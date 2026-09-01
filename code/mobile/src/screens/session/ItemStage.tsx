@@ -32,7 +32,6 @@
  * never a second button.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -57,12 +56,26 @@ export function clockOf(totalSeconds: number): string {
  * Metres under a kilometre, kilometres above it — "5 km", not "5000 m", and "400 m", not "0.4 km".
  * The record stores metres always (one unit, no conversion drift); this is display only.
  */
-export function distanceOf(metres: number): { figure: string; unit: string } {
+/*
+ * ⛔ THE UNITS WERE LATIN LITERALS, IN A HEBREW APP (2026-08-28).
+ *
+ * `'km'` and `'m'`, returned straight to the screen and never offered to i18next — so a 40 m carry
+ * read `40 m` while the live run beside it says `מ׳`, the poster says `ק״מ` and the wheel's own
+ * label says `ק"ג`. The keys have existed the whole time: `cardio.km` and `cardio.metresUnit`.
+ *
+ * ⚠️ AND IT SURVIVED BECAUSE NOBODY COULD SEE IT. `DistanceStage` is the only surface that draws
+ * this, and its gallery entry was deleted on 2026-08-12 — so the screen was edited twice and
+ * reviewed never. The entry is back (`2.2g`), and the first time it was opened this was the first
+ * thing on it.
+ *
+ * The caller passes `t`, which is what every other unit in this file already does.
+ */
+export function distanceOf(metres: number, t: (k: string) => string): { figure: string; unit: string } {
   if (metres >= 1000) {
     const km = metres / 1000;
-    return { figure: Number.isInteger(km) ? String(km) : km.toFixed(1), unit: 'km' };
+    return { figure: Number.isInteger(km) ? String(km) : km.toFixed(1), unit: t('cardio.km') };
   }
-  return { figure: String(Math.round(metres)), unit: 'm' };
+  return { figure: String(Math.round(metres)), unit: t('cardio.metresUnit') };
 }
 
 /**
@@ -71,10 +84,67 @@ export function distanceOf(metres: number): { figure: string; unit: string } {
  * In the serif, because this is Hush speaking rather than an instrument reporting — the same voice
  * split the rest of the app uses. Quiet, not a headline: the figure is what she acts on, this is
  * how. Absent when the coach said nothing, and an absent instruction leaves NO empty row.
+ *
+ * ════ ⛔ IT IS THE APP'S ONLY MOUTH FOR AN ITEM'S `say` (2026-08-26 audit) ════
+ *
+ * The coach writes one line per item — *"at a pace where you could hold a conversation"* — and the
+ * prompt tells it where that line lands. On the day this was audited it landed in exactly ONE of
+ * the three places an item can be executed:
+ *
+ *   a HOLD / a DISTANCE inside a session   drawn here                        ✔
+ *   a prescribed RUN, on the live GPS stage  `say` in the props, rendered by nothing   ✘
+ *   an ordinary LIFT, on the set stage       no surface at all                          ✘
+ *
+ * Both failures are the same event: the sentence used to sit behind a KEY POINTS control on those
+ * two screens, the control was deleted on 2026-08-12, and **nothing replaced it** — so the one
+ * thing that turns "5 km" into a prescription was handed to the screen and dropped. This component
+ * is now mounted by all three, so there is one voice and one style, and `everyThingTheCoachSaysHasAMouth`
+ * holds the three call sites together.
+ *
+ * `lines` caps the sentence where the screen cannot afford to grow (the set stage carries two
+ * 164-point dials under it). The prompt's own bound is *"one line"*, so two is generous rather
+ * than lossy — and a screen with no cap passes nothing and stays unbounded, as the item stages do.
+ *
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ A CAP CUTS AT A GLYPH; IT SHOULD CUT AT A THOUGHT (2026-08-27).
+ *
+ * Measured on `3.4`, the live run: the coach's sentence laid out to a `scrollHeight` of 116 in a
+ * 58-point box — **four lines clamped to two** — so the screen showed
+ *
+ *     "בקצב שאפשר לדבר בו — זה היום הקל של השבו…"
+ *
+ * and the rest was unreachable, on a screen she looks at for twenty-six minutes. The cap itself is
+ * right and stays: uncapped, the same sentence pushed the kilometre rows and the heart rate off the
+ * bottom of a running screen. What was wrong is that it truncated MID-WORD, and a sentence cut
+ * mid-word reads as a broken screen no matter how good the reason for the cap.
+ *
+ * ⚠️ THE ANSWER WAS ALREADY IN THE CARDIO CALL SITE'S OWN NOTE: *"the half that matters mid-run is
+ * the instruction; the rest is the reason for it, and the reason has a screen of its own before she
+ * starts."* If only the instruction is wanted, then take the INSTRUCTION — the opening sentence —
+ * rather than however much of the paragraph happens to fit in two lines. She reads a complete
+ * thought, there is no ellipsis, and nothing looks cut.
+ *
+ * ⚠️ THE CAP REMAINS AS THE BACKSTOP. A coach who writes one very long opening sentence still gets
+ * clamped, because the layout argument does not depend on the punctuation cooperating.
  */
-export function SayLine({ say }: { say?: string }) {
+/**
+ * The first complete sentence. A terminator only ends a sentence when whitespace or the string's
+ * end follows it — otherwise `5.2 km` and `06:30.4` would be cut in half by their own decimal.
+ */
+export function openingSentence(say: string): string {
+  const m = /[.!?](?=\s|$)/.exec(say);
+  return m ? say.slice(0, m.index + 1) : say;
+}
+
+export function SayLine({ say, lines }: { say?: string; lines?: number }) {
   if (!say) return null;
-  return <Text style={styles.say}>{say}</Text>;
+  /* Capped screens get the opening thought; uncapped ones get the whole sentence. See above. */
+  const text = lines ? openingSentence(say) : say;
+  return (
+    <Text style={styles.say} {...(lines ? { numberOfLines: lines } : {})}>
+      {text}
+    </Text>
+  );
 }
 
 /** The name of the thing, above the figure. Chrome everywhere else; here it names the subject. */
@@ -112,26 +182,6 @@ function muscleFor(ex: string, t: (k: string) => string): string | null {
   return m ? t(`muscle.${m}`) : null;
 }
 
-/**
- * ════ WHERE SHE IS IN A REPEATED ITEM ════
- *
- * Six 400 m repeats are six visits to this stage, and every one of them used to look identical —
- * and identical to a brand new exercise. The set stage has printed "SET 2 OF 4" from the start;
- * this one printed nothing, so an interval had no shape from the inside.
- *
- * Absent when `m` is 1, which is most items: a single 5 km run is not "rep 1 of 1", and saying so
- * would put a number on the screen that means nothing.
- */
-function RoundLine({ round }: { round?: { n: number; m: number } | null }) {
-  const { t } = useCopy();
-  if (!round || round.m <= 1) return null;
-  return (
-    <Legend size={17} track={0.2} align="center" tone="onStage" style={styles.roundLine}>
-      {t('workout.repOfM', { n: round.n, m: round.m })}
-    </Legend>
-  );
-}
-
 function ItemName({ name, muscle }: { name: string; muscle?: string | null }) {
   return (
     <>
@@ -160,12 +210,10 @@ function ItemName({ name, muscle }: { name: string; muscle?: string | null }) {
 export function TimeStage({
   item,
   name,
-  round,
   onDone,
 }: {
   item: Extract<PlannedItem, { kind: 'time' }>;
   name: string;
-  round?: { n: number; m: number } | null;
   onDone: (actualSeconds: number) => void;
 }) {
   const { t } = useCopy();
@@ -230,7 +278,11 @@ export function TimeStage({
           <ItemName name={name} muscle={muscleFor(item.ex, t)} />
         </Arrive>
         <Arrive order={1} style={styles.band}>
-          <Legend size={22} track={0.26} align="center" style={styles.bandLabel}>
+          {/* ⛔ 22 → 26 (2026-08-27). The founder raised the set stage's band headings on 2026-08-26
+              — *"הגדלת את הגודל של הסרגלים אבל את המלל מעליהם השארת קטן"* — and this stage
+              kept 22. The note at the top of this file is about these two screens not reading as
+              different apps; a heading tier is exactly that kind of difference. */}
+          <Legend size={26} track={0.26} align="center" style={styles.bandLabel}>
             {t('workout.hold')}
           </Legend>
           <Text style={[styles.hero, heroType(figure)]} numberOfLines={1} accessibilityLabel={figure}>
@@ -266,13 +318,11 @@ export function TimeStage({
 export function DistanceStage({
   item,
   name,
-  round,
   onDone,
   measured = false,
 }: {
   item: Extract<PlannedItem, { kind: 'distance' }>;
   name: string;
-  round?: { n: number; m: number } | null;
   onDone: () => void;
   /**
    * The phone is going to MEASURE this one — a GPS movement, so the act starts the run rather than
@@ -283,29 +333,58 @@ export function DistanceStage({
   measured?: boolean;
 }) {
   const { t } = useCopy();
-  const { figure, unit } = distanceOf(item.metres);
+  const { figure, unit } = distanceOf(item.metres, t);
   return (
     <>
       <View style={styles.body}>
         {/* The three stages compose on arrival, exactly as the SET stage does — a plank and a
             400 m repeat are steps of the same workout and must not feel like a different app.
             See `SessionFlow`'s `beat` for the argument and the caveat. */}
+        {/*
+          ⛔ AND THE RULING WAS ONLY EVER APPLIED TO THE TIME STAGE. The note above `TimeStage`
+          says `RoundLine` is deleted, because the rail already draws her position from the same
+          `session.setLabel` — and it was left standing here, so a 6 × 400 m interval told her where
+          she was twice, in two different languages, on one screen. The law test that pins it
+          (`aRepeatedItemSaysWhereSheIsInIt`) only ever asked the time stage.
+        */}
         <Arrive order={0} style={styles.identity}>
           <ItemName name={name} muscle={muscleFor(item.ex, t)} />
-          <RoundLine round={round} />
         </Arrive>
-        <View style={styles.figureRow}>
-          <Text style={[styles.hero, heroType(figure)]} numberOfLines={1}>
-            {figure}
-          </Text>
-          <Text style={styles.unit}>{unit}</Text>
-        </View>
-        {item.load != null ? (
-          <Legend size={17} track={0.14} align="center" tone="onStage">
-            {t('workout.itemCarrying', { load: item.load })}
+        {/*
+          ⛔ AND THE OTHER HALF OF THAT RULING WAS NEVER APPLIED EITHER (2026-08-27).
+
+          The note over `TimeStage` says it plainly: *"THE FIGURE had no heading. On `2.2` every
+          figure is opened by a lit word — WEIGHT, REPS — and an unlabelled `0:45` is the same
+          defect as an unlabelled band tick: the athlete is asked to infer what she is looking at."*
+          The hold was fixed. **A bare `400 m` was left standing one function below it**, on the same
+          stage, in the same file, under a comment claiming the three blocks compose like the set
+          stage's — which they did not: only the name had an `Arrive`, so the figure and the coach's
+          line appeared with no entrance while the name rose.
+
+          It is a band now, like the hold's and like the load's: a lit word, then the figure. The
+          carry note stays inside it, because "carrying 20 kg" is a fact ABOUT this distance.
+        */}
+        <Arrive order={1} style={styles.band}>
+          <Legend size={26} track={0.26} align="center" style={styles.bandLabel}>
+            {t('workout.distance')}
           </Legend>
-        ) : null}
-        <SayLine say={item.say} />
+          {/* One measurement, one announcement — VoiceOver stopped on "400", moved, then stopped on
+              "m". The same shape `WellDone`'s facts were fixed into. */}
+          <View style={styles.figureRow} accessible accessibilityLabel={`${figure} ${unit}`}>
+            <Text style={[styles.hero, heroType(figure)]} numberOfLines={1}>
+              {figure}
+            </Text>
+            <Text style={styles.unit}>{unit}</Text>
+          </View>
+          {item.load != null ? (
+            <Legend size={17} track={0.14} align="center" tone="onStage">
+              {t('workout.itemCarrying', { load: item.load })}
+            </Legend>
+          ) : null}
+        </Arrive>
+        <Arrive order={2} style={styles.sayBlock}>
+          <SayLine say={item.say} />
+        </Arrive>
       </View>
       <View style={styles.footer}>
         <Button
@@ -359,7 +438,6 @@ const styles = StyleSheet.create({
   unit: { fontFamily: font.monoMedium, fontSize: 22, color: stage.ink2, textAlign: 'left' },
   // Matched to the set stage, measured: 12 / 29, the muscle in the label tone and the lift in cream.
   itemMuscle: { marginBottom: 4 },
-  roundLine: { marginTop: 10 },
   /* 29 → 36, with the set stage: the movement is the subject of its screen, and it was set smaller
      than the instruction beneath it. `adjustsFontSizeToFit` at the call site protects long names. */
   itemName: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink0, textAlign: 'center', maxWidth: 330 },

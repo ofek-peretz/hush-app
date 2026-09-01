@@ -76,6 +76,18 @@ function harness(): { view: () => SessionView } {
   };
 }
 
+/** Step through any warm-up bridges on the current lift (the live builder carries the ramp since
+ *  2026-08-25 — a first compound opens on its bridges, and every walk must cross them the way the
+ *  athlete does). */
+async function passBridges(h: { view: () => SessionView }): Promise<void> {
+  while (h.view().setLabel?.warmup && h.view().active) {
+    await act(async () => { await h.view().completeSet(); });
+    while (h.view().displayPhase !== 'SET_PRESENTED' && h.view().active) {
+      await act(async () => h.view().endRest());
+    }
+  }
+}
+
 /** Finish the step she is on, whichever shape it is, and walk through any rest that follows. */
 async function finishStep(h: { view: () => SessionView }, done?: { seconds?: number }): Promise<void> {
   const v = h.view();
@@ -110,6 +122,7 @@ describe('a session of every shape', () => {
 
     expect(h.view().currentItem?.kind).toBe('open');
     await finishStep(h);
+    await passBridges(h); // the bench is the session's first compound — its ramp runs first now
     expect(h.view().currentItem?.kind).toBe('reps');
     await finishStep(h);
     await finishStep(h);
@@ -121,7 +134,9 @@ describe('a session of every shape', () => {
     const [saved] = await db.loadHistory();
     expect(saved.items?.map((i) => i.kind)).toEqual(['open', 'reps', 'reps', 'time', 'distance']);
     // A plank is never written as zero reps at zero kilograms — the whole reason `items` exists.
-    expect(saved.sets.map((s) => s.exerciseId)).toEqual(['bb_bench_press', 'bb_bench_press']);
+    // Working sets only — the ramp's bridges are marked and excluded, exactly like the engine path.
+    expect(saved.sets.filter((s) => !s.isWarmup).map((s) => s.exerciseId)).toEqual(['bb_bench_press', 'bb_bench_press']);
+    expect(saved.sets.filter((s) => s.isWarmup).every((s) => s.isApproach)).toBe(true);
     const held = saved.items!.find((i) => i.kind === 'time')!;
     expect(held).toMatchObject({ kind: 'time', seconds: 30, askedSeconds: 45, ex: 'plank' });
     const carried = saved.items!.find((i) => i.kind === 'distance')!;
@@ -131,7 +146,7 @@ describe('a session of every shape', () => {
   it('says where each step sat, so the coach reads it back as the session she was given', async () => {
     const h = harness();
     await act(async () => h.view().startCoach(MIXED, 'coach_0'));
-    for (let i = 0; i < 5; i++) await finishStep(h);
+    for (let i = 0; i < 5; i++) { await passBridges(h); await finishStep(h); }
 
     const [saved] = await db.loadHistory();
     expect(saved.items!.map((i) => [i.block, i.round, i.position])).toEqual([
@@ -144,11 +159,11 @@ describe('a session of every shape', () => {
     // sent. A record that held only the planks would tell the coach she had stopped lifting.
     const h = harness();
     await act(async () => h.view().startCoach(MIXED, 'coach_0'));
-    for (let i = 0; i < 5; i++) await finishStep(h);
+    for (let i = 0; i < 5; i++) { await passBridges(h); await finishStep(h); }
 
     const [saved] = await db.loadHistory();
     const reps = saved.items!.filter((i) => i.kind === 'reps');
-    expect(reps).toHaveLength(saved.sets.length);
+    expect(reps).toHaveLength(saved.sets.filter((s) => !s.isWarmup).length);
     expect(reps[0]).toMatchObject({ load: 32.5, reps: 8 });
   });
 });
@@ -198,6 +213,7 @@ describe('the two doors refuse each other', () => {
     expect(h.view().currentItem?.kind).toBe('time');
 
     await finishStep(h);
+    await passBridges(h); // the bench opens on its ramp — the doors law is about the WORKING set
     expect(h.view().currentItem?.kind).toBe('reps');
     // On the bench: `completeItem` must not write a reps step as a shapeless "done".
     await act(async () => { await h.view().completeItem(); });

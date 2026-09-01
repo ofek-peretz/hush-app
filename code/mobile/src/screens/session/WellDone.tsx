@@ -41,7 +41,6 @@
  * The session is already SAVED (invariant §8.4); stats are read from it. The
  * success haptic fires once.
  */
-// @ts-nocheck
 
 // 
 
@@ -50,36 +49,51 @@ import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, ARRIVE_STAGGER, Button, Legend, FooterFade } from '@/components/ds';
+import { BottomSheet } from '@/components/BottomSheet';
 import { RangeMark } from '@/components/RangeMark';
 import { sessionPoster } from '@/domain/sessionPoster';
 import { useCopy } from '@/i18n/useCopy';
+import { sessionCardFromHistory } from '@/domain/shareCard';
 import { bidi } from '@/i18n/bidi';
-import { monoCanDraw } from '@/design/monoVoice';
+import { legendVoice, monoCanDraw } from '@/design/monoVoice';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { coachIsDeciding, onCoachUpdate, type CoachUpdate } from '@/platform/coach/afterSession';
 import { coachVerdict } from '@/domain/coachEarned';
 import type { CoachDecision } from '@/domain/coachLog';
 import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
-import { ensureNotificationPermission, markNotificationsAsked, shouldAskForNotifications } from '@/platform/notifications';
+import { ensureNotificationPermission, markNotificationsAsked, notifier, shouldAskForNotifications } from '@/platform/notifications';
 import { wellDone as wellDoneHaptic, tick as tickHaptic } from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { useFocusedStatusBar } from '@/platform/statusBar';
-import { exerciseDisplayName } from '@/data/exercises';
+import { exerciseDisplayName, muscleOf } from '@/data/exercises';
 import { displayWeight } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
 import { sessionKcal } from '@/domain/energy';
-import { durationMinutes } from '@/domain/duration';
+import { durationMinutes, posterDate} from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
+import { maybeAskForReview } from '@/platform/review';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
+import { MiniBody } from '@/components/MiniBody';
 import type { Session, SetLog } from '@/data/local/models';
 import type { Explanation } from '@/engine/weeklyView';
-import { space, stage, signal, font, textScale, tracking, trackingPx, up, down } from '@/design/tokens';
+import { color, space, stage, signal, font, textScale, ramp, tracking, trackingPx, up, down, motion } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+// The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
+import { currentLocale } from '@/i18n';
 
 type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
+
+/**
+ * ✦ When the body's bloom is allowed to begin.
+ *
+ * The figures are the poster's THIRD beat, so they land at `2 × ARRIVE_STAGGER`; the arrival itself
+ * then takes `motion.dur[4]` to settle. The bloom starts as that settle finishes, so the two motions
+ * read as a sequence — the body arrives, and THEN it lights up — rather than as one smear.
+ */
+const BLOOM_AFTER = 2 * ARRIVE_STAGGER + motion.dur[4];
 
 /** The beats of this screen, in the only order they may be walked. */
 export type WellDonePhase = 'saved' | 'result' | 'milestone';
@@ -114,8 +128,8 @@ function ScanPulse({ children }: { children: React.ReactNode }) {
     if (reduced) return;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.35, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.35, duration: motion.dur[5], useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: motion.dur[5], useNativeDriver: true }),
       ]),
     );
     loop.start();
@@ -124,15 +138,19 @@ function ScanPulse({ children }: { children: React.ReactNode }) {
   return <Animated.View style={{ opacity: pulse }}>{children}</Animated.View>;
 }
 
-/** How many sets of one lift this session logged — the fact each scanned row states. */
+/** How many WORKING sets of one lift this session logged — the fact each scanned row states.
+ *  A warm-up bridge (`isApproach`, 2026-08-24) is the road to the work, not the work — the same
+ *  line sessionMetrics and the wrist summary draw, so every surface counts the same sets. */
 function setsOf(exerciseId: string, session: Session | null): number {
-  return (session?.sets ?? []).filter((s) => s.exerciseId === exerciseId).length;
+  return (session?.sets ?? []).filter((s) => s.exerciseId === exerciseId && !s.isApproach).length;
 }
 
 /** Tonnes moved this session — Σ(weight × reps), in tonnes to one decimal. Bodyweight sets carry
- *  no declared load, so they add nothing rather than a guessed one. */
+ *  no declared load, so they add nothing rather than a guessed one. Working sets only — a warm-up
+ *  bridge (`isApproach`) is excluded, exactly as `sessionMetrics.sessionTonnageKg` excludes it, so
+ *  this poster and the Log row can never state two different tonnes for one workout. */
 function sessionTonnes(sets: readonly SetLog[]): number {
-  const kg = sets.reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
+  const kg = sets.reduce((sum, s) => sum + (s.isApproach ? 0 : (s.actualWeight ?? 0) * s.actualReps), 0);
   return Math.round(kg / 100) / 10;
 }
 
@@ -236,6 +254,74 @@ function earnedLines(
   });
 }
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ ONE SENTENCE PER DECISION, NOT ONE PER LIFT (founder 2026-08-22, from a device screenshot).
+ *
+ * The ledger is the best thing on this screen and the closest the product comes to saying out loud
+ * what it is — and on a first workout it read:
+ *
+ *   Barbell Bench Press   37.5 → 40    "It met its target on every set, so I added 2.5 kg."
+ *   Deadlift              55 → 57.5    "It met its target on every set, so I added 2.5 kg."
+ *   Triceps Pushdown      20 → 22.5    "It met its target on every set, so I added 2.5 kg."
+ *   Cable Pull-Through    25 → 27.5    "It met its target on every set, so I added 2.5 kg."
+ *   Seated Calf Raise     12 → 13      "It met its target on every set, so I added 2.5 kg."
+ *
+ * **The product's proudest moment, set like a mail merge.** Five lifts took the same decision for
+ * the same reason, and the screen printed the reason five times — which does not read as five
+ * decisions, it reads as one template.
+ *
+ * ── ⚠️ AND THE VOCABULARY WAS NEVER THE PROBLEM ─────────────────────────────────────────────────
+ * `explain` carries eight distinct decisions (progress, graduate, volume up and down, the coarse-
+ * machine hold, a reprice, a swap, detraining). Nothing here is short of words. What happened is
+ * that a first session is the one where every lift meets its target — so the repetition is worst
+ * exactly where the athlete is deciding what this app is.
+ *
+ * ── THE GROUPING KEY IS THE RENDERED SENTENCE, AND THAT IS THE WHOLE HONESTY OF IT ──────────────
+ * Same copy key AND same params ⇒ the two rows would print the same words, so they are one thing
+ * said once. A lift that went up **5 kg** while the others went up 2.5 carries a different sentence
+ * and keeps its own — nothing is ever folded together that would have read differently apart.
+ *
+ * ⚠️ THE FACT STILL COMES BEFORE THE REASON. The rows are drawn first and the sentence sits under
+ * them, ruled — which is this product's grammar everywhere (Today prints the load and the WHY sheet
+ * holds the argument; the Saturday letter states the change and unfolds the case). A group of one is
+ * therefore byte-for-byte the layout that shipped: one row, its sentence beneath it.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export interface DecisionGroup {
+  key: string;
+  lines: EarnedLine[];
+  reason: EarnedReason;
+}
+
+/** The stable identity of a rendered sentence — the copy key and the values it interpolates. */
+function reasonId(r: EarnedReason): string {
+  return 'text' in r ? `t:${r.text}` : `k:${r.key}:${JSON.stringify(r.params ?? {})}`;
+}
+
+export function groupDecisions(lines: readonly EarnedLine[]): DecisionGroup[] {
+  const out: DecisionGroup[] = [];
+  const at = new Map<string, DecisionGroup>();
+  for (const line of lines) {
+    const id = reasonId(line.reason);
+    const found = at.get(id);
+    if (found) {
+      found.lines.push(line);
+      continue;
+    }
+    /*
+     * ⚠️ ORDER IS THE SESSION'S, and it is kept twice over: a group takes the position of its FIRST
+     * lift, and lifts stay in their own order inside it. She read these rows in this order twenty
+     * seconds ago on the stage — re-sorting the record of a workout by anything other than the
+     * workout would make her hunt for the lift she is looking for.
+     */
+    const group: DecisionGroup = { key: `${id}|${line.key}`, lines: [line], reason: line.reason };
+    at.set(id, group);
+    out.push(group);
+  }
+  return out;
+}
+
 export function WellDone({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
@@ -263,6 +349,7 @@ export function WellDone({ navigation, route }: Props) {
    * only opens the system dialog if she says yes. `null` while we are still finding out whether
    * this is the first; the screen simply does not draw until then.
    */
+
   const [askNotifications, setAskNotifications] = useState(false);
   useEffect(() => {
     if (notStarted) return;
@@ -299,17 +386,45 @@ export function WellDone({ navigation, route }: Props) {
    * without them simply yields nothing and the list does not draw.
    */
   const [earned, setEarned] = useState<Explanation[] | null>(null);
+  /**
+   * ⚠️ A READ THAT FAILED IS NOT A WORKOUT THAT CHANGED NOTHING (found 2026-08-18).
+   *
+   * The catch below used to `setEarned([])`, and an empty list is drawn as *"Every lift held."* —
+   * the one thing the note above says silence must never look like. An engine the screen could not
+   * reach was reported to her as a verdict the engine did not give. It has its own state now: the
+   * box states a result only when there IS one, and says nothing when the read did not land.
+   */
+  const [earnedFailed, setEarnedFailed] = useState(false);
   const [forward, setForward] = useState<Record<string, { loadFrom: number | null; loadTo: number | null }> | null>(null);
   useEffect(() => {
     if (notStarted || !summary?.startedAtMs) return;
     let active = true;
     const startedAtMs = summary.startedAtMs;
-    void Promise.resolve(app.model.sessionEarned?.({ startedAtMs }))
-      .then((e) => active && setEarned(e ?? []))
-      .catch(() => active && setEarned([]));
-    void Promise.resolve(app.model.sessionForward?.({ startedAtMs }))
-      .then((f) => active && setForward(f ?? {}))
-      .catch(() => active && setForward({}));
+    /*
+     * ⛔ ONE AT A TIME, AND THIS IS NOT TIDINESS (found 2026-08-18). Both calls ran unawaited, and
+     * both run `foldEngine`: an unlocked load-mutate-save of the `hush.engine.v5` blob plus a
+     * read-modify-write of `hush.preferences`. Two folds in flight over one blob means the second
+     * save writes over whatever the first enacted — a graduation or a retirement simply gone, and
+     * the lift the engine had just dropped back in her week the following Monday. Nothing about
+     * that is visible here; it is visible next week, as a programme that will not move on.
+     *
+     * ⚠️ AND A FAILURE DOES NOT STRAND THE SECOND. Each read owns its own catch, so a `sessionEarned`
+     * that throws still lets the from→to figures land, which is the same rule the two had apart.
+     */
+    void (async () => {
+      try {
+        const e = await Promise.resolve(app.model.sessionEarned?.({ startedAtMs }));
+        if (active) setEarned(e ?? []);
+      } catch {
+        if (active) setEarnedFailed(true);
+      }
+      try {
+        const f = await Promise.resolve(app.model.sessionForward?.({ startedAtMs }));
+        if (active) setForward(f ?? {});
+      } catch {
+        if (active) setForward({});
+      }
+    })();
     return () => {
       active = false;
     };
@@ -379,18 +494,29 @@ export function WellDone({ navigation, route }: Props) {
   const stamp = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (phase !== 'milestone') return;
+    /*
+     * ⛔ THE ONE ASK FOR A RATING RIDES THE ONE LICENSED LOUD MOMENT (2026-08-23). A milestone is
+     * rare by construction, it is HER achievement, and the emblem has already landed when the OS
+     * sheet appears — so the app is asking at the only instant it has genuinely earned the
+     * question. Once ever, structurally gated at ten sessions, silent on failure; the whole
+     * doctrine is `platform/review`. Delayed past the stamp so nothing interrupts the beat itself.
+     */
+    const ask = setTimeout(() => void maybeAskForReview(app.modeState.completedSessions), 2600);
     if (reduced) {
       stamp.setValue(1);
       milestoneHaptic();
-      return;
+      return () => clearTimeout(ask);
     }
     stamp.setValue(0);
     const timer = setTimeout(() => {
       milestoneHaptic();
       Animated.spring(stamp, { toValue: 1, damping: 14, stiffness: 220, useNativeDriver: true }).start();
     }, 650);
-    return () => clearTimeout(timer);
-  }, [phase, reduced, stamp]);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(ask);
+    };
+  }, [phase, reduced, stamp, app.modeState.completedSessions]);
 
   /**
    * The session's lifts, in the order they were performed — the list THE SCAN reads down (2.4c).
@@ -457,6 +583,7 @@ export function WellDone({ navigation, route }: Props) {
     const seen = new Set<string>();
     const order: Lift[] = [];
     for (const s of session?.sets ?? []) {
+      if (s.isApproach) continue; // a lift she only warmed up on was not trained — no row to read back
       if (seen.has(s.exerciseId)) continue;
       seen.add(s.exerciseId);
       order.push({ exerciseId: s.exerciseId, name: exerciseDisplayName(s.exerciseId) });
@@ -589,7 +716,14 @@ export function WellDone({ navigation, route }: Props) {
           <View style={styles.notStartedBody}>
             <View style={styles.savedRow}>
               <Icon name="minus" size={18} color={stage.ink2} strokeWidth={2.4} />
-              <Text style={styles.notStartedLegend}>{t('complete.notStartedLegend')}</Text>
+              <Text
+                style={[
+                  styles.notStartedLegend,
+                  { letterSpacing: legendVoice(t('complete.notStartedLegend'), textScale['2xs'], tracking.legend).letterSpacing },
+                ]}
+              >
+                {t('complete.notStartedLegend')}
+              </Text>
             </View>
             <Text style={styles.savedTitle} accessibilityRole="header">{t('complete.notStartedTitle')}</Text>
             <Text style={styles.copy}>{t('complete.notStartedBody')}</Text>
@@ -605,11 +739,7 @@ export function WellDone({ navigation, route }: Props) {
   /* ---- Beat 4: a milestone landed — the one licensed loud moment ---- */
   if (phase === 'milestone' && celebration) {
     const mc = milestoneCopy(celebration, t, units);
-    const dateLabel = new Date(celebration.earnedAt).toLocaleDateString(undefined, {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    const dateLabel = posterDate(new Date(celebration.earnedAt), currentLocale());
     return (
       <View style={styles.root}>
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -677,13 +807,44 @@ export function WellDone({ navigation, route }: Props) {
   // figure; it shows "× reps" alone rather than a fabricated load.
 
   /**
-   * The saved legend names the WORKOUT — "UPPER A · SAVED" (v7 2.5). The single word "LOGGED" said
-   * that something had been saved without ever saying what; the name is the fact, and it is the one
-   * the athlete came out of the session holding.
+   * ════════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE POSTER WAS STUTTERING ITS OWN HEADLINE (2026-08-27, the elevation pass)
+   *
+   * The legend was `${workoutName} · SAVED` and the line 40 points under it — `posterName`, the
+   * serif at 36 — was `workoutName`. On every ordinary session the poster printed the name of the
+   * workout TWICE, in two faces, one above the other. The docblock this replaces argued the name in
+   * well: *"LOGGED said that something had been saved without ever saying what."* True — and by the
+   * time it was written the title underneath was already saying it.
+   *
+   * ── WHAT THE LEGEND CARRIES INSTEAD, AND WHY IT IS THE RIGHT LINE ───────────────────────────────
+   * The slot wants the thing the poster otherwise never says. This screen is a KEEPSAKE — it holds
+   * the mark so *"a screenshot carries the product"*, it is the surface the share card is cut from,
+   * and it is the one screen in the app an athlete comes back to look at. **A keepsake is dated.**
+   * Nothing on it was.
+   *
+   * ⚠️ AND THE APP'S OTHER POSTER ALREADY KNEW. `Cardio`'s finish poster has carried `posterDate`
+   * — weekday, day, month — since the founder asked for the pride half (2026-08-23). Two posters
+   * for one product, and only the run was dated.
+   *
+   * The weekday is dropped where cardio keeps it: this line is tracked and centred inside 342 points
+   * of poster, and `MONDAY 26 AUGUST · SAVED` is the one that wraps. The day and the month are what
+   * survive a year; the weekday is not.
+   *
+   * ⚠️ `complete.logged` STAYS as the fallback. A session finalised before `startedAtMs` existed has
+   * no date to print, and a legend reading just "· SAVED" would be worse than the word it replaced.
+   * ════════════════════════════════════════════════════════════════════════════════════════════════
    */
-  const savedLegend = summary?.workoutName
-    ? `${summary.workoutName} · ${t('complete.saved')}`
-    : t('complete.logged');
+  const savedOn = summary?.startedAtMs ? new Date(summary.startedAtMs) : null;
+  /* ⛔ A PARTIAL SAYS SO AT THE TOP (design review 2026-09-01). "אימון חלקי נשמר." sat at the BOTTOM
+     of the scroll — under the fold, beneath the sticky footer, on a screen most athletes close in
+     two seconds. The most important status of the session was the least visible line on it. It is
+     the head legend now, in the exact slot "נשמר" occupied, so nothing else on the poster moves. */
+  const savedWord = partial ? t('complete.partialSavedShort') : t('complete.saved');
+  const savedLegend = savedOn
+    ? `${posterDate(savedOn, currentLocale())} · ${savedWord}`
+    : partial
+      ? t('complete.partialSavedShort')
+      : t('complete.logged');
 
   // 8.2 — the ask stands OVER the completion, once ever, and hands it back on either answer. It is
   // deliberately after this screen has been earned: the handoff asks for it "right after your first
@@ -694,6 +855,9 @@ export function WellDone({ navigation, route }: Props) {
         onAllow={async () => {
           await markNotificationsAsked();
           await ensureNotificationPermission();
+          // She said yes seconds ago — the Saturday letter arms NOW, not at the next cold boot.
+          // (Without this line a granted permission scheduled nothing until the app relaunched.)
+          void notifier.scheduleWeeklyUpdate();
           setAskNotifications(false);
         }}
         onDecline={() => {
@@ -709,6 +873,15 @@ export function WellDone({ navigation, route }: Props) {
   return (
     <SessionEarned
       savedLegend={savedLegend}
+      /*
+       * ⛔ TRAINED TOGETHER — v1 (founder, 2026-08-23: *"אפשר לעשות שגם מסך האימון ממש מציג עם מי
+       * היה האימון המשותף"*). The names she gives are stamped onto the SAVED session
+       * (`db.setSessionPartners` — the save has already landed when this screen stands), drawn on
+       * the poster, and carried onto the story card. The LIVE shared session (the paired, mirrored
+       * workout) is the next cycle's CloudKit work and will fill the same field — the record's
+       * shape is the contract, not the mechanism.
+       */
+      partners={session?.partners ?? []}
       partial={partial}
       durationLabel={durationLabel}
       kcal={kcal}
@@ -731,6 +904,10 @@ export function WellDone({ navigation, route }: Props) {
       }
       workoutName={summary?.workoutName ?? session?.programDayName ?? null}
       units={app.profile?.units ?? 'kg'}
+      /* Her body, wearing this session's work — from the session itself, so the figures stand from
+         the first frame instead of waiting on the history read the hero waits on. */
+      muscles={[...new Set((session?.sets ?? []).map((x) => muscleOf(x.exerciseId)).filter((m): m is NonNullable<ReturnType<typeof muscleOf>> => m != null))]}
+      sex={app.profile?.sex === 'male' ? 'male' : 'female'}
       /*
        * The COACH's rows now, with the engine's kept behind them.
        *
@@ -739,9 +916,42 @@ export function WellDone({ navigation, route }: Props) {
        * last fold ran before the deletion still sees the sentence she was already promised.
        */
       decisions={coachLines.length ? coachLines : decisions}
+      /* An empty list is the verdict "every lift held" — so it may only be drawn once the engine has
+         actually answered. `earnedFailed` is a read that never will; see its note. */
+      decisionsKnown={!earnedFailed && (earned !== null || coachLines.length > 0)}
       volume={volume}
       onDone={() => leave(goHome)}
       onRecord={() => leave(goRecord)}
+      /*
+       * ⛔ THE STORY DOOR (founder 2026-08-23, reversing his 2026-08-02 ruling BY NAME: *"המסך
+       * שאותו אנשים ירצו לשתף ולהעלות לסטורי … מקור הגאווה שלהם + האפשרות לפרסום שלנו בזכות חשיפה
+       * ויראלית. אנו חייבים לעמוד במשימה הזאת."*).
+       *
+       * The old ruling ("they can screenshot it — let's have some class") shaped the POSTER, and
+       * the poster keeps it: no share chrome anywhere above the footer. What changed is that a
+       * screenshot carries the status bar, the buttons, and whatever notch the phone has — and the
+       * story she actually wants is the 9:16 card with none of that.
+       *
+       * ⛔ AND THE DOOR OPENS THE WORKOUT — ALWAYS (founder, device QA 2026-08-23: *"אני רוצה
+       * לשתף את האימון מאיפה הגיע הדדליפט הזה"*). The first cut let the RECORD card outrank the
+       * session here — my "prouder truth wins" — and on his device the door opened a deadlift
+       * figure instead of the workout with her body on it. The record still rides the card, as a
+       * line (`ShareSessionCard.record`); the workout is the story. No card (nothing real
+       * logged) → no door, never a stub.
+       */
+      onShareStory={
+        history && history.length > 0
+          ? () => {
+              const card = sessionCardFromHistory(
+                history,
+                app.profile?.units ?? 'kg',
+                app.profile?.weightKg,
+                app.profile?.sex === 'male' ? 'male' : 'female',
+              );
+              if (card) navigation.navigate('ShareCardModal', { card });
+            }
+          : undefined
+      }
     />
   );
 }
@@ -763,10 +973,15 @@ export function SessionEarned({
   poster,
   workoutName,
   units,
+  muscles,
+  sex,
+  partners,
   decisions,
+  decisionsKnown = true,
   volume,
   onDone,
   onRecord,
+  onShareStory,
   previewSheetOpen,
 }: {
   savedLegend: string;
@@ -785,10 +1000,32 @@ export function SessionEarned({
   poster: import('@/domain/sessionPoster').SessionPoster | null;
   workoutName?: string | null;
   units?: 'kg' | 'lb';
+  /**
+   * ⛔ HER BODY, ON THE FINISH ITSELF (founder, device QA 2026-08-23: *"אמרת שיופיע כאן
+   * הדמויות. אין פה שום דבר שקשור לזה"*). The figures were built for the share card and drawn
+   * only there — behind a door he had to guess at. The screen he photographs is this one, so the
+   * body wearing the session's work stands on it too: the same `MiniBody` pair, the same moss.
+   * Empty → nothing drawn (a bodyweight-only interval logs no muscle rows).
+   */
+  muscles?: string[];
+  sex?: 'female' | 'male';
+  /** Trained together — the names on the poster. Filled by the dedicated partner-workout flow
+   *  (its own screen, founder 2026-08-24); an ordinary finish never asks. */
+  partners?: string[];
   decisions: EarnedLine[];
+  /**
+   * ⚠️ WHETHER THE ENGINE ACTUALLY ANSWERED. An empty `decisions` means "every lift held", which is a
+   * real verdict and is drawn as one — so it may only be drawn when the read LANDED. False while the
+   * answer is still coming, and false for ever if it failed; the box holds its tongue instead of
+   * telling her a workout changed nothing on the strength of a storage error. Defaults true for the
+   * gallery and every harness that hands the rows in directly.
+   */
+  decisionsKnown?: boolean;
   volume: VolumeMove[];
   onDone: () => void;
   onRecord: () => void;
+  /** The story door — absent when there is nothing true to put on a card (see the container). */
+  onShareStory?: () => void;
   /** Offered only when this session set a real record (§9.1) — there is no card for a session that
    *  set none, and a share button that had nothing true to put on one would be the fabrication the
    *  whole card module exists to refuse. */
@@ -807,6 +1044,18 @@ export function SessionEarned({
   /** The word a held lift wears — read once so the face check below is done once. */
   const holdsWord = t('complete.holds');
   const nothingDecided = decisions.length === 0 && volume.length === 0;
+  /*
+   * ⛔ THE HERO IS ONE MEASUREMENT, AND VoiceOver HEARD TWO. `heroNum` and its unit are sibling
+   * `Text`s, so the reader stopped on "60", moved on, and stopped again on "kg" — the biggest
+   * figure in the product, delivered as two unrelated fragments. The group speaks once now.
+   */
+  const heroA11y = !poster
+    ? ''
+    : poster.hero.kind === 'record'
+      ? `${poster.hero.value} ${poster.hero.unit}`
+      : poster.hero.kind === 'tonnes'
+        ? `${poster.hero.value.toFixed(1)} ${t('weekly.tonneUnit')} ${t('complete.movedShort')}`
+        : `${poster.hero.value} ${t('complete.setsLabel')}`;
 
   return (
     <View style={styles.root}>
@@ -827,8 +1076,20 @@ export function SessionEarned({
             a closing beat; **scrolling is access**, and it costs nothing.
             ════════════════════════════════════════════════════════════════════════════════════════
           */}
-          {poster ? (
-            <View style={styles.poster}>
+          {/*
+            ⛔ AND ONLY THE HERO WAITS FOR THE POSTER (found 2026-08-18).
+
+            This whole block — the legend, the two facts, the partial line, the decisions box — sat
+            inside `{poster ? … }`. `poster` is built from the HISTORY read, so it is null on every
+            render before the disk answers and null FOR EVER if `db.loadHistory()` rejects: the
+            screen she gets for finishing a workout was a black page carrying "Finish workout" and
+            nothing else. Under Reduce Motion the result is the first beat, so that was the whole of
+            her closing screen, every single time, until the read landed.
+
+            Everything below is built from `summary`, `durationLabel` and `kcal` — route params and
+            props, present from the first frame. The poster decides the HERO and nothing else.
+          */}
+          <View style={styles.poster}>
               {/*
                 ════════════════════════════════════════════════════════════════════════════════
                 ⛔ FOUR GROUPS, EACH WITH ITS OWN SPACE (founder, 2026-08-12)
@@ -846,7 +1107,21 @@ export function SessionEarned({
                 left, which is the same rule the set stage and the end-of-set beat both run on.
                 ════════════════════════════════════════════════════════════════════════════════
               */}
-              <View style={styles.posterHead}>
+              {/*
+                ════════════════════════════════════════════════════════════════════════════════
+                ✦ THE POSTER ARRIVES (2026-08-27).
+
+                `Arrive` was built for the founder's largest note — a screen should ARRIVE, not
+                appear — and was wired into six screens. This one, the emotional peak of the
+                product, was not among them: everything landed on the first frame at once.
+
+                Four beats, in reading order: what it is, what it came to, the body that did it,
+                and what it cost. The BLOOM is held until its own beat lands (`bloomDelay`) — a
+                figure that lights up while it is still fading in reads as one smear, not two
+                moments. See the note at `MiniBody.bloomDelay`.
+                ════════════════════════════════════════════════════════════════════════════════
+              */}
+              <Arrive order={0} style={styles.posterHead}>
                 {/* The mark, so a screenshot carries the product without a word of advertising. */}
                 <View style={styles.posterMark}>
                   <RangeMark />
@@ -861,11 +1136,11 @@ export function SessionEarned({
                   so the branch is on the words, never on the structure. The two used to fork the
                   whole poster, which is how the record variant ended up with its own spacing.
                 */}
-                {poster.hero.kind === 'record' ? (
+                {poster?.hero.kind === 'record' ? (
                   <>
                     {/* A record takes the poster: it is the one thing more postable than a total. */}
                     <View style={styles.bestPill}>
-                      <Text style={styles.bestPillText}>{t('complete.newBest')}</Text>
+                      <Legend size={ramp.body} weight="semibold" style={styles.bestPillText}>{t('complete.newBest')}</Legend>
                     </View>
                     <Text style={styles.posterName} numberOfLines={2}>
                       {bidi(exerciseDisplayName(poster.hero.exerciseId))}
@@ -874,9 +1149,18 @@ export function SessionEarned({
                 ) : workoutName ? (
                   <Text style={styles.posterName} numberOfLines={2}>{bidi(workoutName)}</Text>
                 ) : null}
-              </View>
+                {/* Trained together — the sentence the poster is proudest of (2026-08-23). */}
+                {partners && partners.length > 0 ? (
+                  <Text style={styles.togetherLine} numberOfLines={1}>
+                    {t('complete.togetherWith', { names: partners.join(' · ') })}
+                  </Text>
+                ) : null}
+              </Arrive>
 
-              <View style={styles.posterHero}>
+              {/* ⚠️ THE ONE THING THAT GENUINELY NEEDS THE HISTORY: a hero is a fact about her whole
+                  record (a best, a tonnage, a set count), so it waits — and only it waits. */}
+              {poster ? (
+              <Arrive order={1} style={styles.posterHero} accessible accessibilityLabel={heroA11y}>
                 {poster.hero.kind === 'record' ? (
                   /*
                    * ⛔ NO FOOTNOTE UNDER A RECORD (founder 2026-08-05): *"take off the × 8 reps · up
@@ -901,12 +1185,31 @@ export function SessionEarned({
                         <Text style={styles.heroUnitWord}>{t('weekly.tonneUnit')}</Text>
                       ) : null}
                     </View>
-                    <Text style={styles.heroLabel}>
+                    <Legend size={ramp.body} align="center" style={styles.heroLabel}>
                       {poster.hero.kind === 'tonnes' ? t('complete.movedShort') : t('complete.setsLabel')}
-                    </Text>
+                    </Legend>
                   </>
                 )}
-              </View>
+              </Arrive>
+              ) : null}
+
+              {/* her body, wearing this session's work — front and back, lit moss (see `muscles`) */}
+              {/*
+                ✦ THE ONE MOMENT THIS SCREEN HAS (2026-08-27).
+                It bloomed nowhere before: the poster opened fully drawn, so the biggest beat in
+                the product — she has just finished — arrived like a receipt printing. The muscles
+                she worked now light up one after another under the total she moved. See the note
+                in MiniBody. Front and back share the run because they are one body.
+              */}
+              {muscles && muscles.length > 0 ? (
+                <Arrive order={2} style={styles.posterBody}>
+                  {/* 132 → 150 (design review 2026-09-01): with the idle outline finally visible
+                      (MiniBody.DIM), the pair earns the poster's room — at 132 the lit muscles
+                      read as dots on smudges. */}
+                  <MiniBody face="front" sex={sex} lit={muscles} height={150} bloom bloomDelay={BLOOM_AFTER} />
+                  <MiniBody face="back" sex={sex} lit={muscles} height={150} bloom bloomDelay={BLOOM_AFTER} />
+                </Arrive>
+              ) : null}
 
               {/*
                 THE THREE FACTS, as figures. A record poster swaps calories for the tonnage, because
@@ -922,13 +1225,22 @@ export function SessionEarned({
                 ⚠️ A RECORD POSTER STILL SHOWS THE TONNAGE, because the tonnage has just lost the hero
                 slot to the record and is the more distinctive of the two.
               */}
-              <View style={styles.posterStats}>
-                <Fact value={durationLabel} unit={t('common.minShort')} />
-                {poster.hero.kind === 'record' && poster.tonnes > 0 ? (
-                  <Fact value={poster.tonnes.toFixed(1)} unit={`${t('weekly.tonneUnit')} ${t('complete.movedShort')}`} />
+              {/*
+                ⛔ AND THE NAMES ARE THE BOARD'S OWN WORDS (`progress.badge*`), ON PURPOSE.
+
+                The same three facts are drawn on Progress · ALL TIME, and between the two screens
+                this app held FOUR vocabularies for them — `complete.kcal`, `weekly.statKcal`,
+                `progress.unitKcal`, and "moved" as `complete.movedShort` / `weekly.statMoved` /
+                `progress.badgeLifted`. A fact she meets twice must not change its name on the way.
+                One key per fact, read from where the fact is defined at its longest.
+              */}
+              <Arrive order={3} style={styles.posterStats}>
+                <Fact value={durationLabel} unit={t('common.minShort')} name={t('progress.badgeTrained')} />
+                {poster?.hero.kind === 'record' && poster.tonnes > 0 ? (
+                  <Fact value={poster.tonnes.toFixed(1)} unit={t('weekly.tonneUnit')} name={t('progress.badgeLifted')} />
                 ) : null}
-                {kcal != null ? <Fact value={String(kcal)} unit={t('complete.kcal')} /> : null}
-              </View>
+                {kcal != null ? <Fact value={String(kcal)} unit={t('complete.kcal')} name={t('progress.badgeBurned')} /> : null}
+              </Arrive>
 
               {/*
                 ⛔ THE RECEIPT IS DELETED (founder 2026-08-05): *"all the exercises and their sets and
@@ -943,6 +1255,10 @@ export function SessionEarned({
                 ⚠️ Nothing is lost — it is the session record, one press away, where a table belongs.
               */}
 
+              {/* ⛔ the partial status ALSO leads the head legend (`savedWord`, design review
+                  2026-09-01) — this line stays beside the facts it qualifies, because the child
+                  cannot know what a caller's legend string carries, and a partial session must
+                  say so on every path (`sessionEarned` pins it). */}
               {partial ? <Text style={styles.posterPartial}>{t('complete.partialTitle')}</Text> : null}
 
           {/*
@@ -974,7 +1290,13 @@ export function SessionEarned({
             being kept "just in case": there is no fifteen seconds left to fill. The pipe is closed
             at the source, not hidden behind a flag that would let it back in.
           */}
-          {(
+          {/*
+            ⚠️ AND A VERDICT IS ONLY DRAWN WHEN THERE IS ONE (found 2026-08-18). "Every lift held" is
+            what an EMPTY list means; it is not what an unread one means. While the engine's answer
+            is still coming — and for ever, if the read failed — the box is simply not there, because
+            the alternative is telling her the workout changed nothing on the strength of an error.
+          */}
+          {nothingDecided && !decisionsKnown ? null : (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
@@ -1016,8 +1338,7 @@ export function SessionEarned({
               )}
             </Pressable>
           )}
-            </View>
-          ) : null}
+          </View>
         </ScrollView>
 
         {/* WHAT CHANGED — the rows, when she asks for them. */}
@@ -1037,9 +1358,10 @@ export function SessionEarned({
             </View>
             <ScrollView contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.earned}>
-              {decisions.map((d) => (
-                <View key={d.key} style={styles.earnedRow}>
-                  <View style={styles.earnedHead}>
+              {groupDecisions(decisions).map((g) => (
+                <View key={g.key} style={styles.earnedRow}>
+                  {g.lines.map((d) => (
+                  <View key={d.key} style={styles.earnedHead}>
                     <Text style={styles.earnedName} numberOfLines={2}>{bidi(d.name)}</Text>
                     {/* The held verdict puts a WORD in a mono slot — which the handoff does, and
                         which mono can only draw in a Latin script. When it cannot, the whole figure
@@ -1047,8 +1369,35 @@ export function SessionEarned({
                     {/* ⛔ A SILENT ROW DRAWS NO COLUMN. Not "holds", not an empty arrow — nothing.
                         The coach's sentence beneath is the whole row, and any word here is a
                         verdict the app invented about a decision it did not make. */}
+                    {/*
+                      ════════════════════════════════════════════════════════════════════════════
+                      ⛔ THE SANS FALLBACK WAS ASKED ABOUT THE LOCALE, NOT ABOUT THIS ROW.
+
+                      The condition was `!monoCanDraw(holdsWord)` — and `holdsWord` is a CONSTANT
+                      for the language, not this row's content. So in Hebrew, where mono cannot draw
+                      `מחזיק`, the fallback fired on **every** row, including the ones whose figure
+                      is nothing but digits and an arrow.
+
+                      Measured in the harness, on one ledger, three rows apart:
+
+                          " → 41"   Assistant             ← a LOAD that moved
+                          " → 4"    IBMPlexMono-Medium    ← a SET COUNT that moved
+
+                      Two faces for one kind of statement, and the wrong one won on the load. This
+                      app's voice system is FACE: mono is what was measured, and 34 → 41 is the most
+                      measured thing on the screen.
+
+                      ⚠️ IT WAS INVISIBLE IN ENGLISH. `monoCanDraw('holds')` is true, so the fallback
+                      never fired there and the ledger looked right. The defect only ever existed in
+                      the primary locale — which is the one nobody was reading it in.
+
+                      The question is per ROW now: a HELD row draws a word and hands the whole figure
+                      to sans (that is `monoCarriesNoWords`, and it still holds); a moved row draws
+                      figures and stays in the face figures are set in.
+                      ════════════════════════════════════════════════════════════════════════════
+                    */}
                     {d.silent ? null : (
-                    <Text style={[styles.earnedFigure, !monoCanDraw(holdsWord) && styles.earnedFigureSans]}>
+                    <Text style={[styles.earnedFigure, d.held && !monoCanDraw(holdsWord) ? styles.earnedFigureSans : null]}>
                       {d.held ? (
                         <>
                           <Text style={styles.earnedHold}>{`${holdsWord} `}</Text>
@@ -1063,8 +1412,12 @@ export function SessionEarned({
                     </Text>
                     )}
                   </View>
-                  <Text style={styles.earnedReason}>
-                    {'text' in d.reason ? d.reason.text : t(d.reason.key, d.reason.params)}
+                  ))}
+                  {/* Said ONCE for the whole group — see `groupDecisions`. The rule appears only
+                      when the sentence is covering more than one lift, because a rule over a single
+                      row is a separator between a fact and its own reason. */}
+                  <Text style={[styles.earnedReason, g.lines.length > 1 && styles.earnedReasonForMany]}>
+                    {'text' in g.reason ? g.reason.text : t(g.reason.key, g.reason.params)}
                   </Text>
                 </View>
               ))}
@@ -1108,20 +1461,61 @@ export function SessionEarned({
           </View>
         ) : null}
 
+        {/*
+          ⛔ THE FOOTER STANDS DOWN WHILE THE SHEET IS UP (founder screenshot, 2026-08-18).
+
+          `sheetWrap` is `StyleSheet.absoluteFillObject` — it covers the whole safe area, decisions
+          included — and this footer is its NEXT SIBLING, so it painted **on top of it**: the cream
+          "Finish workout" button and the "View session record" link sat across the middle of the
+          decision list, with the fifth lift's "12 → 13" continuing underneath them and the footer's
+          own hairline ruled straight through the sheet.
+
+          ⚠️ IT WAS ALSO PRESSABLE THROUGH THE SHEET, which is the half a screenshot does not show:
+          the one control that ENDS the workout was live, over a list she had opened to read, with
+          nothing on screen tying it to the thing underneath. Nothing here was dimmed or hidden —
+          later siblings simply paint above, and an absolute overlay that stops short of the last
+          child is not an overlay.
+
+          The sheet carries its own close (the ✕ in `sheetHead`), so the footer is not needed while
+          it is up and returns the instant it closes. Not `opacity: 0` and not `pointerEvents`: the
+          control is not there, so VoiceOver does not find it either.
+        */}
+        {sheetOpen ? null : (
         <View style={styles.footer}>
+          {/* The ledger continues under this footer — the fade says so (design review 2026-09-01). */}
+          <FooterFade ground={stage[0]} />
           {/* IMG_8260: the cream action first, "View session record" as a quiet ghost link beneath it.
               ⛔ "Finish workout", not "Done" (founder 2026-08-05): the box above is now the other
               thing she can do here, and two controls called Done and "3 decisions ›" do not tell
               her which one ends the workout. It says what happens. */}
           <Button variant="primary" size="lg" block label={t('complete.finishWorkout')} onPress={onDone} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('complete.viewRecord')}
-            onPress={onRecord}
-            style={({ pressed }) => [styles.recordLink, pressed && styles.ghostPressed]}
-          >
-            <Text style={styles.recordLinkLabel}>{t('complete.viewRecord')}</Text>
-          </Pressable>
+          {onShareStory ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('complete.shareStory')}
+              onPress={onShareStory}
+              style={({ pressed }) => [styles.recordLink, pressed && styles.ghostPressed]}
+            >
+              <Text style={styles.recordLinkLabel}>{t('complete.shareStory')}</Text>
+            </Pressable>
+          ) : null}
+          {/*
+            ════ ⛔ THE FOOTER IS TWO ACTS AGAIN (founder, build-58 device QA 2026-08-24) ════
+
+            He photographed the closing screen with FOUR rows in this footer — finish, share,
+            "התאמנתם יחד?", "צפייה ברשומת האימון" — standing so tall they buried the decisions box
+            under the fold with no visible way to it: *"באג חריף שמסתיר את הכרטיסייה של ההחלטות."*
+
+            Two left with that photograph:
+              · THE TOGETHER DOOR — his ruling: a partner workout deserves its OWN simple screen,
+                not a question appended to every ordinary finish. The RECORD's shape stays
+                (`Session.partners`, `db.setSessionPartners`, the poster line, the story card) —
+                the dedicated flow fills it when its cycle lands; this footer does not ask.
+              · THE RECORD LINK — the Log owns the table, one tap away, where a table belongs.
+
+            What remains is the founder's own arithmetic: the one act that ends the workout, and
+            the one quiet door to the story.
+          */}
           {/*
             ⛔ THE "SHARE YOUR RECORD" CONTROL IS GONE — founder, 2026-08-02.
 
@@ -1132,6 +1526,7 @@ export function SessionEarned({
             the achievement.
           */}
         </View>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -1232,13 +1627,32 @@ export function SessionScan({
  *
  * A row each: the figure on the start edge at 44, its name on the end edge, a hairline between. The
  * block grows with the poster instead of competing with it.
+ *
+ * ⛔ EXCEPT THE THING ON THE END EDGE WAS NEVER A NAME — IT WAS THE UNIT.
+ *
+ * `justifyContent: 'space-between'` then threw it the full width of the poster, so the row read
+ * **"5 ··· 250 points of black ··· min"**: a measurement torn in half, with nothing in the gap.
+ * The row for time said "5 … min" and the one for energy "25 … kcal", while only the tonnage got a
+ * word ("t moved") — three rows, two grammars, and no row saying what it was a measurement OF.
+ *
+ * ⚠️ AND THE APP ALREADY KNEW BETTER IN THREE PLACES. `fmtMinutes(seconds, unit)` exists in
+ * `domain/duration` for the sole purpose of keeping a figure and its unit in one string, and this
+ * screen went around it to split them. `WeeklyUpdate`'s `LetterFact` and `WorkoutDetail`'s `Fact`
+ * both take value-with-unit and a separate `label`. This was the only one of the four that did not.
+ *
+ * The measurement is one group on the start edge, and the end edge carries the NAME this docblock
+ * has been promising since it was written.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-function Fact({ value, unit }: { value: string; unit: string }) {
+function Fact({ value, unit, name }: { value: string; unit: string; name: string }) {
   return (
-    <View style={styles.factRow}>
-      <Text style={styles.factValue}>{value}</Text>
-      <Text style={styles.factUnit}>{unit}</Text>
+    /* One node, one sentence: "Trained 5 min" — not "5", stop, "min". */
+    <View style={styles.factRow} accessible accessibilityLabel={`${name} ${value} ${unit}`}>
+      <View style={styles.factMeasure}>
+        <Text style={styles.factValue}>{value}</Text>
+        <Text style={styles.factUnit}>{unit}</Text>
+      </View>
+      <Legend size={17} tone="muted">{name}</Legend>
     </View>
   );
 }
@@ -1249,7 +1663,11 @@ const styles = StyleSheet.create({
 
   // not started
   notStartedBody: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 12 },
-  notStartedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
+  /* The one legend on the un-started state.
+     ⚠️ THE TRACKING IS SUPPLIED AT THE CALL SITE, from `legendVoice`. It is an answer about the
+     STRING — Latin keeps the instrument's open track, Hebrew never gets it — and a StyleSheet
+     cannot see a string. `noTrackedHebrew` holds every slot in this class. */
+  notStartedLegend: { fontFamily: font.sansMedium, fontSize: textScale['2xs'], textTransform: 'uppercase', color: stage.ink2, textAlign: 'left' },
 
   // beats 1+2
   // v7 2.4c · THE SCAN — the head high on the page, the lifts ruled beneath it, the read's own
@@ -1288,7 +1706,8 @@ const styles = StyleSheet.create({
   scanNote: { fontFamily: font.sans, fontSize: 20, lineHeight: 27, color: stage.ink1, textAlign: 'center' },
 
   // beat 3
-  resultScroll: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 14, flexGrow: 1 },
+  /* paddingBottom 28 → 56: the last ledger row must clear the footer fade. */
+  resultScroll: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 56, flexGrow: 1 },
   // v7 2.5: "That's the work." is Frank Ruhl Libre serif, ~46px — the workout's closing sentence.
   resultTitle: { fontFamily: font.serif, fontSize: textScale['4xl'], letterSpacing: trackingPx(textScale['4xl'], tracking.display), lineHeight: 46, color: stage.ink0, marginTop: 12, textAlign: 'left' },
   copy: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: stage.ink1, marginTop: 10, maxWidth: 320, textAlign: 'left' },
@@ -1340,49 +1759,88 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     fontSize: 92,
     lineHeight: 96,
-    letterSpacing: trackingPx(92, tracking.display),
+    /* ✦ Set as a headline at the size it actually is — see `tracking.figureLarge`. This is the
+       biggest figure in the product and it was the loosest thing in its own size class. */
+    letterSpacing: trackingPx(92, tracking.figureLarge),
     color: stage.ink0,
     includeFontPadding: false,
     textAlign: 'left',
   },
   heroUnit: { fontFamily: font.mono, fontSize: 24, color: stage.ink1, textAlign: 'left' },
   heroUnitWord: { fontFamily: font.sans, fontSize: 24, color: stage.ink1, textAlign: 'left' },
-  heroLabel: {
-    fontFamily: font.sansMedium,
-    fontSize: 17,
-    letterSpacing: trackingPx(13, tracking.legend),
-    textTransform: 'uppercase',
-    color: stage.ink2,
-    textAlign: 'center',
-  },
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THIS LABEL WAS DETACHING ITS OWN HEBREW LETTERS (found 2026-08-27, on the poster itself)
+   *
+   * It read `נ פ ח` under a 92-point `4.2`. Two faults, stacked, and both are fossils:
+   *
+   *   · ⛔ TRACKED SANS. `tracking.legend` is .16em — a device of an alphabet that HAS caps and
+   *     whose letters are built to stand apart. `Legend` has forbidden this since 2026-08-26 and
+   *     says why at length; this style was a hand-rolled copy of `Legend` that never got the fix,
+   *     because `trackingPx(…)` is a CALL and the type lint only knew how to see a positive
+   *     numeric literal. Six styles were hiding in that blind spot. The lint can see calls now.
+   *   · ⚠️ AND THE TRACKING WAS SIZED FOR A FONT THIS TEXT IS NO LONGER SET IN. `trackingPx(13, …)`
+   *     on a `fontSize: 17` line — the founder's type floor (2026-08-12) lifted 13 to 17 and left
+   *     the argument behind. Every one of the six had the same tell: 13, 12.5, 10.5.
+   *
+   * It is a `Legend` now rather than a repair, which is the actual lesson: this was always an
+   * instrument label, and the app has one of those. What survives here is the COLOUR — the poster
+   * sits on `stage`, not on `color` — and `Legend` applies `style` last, so it wins.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  heroLabel: { color: stage.ink2, textAlign: 'center' },
   bestPill: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: 'rgba(169,196,159,0.12)',
   },
-  bestPillText: {
-    fontFamily: font.sansMedium,
-    fontSize: 17,
-    letterSpacing: trackingPx(12.5, tracking.legend),
-    textTransform: 'uppercase',
-    color: up.stage,
-    textAlign: 'left',
-  },
+  /* The record stamp — a `Legend` for the same reason `heroLabel` is; see the note there. */
+  bestPillText: { color: up.stage, textAlign: 'left' },
   /* ⛔ A COLUMN, NOT A STRIP — see the note at `Fact`. */
+  // the session's body pair, front and back, between the hero and the facts
+  posterBody: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 20 },
   posterStats: {
     alignSelf: 'stretch',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(241,238,229,0.12)',
   },
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ `space-between` IS GONE (2026-08-27) — IT WAS STILL DOING THE THING ITS OWN NOTE INDICTS.
+   *
+   * The docblock at `Fact` names the fault exactly: *"`justifyContent: 'space-between'` then threw
+   * it the full width of the poster, so the row read **\"5 ··· 250 points of black ··· min\"**: a
+   * measurement torn in half, with nothing in the gap."*
+   *
+   * That repair changed WHAT was split — the figure and its unit were grouped, correctly — and left
+   * `space-between` standing. So the row stopped tearing the measurement in half and started
+   * tearing the measurement from its NAME instead. Measured on the poster: `58 דק׳` ends at 113 and
+   * `זמן אימון` begins at 307. **194 points of black between a number and the word for what it is.**
+   * The same void, one column over.
+   *
+   * ⚠️ AND THE FOUNDER'S RULING DOES NOT ASK FOR THIS. 2026-08-12: *"תן ל-3 המשתנים … כל שורה משל
+   * עצמו ותגדיל אותם — יש לך כאן מסך שלם למה אתה לא מנצל את כל האיזור."* That is about ROWS and
+   * SIZE, and both stay. Using the whole area is what the RULES do — they run edge to edge and give
+   * the block its presence. It was never a reason to exile a three-letter word to the far margin.
+   *
+   * ⚠️ AND THE POSTER WAS THE ODD ONE OUT. This app has three stat displays: Today's `liveStats` and
+   * the Saturday letter's `statBand` both set the label WITH its figure. Only the poster split them.
+   *
+   * A name sits beside the thing it names.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
   factRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'space-between',
+    gap: 14,
     paddingVertical: 15,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(241,238,229,0.12)',
   },
+  /* The figure and its unit, tighter than the gap to the name — so the row reads as one
+     measurement and then what it is OF, rather than three equal words. */
+  factMeasure: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
   posterPartial: {
     marginTop: 20,
     fontFamily: font.serif,
@@ -1414,7 +1872,7 @@ const styles = StyleSheet.create({
   // Waiting is not a decision, so it does not wear the accent — a plain rim, holding the slot.
   decisionBoxThinking: { borderColor: 'rgba(241,238,229,0.16)', backgroundColor: 'transparent' },
   decisionLead: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  decisionNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, color: signal[0], textAlign: 'left' },
+  decisionNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, letterSpacing: trackingPx(30, tracking.figure), color: signal[0], textAlign: 'left' },
   decisionWords: { flex: 1, gap: 1 },
   decisionWord: { fontFamily: font.sansSemibold, fontSize: 17, color: stage.ink0, textAlign: 'left' },
   decisionFrom: { fontFamily: font.sans, fontSize: 17, color: stage.ink2, textAlign: 'left' },
@@ -1453,7 +1911,9 @@ const styles = StyleSheet.create({
   /* Column, not a row: the figure is not an annotation of the name, it is the news. */
   earnedHead: { gap: 7 },
   earnedName: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, color: stage.ink0, textAlign: 'left' },
-  earnedFigure: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 40, lineHeight: 46, letterSpacing: -1, color: stage.ink1, includeFontPadding: false, textAlign: 'left' },
+  /* `-1` here was -0.025em by hand and it was RIGHT — it is the rung `tracking.figure` was named
+     from. Stated in em now so it travels with the size instead of being re-guessed at each one. */
+  earnedFigure: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 40, lineHeight: 46, letterSpacing: trackingPx(40, tracking.figure), color: stage.ink1, includeFontPadding: false, textAlign: 'left' },
   // The load it came FROM rests in shadow; the load it moved TO stands in moss — the decision is
   // the only thing on this line the engine actually made.
   earnedFrom: { color: stage.ink1 }, // rtl-ok: nested in earnedFigure
@@ -1470,7 +1930,18 @@ const styles = StyleSheet.create({
   // The reason, in the coach's own italic serif — the sentence that earned the number above it.
   /* 17/21 → 19/27. It is the sentence that earns the figure above it and the only prose on the
      sheet; at caption size and caption leading it read as a footnote to a table. */
-  earnedReason: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 19, lineHeight: 27, color: stage.ink1, textAlign: 'left' },
+  earnedReason: { fontFamily: font.serif, fontSize: 19, lineHeight: 27, color: stage.ink1, textAlign: 'left' },
+  /*
+   * The sentence that covers SEVERAL lifts gets a rule above it, so it reads as belonging to the
+   * rows rather than to the last one of them. A group of one gets nothing — see the note at the
+   * markup: a rule between a fact and its own reason is a separator between two halves of one
+   * thing, which is the opposite of what a rule is for.
+   */
+  /* ⚠️ `stage[2]`, NOT `color.border` — this file does not import `color`, and `@ts-nocheck` means
+     nothing said so until a render test refused to load the module. The exact shape
+     `everyComponentIsImported` was written for, one layer down: a StyleSheet is evaluated on import,
+     so an unbound name here does not fail a screen, it fails the whole app at launch. */
+  earnedReasonForMany: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: stage[2] },
 
   // beat 4 — the milestone stamp
   // v7 2.6: one 30px rhythm — legend, seal, words — centred with the whole column lifted 20.
@@ -1488,4 +1959,9 @@ const styles = StyleSheet.create({
   // IMG_8260: "View session record" — a quiet centred ghost link beneath the cream Done action.
   recordLink: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
   recordLinkLabel: { fontFamily: font.sansSemibold, fontSize: textScale.base, color: stage.ink1, textAlign: 'center' },
+  togetherLine: { fontFamily: font.serif, fontSize: 18, lineHeight: 24, color: stage.ink1, textAlign: 'center', marginTop: 6 },
+  togetherLegend: { marginBottom: 10 },
+  togetherTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, color: color.textPrimary, textAlign: 'left' },
+  togetherSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: color.textSecondary, marginTop: 8, marginBottom: 16, textAlign: 'left' },
+  togetherSave: { marginTop: 16 },
 });

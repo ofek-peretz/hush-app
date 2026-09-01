@@ -3,7 +3,6 @@
  * narration, so this is a thin pass-through to v5 — kept as the single import point for Home and the
  * WeeklyUpdate screen (they never import an engine directly, so the surfaces can never disagree).
  */
-// @ts-nocheck
 
 // 
 

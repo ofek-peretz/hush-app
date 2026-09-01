@@ -58,19 +58,18 @@
  * my program" runs completeOnboarding and leads straight into the first session — conversion is the
  * trial-complete paywall (§4.3), not here.
  */
-// @ts-nocheck
 
 // 
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Animated, Easing } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Button, Legend } from '@/components/ds';
+import { Button, FooterFade, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
-import { useApp } from '@/state/stores/appStore';
+import { useApp, engineMayRebuild } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { programmeName } from '@/domain/programmeName';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
@@ -78,17 +77,21 @@ import type { Program, Profile } from '@/data/local/models';
 import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { billing, PRODUCT_IDS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, font, textScale, tracking, trackingPx, radius, paper } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, radius, motion } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ProgramCreated'>;
 
-export function ProgramCreated({ route }: Props) {
+/** ` · ` — see the note where the shape line is joined. */
+const SEP = ' · ';
+
+export function ProgramCreated({ route, navigation }: Props) {
   const { t } = useCopy();
   const app = useApp();
-  const { inputs } = route.params;
+  const { inputs, coachMissed, coachAsk } = route.params;
   const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
   /*
    * The profile the CTA is about to write, in memory. `generateProgram` is pure and reads only these
@@ -122,10 +125,36 @@ export function ProgramCreated({ route }: Props) {
    * about to build. That call is PURE, which is what makes asking it twice safe and its answer
    * identical to the one she will train.
    */
+  /*
+   * ════ ⛔ AND IT NAMED A WEEK SHE WAS NEVER GOING TO TRAIN (found 2026-08-29) ════
+   *
+   * This generated, always — so for the two athletes who arrive here with a week ALREADY ON DISK it
+   * described a different programme entirely:
+   *
+   *   · the one who brought her coach's sheet (`ImportPlan` → `replace('ProgramCreated')`), and
+   *   · the one who wrote her own in the builder (the intake step added the same day).
+   *
+   * Both were shown an engine week's name, an engine week's shape and an engine week's learn-phase
+   * length on the screen whose entire job is telling her what she is about to train — and then
+   * `completeOnboarding` correctly kept the week she actually had. Nothing failed; the screen simply
+   * described somebody else's programme.
+   *
+   * ⚠️ THE GATE IS THE SAME ONE THE WRITE ASKS. `engineMayRebuild` is what `completeOnboarding` uses
+   * to decide whether to assemble at all, so asking it here means the preview and the write cannot
+   * disagree by construction — which is the only fix worth making to a screen that lied about a
+   * derivation.
+   */
   const [program, setProgram] = useState<Program | null>(null);
   useEffect(() => {
     let alive = true;
-    void app.model.generateProgram(profileForPreview).then((p) => alive && setProgram(p)).catch(() => {});
+    void db
+      .loadProgram()
+      .catch(() => null)
+      .then((brought) =>
+        engineMayRebuild(brought) ? app.model.generateProgram(profileForPreview) : brought,
+      )
+      .then((p) => alive && setProgram(p ?? null))
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -134,12 +163,23 @@ export function ProgramCreated({ route }: Props) {
   /* Her week's name, in her language — the same descriptor `BuildingProgramme` renders. */
   const named = useMemo(() => {
     if (!program) return null;
+    /*
+     * ⛔ THE SEPARATOR MAY NOT BE ORPHANED ONTO THE NEXT LINE (2026-08-26, the elevation pass).
+     *
+     * Joined with a plain `' · '`, this line wrapped between a term and the middot that follows it —
+     * and under RTL the stranded middot lands at the visual edge of the next line, where it reads as
+     * a bullet trailing the LAST item: `בהובלת חזה ·`. The screen's one description of her
+     * programme, ending in a dangling mark.
+     *
+     * A NO-BREAK SPACE before the middot glues it to the term it follows, so the break can only
+     * happen AFTER a separator — which is where a list is allowed to break.
+     */
     const n = programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER);
     return [
       t(n.key),
       t('plan.weekDays', { n: n.days }),
-      ...(n.led.length > 0 ? [t('plan.led', { muscles: n.led.map((m) => t(`muscle.${m}`)).join(' · ') })] : []),
-    ].join(' · ');
+      ...(n.led.length > 0 ? [t('plan.led', { muscles: n.led.map((m) => t(`muscle.${m}`)).join(SEP) })] : []),
+    ].join(SEP);
   }, [program, inputs.bodyMap, t]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -159,6 +199,27 @@ export function ProgramCreated({ route }: Props) {
    * She arrives to her actual week now. The seal still draws in, once, because the arrival is worth
    * a beat — it simply no longer waits for a fictional machine to finish.
    */
+
+  /*
+   * ⛔ A TRIAL SCREEN STATES ITS PRICE (design review 2026-09-01). "חינם עד ש-14 מאחוריך" with
+   * no number after it fails the athlete's first question and App Review's guideline alike.
+   * The figure is the STORE'S localized price — never hardcoded — and until the store answers
+   * (or off-store builds), the line still tells the truth without a number.
+   */
+  const [monthlyPrice, setMonthlyPrice] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void billing
+      .getProducts()
+      .then((list) => {
+        if (!alive) return;
+        const m = list.find((p) => p.id === PRODUCT_IDS.monthly);
+        if (m?.priceLabel) setMonthlyPrice(m.priceLabel);
+      })
+      .catch(() => { /* the fallback line stands */ });
+    return () => { alive = false; };
+  }, []);
+
   const seal = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     haptics.success();
@@ -166,7 +227,7 @@ export function ProgramCreated({ route }: Props) {
       seal.setValue(1);
       return;
     }
-    Animated.timing(seal, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(seal, { toValue: 1, duration: motion.dur[4], easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [reduced, seal]);
 
 
@@ -239,6 +300,11 @@ export function ProgramCreated({ route }: Props) {
               <Icon name="check" size={15} color={color.accent} strokeWidth={2.4} />
               <Text style={styles.cancelText}>{t('ob.readyCancel', { n: FREE_SESSION_LIMIT })}</Text>
             </View>
+            {/* And what comes AFTER the fourteen — the price, from the store, in her currency.
+                The strongest form of "no card, no charge" is saying the number it would be. */}
+            <Text style={styles.priceLine}>
+              {monthlyPrice ? t('ob.readyPrice', { price: monthlyPrice }) : t('ob.readyPriceUnknown')}
+            </Text>
             {/* The band explains the two phases of the trial arc.
 
                 The second phase BEGINS WHERE THE FIRST ENDS. It read "5–14" whatever her week
@@ -251,11 +317,42 @@ export function ProgramCreated({ route }: Props) {
                 learnCount={learnTicks}
                 learn={t('ob.readyLearnYou').toUpperCase()}
                 learnRange={t('ob.readyLearnRange', { n: learnTicks })}
+                learnSub={t('ob.readyLearnSub')}
                 know={t('ob.readyKnowYou').toUpperCase()}
-                knowRange={t('ob.readyKnowRange', { from: learnTicks + 1, to: FREE_SESSION_LIMIT }).toUpperCase()}
+                knowRange={t('ob.readyKnowRange', { from: learnTicks + 1, to: FREE_SESSION_LIMIT })}
+                knowSub={t('ob.readyKnowSub')}
               />
             </View>
             <Text style={styles.signature}>{t('ob.readySignature')}</Text>
+            {/*
+              ⛔ THE ONE THING SHE WROTE, AND WHETHER IT LANDED (2026-08-30).
+              ⚠️ Measured on the production Worker: nine builds in sixteen come back usable inside
+              the intake's budget. The other seven fall through to the local assembler, which is
+              the right week to hand her — and until now the screen said nothing about it, on the
+              deliberate ruling that *"she never learns there was a call."*
+              That ruling was written when the fallback was rare. It is not rare, and the sentence
+              she typed in her own words is the whole promise of the AI door. So: said plainly,
+              once, in the quietest voice on the screen — and the ask is offered again rather than
+              only regretted, because a line that reports a failure without a way out of it is an
+              apology, not a product.
+            */}
+            {coachMissed ? (
+              <View style={styles.missedBlock}>
+                <Text style={styles.missed}>{t('ob.readyCoachMissed')}</Text>
+                <Pressable
+                  onPress={() =>
+                    navigation.replace('BuildingProgramme', {
+                      inputs,
+                      ...(coachAsk != null ? { coachAsk } : {}),
+                    })
+                  }
+                  accessibilityRole="button"
+                  hitSlop={8}
+                >
+                  <Text style={styles.missedRetry}>{t('ob.readyCoachRetry')}</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {/*
               ⛔ THE WEEK LIST IS DELETED (founder 2026-08-10): *"אם אני זוכר התוכנית אימון מופיעה
               שם למטה וצריך להעיף אותה כי אף אחד לא רואה את זה."*
@@ -268,6 +365,8 @@ export function ProgramCreated({ route }: Props) {
           </Animated.View>
       </ScrollView>
       <View style={styles.footer}>
+        {/* The how-it-works card scrolls on beneath — the fade says so (design review 2026-09-01). */}
+        <FooterFade />
         {failed ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
         <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={() => void onDone()} disabled={busy} />
       </View>
@@ -316,7 +415,8 @@ function StartFinishMark() {
 
 /** The fourteen-tick trial arc: the first four cream (I learn you), the rest moss (I know you),
  *  under two down-brackets naming the phases. */
-function PhaseTimeline({ learn, learnRange, know, knowRange, learnCount: learnTicks }: { learn: string; learnRange: string; know: string; knowRange: string; learnCount: number }) {
+
+function PhaseTimeline({ learn, learnRange, learnSub, know, knowRange, knowSub, learnCount: learnTicks }: { learn: string; learnRange: string; learnSub: string; know: string; knowRange: string; knowSub: string; learnCount: number }) {
   return (
     <View>
       <View style={styles.tickRow}>
@@ -329,7 +429,16 @@ function PhaseTimeline({ learn, learnRange, know, knowRange, learnCount: learnTi
               key={i}
               style={[
                 styles.tick,
-                { backgroundColor: isLearn ? color.textPrimary : color.accent, height: last ? 40 : 34, marginTop: last ? -3 : 0 },
+                /* ⛔ TWO CHANNELS, NOT A HUE WHISPER (design review 2026-09-01). Cream vs moss on
+                   2-point ticks is a difference nobody perceives at arm's length, so the chart
+                   read as fourteen identical bars — decoration shaped like data. The phases now
+                   differ in HEIGHT as well (24 vs 34): the learning rungs are the short ones, the
+                   known ones stand taller, and the boundary is visible before the brackets say it. */
+                {
+                  backgroundColor: isLearn ? color.textPrimary : color.accent,
+                  height: isLearn ? 24 : last ? 40 : 34,
+                  marginTop: last ? -3 : 0,
+                },
               ]}
             />
           );
@@ -351,6 +460,18 @@ function PhaseTimeline({ learn, learnRange, know, knowRange, learnCount: learnTi
         <View style={styles.bracketGap} />
         <View style={[styles.bracket, { flex: Math.max(1, FREE_SESSION_LIMIT - learnTicks), borderColor: color.accent }]} />
       </View>
+      {/*
+        ⛔ THE TWO SENTENCES CAME OUT OF THE COLUMNS (2026-08-26, the elevation pass).
+
+        The columns are right for the LABELS — "I learn you · 1–4" against "I know you · 5–14" is a
+        comparison, and a comparison wants two seats. They were wrong for the prose. Half of a 393
+        point screen, less the card's padding, is about 150 points; at the type floor that is roughly
+        NINE HEBREW CHARACTERS PER LINE, so both sentences wrapped four deep and broke mid-phrase
+        (`מדידה — כל סט`). An earlier eye-pass had already widened these columns once — the fix was
+        real and the shape was the problem.
+
+        A label is a word and fits a column. A sentence is a sentence and takes the width.
+      */}
       <View style={styles.phaseRow}>
         <View style={styles.phaseCol}>
           <Text style={[styles.phaseLabel, { color: color.textPrimary }]}>{learn}</Text>
@@ -361,6 +482,11 @@ function PhaseTimeline({ learn, learnRange, know, knowRange, learnCount: learnTi
           <Text style={[styles.phaseRange, styles.phaseLabelEnd]}>{knowRange}</Text>
         </View>
       </View>
+      {/* THE CALIBRATION PROMISE (the review's RP steal, founder-approved 2026-08-24): the first
+          days' weights are a MEASUREMENT, said once, here at the programme's birth — so a cautious
+          opening load reads as the method, never as the app guessing wrong. */}
+      <Text style={styles.phaseSub}>{learnSub}</Text>
+      <Text style={styles.phaseSub}>{knowSub}</Text>
     </View>
   );
 }
@@ -375,22 +501,19 @@ const styles = StyleSheet.create({
     color: color.textPrimary,
     textAlign: 'left',
   },
-  // The reason is the coach speaking, so it wears the coach's italic — the same voice as its notes.
-  programWhy: {
-    fontFamily: font.serif,
-    fontStyle: 'italic',
-    fontSize: 17,
-    lineHeight: 24,
-    color: color.textSecondary,
-    textAlign: 'left',
-  },
+  /* ⚠️ `programWhy` IS GONE. It dressed a second line under the name — the coach explaining its own
+     choice — and that line went with the coach on 2026-08-10. What survives is the NAME; a rule for
+     a sentence nobody writes any more is a description of a screen that is not there. */
   root: { flex: 1, backgroundColor: color.bg },
   /*
    * A ScrollView's content, not a flex child: the week can be three sessions or six, and a screen
    * that centred a fixed block now has to be able to run past the bottom of the phone.
    * `flexGrow` keeps a SHORT programme centred the way it always was.
    */
-  body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 34, paddingVertical: 24 },
+  /* Bottom padding outranks the top: the "— hush" signature is the last thing on the page, and at
+     the end of a scroll it deserves air, not the footer's shoulder (walk finding, 2026-08-26). */
+  /* paddingBottom 36 → 56: the card's last line ("— hush") must clear the footer fade. */
+  body: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 34, paddingTop: 24, paddingBottom: 56 },
 
 
 
@@ -418,15 +541,38 @@ const styles = StyleSheet.create({
   // freeze it to the physical left (an omitted alignment is iOS `natural`, which RN never flips).
   bigNum: { fontFamily: font.monoMedium, fontSize: 104, lineHeight: 104, letterSpacing: -5.2, color: color.textPrimary, textAlign: 'center' },
   freeCol: { gap: 8, alignItems: 'flex-start' },
-  // The pill is a fixed 176 × 36 bar, not a label with padding — it is the width the handoff
-  // draws, so FREE reads as a stamp across the column rather than a chip hugging four letters.
-  freePill: { width: 176, height: 36, borderRadius: 100, backgroundColor: color.accent, alignItems: 'center', justifyContent: 'center' },
-  // Paper on moss — the mark carries the LIGHT tone here, never the stage's ink.
-  freePillText: { color: color.paper },
+  /*
+   * ⛔ THE STAMP IS AN OUTLINE NOW, NOT A FILL (2026-08-26, the elevation pass).
+   *
+   * A 176 × 36 FILLED MOSS CAPSULE with centred semibold type is not a stamp in this app's
+   * vocabulary — it is `Button variant="signal"`, exactly: same shape, same fill, same radius, same
+   * label treatment. So the one non-interactive object on the screen was wearing the costume of the
+   * one interactive one, eighty points above a real cream CTA. An athlete who taps it gets nothing,
+   * which is the cheapest kind of distrust to buy.
+   *
+   * ⚠️ THE WIDTH IS KEPT AND THE HANDOFF'S INTENT WITH IT: *"the width the handoff draws, so FREE
+   * reads as a stamp across the column rather than a chip hugging four letters."* Still true. What
+   * changed is the one property that made it a control — moss rim, moss word, no ground. A seal is
+   * an outline; a button is a surface.
+   *
+   * ⚠️ AND IT MATTERS MORE IN HEBREW. `חינם` is four characters in a 176-point capsule; filled, that
+   * is mostly empty paint. Outlined, the air inside it reads as the stamp's own margin.
+   */
+  freePill: {
+    width: 176,
+    height: 36,
+    borderRadius: 100,
+    borderWidth: 1.5,
+    borderColor: color.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  freePillText: { color: color.accentText },
 
   // "Cancel anytime" — a moss check + a quiet sans line.
   cancelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cancelText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: color.textSecondary, textAlign: 'left' },
+  priceLine: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 
   // The two-phase band.
   howCard: {
@@ -455,13 +601,25 @@ const styles = StyleSheet.create({
   bracket: { height: 8, borderTopWidth: 1.5, borderStartWidth: 1.5, borderEndWidth: 1.5 },
   // …and the words beneath them, each free to take the width it needs.
   phaseRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
-  phaseCol: { flexShrink: 1 },
-  phaseLabel: { fontFamily: font.monoSemibold, fontSize: 17, letterSpacing: 0.95, textAlign: 'left' },
+  /* flex:1, not flexShrink — with shrink alone the column whose sentence is longer takes the row
+     and squeezes the other into one-word-per-line fragments (eye-pass 2026-08-26). Equal halves:
+     both sentences wrap at their own pace, neither is starved. */
+  phaseCol: { flex: 1 },
+  // Sans, not mono: these are WORDS ("I learn you"), and the mono has no Hebrew glyphs — on the
+  // Hebrew build the fallback face + Latin letterspacing was the jumble on 1.5 (audit 2026-08-23).
+  // monoCarriesNoWords polices literals only; words that arrive via t() must obey it by hand.
+  phaseLabel: { fontFamily: font.sansSemibold, fontSize: 17, textAlign: 'left' },
   phaseLabelEnd: { textAlign: 'right' }, // rtl-ok: the logical END, merged onto the base above
   phaseRange: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, textAlign: 'left', marginTop: 3 },
+  /* Full width, and given the leading a sentence needs — see the note where they left the columns.
+     `marginTop: 10` is the air that says these two lines belong to the row above and not to it. */
+  phaseSub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 23, color: color.textMuted, textAlign: 'left', marginTop: 10 },
 
   // "— hush" — the italic serif signature.
-  signature: { fontFamily: font.serif, fontStyle: 'italic', fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },
+  signature: { fontFamily: font.serif, fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },
+  missedBlock: { gap: 6, marginTop: 18 },
+  missed: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
+  missedRetry: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 21, color: color.accent, textAlign: 'left' },
 
   footer: { paddingHorizontal: space.gutter, paddingBottom: 30, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center' },

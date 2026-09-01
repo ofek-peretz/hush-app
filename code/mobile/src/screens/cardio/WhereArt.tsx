@@ -19,7 +19,6 @@
  * thing on this screen claiming something before she has moved.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 import React from 'react';
 import Svg, { Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
@@ -27,19 +26,55 @@ import { signal, stage } from '@/design/tokens';
 
 const MOSS = signal[0];
 
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ IT SAID "SEEN AT AN ANGLE" AND IT WAS DEAD FLAT (2026-08-27).
+ *
+ * The track was three axis-aligned `<Rect>`s with `rx` at half their height — three concentric
+ * stadium outlines, straight on. The treadmill beside it is drawn in three-quarter view: a raked
+ * deck, an upright leaning back, a console above it. **The two drawings the header calls "one
+ * family" were in two different projections**, and only one of them looked like a place.
+ *
+ * ⚠️ AND FLAT MADE IT ECHO THE BUTTON. A horizontal stadium outline is the exact silhouette of this
+ * app's primary control, and `התחל קרדיו` sits about a hundred points below it in the same width. The
+ * one illustration in the product read as a large empty button.
+ *
+ * ⛔ THE START LINE WAS INVISIBLE. `Line` ran y 110→124 and the runner was a `r={7}` circle with a
+ * 3.5 stroke centred at y=124 — outer radius 8.75, covering y 115→133. Nine of the line's fourteen
+ * points were underneath it, and on glass nothing of it could be seen. The runner also sat ON the
+ * outer kerb (`y = 26 + 98`), which is the boundary, not a lane.
+ *
+ * ── WHAT IT IS NOW ──────────────────────────────────────────────────────────────────────────────
+ * One path, in perspective: the far straight is shorter and higher than the near one, so the bends
+ * foreshorten and the shape reads as ground rather than as an outline. The three lanes are the SAME
+ * path scaled about the figure's own centre — so they cannot drift out of family the way three
+ * hand-tuned rectangles could, and the lane spacing narrows toward the far side exactly as
+ * perspective requires, for free.
+ *
+ * ⚠️ AND THERE IS ONE MARK, NOT TWO. The start line is deleted rather than made bigger: this header
+ * says the drawings are FURNITURE, and a start line beside a runner is a second thing competing for
+ * twelve points of near straight. The filled dot is where she is, and that is the whole sentence.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+/** The outer kerb, in three-quarter view. Symmetric about x=150; the lanes are this, scaled. */
+const TRACK = 'M72 120 L228 120 C262 116 244 60 206 56 L94 56 C56 60 38 116 72 120 Z';
+/** Scaled about the figure's centre — the shape's own bounding centre, not the viewBox's. */
+const lane = (s: number) => `translate(${150 - 150 * s} ${88 - 88 * s}) scale(${s})`;
+
 /** An athletics track, seen at an angle — two straights, two bends, a lane inside a lane. */
 export function TrackArt({ width = 300, height = 150 }: { width?: number; height?: number }) {
   return (
     <Svg width={width} height={height} viewBox="0 0 300 150" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <G opacity={0.9}>
-        {/* The outer kerb, then two inner lanes — a track is legible from the ratio of its bends. */}
-        <Rect x={14} y={26} width={272} height={98} rx={49} stroke={MOSS} strokeWidth={2.5} fill="none" opacity={0.85} />
-        <Rect x={34} y={42} width={232} height={66} rx={33} stroke={MOSS} strokeWidth={1.5} fill="none" opacity={0.45} />
-        <Rect x={52} y={57} width={196} height={36} rx={18} stroke={MOSS} strokeWidth={1.5} fill="none" opacity={0.22} />
-        {/* The start line, on the near straight. */}
-        <Line x1={150} y1={110} x2={150} y2={124} stroke={MOSS} strokeWidth={2.5} strokeLinecap="round" />
-        {/* And the runner on it — the one filled mark, where she is. */}
-        <Circle cx={150} cy={124} r={7} fill={stage[0]} stroke={MOSS} strokeWidth={3.5} />
+        <Path d={TRACK} stroke={MOSS} strokeWidth={2.5} fill="none" opacity={0.85} />
+        <G transform={lane(0.8)}>
+          <Path d={TRACK} stroke={MOSS} strokeWidth={1.9} fill="none" opacity={0.45} />
+        </G>
+        <G transform={lane(0.62)}>
+          <Path d={TRACK} stroke={MOSS} strokeWidth={2.4} fill="none" opacity={0.22} />
+        </G>
+        {/* The runner — the one filled mark, in lane one on the near straight, where she is. */}
+        <Circle cx={150} cy={117} r={5.5} fill={stage[0]} stroke={MOSS} strokeWidth={3} />
       </G>
     </Svg>
   );

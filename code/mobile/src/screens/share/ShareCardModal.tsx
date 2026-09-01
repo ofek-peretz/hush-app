@@ -9,7 +9,6 @@
  * Expo Go / simulator without the modules) the action says so quietly instead of
  * failing; the preview still stands.
  */
-// @ts-nocheck
 
 // 
 

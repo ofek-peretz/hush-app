@@ -46,7 +46,7 @@ import {
 } from '@/engine/v5/constants';
 import { regionOf } from '@/engine/v5/assembler';
 import { exerciseById, muscleOf } from '@/data/exercises';
-import { estimateSessionMinutes } from '@/data/api/fixtureModel';
+import { estimateSessionMinutes, weeklyEffectiveSets } from '@/data/api/fixtureModel';
 import type { MuscleStance, Program, ProgramDay } from '@/data/local/models';
 
 /**
@@ -107,11 +107,39 @@ export interface WeekFinding {
 export interface WeekInputs {
   bodyMap?: Record<string, MuscleStance>;
   daysPerWeek?: number;
+  /**
+   * ⛔ HOW THIS WEEK IS PRICED — and it belongs here, with her other facts (2026-08-18).
+   *
+   * `minutesOf` used to be a third ARGUMENT of `weekFindings`, defaulted to the bare
+   * `estimateSessionMinutes`. Nothing ever passed it, so the judge priced every day with the
+   * day-one bootstrap — the 150-second compound rest — while the assembler priced the same day
+   * with her MEASURED rest and set duration (S-17 / B-4). An athlete who rests 90 seconds had her
+   * week judged, and then REPAIRED, against a session the engine had already fitted inside her hour.
+   *
+   * ⚠️ IT IS AN INPUT, NOT A PARAMETER, because `weekRepair` re-judges the board on every candidate
+   * move through three call layers — `repairWeek`, `attemptRepair`, `tradeOn`/`dropASet` — and a
+   * positional argument forgotten at any one of them silently restores the bootstrap. `inputs`
+   * already travels all four; the clock travels with it.
+   *
+   * ⚠️ AND THE DEFAULT IS A CHOICE, NOT AN ACCIDENT. Where a caller genuinely has no learned data —
+   * a cold start, or a pure unit test handed a hand-built week — the bootstrap is the honest price:
+   * it is the same estimate the engine itself uses for an athlete who has logged nothing.
+   */
+  minutesOf?: (d: ProgramDay) => number;
 }
 
 const workoutsOf = (p: Program) => p.days.filter((d) => !d.isRest && d.slots.length > 0);
 
-/** Weekly sets per muscle, as she actually receives them. */
+/**
+ * Weekly sets per muscle, as the week PRESCRIBES them — the rows she can count on her cards.
+ *
+ * ⚠️ NOT WHAT SHE RECEIVES, and the old one-liner here said it was. That is `weeklyEffectiveSets`,
+ * which adds what every compound lends the muscles it also drives (`indirectMusclesOf`). The two are
+ * different questions and both are needed: a switched-off muscle is judged on what she is GIVEN (a
+ * row still feeds the biceps she turned off, and that is not the engine disobeying her), while the
+ * minimum effective dose is judged on what she RECEIVES. Which reading each rule takes is stated at
+ * the rule.
+ */
 export function weeklySets(p: Program): Record<string, number> {
   const out: Record<string, number> = {};
   for (const d of workoutsOf(p))
@@ -156,12 +184,22 @@ function liftsPerMusclePerDay(p: Program): Record<string, number[]> {
 export function weekFindings(
   program: Program | null | undefined,
   inputs: WeekInputs = {},
-  minutesOf: (d: ProgramDay) => number = estimateSessionMinutes,
 ): WeekFinding[] {
   if (!program) return [];
   const found: WeekFinding[] = [];
   const days = workoutsOf(program);
+  // The bootstrap only where she has given us nothing to price with — see `WeekInputs.minutesOf`.
+  const minutesOf = inputs.minutesOf ?? estimateSessionMinutes;
   const sets = weeklySets(program);
+  /*
+   * ⛔ AND WHAT SHE RECEIVES, FROM THE ENGINE'S OWN FUNCTION (2026-08-18).
+   *
+   * `weeklyEffectiveSets` is the accounting `raiseToWeeklyFloor` spends her minutes on — the same
+   * call, not a reading of the same rule. Before this, the floor pass counted a row as biceps work
+   * and this file did not, so the board reported a muscle under the dose that the engine had decided
+   * was fed, no regeneration could ever clear it, and HOME printed the complaint every morning.
+   */
+  const received = weeklyEffectiveSets(days);
   const onDays = daysPerMuscle(program);
   const perDay = liftsPerMusclePerDay(program);
   const stance = (m: string) => inputs.bodyMap?.[m] ?? 'normal';
@@ -206,6 +244,20 @@ export function weekFindings(
    *
    * ⚠️ IT IS COMPUTED FROM WHAT THE WEEK ACTUALLY DELIVERS, not from a formula about capacity — so
    * it stays true if the hour, the set range or the lift limit ever change.
+   *
+   * ⛔ AND IT IS COUNTED IN PRESCRIBED SETS WHILE THE DOSE ITSELF IS JUDGED ON RECEIVED ONES. That
+   * looks like the very split this file just closed and it is the opposite of it — it is deliberate,
+   * and it is about which quantity is CONSERVED (2026-08-18).
+   *
+   * The only moves anything downstream can make are "move a set" and "drop a set". A set moved
+   * between two lifts is exactly one prescribed set either way, so the prescribed total is a
+   * conservation law and a bound built on it cannot lie. Effective volume is NOT conserved by the
+   * same move: carry a set off a compound onto an isolation and half a set of indirect work simply
+   * ceases to exist. A bound built on it would claim an arrangement exists that no move can reach.
+   *
+   * So this stays a SUFFICIENT test for impossibility, never a necessary one. A muscle that is short
+   * because the compounds feeding it sit on the wrong day is still reported as a defect — and it
+   * should be, because that one IS arrangement, and arrangement is the engine's job.
    */
   const trainedMuscles = structural.filter((m) => (sets[m] ?? 0) > 0);
   const totalSets = trainedMuscles.reduce((n, m) => n + (sets[m] ?? 0), 0);
@@ -214,13 +266,34 @@ export function weekFindings(
   /* ── the muscle ────────────────────────────────────────────────────────────────────────────── */
   for (const m of CANONICAL_MUSCLE_ORDER) {
     const got = sets[m] ?? 0;
+    /*
+     * ⚠️ SWITCHED OFF IS ASKED OF WHAT SHE IS GIVEN, NEVER OF WHAT SHE RECEIVES. S-2 is a rule about
+     * the engine's obedience: it must not PRESCRIBE a muscle she turned off. Her rows go on feeding
+     * the biceps she switched off — that is simply true, `theVolumeAMuscleActuallyReceives` says so
+     * out loud, and reading it here would flag every single week for a promise nobody broke.
+     */
     if (stance(m) === 'off') {
       if (got > 0) found.push({ rule: 'muscle_switched_off', subject: m, measured: got, limit: 0 });
       continue;
     }
     if (m === 'Core' || got === 0) continue;
-    if (got < WEEKLY_SETS_FLOOR)
-      found.push({ rule: 'under_dose', subject: m, measured: got, limit: WEEKLY_SETS_FLOOR, ...(doseImpossible ? { unavoidable: true } : {}) });
+    /*
+     * ⛔ THE DOSE IS ASKED OF WHAT SHE RECEIVES — the engine's own number (2026-08-18).
+     *
+     * `raiseToWeeklyFloor` decides a muscle is fed at direct sets PLUS half a set from every compound
+     * that also drives it, and it will not spend another minute of her hour on a muscle that clears
+     * that. This rule asked the same question of direct sets alone, so it reported a shortfall the
+     * engine had already refused to act on: Biceps at 4 direct and 7.5 received read as under MEV,
+     * `weekRepair` was sent hunting a set for it, and `weekNotice` printed the complaint on HOME
+     * every morning of a week that was never going to change.
+     *
+     * ⚠️ THE CEILING BELOW STAYS ON PRESCRIBED SETS, AND THAT IS NOT AN INCONSISTENCY. Past the
+     * ceiling is junk volume she PAYS THE HOUR FOR, and she pays for the sets she is told to
+     * perform — indirect work costs no extra minute, so charging it against a ceiling about her time
+     * would flag a week for volume it never asked her to do.
+     */
+    if ((received[m] ?? 0) < WEEKLY_SETS_FLOOR)
+      found.push({ rule: 'under_dose', subject: m, measured: received[m] ?? 0, limit: WEEKLY_SETS_FLOOR, ...(doseImpossible ? { unavoidable: true } : {}) });
     if (got > WEEKLY_SETS_CEILING) found.push({ rule: 'over_ceiling', subject: m, measured: got, limit: WEEKLY_SETS_CEILING });
     /*
      * Twice a week grows roughly 63% more at equal volume, which is why a low-frequency week is

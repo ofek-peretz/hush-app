@@ -15,14 +15,13 @@
  * discount to bait a return, and never a higher one to punish the gap. "Same price as before" is
  * printed under it because that is the promise, and a promise nobody can see is not one.
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { color, font, textScale, press } from '@/design/tokens';
@@ -51,13 +50,22 @@ export function LapsedView({ dayName, endedOn, priceLabel, kept, onResume }: Lap
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
+      {/*
+        ✦ IT ARRIVES (2026-08-27). `Arrive` was built for the founder's largest note — a screen
+        should ARRIVE, not appear (2026-08-12) — and reached six screens out of forty-seven.
+
+        This one has the hardest job in the product: she has lost access, and the screen's whole
+        argument is *"your work is safe, come back when you are ready."* An argument that is simply
+        PRESENT on the first frame is a notice. Three beats let it be said instead: the day that
+        did not change, the card that explains, and the proof underneath that nothing was taken.
+      */}
       {/* Today, still Today. The header does not change because the day did not. */}
-      <View style={styles.head}>
+      <Arrive order={0} style={styles.head}>
         <Legend size={17} track={0.16}>{t('lapsed.todayLegend')}</Legend>
         <Text style={styles.day} accessibilityRole="header">{dayName ?? t('lapsed.noDay')}</Text>
-      </View>
+      </Arrive>
 
-      <View style={styles.cardWrap}>
+      <Arrive order={1} style={styles.cardWrap}>
         <View style={styles.card}>
           <View style={styles.lockRow}>
             <Icon name="lock" size={18} color={color.accent} strokeWidth={1.8} />
@@ -77,11 +85,13 @@ export function LapsedView({ dayName, endedOn, priceLabel, kept, onResume }: Lap
           {/* The promise, printed where the price is. */}
           <Text style={styles.samePrice}>{t('lapsed.samePrice')}</Text>
         </View>
-      </View>
+      </Arrive>
 
       {/* STILL YOURS. Not a teaser — every row opens. */}
       <ScrollView style={styles.keptScroll} contentContainerStyle={styles.kept} showsVerticalScrollIndicator={false}>
-        <Legend size={17} track={0.14} style={styles.keptLegend}>{t('lapsed.stillYours')}</Legend>
+        <Arrive order={2}>
+          <Legend size={17} track={0.14} style={styles.keptLegend}>{t('lapsed.stillYours')}</Legend>
+        </Arrive>
         {kept.map((row, i) => (
           <Pressable
             key={row.key}

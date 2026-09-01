@@ -109,8 +109,22 @@ describe('the route, and the ruling behind it', () => {
   });
 
   it('the SPLITS carry the shape of the run instead', () => {
-    expect(done()).toContain('styles.doneShape');
-    expect(done()).toContain('{splits.length > 0 ? (');
+    /*
+     * ⛔ AND THE POSTER CARRIES NO GRAPHIC AT ALL (founder, 2026-08-28):
+     * *"לא אבל בכללי זה לא ברור הדבר הזה. אנשים לא מבינים מה זה בכלל. זה נראה מוזר."*
+     *
+     * This test has now held three different answers to "what shape does the poster draw" — a bar
+     * chart scaled by ratio, one scaled by window, and one drawn against the average — and the
+     * founder rejected the CATEGORY, not the encoding. It is the same ruling he made about the route
+     * on 2026-08-04, on the same surface: a graphic that needs explaining does not belong on a thing
+     * read in one second by a stranger.
+     *
+     * So the rule is what it always meant: the poster says the run in FIGURES. It is pinned as an
+     * absence because that is the decision — and if the shape of a run is ever wanted here again, it
+     * arrives as a sentence in the coach's voice, which needs no legend.
+     */
+    expect(done()).not.toContain('<EffortShape');
+    expect(done()).not.toContain('styles.doneShape');
   });
 
   it('⚠️ and the map ruling is untouched — no map package, still', () => {
@@ -119,17 +133,46 @@ describe('the route, and the ruling behind it', () => {
      * poster decision did not go near it, and this asserts that from the dependency list rather
      * than from a comment — the only place the claim can actually be checked.
      */
+    /*
+     * ⛔ RE-LITIGATED 2026-08-23: the founder released his own 2026-07-12 ban ("פסיקות ישנות…
+     * אל תיתן להן להגביל אותך"), and the run's RECORD now draws the route on Apple Maps
+     * (react-native-maps — keyless, no account). What this test still holds is the half that was
+     * never about the SDK: the POSTER stays map-free (a polyline is legible to one person, and a
+     * paid tile on a shared story is somebody else's brand), and third-party TILE services with
+     * keys and tracking stay out.
+     */
     const deps = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
-    expect(Object.keys(deps.dependencies).filter((k) => /(^|-)map(box|libre)?($|-)/i.test(k))).toEqual([]);
-    expect(read('src/components/RouteTrace.tsx')).toContain('no map SDK, ever');
+    expect(Object.keys(deps.dependencies).filter((k) => /mapbox|maplibre|google-maps/i.test(k))).toEqual([]);
+    expect(deps.dependencies['react-native-maps']).toBeTruthy(); // Apple's own — keyless, released 2026-08-23
+    expect(read('src/components/RouteTrace.tsx')).toContain('WAS RELEASED BY ITS AUTHOR');
+    // The poster half of CardioComplete still draws no map — the shape bars carry the effort there.
+    const done2 = done();
+    expect(done2.slice(0, done2.indexOf('styles.doneFooter'))).not.toMatch(/MapView|react-native-maps/);
   });
 });
 
-describe('and it asks for nothing', () => {
-  it('there is no share control at the end of a run', () => {
-    // The CONTROL, not the word: the block above explains in prose why there is no share button,
-    // and a law that forbade the word would forbid saying why.
-    expect(done()).not.toMatch(/onShare|ShareCardModal|t\('cardio\.share/);
+describe('and its poster half asks for nothing — the door lives with the act', () => {
+  /*
+   * ⛔ RE-LITIGATED 2026-08-23. This test pinned the founder's 2026-08-02 "no share button"
+   * ruling; he reversed it for the strength finish that morning and for THIS screen by name the
+   * same day: *"שמסך הסיום של הקרדיו ירגיש גם הוא גאווה כך שהמתאמן ירצה לשתף את זה."*
+   *
+   * What SURVIVES of the old ruling is its dress code, the same split `theFinishIsAPosterNotAReport`
+   * holds on WellDone: the poster half — everything a screenshot captures above the footer — stays
+   * chrome-free, and the door is a QUIET ghost link in the footer, below Done, never a primary.
+   */
+  it('the POSTER half carries no share chrome — the door is in the footer only', () => {
+    const poster = done().slice(0, done().indexOf('styles.doneFooter'));
+    expect(poster.length).toBeGreaterThan(200); // the anchor still splits the halves
+    expect(poster).not.toMatch(/ShareCardModal|t\('cardio\.shareStory'/);
+  });
+
+  it('⛔ …and the quiet door exists, dressed as a ghost link below Done', () => {
+    const footer = done().slice(done().indexOf('styles.doneFooter'));
+    expect(footer).toContain("navigation.navigate('ShareCardModal', { card: shareCard })");
+    // Below Done, and in the ghost dress — not a second primary.
+    expect(footer.indexOf("t('cardio.done')")).toBeLessThan(footer.indexOf("t('cardio.shareStory')"));
+    expect(footer).toContain('styles.shareLink');
   });
 
   it('it ends on DONE, and the mark is carried whole so a screenshot brings the product with it', () => {

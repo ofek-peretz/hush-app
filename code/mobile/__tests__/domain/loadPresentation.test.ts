@@ -9,7 +9,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { HERO_FONT_SIZE, heroFontSize, loadSetup, platesPerSide } from '@/domain/loadPresentation';
+import { BAND_FONT_SIZE, HERO_FONT_SIZE, bandType, heroFontSize, loadSetup, platesPerSide } from '@/domain/loadPresentation';
 
 describe('barbell load setup', () => {
   it('NEVER changes the prescribed load — the headline equals the engine value', () => {
@@ -181,11 +181,58 @@ describe('the lit figure fits the stage', () => {
       path.join(__dirname, '..', '..', 'src/screens/session/SessionFlow.tsx'),
       'utf8',
     );
-    // Both figures on the stage — the load and the rep band — take their type from the rule.
-    expect(flow.match(/heroType\(/g) ?? []).toHaveLength(2);
-    // And nothing overrides it back to a constant afterwards.
-    const at = flow.indexOf('rxFigure: {');
-    expect(flow.slice(at, flow.indexOf('},', at))).toContain(`fontSize: ${HERO_FONT_SIZE}`);
+    /*
+     * ⛔ ONE RULE PER FIGURE, NOT ONE RULE FOR BOTH (founder 2026-08-22).
+     *
+     * This read *"both figures on the stage — the load and the rep band — take their type from the
+     * rule"* and asserted `heroType(` twice. It was pinning a SIZE COLLISION as if it were a
+     * guarantee: the band was drawn at the load's own size, so the stage had two anchors and no
+     * subject. The band has its own tier now (`bandType`).
+     *
+     * ⚠️ THE PROPERTY THIS TEST EXISTS FOR IS UNCHANGED AND IS THE ONLY REASON IT IS CRUDE: **the
+     * screen must CALL a rule, never write a size into a style.** That is what was cut in the
+     * 2026-08-12 redesign and survived a week of green laws. So: one call each, and neither style
+     * may hardcode a size the rule does not own.
+     */
+    /*
+     * ⛔ REWRITTEN AGAIN FOR THE ATHLETE-AS-HERO PASS (founder, 2026-08-31), and the rewrite is the
+     * interesting part.
+     *
+     * The 2026-08-26 cut left the stage with NO static figure at all — both facts were the engraved
+     * dial, whose numerals are sized inside the instrument (`NUM_SIZE`, guarded by
+     * `everyWheelIsTheSameWheel`). This probe then read: *"what can regress is someone
+     * reintroducing a hand-set poster figure beside the dials"*, and asserted the old styles stayed
+     * deleted.
+     *
+     * ⚠️ AND THEN THE FOUNDER REINTRODUCED EXACTLY THAT, ON PURPOSE — the athlete took the stage,
+     * the two dials moved into her slot, and their numbers stayed as a prescription row. Which
+     * forces the question this file has to answer honestly: was the assertion protecting the
+     * PROPERTY, or protecting the 2026-08-26 composition?
+     *
+     * The property. It has never been "no static figure"; it is **the screen must CALL a rule,
+     * never write a size into a style** — the absence of which let a hardcoded 118 over a 106 line
+     * box clip "37" for a week while every other test in this file stayed green. So the probe now
+     * requires the call and forbids the literal, which holds against ANY composition:
+     *
+     *   · the prescription figures are sized by `rxType` (the third tier), once each;
+     *   · and `rxFigure`, the style they wear, carries no `fontSize` of its own.
+     *
+     * ⚠️ `heroType`/`bandType` STAY AT ZERO. Those two tiers were built for a 338-point full-width
+     * poster and are unreachable from a 169-point cell; a call to either from this screen would be
+     * the old composition creeping back in under the new one.
+     *
+     * ⚠️ AND THE `<WheelPicker` CLAUSE IS GONE, which is the third composition this probe has
+     * outlived in nine days. It required two dials on the stage; the founder replaced them with a
+     * number pad (*"בהקלדה"*) because on this screen she is REPORTING a result rather than choosing
+     * one from a ladder. Asserting the instrument was asserting the furniture. What the figures are
+     * SIZED by is the thing that has never changed and is what stays under test.
+     */
+    expect((flow.match(/rxType\(/g) ?? []).length).toBe(2);
+    expect(flow).toMatch(/rxFigure: \{[^}]*\}/);
+    expect(flow.match(/rxFigure: \{[^}]*\}/)![0]).not.toContain('fontSize');
+    expect(flow).not.toContain('rxBandFigure: {');
+    expect(flow.match(/heroType\(/g) ?? []).toHaveLength(0);
+    expect(flow.match(/bandType\(/g) ?? []).toHaveLength(0);
   });
 
   it('steps down only when it must, and never continuously', () => {

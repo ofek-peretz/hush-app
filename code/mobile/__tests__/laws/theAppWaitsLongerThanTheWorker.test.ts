@@ -46,12 +46,20 @@ const num = (source: string, re: RegExp, what: string): number => {
 };
 
 const worker = read('server/worker.ts');
-/** Both hedge delays, from `const HEDGE_MS = cond ? A : B;`. */
-const hedgeMs = (() => {
-  const m = /const HEDGE_MS = [^?]+\?\s*([\d_]+)\s*:\s*([\d_]+);/.exec(worker);
-  if (!m) throw new Error('no HEDGE_MS');
-  return [Number(m[1].replace(/_/g, '')), Number(m[2].replace(/_/g, ''))];
-})();
+/*
+ * Every hedge delay the Worker can pick.
+ *
+ * ⚠️ THREE OF THEM SINCE 2026-08-30, not two, and they are read BY NAME rather than off a ternary.
+ * The hedge stopped racing headers and started racing a finished answer, which split the fast path
+ * in half: a chat turn completes in ~1.8s, a plan build in ~8.4s, and one number cannot sit just
+ * past both. A regex over `cond ? A : B` could not survive that, and should not have had to — it
+ * was reading punctuation where the law is about durations.
+ */
+const hedgeMs = [
+  num(worker, /const BUILD_HEDGE_MS = ([\d_]+);/, 'BUILD_HEDGE_MS'),
+  num(worker, /const CHAT_HEDGE_MS = ([\d_]+);/, 'CHAT_HEDGE_MS'),
+  num(worker, /const HEDGE_MS = [^?]+\? \([^)]+\) : ([\d_]+);/, 'HEDGE_MS (slow branch)'),
+];
 /** Both overall budgets — the point at which the Worker stops hoping and answers. */
 const overallMs = (() => {
   const m = /const OVERALL_MS = [^?]+\?\s*([\d_]+)\s*:\s*([\d_]+);/.exec(worker);
@@ -100,6 +108,9 @@ describe('the two timeouts on one call', () => {
      */
     expect(Math.max(...hedgeMs)).toBeGreaterThanOrEqual(14_000);
     // …and every hedge leaves room for at least one more attempt inside the budget.
-    for (let i = 0; i < hedgeMs.length; i += 1) expect(hedgeMs[i]).toBeLessThan(overallMs[i] / 2);
+    /* ⚠️ AGAINST THE SHORTEST BUDGET, not index-by-index — there are three hedges and two budgets
+       now, and pairing them by position was only ever coincidence. Every hedge must leave room for
+       a replacement to finish inside the tightest budget it could run under. */
+    for (const ms of hedgeMs) expect(ms).toBeLessThan(Math.min(...overallMs) / 2);
   });
 });

@@ -5,7 +5,6 @@
  * screen, merged in here 2026-07-15). One surface, two windows; both peak-based so a recent dip never
  * hides progress.
  */
-// @ts-nocheck
 
 // 
 
@@ -22,6 +21,9 @@ import { allTimePeakProgress, quarterlyPeakProgress, type QuarterlyProgressEntry
 import { progressAggregate, type ProgressAggregate } from '@/domain/progressAggregate';
 import { trainingWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
 import { weekCardFromHistory } from '@/domain/shareCard';
+import { earnedMilestones, nextUp } from '@/domain/milestones';
+import { milestoneCopy } from '@/domain/milestoneCopy';
+import { tg } from '@/i18n';
 import type { Session, CardioActivity } from '@/data/local/models';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
@@ -73,14 +75,44 @@ export function Progress({ navigation, route }: Props) {
     // still empty, so the affordance simply doesn't appear). Derived here where the raw sessions
     // and bodyweight live; ProgressLifts only receives the opener.
     const weekCard = sessions
-      ? weekCardFromHistory(sessions, currentWeekOpen(Date.now()), app.profile?.weightKg, units)
+      // ⚠️ `memberSince` IS PASSED SO THE CARD AND THIS SCREEN AGREE. Progress read "6 weeks" from
+      // `trainingWeekNumber` while the card made from the same screen read "Week 4" off its own
+      // count from the first logged session. One anchor, one counter.
+      ? weekCardFromHistory(sessions, currentWeekOpen(Date.now()), app.profile?.weightKg, units, app.profile?.memberSince)
       : null;
+    /*
+     * ════ THE PRIDE WALL'S SEALS (founder 2026-08-23) ════
+     *
+     * Earned marks newest-first — the seal she just won greets her at the start of the shelf — and
+     * ONE locked next (the closest by fraction, the same pick Home's paper card makes), carrying
+     * how far she stands from it. Formatted HERE through `milestoneCopy`, the same voice that
+     * engraves the celebration emblem, so the wall and the moment can never spell one mark two ways.
+     */
+    const earnedSeals = (sessions ? earnedMilestones(sessions, app.profile) : [])
+      .slice()
+      .reverse()
+      .map((m) => {
+        const c = milestoneCopy(m, tg, units);
+        return { value: c.value, caption: c.caption, title: c.title, glyph: c.glyph };
+      });
+    const nextSeal = (() => {
+      const n = sessions ? nextUp(sessions, app.profile)[0] : null;
+      if (!n) return null;
+      const c = milestoneCopy(n.milestone, tg, units);
+      const fig =
+        n.milestone.family === 'tonnage'
+          ? `${(n.current / 1000).toFixed(1)}/${Math.round(n.target / 1000)}`
+          : `${Math.round(n.current)}/${Math.round(n.target)}`;
+      return { value: c.value, caption: c.caption, title: c.title, glyph: c.glyph, progressLabel: fig, progress: n.target > 0 ? n.current / n.target : 0 };
+    })();
+
     return (
       <ProgressLifts
         entries={entries}
         aggregate={aggregate}
         loaded={sessions != null}
         units={units}
+        marks={{ earned: earnedSeals, next: nextSeal }}
         onLog={() => navigation.navigate('History')}
         onLift={(exerciseId) => navigation.navigate('LiftDetail', { exerciseId })}
         onShareWeek={weekCard ? () => navigation.navigate('ShareCardModal', { card: weekCard }) : undefined}

@@ -102,9 +102,15 @@ describe('⛔ the import, from a photograph', () => {
     const kinds = out.findings.map((f) => f.kind);
     expect(kinds).toContain('unmatched_lift');
     expect(kinds).toContain('sets_above_ceiling');
-    // …and the programme still holds exactly what matched: three lifts, unchanged.
-    expect(out.liftCount).toBe(3);
+    /*
+     * ⛔ THE COUNT IS WHAT WAS **READ**, NOT WHAT SURVIVED. The review's own line says "{{lifts}}
+     * exercises read", and counting the matched slots reported three off a sheet of four — the app
+     * understating her programme back at her while the finding above named the missing one.
+     */
+    expect(out.liftCount).toBe(4);
     expect(out.sessionCount).toBe(2);
+    // …and the programme still holds exactly what matched: three lifts, unchanged.
+    expect(out.program.days.reduce((n, d) => n + d.slots.length, 0)).toBe(3);
     expect(out.title).toBe('Coach block');
   });
 });
@@ -156,7 +162,7 @@ describe('⛔ every way it can fail', () => {
     const { ask } = modelSaying(readReply, null);
     const out = await runImport(ask, { images: PHOTO });
     expect(out.ok).toBe(true);
-    expect(out.liftCount).toBe(3);
+    expect(out.liftCount).toBe(4); // four lifts read; three of them are in her week
     expect(out.suggestions).toEqual([]);
     // …and the lift it could not place is still reported, which is a true and useful sentence.
     expect(out.findings.some((f) => f.kind === 'unmatched_lift' && f.subject === 'Zercher Squat')).toBe(true);
@@ -222,6 +228,27 @@ describe('⛔ a programme she typed or pasted', () => {
     // Six sets, straight through, past F-1's ceiling.
     expect(out.program.days[0].slots[0].setCount).toBe(6);
     expect(out.program.authored).toBe('athlete_or_coach');
+  });
+
+  it('⛔ a line with a set count is a LIFT, never the name of the day', () => {
+    /*
+     * She pastes her week out of a message thread, where nobody writes headers. The first non-blank
+     * line of every block was taken as the session NAME whatever it said — so her bench press became
+     * the day's title and vanished out of her programme. A silent edit to her week, by the one
+     * feature that exists to refuse silent edits, and nothing on the review said it had happened.
+     */
+    const w = parseTypedPlan(['Bench 4x8', 'Squat 5x5', '', 'Deadlift 3x5'].join('\n'));
+    expect(w.sessions[0].lifts).toEqual([{ name: 'Bench', sets: 4 }, { name: 'Squat', sets: 5 }]);
+    expect(w.sessions[1].lifts).toEqual([{ name: 'Deadlift', sets: 3 }]);
+    // The day still gets a name — one made up about the day, never one taken out of her week.
+    expect(w.sessions.map((s) => s.name)).toEqual(['Day 1', 'Day 2']);
+  });
+
+  it('still reads a header when she wrote one', () => {
+    const w = parseTypedPlan(['Push', 'Bench 4x8', '', 'Squat 5x5'].join('\n'));
+    expect(w.sessions[0].name).toBe('Push');
+    expect(w.sessions[0].lifts).toEqual([{ name: 'Bench', sets: 4 }]);
+    expect(w.sessions[1].name).toBe('Day 2');
   });
 
   it('a blank or shapeless paste yields nothing rather than a broken week', () => {

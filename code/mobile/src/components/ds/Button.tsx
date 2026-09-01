@@ -4,7 +4,6 @@
  * danger, or onstage. No gradients, no rest shadow; press settles to 0.98 scale,
  * never bounces.
  */
-// @ts-nocheck
 
 // 
 

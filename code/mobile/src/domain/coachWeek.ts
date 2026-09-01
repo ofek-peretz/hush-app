@@ -26,13 +26,11 @@
  * Pure and I/O-free. Knows nothing about storage, the model, or any screen.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
 import { REST_TRANSITION_S, perSetSeconds } from './restPrescription';
 import { exerciseDisplayName, exerciseById } from '@/data/exercises';
-import { MOVEMENTS } from '@/data/movements';
 import type { CoachPlan, PlannedItem, PlannedSession, Weekday } from './coachPlan';
 
 /**
@@ -84,8 +82,32 @@ export interface CoachWorkout {
   name: string;
   /** Present on programmes where the day matters (a long run belongs on Sunday); absent otherwise. */
   day?: Weekday;
-  /** How many things she does, counting every round. What a chip's meta line says. */
+  /** How many things she does, counting every round. Pieces of work — the estimate's own unit. */
   items: number;
+  /**
+   * ⛔ HOW MANY LIFTS — DISTINCT EXERCISES, AND IT IS NOT `items` (2026-08-18, design review).
+   *
+   * `items` counts ROUNDS (`items.length × rounds`), which is deliberate and correct for what it is
+   * for: a block of two things done four times is eight pieces of work, and the estimate prices all
+   * eight. It is not, however, how many lifts are in the session — and **every consumer of `items`
+   * was printing it under the word "lifts"**:
+   *
+   *   · Today's card   — "22 LIFTS · ~54 MIN" for a Full Body of seven exercises (`WeekColumn`)
+   *   · Hebrew         — "22 תרגילים", which says exercises outright
+   *   · the wrist      — `publishWatchLobby({ lifts })`, drawn as "22 LIFTS" on the Start screen
+   *
+   * The number is not merely mislabelled, it is **not believable**: twenty-two exercises inside
+   * fifty-four minutes is not a session anyone has ever trained, so the one line that answers *have
+   * I got time for this?* was arguing with itself.
+   *
+   * ⚠️ AND THE WRIST ALREADY DISAGREED WITH THE PHONE ABOUT IT. `WatchModel.swift:535` computes its
+   * own lobby the same way this line now does — `Set(steps.map { $0.exerciseId }).count` — so the
+   * locally-built Start screen said seven and the phone-published one said twenty-two, on the same
+   * watch, for the same workout, under the same word.
+   *
+   * A `Set`, not a sum: a lift that appears in two blocks is one lift in the session.
+   */
+  lifts: number;
   /** Minutes of work whose duration is known. See the header — never a guess. */
   minutes: number;
   /** There is work here that cannot be timed (a distance). `minutes` is a floor, not the total. */
@@ -112,11 +134,25 @@ export interface CoachRow {
   say?: string;
 }
 
-const movementName = new Map(MOVEMENTS.map((m) => [m.id, m.name]));
-
+/**
+ * ⛔ THIS WAS THE BYPASS, WORD FOR WORD (2026-08-27).
+ *
+ * It read `movementName.get(ex) ?? exerciseDisplayName(ex)`, over a map built from
+ * `MOVEMENTS.map((m) => [m.id, m.name])` — and `everyLiftHasAHebrewName`'s own header describes
+ * exactly that shape: *"`x?.name ?? exerciseDisplayName(id)` reads like a safe fallback and is in
+ * fact a bypass — the catalogue always answers, so the locale never gets asked."* The map answers
+ * for every one of the 26 movements, so the display path was unreachable for all of them, and a
+ * coach's week named its runs, holds and carries in English.
+ *
+ * ⚠️ AND THE LAW COULD NOT SEE IT, because it walked `src/screens` and `src/components` only. This
+ * is `src/domain` — one directory further back, feeding both. The walk includes it now.
+ *
+ * The map is deleted rather than fixed: `exerciseDisplayName` resolves a movement id against
+ * `movement.*` itself, so the fallback had nothing left to fall back from.
+ */
 /** Whichever catalogue holds it. An id that resolves in neither cannot reach here — the parse refuses it. */
 function nameOf(ex: string): string {
-  return movementName.get(ex) ?? exerciseDisplayName(ex);
+  return exerciseDisplayName(ex);
 }
 
 /** A session's id. Position-based; see `CoachWorkout.id`. */
@@ -138,6 +174,9 @@ function isCompound(exerciseId: string): boolean {
 function timeOf(session: PlannedSession, enginePriced = false): { minutes: number; hasUncountedWork: boolean } {
   let seconds = 0;
   let uncounted = false;
+  /* ⛔ THE RAMP IS NOT CHARGED HERE EITHER (founder 2026-08-30, and `estimateSessionMinutes`
+     carries the argument). The two arithmetics stayed one arithmetic through the change: neither
+     prices a bridge, because a bridge is now something the athlete asks for at the station. */
   for (const block of session.blocks) {
     /*
      * ⛔ A BLOCK THAT PRESCRIBES NO REST IS PRICED THE WAY THE ENGINE PRICES IT (2026-08-11).
@@ -197,6 +236,7 @@ export function coachWeek(plan: CoachPlan | null | undefined): CoachWorkout[] {
     name: s.name,
     ...(s.day ? { day: s.day } : {}),
     items: s.blocks.reduce((n, b) => n + b.items.length * b.rounds, 0),
+    lifts: new Set(s.blocks.flatMap((b) => b.items.map((i) => i.ex))).size,
     ...timeOf(s, plan?.pricing === 'engine'),
   }));
 }
@@ -298,8 +338,13 @@ export function coachPlanRows(
         return { ...base, load: null, detail: `${r.rounds}×${formatSeconds(r.seconds ?? 0)}` };
       case 'distance':
         return { ...base, load: null, detail: `${r.rounds}×${formatDistance(r.metres ?? 0, units)}` };
-      case 'open':
-        // No number worth stating — the founder's law: a control that says nothing says nothing.
+      default:
+        /*
+         * ⚠️ THE LEGACY TOLERANCE, NOT A LIVE SHAPE. `open` left `PlannedItem` on 2026-08-12 and the
+         * parser refuses it — but a plan SAVED before that day can still be on disk, and a switch
+         * with no default returned `undefined` INTO THE ROWS ARRAY for exactly that plan. Typed
+         * rows made the hole visible the day `@ts-nocheck` came off this file.
+         */
         return { ...base, load: null, detail: '' };
     }
   });

@@ -20,7 +20,6 @@
  *
  * Tapping the scrim still dismisses.
  */
-// @ts-nocheck
 
 // 
 
@@ -43,7 +42,8 @@ import Animated, {
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
-import { color, radius, space, stage } from '@/design/tokens';
+import { color, motion, radius, space, stage } from '@/design/tokens';
+import { useReducedMotion } from '@/platform/reducedMotion';
 
 const DISMISS_DISTANCE = 90; // drag this far down (or flick) to dismiss
 const DISMISS_VELOCITY = 800;
@@ -77,6 +77,21 @@ const DISMISS_VELOCITY = 800;
  * a different question — one the palette itself changed the answer to.
  */
 export const SCRIM_OPACITY = 0.45;
+
+/**
+ * ✦ HOW LONG A SHEET TAKES TO LAND, published (2026-08-27).
+ *
+ * A sheet's contents must not begin arriving while the sheet is still in the air — the two motions
+ * would race and read as one soft blur — so anything using `<Arrive after={…}>` inside a sheet needs
+ * to know when the container is home. That number belongs HERE, with the spring that owns it, not
+ * re-guessed in each sheet: three sheets holding three different opinions about when they have
+ * landed is the same class of drift `ARRIVE_STAGGER` exists to prevent.
+ *
+ * The rise is `withSpring({ damping: 20, stiffness: 220 })` and a spring has no duration to read,
+ * so this is the settle stated against the product's own rungs — the same beat the sheet uses on
+ * the way out.
+ */
+export const SHEET_SETTLE = motion.dur[2];
 
 interface Props {
   onClose: () => void;
@@ -159,6 +174,9 @@ export function BottomSheet({
   style,
 }: Props) {
   const ty = useSharedValue(0);
+  /** The sheet's own opacity — 1 always, except as the Reduced-Motion exit (see `onEnd`). */
+  const fade = useSharedValue(1);
+  const reduced = useReducedMotion();
   // A sheet with no scrolling content is, definitionally, always at the top. This is a REAL
   // shared value rather than a plain object cast to one: it is read inside the pan worklet, and
   // a hand-rolled `{ value: true }` would be relying on how Reanimated happens to capture plain
@@ -198,9 +216,24 @@ export function BottomSheet({
       // The velocity path is gated on the sheet having actually MOVED, so a fast flick that was
       // really a list scroll can never dismiss.
       if (ty.value > DISMISS_DISTANCE || (e.velocityY > DISMISS_VELOCITY && ty.value > 0)) {
-        ty.value = withTiming(800, { duration: 180 }, () => runOnJS(onClose)());
+        /*
+         * REDUCED MOTION (spec §8.2: "sheet springs become fades"). The dismissal is the larger of
+         * the two offences — an 800pt slide across the whole screen — so under the setting the sheet
+         * leaves by opacity and does not travel at all. The close callback still fires from the
+         * animation that actually ran, so the two paths cannot diverge on when the sheet is gone.
+         */
+        if (reduced) {
+          fade.value = withTiming(0, { duration: motion.dur[1] }, () => runOnJS(onClose)());
+        } else {
+          ty.value = withTiming(800, { duration: motion.dur[2] }, () => runOnJS(onClose)());
+        }
       } else {
-        ty.value = withSpring(0, { damping: 20, stiffness: 220 });
+        /*
+         * The snap-back. A spring OVERSHOOTS, and the overshoot — not the travel — is what the
+         * vestibular setting is actually about, so under Reduced Motion the same journey is made on
+         * a plain curve that arrives once and stops.
+         */
+        ty.value = reduced ? withTiming(0, { duration: motion.dur[2] }) : withSpring(0, { damping: 20, stiffness: 220 });
       }
     });
 
@@ -211,7 +244,7 @@ export function BottomSheet({
   // its type only names ComponentType), not a soundness hole.
   if (scroll) pan = pan.simultaneousWithExternalGesture(scroll.ref as React.RefObject<React.ComponentType>);
 
-  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: ty.value }] }));
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: ty.value }], opacity: fade.value }));
 
   return (
     <View style={styles.fill}>

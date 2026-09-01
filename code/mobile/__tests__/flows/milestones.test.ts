@@ -22,6 +22,7 @@ import {
   clubLadders,
   COUNT_THRESHOLDS,
   TONNAGE_THRESHOLDS_KG,
+  WEEKS_THRESHOLDS,
   type MilestoneProfile,
 } from '@/domain/milestones';
 import type { Session, SetLog } from '@/data/local/models';
@@ -287,6 +288,35 @@ describe('nextUp — the gallery silhouettes', () => {
   it('no clubs at all before any club lift is trained', () => {
     const sessions = [session(0, [log('lat_pulldown', 40)])];
     expect(nextUp(sessions).find((n) => n.milestone.family === 'club')).toBeUndefined();
+  });
+});
+
+describe('weeks — showing up, counted, never a streak (2026-08-24)', () => {
+  const anyLift = () => [log('lat_pulldown', 40), log('lat_pulldown', 40), log('lat_pulldown', 40)];
+
+  it('four distinct training weeks earn weeks_4, attributed to the crossing session', () => {
+    const sessions = [0, 7, 14, 21].map((d) => session(d, anyLift()));
+    const weeks = earnedMilestones(sessions).filter((m) => m.family === 'weeks');
+    expect(weeks.map((m) => m.id)).toEqual(['weeks_4']);
+    expect(weeks[0].sessionId).toBe(sessions[3].id);
+  });
+
+  it('two workouts in one week claim the week ONCE — a week is a week, not a volume knob', () => {
+    const sessions = [0, 2, 7, 14].map((d) => session(d, anyLift())); // 3 distinct weeks
+    expect(earnedMilestones(sessions).filter((m) => m.family === 'weeks')).toHaveLength(0);
+  });
+
+  it('a gap costs nothing already earned — the count only grows (no chain, no reset)', () => {
+    const sessions = [0, 7, 14, 21, 70].map((d) => session(d, anyLift())); // 7-week hole after weeks_4
+    const weeks = earnedMilestones(sessions).filter((m) => m.family === 'weeks');
+    expect(weeks.map((m) => m.id)).toEqual(['weeks_4']); // still earned, nothing taken back
+    const next = nextUp(sessions).find((n) => n.milestone.family === 'weeks')!;
+    expect(next.milestone.id).toBe('weeks_12');
+    expect(next.current).toBe(5); // …and the hole simply did not count
+  });
+
+  it('WEEKS_THRESHOLDS starts at 4 — a month of showing up, not day-one candy', () => {
+    expect(WEEKS_THRESHOLDS[0]).toBe(4);
   });
 });
 

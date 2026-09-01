@@ -136,6 +136,20 @@ describe('⛔ the scoreboard', () => {
      * ⚠️ TWO SURVIVE AND THEY ARE REAL. A two-day week with the LEGS off trains five muscles, so the
      * dose is comfortably reachable — and Shoulders still lands at five sets. That is arrangement,
      * not arithmetic, and it is pinned rather than excused.
+     *
+     * ── ⛔ 2 → 1, 2026-08-18 · THE RULE NOW ASKS THE ENGINE'S OWN NUMBER ─────────────────────────
+     * `weekQuality` counted DIRECT sets while `raiseToWeeklyFloor` — the pass that actually spends
+     * her minutes on a thin muscle — counts direct PLUS `INDIRECT_SHARE` of every compound that also
+     * drives the muscle. Two accountings of one quantity, so this board reported shortfalls the
+     * engine had already decided did not exist and would never have acted on.
+     *
+     * The one that left is the FEMALE two-day, legs-off week: Triceps at 5 direct sets and 8 or more
+     * received, because a week of pressing is triceps work. Nothing about her programme changed —
+     * only that the board stopped calling a fed muscle starved.
+     *
+     * The one that stays is the male Shoulders, and it stays for the reason that makes this number
+     * worth keeping: NO pattern in the catalogue lends to the shoulders, so 5 direct is 5 received,
+     * and the defect is exactly as real as it was.
      */
     expect(linesFor('under_dose').length).toBeLessThanOrEqual(UNDER_DOSE);
   });
@@ -250,8 +264,40 @@ describe('⛔ the scoreboard', () => {
  * that, and it still holds — where two sessions cannot carry nine muscles to MEV whatever the clock
  * says. They were not being dosed before; they were being PRICED as dosed, in sessions that ran past
  * the hour she was promised. Naming three more of them is the scoreboard doing its job.
+ *
+ * ⛔ RE-MEASURED 2026-08-18, when the dose rule stopped keeping its own set of books.
+ *
+ * `weekQuality` judged the dose on DIRECT sets; `raiseToWeeklyFloor` — the engine pass that decides
+ * whether to spend another minute of her hour on a thin muscle — judged it on direct sets PLUS
+ * `INDIRECT_SHARE` of every compound that also drives the muscle. Both are now the same call
+ * (`weeklyEffectiveSets`, exported from the assembler), so the board reports what the engine
+ * believes rather than a rival opinion:
+ *
+ *     unavoidable under-dose ..... 159 → 111   BETTER, and no programme changed
+ *     under-dose defects ......... 2 → 1       BETTER, and the survivor is Shoulders (see below)
+ *     share inversions ........... 85 → 85     untouched — that rule reads PRESCRIBED sets, rightly
+ *     every other rule ........... unchanged
+ *
+ * ⚠️ NOT ONE SET MOVED. Every one of the 48 is a muscle the engine had already decided was fed —
+ * biceps under a week of rows, triceps under a week of presses, glutes under a week of hinges — and
+ * refused to add to. The old number was the scoreboard, the WHY sheet and HOME all complaining about
+ * a shortfall no regeneration could ever have cleared, because the engine did not believe in it.
+ *
+ * ⚠️ 111 IS STILL A LARGE NUMBER AND STILL HONEST. They are all two-day weeks, and what remains
+ * there is what indirect work cannot reach: nine muscles need 54 weekly sets and two sessions carry
+ * about 49, and no compound lends to the shoulders or the calves at all.
  */
 const SHARE_INVERSIONS = 85;
 const OVER_CEILING = 0;
-const UNAVOIDABLE_UNDER_DOSE = 159;
-const UNDER_DOSE = 2;
+/*
+ * 111 → 123 on 2026-08-25 when the hour began pricing compulsory warm-up bridges: twelve more
+ * low-frequency weeks could not fit the dose in the promised time, and said so.
+ *
+ * ⛔ AND 123 → 111 ON 2026-08-30, to the athlete, when the founder made the ramp OPTIONAL and the
+ * charge went with it. Those twelve weeks were never really short of minutes — they were short of
+ * minutes we had spent in advance on a warm-up nobody had asked for. Twelve athletes get their dose
+ * back. (The same reversal, to the same pre-charge number, shows up in `theWeekIsBalanced`'s
+ * emptied-donor ratchet: 0 → 40. One charge, two distorted boards.)
+ */
+const UNAVOIDABLE_UNDER_DOSE = 111;
+const UNDER_DOSE = 1;

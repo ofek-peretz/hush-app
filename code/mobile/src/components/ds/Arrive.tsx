@@ -34,7 +34,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, type ViewStyle, type StyleProp } from 'react-native';
+import { Animated, Easing, type ViewProps, type ViewStyle, type StyleProp } from 'react-native';
 
 import { motion } from '@/design/tokens';
 import { useReducedMotion } from '@/platform/reducedMotion';
@@ -59,7 +59,23 @@ export interface ArriveProps {
   children: React.ReactNode;
 }
 
-export function Arrive({ order = 0, after = 0, style, children }: ArriveProps) {
+/**
+ * ⛔ AN ARRIVAL MAY NOT COST A SCREEN ITS ACCESSIBILITY (2026-08-27).
+ *
+ * `Arrive` wraps the element it animates, so a block that carried `accessible` +
+ * `accessibilityLabel` — the finish poster's hero reads as ONE node to VoiceOver, deliberately —
+ * would have had to grow a second `View` inside the wrapper just to keep them. Two views, one for
+ * the motion and one for the meaning, on every block that has both.
+ *
+ * The wrapper carries them instead. Choreography is a presentation concern; it does not get to
+ * change what the screen announces.
+ */
+type ArriveA11y = Pick<
+  ViewProps,
+  'accessible' | 'accessibilityLabel' | 'accessibilityRole' | 'accessibilityState' | 'accessibilityHint'
+>;
+
+export function Arrive({ order = 0, after = 0, style, children, ...a11y }: ArriveProps & ArriveA11y) {
   const reduced = useReducedMotion();
   const t = useRef(new Animated.Value(reduced ? 1 : 0)).current;
 
@@ -88,6 +104,7 @@ export function Arrive({ order = 0, after = 0, style, children }: ArriveProps) {
           transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [RISE, 0] }) }],
         },
       ]}
+      {...a11y}
     >
       {children}
     </Animated.View>

@@ -38,7 +38,13 @@ const DENYLIST: { re: RegExp; why: string }[] = [
 // legitimately states a 3-month timeframe ("Three months", "three months ago").
 // These specific copy keys are exempt from the Decision-1 horizon ban; the ban
 // still guards forecast/horizon copy everywhere else (the model stays horizonless).
+//
+// `paywall.trialPeriod.*` (2026-08-24): the length of a StoreKit introductory free trial
+// ("1 week free"). A BILLING period Apple defines, restated to her verbatim — not the model
+// promising anything about her training in that time. Decision 1 bans the coach's horizon;
+// a subscription's trial window is the store's fact, and hiding it would be the dishonesty.
 const TIMEFRAME_EXEMPT = new Set(['portrait.threeMonths', 'portrait.compareThreeMonths']);
+const isTrialPeriod = (path: string) => path.startsWith('paywall.trialPeriod.');
 const isDecision1 = (why: string) => why.includes('Decision 1');
 
 // Cardio (Open training) is a RECORDED, never-coached activity, deliberately
@@ -78,7 +84,7 @@ describe('forbidden vocabulary never appears in copy', () => {
       const hits = all.filter(
         (x) =>
           re.test(x.v) &&
-          !(isDecision1(why) && TIMEFRAME_EXEMPT.has(x.path)) &&
+          !(isDecision1(why) && (TIMEFRAME_EXEMPT.has(x.path) || isTrialPeriod(x.path))) &&
           !(isCalories(why) && isCardioPath(x.path)),
       );
       expect(hits.map((h) => `${h.path}: "${h.v}"`)).toEqual([]);

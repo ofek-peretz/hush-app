@@ -17,7 +17,6 @@
  *  - `cardio` — Open training. Running / paused, with pace · calories · heart and
  *    the latest kilometre split. Recorded, never coached (sealed from the engine).
  */
-// @ts-nocheck
 
 // 
 
@@ -136,10 +135,11 @@ export function liveActivityStateFromMirror(mirror: SessionMirror): LiveActivity
     // athlete already did — and the Lock Screen was showing it back to them while they waited to
     // do the following one. The mirror now says which set is coming; on a rest, that is the only
     // set worth naming.
+    // A warm-up bridge says so on the Lock Screen too — same localized wording as the stage.
     setLabel:
       isResting && mirror.nextSetNumber > 0
-        ? tg('workout.setOfM', { n: mirror.nextSetNumber, m: mirror.nextSetsInExercise })
-        : tg('workout.setOfM', { n: mirror.setNumber, m: mirror.setsInExercise }),
+        ? tg(mirror.nextIsWarmup ? 'workout.warmupOfM' : 'workout.setOfM', { n: mirror.nextSetNumber, m: mirror.nextSetsInExercise })
+        : tg(mirror.isWarmup ? 'workout.warmupOfM' : 'workout.setOfM', { n: mirror.setNumber, m: mirror.setsInExercise }),
     // The dot row follows the SAME set the label names — on a rest that is the set still to come.
     setIndex: isResting && mirror.nextSetNumber > 0 ? mirror.nextSetNumber : mirror.setNumber,
     setCount: isResting && mirror.nextSetNumber > 0 ? mirror.nextSetsInExercise : mirror.setsInExercise,

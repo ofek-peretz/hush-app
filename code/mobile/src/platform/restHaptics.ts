@@ -22,7 +22,6 @@
  * (notifications.ts) suppresses these `rest_*` alerts while the app is ACTIVE — no double buzz.
  * Locked/background: the handler doesn't run, so the scheduled alert wakes the screen.
  */
-// @ts-nocheck
 
 // 
 

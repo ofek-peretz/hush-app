@@ -125,35 +125,55 @@ describe('nothing on the stage is abandoned by what stands above it', () => {
    */
   it('with a GPS lock and kilometres logged, every child of the body draws', () => {
     /*
-     * ⛔ FOUR since the founder's ring landed (2026-08-12): the clock, the RING, the GPS line and
-     * the per-kilometre rows. It was five for an afternoon, when the rows and the bar TEXTURE were
-     * both drawn — and he took the texture off: *"תוריד את המשבצות האלה כי זה לא ברור בכלל."* The
-     * rows say 6:19 and 6:24 in figures, which is the same comparison without asking her to measure
-     * rectangles at eight kilometres an hour.
+     * ⛔ THREE since the ring retired (founder, build-58 QA 2026-08-24): the clock, the kilometre
+     * LIST (whose top row is the live kilometre — the stride-by-stride motion the ring used to
+     * carry), and the stat row. The list absorbs the GPS line's old seat too when it draws.
      */
     expect(liveBody(mount(<CardioLiveView
-  paceSec={342} {...live} />)).props.children.filter(Boolean)).toHaveLength(4);
+  {...live} />)).props.children.filter(Boolean)).toHaveLength(3);
   });
 
-  it('⛔ …and before the first kilometre the ROWS do not stand as an empty frame', () => {
+  it('⛔ …and before the first kilometre the list STILL stands — its live row IS the first kilometre', () => {
+    // No empty frame and no missing instrument: with zero splits the list is one live row.
     expect(liveBody(mount(<CardioLiveView
-  paceSec={342} {...live} splits={[]} />)).props.children.filter(Boolean)).toHaveLength(3);
+  {...live} splits={[]} />)).props.children.filter(Boolean)).toHaveLength(3);
+  });
+
+  /*
+   * ⛔ AND THE COACH'S LINE IS THE FOURTH CHILD WHEN THERE IS ONE (2026-08-26).
+   *
+   * `say` — the coach's instruction for this run — was in this view's props for a fortnight and
+   * rendered by nothing (`everythingTheCoachSaysHasAMouth` records why). Putting it back landed
+   * here first: written unconditionally it was a child that drew nothing, which is the exact shape
+   * of the fixed-height GPS slot this law was written on. Both states are pinned now, so the
+   * sentence can neither vanish again nor come back as an empty seat.
+   */
+  it('⛔ the coach\'s line is a child only when the coach wrote one', () => {
+    const withSay = mount(<CardioLiveView
+  {...live} say="Hold a pace you could talk at." />);
+    expect(liveBody(withSay).props.children.filter(Boolean)).toHaveLength(4);
+    /* `said` upper-cases as it flattens (it exists to compare against `Legend`s), so the sentence
+       is matched the way this file matches every other one. */
+    expect(said(withSay)).toContain('HOLD A PACE YOU COULD TALK AT.');
+    // …and with none, the body is back to three: no seat is held for a sentence nobody wrote.
+    expect(said(mount(<CardioLiveView
+  {...live} />))).not.toContain('HOLD A PACE YOU COULD TALK AT.');
   });
 
   it('…and no empty element is left standing in for the silent GPS line', () => {
     const r = mount(<CardioLiveView
-  paceSec={342} {...live} />);
+  {...live} />);
     expect(said(r)).not.toContain(label('cardio.gpsAcquiring'));
     expect(said(r)).not.toContain(label('cardio.gpsOff'));
   });
 
   it('but a phone WITHOUT a fix still says so, in the same place', () => {
     expect(said(mount(<CardioLiveView
-  paceSec={342} {...live} gps="acquiring" />))).toContain(label('cardio.gpsAcquiring'));
+  {...live} gps="acquiring" />))).toContain(label('cardio.gpsAcquiring'));
     expect(said(mount(<CardioLiveView
-  paceSec={342} {...live} gps="denied" />))).toContain(label('cardio.gpsOff'));
+  {...live} gps="denied" />))).toContain(label('cardio.gpsOff'));
     expect(said(mount(<CardioLiveView
-  paceSec={342} {...live} gps="unavailable" />))).toContain(label('cardio.gpsOff'));
+  {...live} gps="unavailable" />))).toContain(label('cardio.gpsOff'));
   });
 });
 
@@ -174,25 +194,25 @@ describe('⛔ the absence sentence names the source she actually chose', () => {
    * ════════════════════════════════════════════════════════════════════════════════════════════
    */
   it('OUTDOORS with no fix yet: it waits for the satellite', () => {
-    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="acquiring" />);
+    const r = mount(<CardioLiveView {...live} splits={[]} distanceKm={0} gps="acquiring" />);
     expect(said(r)).toContain(tg('cardio.gpsAcquiring').toUpperCase());
     expect(said(r)).not.toContain(tg('cardio.motionOff').toUpperCase());
   });
 
   it('OUTDOORS with location refused: it says so, and never blames the motion sensor', () => {
-    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="denied" />);
+    const r = mount(<CardioLiveView {...live} splits={[]} distanceKm={0} gps="denied" />);
     expect(said(r)).toContain(tg('cardio.gpsOff').toUpperCase());
     expect(said(r)).not.toContain(tg('cardio.motionOff').toUpperCase());
   });
 
   it('⛔ INDOORS: no satellite is ever mentioned — acquiring or otherwise', () => {
-    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="acquiring" indoor />);
+    const r = mount(<CardioLiveView {...live} splits={[]} distanceKm={0} gps="acquiring" indoor />);
     expect(said(r)).not.toContain(tg('cardio.gpsAcquiring').toUpperCase());
     expect(said(r)).not.toContain(tg('cardio.gpsOff').toUpperCase());
   });
 
   it('…and INDOORS with no motion source it names that, which is the only thing that can fail there', () => {
-    const r = mount(<CardioLiveView paceSec={0} {...live} splits={[]} distanceKm={0} gps="unavailable" indoor />);
+    const r = mount(<CardioLiveView {...live} splits={[]} distanceKm={0} gps="unavailable" indoor />);
     expect(said(r)).toContain(tg('cardio.motionOff').toUpperCase());
   });
 
@@ -217,7 +237,7 @@ describe('Hush does not name a measurement it has no instrument for', () => {
 
   it('NO WATCH: the heart is gone from the row — not an em-dash sitting in its seat', () => {
     const row = said(mount(<CardioLiveView
-  paceSec={342} {...live} hr={null} watchPaired={false} />));
+  {...live} hr={null} watchPaired={false} />));
     expect(row).not.toContain(label('cardio.hrShort'));
     expect(row).not.toContain('—');
     // …and the two facts her phone CAN measure are untouched.
@@ -227,14 +247,14 @@ describe('Hush does not name a measurement it has no instrument for', () => {
 
   it('A PAIRED WATCH, no beat yet: the seat is real and it waits', () => {
     const row = said(mount(<CardioLiveView
-  paceSec={342} {...live} hr={null} watchPaired />));
+  {...live} hr={null} watchPaired />));
     expect(row).toContain(label('cardio.hrShort'));
     expect(row).toContain('—');
   });
 
   it('A READING, whatever the flag says: presence can be UNKNOWN, a heartbeat cannot', () => {
     const row = said(mount(<CardioLiveView
-  paceSec={342} {...live} hr={141} watchPaired={false} />));
+  {...live} hr={141} watchPaired={false} />));
     expect(row).toContain(label('cardio.hrShort'));
     expect(row).toContain('141');
   });

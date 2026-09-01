@@ -8,21 +8,64 @@
  *
  * The bracket-dot's arrival animation is a later polish layer; this is the static truth.
  */
-// @ts-nocheck
 
 // 
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
-import { Button } from '@/components/ds';
+import { Arrive, Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
 import { TrackArt, TreadmillArt } from './WhereArt';
+import { db } from '@/data/local/db';
 import { font, textScale, stage as stageC, signal } from '@/design/tokens';
 
 export function CardioReady({ onBegin }: { onBegin: (indoor: boolean) => void }) {
   const { t } = useCopy();
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE TAB SAID NOTHING ABOUT HER RUNNING (founder, 2026-08-21).
+   *
+   * She opens Cardio and the screen offers her a choice and a drawing. Nothing on it knows she has
+   * ever run: not how far she went last time, not when. Every app she might use instead opens on her
+   * last activity, and this one had the room for it — `art` is `flex: 1`, so the drawing was
+   * spreading to fill a hole rather than sitting in a composition.
+   *
+   * ⚠️ ONE LINE, AND ONLY WHEN IT IS TRUE. A first-time athlete has no last run, and a placeholder
+   * row saying so would be the app talking about nothing — the same rule the load delta already
+   * holds (`theLoadCarriesItsOwnNews`). Before her first run the screen is exactly as it was.
+   *
+   * ⚠️ IT STATES A DATE, NEVER AN INTERVAL. "Three days ago" is a past timeframe, which Decision 1
+   * (2026-06-14) bans across the whole product and `forbiddenGlobally` enforces — the model is
+   * horizonless and the copy does not get to imply otherwise. A date is a fact about a run; an
+   * interval is the app counting the days she did not train, which is the shape of guilt this
+   * product refuses everywhere else.
+   *
+   * Distance and date, and nothing more: a pace belongs beside the run it came from, and a second
+   * figure here would turn a reminder into a report.
+   */
+  const [last, setLast] = useState<{ km: number; date: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void db
+      .loadCardio()
+      .then((all) => {
+        if (!alive) return;
+        const done = all.filter((a) => a.distanceKm > 0).sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+        const a = done[0];
+        if (!a) return;
+        setLast({
+          km: a.distanceKm,
+          date: new Date(a.startedAt).toLocaleDateString(currentLocale(), { day: 'numeric', month: 'short' }),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   /*
    * ════════════════════════════════════════════════════════════════════════════════════════════
    * ⛔ THE ONE QUESTION THIS SCREEN HAS TO ASK (founder, 2026-08-12)
@@ -65,16 +108,22 @@ export function CardioReady({ onBegin }: { onBegin: (indoor: boolean) => void })
           the drawing's (`WhereArt`).
           ════════════════════════════════════════════════════════════════════════════════════════
         */}
-        <View style={styles.head}>
-          <View style={styles.bracket}>
-            <View style={styles.bracketLine} />
-            <View style={styles.bracketCapL} />
-            <View style={styles.bracketCapR} />
-            <View style={styles.bracketDot} />
-          </View>
+        {/*
+          ✦ IT ARRIVES (2026-08-27). `Arrive` was built for the founder's largest note — a screen
+          should ARRIVE, not appear (2026-08-12).
+
+          Two beats, matching what this screen IS: its name and what it is asking, then the one
+          decision on it. The two choice cards land together — they are a question with two answers,
+          and letting one land before the other would put a thumb on it.
+        */}
+        {/* ⛔ THE ONE CENTRED HEAD IN FIVE TABS (design review 2026-09-01). Every other tab opens
+            with the serif title on the start edge at 40 — this one centred a 60-point title under
+            a brand bracket, so the bar's five screens disagreed about what a screen head is. The
+            bracket goes with it: the wordmark lives on Today; a tab does not re-introduce the brand. */}
+        <Arrive order={0} style={styles.head}>
           <Text style={styles.title} accessibilityRole="header">{t('cardio.readyTitle')}</Text>
           <Text style={styles.sub}>{t('cardio.readySub')}</Text>
-        </View>
+        </Arrive>
 
         {/*
           ⛔ TWO CARDS, NOT A PILL PAIR — the shape he named. `SegmentedControl` is the app's control
@@ -82,7 +131,7 @@ export function CardioReady({ onBegin }: { onBegin: (indoor: boolean) => void })
           is the only decision on the screen. The onboarding sex control is the precedent and the
           geometry is lifted from it: equal cards, a lit border on the answer, a wash on press.
         */}
-        <View style={styles.choices}>
+        <Arrive order={1} style={styles.choices}>
           {([false, true] as const).map((v) => (
             <Pressable
               key={String(v)}
@@ -97,10 +146,16 @@ export function CardioReady({ onBegin }: { onBegin: (indoor: boolean) => void })
               </Text>
             </Pressable>
           ))}
-        </View>
+        </Arrive>
 
         {/* What each one measures with, said plainly — she is choosing a sensor. */}
         <Text style={styles.whereNote}>{t(indoor ? 'cardio.treadmillNote' : 'cardio.outsideNote')}</Text>
+
+        {last ? (
+          <Text style={styles.lastRun}>
+            {t('cardio.lastRun', { km: last.km.toFixed(1), date: last.date })}
+          </Text>
+        ) : null}
 
         {/* ⛔ AND THE ROOM UNDERNEATH IS THE DRAWING'S — see `WhereArt` for why it is vector, and
             why nothing in either picture is a measurement. */}
@@ -126,7 +181,7 @@ export function CardioReady({ onBegin }: { onBegin: (indoor: boolean) => void })
 const styles = StyleSheet.create({
   stage: { flex: 1, backgroundColor: stageC[0] },
   safe: { flex: 1 },
-  head: { alignItems: 'center', gap: 12, paddingHorizontal: 26, paddingTop: 28 },
+  head: { alignItems: 'stretch', gap: 8, paddingHorizontal: 30, paddingTop: 20 },
   /* ⛔ Two cards, the onboarding sex control's own geometry — his reference. 54 → 76 tall, because
      this is the only decision on the page and it was the smallest thing on it. */
   choices: { flexDirection: 'row', gap: 12, paddingHorizontal: 26, marginTop: 34 },
@@ -145,13 +200,16 @@ const styles = StyleSheet.create({
   choiceText: { fontFamily: font.sansMedium, fontSize: 24, color: stageC.ink2, textAlign: 'center' },
   choiceTextOn: { color: stageC.ink0 },
   art: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  bracket: { width: 64, height: 22, marginBottom: 4 },
-  bracketLine: { position: 'absolute', left: 0, top: 10, width: 64, height: 1.5, backgroundColor: signal[0] },
-  bracketCapL: { position: 'absolute', left: 0, top: 2, width: 1.5, height: 18, backgroundColor: signal[0] },
-  bracketCapR: { position: 'absolute', right: 0, top: 2, width: 1.5, height: 18, backgroundColor: signal[0] },
-  bracketDot: { position: 'absolute', left: 27, top: 5, width: 12, height: 12, borderRadius: 6, backgroundColor: signal[0] },
-  title: { fontFamily: font.serif, fontSize: 60, lineHeight: 64, color: stageC.ink0, textAlign: 'center' },
-  sub: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 22, lineHeight: 30, color: stageC.ink1, textAlign: 'center', maxWidth: 300 },
+  /* the bracket-dot styles left with the mark they dressed (design review 2026-09-01) — an
+     orphaned style is the exact class of thing this codebase has been bitten by before. */
+  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: stageC.ink0, textAlign: 'left' },
+  sub: { fontFamily: font.serif, fontSize: 22, lineHeight: 30, color: stageC.ink1, textAlign: 'left' },
   whereNote: { fontFamily: font.sans, fontSize: 20, lineHeight: 28, color: stageC.ink2, textAlign: 'center', alignSelf: 'center', maxWidth: 320, marginTop: 18, paddingHorizontal: 26 },
+  /* Quieter than the sensor note above it — a reminder, not an instruction. */
+  /* ⛔ `stageC.ink3` DOES NOT EXIST — found the day the typechecker was allowed to look (2026-08-23).
+     The style compiled to `color: undefined`, so this line rendered in RN's platform default. There
+     is deliberately no legible tier below `ink2` on the stage (see tokens: "there is no legible tier
+     below the muted one"), so muted is what "quieter" honestly means here. */
+  lastRun: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: stageC.ink2, textAlign: 'center', alignSelf: 'center', maxWidth: 320, marginTop: 14, paddingHorizontal: 26 },
   footer: { paddingHorizontal: 26, paddingBottom: 14 },
 });

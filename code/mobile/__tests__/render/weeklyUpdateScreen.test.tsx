@@ -95,6 +95,32 @@ function byLabel(r: ReactTestRenderer, label: string): ReactTestInstance | null 
 }
 
 const goBack = jest.fn();
+
+/*
+ * ⛔ WHAT IS MOUNTED HERE IS UNMOUNTED (2026-08-27).
+ *
+ * This suite created renderers and never tore them down — one of two render suites out of
+ * thirty-four missing the pattern the other thirty-two share. It cost nothing while the letter was
+ * static. The moment `WeeklyUpdate` gained an ARRIVAL, it cost a crash: `Arrive` schedules a
+ * native-driver animation on a delay, jest tore the environment down while one was still pending,
+ * and it woke into a renderer that no longer existed —
+ *
+ *     TypeError: Cannot read properties of undefined (reading 'findNodeHandle')
+ *
+ * printed AFTER "Ran all test suites", which is the worst shape a failure can take: it kills a
+ * worker intermittently and belongs to no test.
+ *
+ * ⚠️ THE COMPONENT WAS NOT THE FAULT. `Arrive` stops its animation in its effect cleanup — that
+ * cleanup simply never ran, because nothing ever unmounted. A leaked renderer is invisible until
+ * something inside it owns a timer.
+ */
+const mounted: ReactTestRenderer[] = [];
+afterEach(() => {
+  act(() => {
+    while (mounted.length) mounted.pop()!.unmount();
+  });
+});
+
 async function open(): Promise<ReactTestRenderer> {
   const nav = { goBack, navigate: () => {} };
   let r!: ReactTestRenderer;
@@ -105,6 +131,7 @@ async function open(): Promise<ReactTestRenderer> {
       </SafeAreaProvider>,
     );
   });
+  mounted.push(r);
   return r;
 }
 

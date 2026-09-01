@@ -25,16 +25,25 @@
  * ── WHEN IT FAILS ───────────────────────────────────────────────────────────────────────────────
  * It says so and offers to try again. It NEVER invents a programme locally: the coach is the only
  * decider, and a fallback week would be the engine coming back through a side door.
+ *
+ * ── ⛔ AND IT REVEALS A WEEK SHE WROTE, TOO (founder 2026-08-29) ────────────────────────────────
+ * *"אנו לא צריכים לוותר על החלק של האנימציה בסוף — התרגילים שנבנו נכנסים לאנימציה."*
+ *
+ * With `route.params.authored` the week is already sealed on disk (the builder wrote it), so this
+ * screen READS it rather than generating one. Every other line is untouched: the same dark body, the
+ * same muscle-at-a-time beat, the same naming — over her own lifts. The reveal is the payoff of the
+ * intake, and it is not the engine's to keep.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { track } from '@/platform/telemetry';
+import { FUNNEL_EVENTS } from '@/platform/events';
 
-import { peekImport, settledImport } from '@/domain/pendingImport';
-import { Text, StyleSheet } from 'react-native';
+import { importFailure, peekImport, settledImport } from '@/domain/pendingImport';
+import { AppState, Text, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
@@ -43,7 +52,10 @@ import { BuildingProgrammeView, beatFor, type BuildLift, type BuildMuscle } from
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 import { programmeName, type ProgrammeName } from '@/domain/programmeName';
+import { draftFromCoachWeek } from '@/domain/coachDraft';
+import { requestPlanBuild } from '@/platform/coach/planBuild';
 import { color, font } from '@/design/tokens';
 import type { Profile, Program } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -56,7 +68,7 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
  * under "READING WHAT YOU TOLD ME". Long enough to register that the body starts empty, because
  * everything after it is that body filling.
  */
-const OPENING_MS = 1500;
+export const OPENING_MS = 1500;
 /**
  * ⛔ AND EVERY OTHER NUMBER HERE IS DERIVED FROM THE ANIMATION, NOT SET BESIDE IT.
  *
@@ -74,18 +86,133 @@ const OPENING_MS = 1500;
 /** Long enough to READ the name, on a body that is now entirely lit. */
 const REVEAL_MS = 2600;
 /**
+ * ⛔ THE FILL IS ONE BEAT NOW, NOT TEN — AND THE FOUNDER SAID WHY (2026-08-30):
+ *
+ *   *"האנימציה הייתה בשביל למרוח את הזמן בעת הטעינה של הבינה… בעבר היה לוקח
+ *   לפחות 30 שניות עד יצירת התוכנית ולא רציתי שסתם יהיה מסך סטאטי ומשעמם."*
+ *
+ * That is a LOADER, and it was written against a thirty-second load. The load is six to nine
+ * seconds now, and the walk had stopped being a cover for it: measured end to end on real weeks,
+ * this screen ran **22 seconds even when the answer arrived instantly**, because the fill walked
+ * one muscle at a time through a week that covers ten of them. An animation that outlives the wait
+ * it was hiding IS the wait.
+ *
+ * So the walk covers the WAIT and nothing else — placeholders while the answer is out, and the
+ * moment it lands the whole body fills at once and holds for exactly this long. Long enough that
+ * the dashes are seen BECOMING her exercises; too short to be a second wait.
+ *
+ * ⚠️ AND NOTHING IS LOST BY CUTTING IT, WHICH IS WHY THIS WAS SAFE. `ProgramCreated` is next, it
+ * draws the entire week, and it waits for HER. The per-muscle walk was showing her — on a clock
+ * she could not control — what the very next screen shows her in full at her own pace.
+ *
+ * ⛔ BUT THE HOLD IS **ASKED FOR**, NOT PICKED. I first wrote `1_100` here, which is less than the
+ * 1400 ms a single lift needs to rise, sit and travel — the name would have landed while the rows
+ * were still moving, which is the founder's own 2026-08-13 finding rebuilt from scratch: *"זה טס
+ * במהירות האור ולא נותן לכל שריר את הרגע שלו."* The whole body fills at once now, so the beat
+ * belongs to the muscle that is actually ON SCREEN, and `beatFor` is the animation's own arithmetic
+ * rather than a second opinion about it.
+ *
+ * ⚠️ AND THAT IS THE **LAST** MUSCLE, NOT THE BUSIEST — I wrote the busiest first, which is a hold
+ * measured against rows nobody is looking at. `BuildingProgrammeView` draws exactly one lift list:
+ * `props.muscles[props.muscles.length - 1]`. The beat has to be the beat of the thing being drawn.
+ */
+function fillHold(muscles: readonly BuildMuscle[]): number {
+  return beatFor(muscles[muscles.length - 1]?.lifts.length ?? 1);
+}
+/**
  * ⚠️ THE MUSCLES A PROGRAMME COVERS, which the app knows without asking anyone — so the screen
  * has something TRUE to draw during the wait rather than a spinner. Their lifts stand as dashes
  * until the coach answers; nothing here is a guess about what it will say.
  */
-const PLACEHOLDER_MUSCLES: readonly string[] = ['Chest', 'Back', 'Quads', 'Hamstrings', 'Shoulders', 'Biceps', 'Triceps'];
+/*
+ * ⛔ THE CANONICAL TEN, NOT A HAND-PICKED SEVEN (2026-08-30).
+ *
+ * The seven were `Glutes`, `Calves` and `Core` short — three muscles every assembled week actually
+ * covers, left out of a list whose own docblock promises *"the muscles a programme covers, which
+ * the app knows without asking anyone."* So the omission was a small lie, and removing it is worth
+ * doing on its own.
+ *
+ * ⚠️ AND IT IS ALSO WHAT PAYS FOR THE LONGER WAIT. The cover has to outlast the call (see
+ * `PLAN_BUILD_SAID_MS`), and the only two ways to stretch it are more muscles or a slower beat.
+ * The founder rejected a slower beat on 2026-08-13. More muscles costs nothing and is truer:
+ * 1500 + 9 × 1920 = **18.8 seconds** of a screen that is still drawing something real.
+ */
+export const PLACEHOLDER_MUSCLES: readonly string[] = CANONICAL_MUSCLE_ORDER;
+/**
+ * ⚠️ HOW MANY DASHED ROWS A WAITING MUSCLE DRAWS — and therefore how long it holds, since `beatFor`
+ * is paced by rows. Named because three separate places need the SAME number: the walk, the
+ * background catch-up, and the law that proves the cover outlasts the call it is covering.
+ */
+export const PLACEHOLDER_LIFTS = 2;
 
 export function BuildingProgramme({ navigation, route }: Props) {
   const { t } = useCopy();
+  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. The build call is about to run. */
+  React.useEffect(() => {
+    void track(FUNNEL_EVENTS.buildReached);
+  }, []);
   const app = useApp();
   const model = app.model;
-  const { inputs } = route.params;
+  /*
+   * ⛔ `authored` — SHE WROTE THIS WEEK HERSELF (founder 2026-08-29). The builder is intake step 3
+   * now; when she seals a week there it is already on disk, and this screen reveals it instead of
+   * assembling one. See `build` below — it is the only line in the file that branches on it.
+   */
+  /*
+   * ⚠️ DEFENSIVE, AND ONLY BECAUSE THIS SCREEN HAS NO WAY BACK. `route.params` is always sent by
+   * both callers (`PlanBuilder`, twice), and both are typed — but the navigation prop they use is
+   * hand-typed as `params?: unknown`, so a mis-spelled key is a runtime crash on the one screen
+   * with no back gesture and no route out except its own retry. `?? {}` turns that into the build
+   * failure it actually is, which already has a retry button on it.
+   */
+  const { inputs, authored, coachAsk } = (route.params ?? {}) as typeof route.params;
+
+  /**
+   * ⛔ ASK THE MODEL, AND NEVER LET IT BE THE REASON SHE HAS NO WEEK.
+   *
+   * Returns her week, or `null` — and `null` sends the caller to the local assembler on the same
+   * screen with nothing on it saying so. Every reason is folded into one, deliberately: unreachable,
+   * unparseable and "nothing usable came back" are three engineering facts and one athlete fact,
+   * which is that the ordinary week is what she is getting.
+   *
+   * ⚠️ THE DAY NAMES ARE THE MODEL'S OWN and survive into the sealed week — they are the difference
+   * between a week that was WRITTEN and one that was picked, and `programmeName` never overwrites
+   * them (it composes the sentence ABOVE the list, not the day rows).
+   */
+  const askTheModel = useCallback(async (): Promise<Program | null> => {
+    const res = await requestPlanBuild({
+      daysPerWeek: inputs.daysPerWeek,
+      sex: inputs.sex === 'female' ? 'female' : 'male',
+      ...(inputs.weightKg != null ? { weightKg: inputs.weightKg } : {}),
+      ...(coachAsk ? { ask: coachAsk } : {}),
+    }).catch(() => null);
+    if (!res?.ok) return null;
+    return draftFromCoachWeek(res.week, {
+      id: `built_ai_${Date.now()}`,
+      dayNamer: (i) => t('builder.dayNamed', { letter: String.fromCharCode(65 + i) }),
+    });
+  }, [inputs, coachAsk, t]);
   const [failed, setFailed] = useState(false);
+  /** She asked in her own words and no answer came back in time — carried to the reveal, not buried. */
+  const coachMissed = useRef(false);
+  /*
+   * ⛔ THE WEEK THAT GOT WRITTEN IS THE TRUTH ABOUT HOW OFTEN SHE TRAINS (2026-08-30).
+   *
+   * ⚠️ FOUND IN A 30-CALL LIVE BATTERY, and it read as a model failure until I looked at it. The
+   * wheel said four days; she then typed *"אני מתאמן פעמיים בשבוע בלבד"*; the model obeyed HER and
+   * wrote two. Nothing was broken — she had contradicted herself, and the model resolved it the
+   * way a coach would: the sentence is later and more specific than the dial.
+   *
+   * The app did not. `inputs.daysPerWeek` rode on unchanged into `completeOnboarding`, so her
+   * profile would have claimed four sessions a week over a programme containing two — and that
+   * number is read by the engine, the scoreboard and every "is the week balanced" check after it.
+   * A profile that disagrees with the programme it describes is a slow, invisible wrongness.
+   *
+   * ⚠️ THE IMPORT PATH ALREADY DID THIS and has since the day it was written (`ImportPlan` re-stamps
+   * from the sheet it read). The rule was never AI-specific: **whoever wrote the week decides how
+   * many days it has.** This is the second author finally being held to the same rule as the first.
+   */
+  const authoredDays = useRef<number | null>(null);
   const started = useRef(false);
 
   /*
@@ -115,6 +242,10 @@ export function BuildingProgramme({ navigation, route }: Props) {
    */
   const [shownMuscles, setShownMuscles] = useState(0);
   const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number } | null>(null);
+  /** When the show began — wall-clock, so a background gap costs nothing (see the catch-up below). */
+  const startedAtMs = useRef(Date.now());
+  /** …and when the answer landed, which is what everything after the fill is scheduled from. */
+  const builtAtMs = useRef<number | null>(null);
 
   useEffect(() => {
     // The dark body owns the first beat; then the muscles begin arriving whether or not the coach
@@ -135,13 +266,19 @@ export function BuildingProgramme({ navigation, route }: Props) {
     const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
     if (shownMuscles >= total) return;
     /*
-     * ⚠️ THE MUSCLE ON SCREEN IS THE ONE THAT SETS THE PACE — its own lift count, through the
-     * animation's own arithmetic. The old `built ? 90 : 900` split was written when the coach was a
-     * network call and "the answer is in hand" meant "stop stalling"; the engine is pure now, so
-     * `built` is true before the first muscle ever appears and that branch only ever meant 90 ms.
+     * ⛔ THE ANSWER IS IN ⇒ THE BODY FILLS AT ONCE. See `FILL_HOLD_MS`: the walk is a cover for
+     * the wait, so the instant there is nothing left to wait for the cover has no work to do.
+     *
+     * ⚠️ AND THIS IS ALSO WHERE THE OLD BUILD COULD SKIP THE FILL ENTIRELY. The walk used to
+     * carry on through HER muscles, so a week with fewer muscles than the placeholders already
+     * shown satisfied `shownMuscles >= total` on the very render the answer landed — dashes
+     * straight to the name, the fill never drawn once. One branch, and the case cannot arise.
      */
-    const rows = built ? built.muscles[shownMuscles - 1]?.lifts.length ?? 1 : 2;
-    const id = setTimeout(() => setShownMuscles((n) => n + 1), beatFor(rows));
+    if (built) {
+      setShownMuscles(total);
+      return;
+    }
+    const id = setTimeout(() => setShownMuscles((n) => n + 1), beatFor(PLACEHOLDER_LIFTS));
     return () => clearTimeout(id);
   }, [shownMuscles, built]);
 
@@ -158,15 +295,56 @@ export function BuildingProgramme({ navigation, route }: Props) {
    */
   const filled = !!built && shownMuscles >= built.muscles.length;
   const [revealed, setRevealed] = useState(false);
+
+  /*
+   * ⛔ THE SHOW CATCHES UP WHEN SHE COMES BACK (founder, device QA 2026-08-23: *"אם אני יוצא לרגע
+   * מהאפליקציה, האנימציה לא ממשיכה ואז כשאני חוזר אני חייב להמשיך לצפות בזה"*).
+   *
+   * Every beat here is a `setTimeout`, and iOS freezes JS timers the moment the app backgrounds —
+   * so the sequence PAUSED with her and resumed from the same muscle when she returned, making the
+   * animation something she owes the screen rather than something the screen shows her. The build
+   * itself finished long ago (the engine is pure and synchronous); only the THEATRE was frozen.
+   *
+   * So the timeline is anchored to the wall clock. On every return to foreground the elapsed time
+   * is walked through the same arithmetic the timers use — `OPENING_MS`, then each muscle's own
+   * `beatFor` — and the screen jumps to wherever the show WOULD be. Away past the end ⇒ she comes
+   * back to the named programme, which is the honest state: the work was done before she left.
+   *
+   * ⚠️ `Math.max` — the catch-up may only ever move FORWARD. The running timers keep the ordinary
+   * on-screen pacing; this only closes the gap they were frozen for.
+   */
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') return;
+      const elapsed = Date.now() - startedAtMs.current;
+      /*
+       * ⚠️ THE ANSWER'S OWN ARRIVAL TIME IS THE ANCHOR, not the start of the show. The schedule
+       * past that point is the fill's hold and nothing else, and it cannot be derived from
+       * `elapsed` — the wait it followed was however long the network took.
+       */
+      if (built) {
+        setShownMuscles((cur) => Math.max(cur, built.muscles.length));
+        if (builtAtMs.current != null && Date.now() - builtAtMs.current >= fillHold(built.muscles)) setRevealed(true);
+        return;
+      }
+      if (elapsed < OPENING_MS) return;
+      const n = Math.min(
+        PLACEHOLDER_MUSCLES.length,
+        1 + Math.floor((elapsed - OPENING_MS) / beatFor(PLACEHOLDER_LIFTS)),
+      );
+      setShownMuscles((cur) => Math.max(cur, n));
+    });
+    return () => sub.remove();
+  }, [built]);
   useEffect(() => {
     if (!filled || revealed) return;
     /*
-     * ⛔ THE LAST MUSCLE GETS THE SAME BEAT AS EVERY OTHER ONE. This was a flat 320 ms, so the
-     * final muscle's lifts were still rising when the name replaced the feed — the one muscle in
-     * the programme that never got its moment was the one the whole sequence ends on.
+     * ⛔ THE NAME STILL WAITS FOR THE FILL — that law is older than this change and it survives it
+     * whole. What changed is only how long the fill takes: one beat for the whole body instead of
+     * one beat per muscle. Zero would put us back in the 2026-08-05 audit bug, where the name
+     * replaced a list that had rendered for no frames at all.
      */
-    const last = built!.muscles[built!.muscles.length - 1]?.lifts.length ?? 1;
-    const id = setTimeout(() => setRevealed(true), beatFor(last));
+    const id = setTimeout(() => setRevealed(true), fillHold(built!.muscles));
     return () => clearTimeout(id);
   }, [filled, revealed, built]);
   /*
@@ -181,7 +359,16 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * ⚠️ `null` MEANS SHE NEVER STARTED ONE, which is the ordinary case, and the intake carries on
    * exactly as it did. Nothing about the generated path changes.
    */
-  const [waitingForImport, setWaitingForImport] = useState(() => peekImport().phase !== 'idle');
+  /*
+   * ⚠️ …UNLESS SHE HAS ALREADY ANSWERED THE QUESTION WITH HER OWN HANDS. A week SHE wrote on the
+   * step before this one is her last word on the subject: waiting here for a photograph she started
+   * at the fork and then walked away from would hand her programme to the abandoned sheet. The
+   * builder drops the pending read when it seals (`clearImport`); this guard is the second lock,
+   * because a screen that can be reached two ways may not depend on the other one's tidiness.
+   */
+  const [waitingForImport, setWaitingForImport] = useState(() => !authored && peekImport().phase !== 'idle');
+  /** Why her sheet could not be read — said on this screen, because there is no other left. */
+  const [importFailed, setImportFailed] = useState<string | null>(null);
   useEffect(() => {
     if (!waitingForImport) return;
     let alive = true;
@@ -190,10 +377,25 @@ export function BuildingProgramme({ navigation, route }: Props) {
       setWaitingForImport(false);
       /*
        * A FAILED import is not a dead end. She is dropped back into the ordinary build with her body
-       * map — the week she gets is generated, and the import screen told her why it could not read
-       * her sheet. Losing the whole intake because a photograph was blurry would be indefensible.
+       * map — the week she gets is generated. Losing the whole intake because a photograph was
+       * blurry would be indefensible.
+       *
+       * ⛔ BUT IT WAS ALSO NOT SAID. This comment used to end *"and the import screen told her why
+       * it could not read her sheet"*, which that screen had no chance to do: `startAndReturn`
+       * dismisses it the moment the read STARTS, so the failure landed here, minutes later, with
+       * nowhere to go. She finished onboarding on a generated week believing it was her coach's.
+       * The reason is carried onto this screen instead — `import.fail.<reason>` is already written.
        */
-      if (result?.ok) navigation.replace('ImportPlan', { inputs, review: true });
+      if (result?.ok) {
+        /* ⚠️ `coachAsk` RIDES ALONG so the report can hand it BACK. She may decline the photograph
+           (`import.declineImport`), and declining has to return her to the build she was actually
+           watching — including the sentence she typed on the ask step. Dropping it here would make
+           "carry on with the one you built me" quietly mean "build me a different one". */
+        navigation.replace('ImportPlan', { inputs, review: true, ...(coachAsk != null ? { coachAsk } : {}) });
+        return;
+      }
+      const reason = result ? importFailure() : null;
+      if (reason) setImportFailed(reason);
     });
     return () => {
       alive = false;
@@ -204,9 +406,16 @@ export function BuildingProgramme({ navigation, route }: Props) {
     if (!revealed || waitingForImport) return;
     // ⚠️ Held just long enough to READ the name, then on. A reveal she cannot see is not a reveal,
     // and one that outstays the work is the dragging he asked me to avoid.
-    const id = setTimeout(() => navigation.replace('ProgramCreated', { inputs }), REVEAL_MS);
+    const id = setTimeout(
+      () => navigation.replace('ProgramCreated', {
+        /* …carrying the frequency the WEEK has, not the one the wheel was left on. */
+        inputs: authoredDays.current ? { ...inputs, daysPerWeek: authoredDays.current } : inputs,
+        ...(coachMissed.current ? { coachMissed: true, ...(coachAsk ? { coachAsk } : {}) } : {}),
+      }),
+      REVEAL_MS,
+    );
     return () => clearTimeout(id);
-  }, [revealed, waitingForImport, navigation, inputs]);
+  }, [revealed, waitingForImport, navigation, inputs, coachAsk]);
 
   /*
    * ⛔ HER PROFILE AS IT **WILL** BE — ASSEMBLED, NOT WRITTEN.
@@ -236,6 +445,16 @@ export function BuildingProgramme({ navigation, route }: Props) {
       daysPerWeek: inputs.daysPerWeek,
       workoutMinutes: inputs.workoutMinutes,
       healthConnected: inputs.healthConnected,
+      /*
+       * ⛔ AND THE BODY MAP, WHICH THIS SCREEN EXISTS TO BUILD FROM.
+       *
+       * It was the one field the memo left out, and both readers below need it: `generateProgram`
+       * assembles the week FROM `profile.bodyMap`, and `programmeName(days, profile.bodyMap, …)`
+       * reads it to write the "led with …" clause. Undefined, so the muscles she had just switched
+       * off were trained anyway, the name lost its clause — and `ProgramCreated`, which DOES carry
+       * `bodyMap`, then generated a different week from the same answers one screen later.
+       */
+      bodyMap: inputs.bodyMap,
       repBand: '8-10',
       ...(inputs.goalText ? { goalText: inputs.goalText } : {}),
       ...(inputs.limitsText ? { limitsText: inputs.limitsText } : {}),
@@ -260,10 +479,84 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * not — Loop 1 sets the opening load from her FIRST SET (S-38), so a weight printed on this screen
    * would be a number nothing had measured. Exercise, sets and her rep band are what is known now.
    */
+  /*
+   * ⛔ THE REVEAL BELONGS TO A WEEK SHE WROTE, TOO (founder 2026-08-29): *"אני חושב שאנו לא צריכים
+   * לוותר על החלק של האנימציה בסוף … התרגילים שנבנו נכנסים לאנימציה."*
+   *
+   * The builder is onboarding step 3 now, and the first draft of it walked her from a sealed week
+   * straight to `ProgramCreated` — skipping the one beat in the whole intake that is a payoff rather
+   * than a question. So this screen takes a week it did not build: `authored` means the sealed week
+   * is already on disk (`saveBuiltProgram` wrote it before navigating), and everything after this
+   * line is identical — the same grouping, the same per-muscle beat, the same naming.
+   *
+   * ⚠️ AND IT IS READ FROM DISK, NOT CARRIED IN THE ROUTE. What she trains has to be what she was
+   * shown, and the only way to guarantee that is for both to be the same read. A `Program` in a
+   * navigation param would be a second copy that a failed write could silently disagree with.
+   */
   const build = useCallback(async () => {
     setFailed(false);
     try {
-      const program = await model.generateProgram(profile);
+      /*
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       * ⛔ THE MODEL WRITES IT HERE, AND THIS SCREEN WAS COMPOSED FOR EXACTLY THAT (2026-08-29).
+       *
+       * The docblock in `BuildingProgrammeView` has said so since it was written: each muscle's
+       * rows *"stand as DASHES until the coach's answer lands. Then they fill fast and the name
+       * follows."* That choreography lost its subject on 2026-08-10 when the call was removed —
+       * ever since, the screen has been revealing a week that was already finished before the
+       * animation began, which is an animation with nothing to wait for.
+       *
+       * The founder's instruction that CREATED this screen names the moment: *"this is the part
+       * where the user sees the programme they are getting for the first time."* Now something is
+       * genuinely being made while she watches it, in the six to nine seconds the call takes.
+       *
+       * ⚠️ AND THE FALLBACK IS THE LOCAL ASSEMBLER, ON THE SAME SCREEN, WITH NO SEAM. Unreachable,
+       * unparseable, or a week with nothing usable in it → `generateProgram`, which is what this
+       * screen has been doing on its own for nineteen days. She never learns there was a call: the
+       * beat, the fill and the name are identical either way, and the only thing a failed call
+       * costs is the seconds it took.
+       * ════════════════════════════════════════════════════════════════════════════════════════
+       */
+      /* ⚠️ `!authored` FIRST, AND IT IS NOT BELT-AND-BRACES. The two params are never sent together
+         today, but the ternary below would DISCARD an answer paid for over a sealed week — a call
+         spent re-answering a settled question, and a second week that could disagree with the one
+         she trains. The guard is where the money is spent, not where the result is chosen. */
+      const asked = !authored && coachAsk != null ? await askTheModel() : null;
+      /* ⚠️ ONLY WHEN THERE WAS A SENTENCE TO LOSE. Pressing through the ask step without writing a
+         line is still the coach path (`coachAsk` is `''`), but there is nothing to apologise for
+         and nothing to offer again — the local week IS the answer to saying nothing. */
+      coachMissed.current = !authored && !!coachAsk?.trim() && asked == null;
+      if (asked) {
+        const wrote = asked.days.filter((d) => !d.isRest).length;
+        if (wrote > 0) authoredDays.current = wrote;
+      }
+      /*
+       * ⚠️ THE DISK IS BOUNDED TOO, AND FOR THE SAME REASON THE MODEL IS (2026-08-30). This screen
+       * draws dashes until a programme is in hand and the ticker stops when the placeholders run
+       * out, so ANY await here that can outlive the beat is a dead screen. `loadProgram` is fast
+       * and local and has never been the problem — but "has never" is not a bound, and this is the
+       * one screen in the intake she cannot back out of.
+       *
+       * Timing out lands on `setFailed`, which is the retry scaffold with a button on it. A screen
+       * that says it could not do it is a product; a screen that says nothing is a bug report.
+       */
+      const readSealed = async (): Promise<Program | null> => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const late = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), 8_000); });
+        try {
+          return await Promise.race([db.loadProgram(), late]);
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
+      };
+      const program = authored ? await readSealed() : asked ?? (await model.generateProgram(profile));
+      // Nothing on disk under `authored` means the write that preceded this navigation did not land.
+      // The retry is already here and it is the honest answer — never a generated week wearing hers.
+      if (!program) {
+        setFailed(true);
+        return;
+      }
+      builtAtMs.current = Date.now();
       setBuilt({
         muscles: buildMusclesFromProgram(program, profile.repBand ?? '8-10'),
         name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER),
@@ -280,13 +573,43 @@ export function BuildingProgramme({ navigation, route }: Props) {
       // end, so the retry stays. It just has nothing to blame a network for any more.
       setFailed(true);
     }
-  }, [profile]);
+  }, [profile, authored, model, coachAsk, askTheModel]);
+
+  /*
+   * ⛔ THE BUILD WAITS FOR A RUNNING IMPORT — BUT NEVER FOR LONG, AND THAT SECOND HALF IS THE WHOLE
+   * FIX (2026-08-30, hours after I broke it).
+   *
+   * The wait is worth something: if she photographed a sheet at the fork and then took the engine
+   * door, both are in flight and the import WINS — it replaces the route the moment it lands — so
+   * building first means paying for a week we are about to throw away and flashing it at her on
+   * the way past. The read has been running since the fork and is almost always already done, so
+   * the wait is usually zero.
+   *
+   * ⛔ WHAT I SHIPPED FIRST WAS `if (waitingForImport) return;` WITH NO BOUND, and that is a frozen
+   * screen. `settledImport()` resolves when the read does, and a read can legitimately take up to
+   * `TIMEOUT_MS` — **three minutes** of a dark body with dashed rows that never fills, on the last
+   * step of the intake, with the back gesture correctly disabled. "It is stuck and it does not
+   * move" is exactly what that looks like, and I traded it for the cost of one API call.
+   *
+   * ⚠️ THE ATHLETE NEVER WAITS ON AN OPTIMISATION. The grace is short enough to be invisible and
+   * long enough to catch the ordinary case; past it, the build runs. If the import lands afterwards
+   * it still redirects — nothing is lost but the price of a call we may not need, which is the
+   * right thing to spend here and the wrong thing to make her wait for.
+   */
+  const IMPORT_GRACE_MS = 1_500;
+  const [graceOver, setGraceOver] = useState(false);
+  useEffect(() => {
+    if (!waitingForImport) return;
+    const id = setTimeout(() => setGraceOver(true), IMPORT_GRACE_MS);
+    return () => clearTimeout(id);
+  }, [waitingForImport]);
 
   useEffect(() => {
     if (started.current) return;
+    if (waitingForImport && !graceOver) return;
     started.current = true;
     void build();
-  }, [build]);
+  }, [build, waitingForImport, graceOver]);
 
   /*
    * ⛔ THE FAILURE KEEPS THE SCAFFOLD; THE BUILD DOES NOT.
@@ -364,12 +687,20 @@ export function BuildingProgramme({ navigation, route }: Props) {
   return (
     <BuildingProgrammeView
       muscles={muscles}
+      sex={inputs.sex}
       programmeName={revealed ? named : null}
       summary={
-        revealed && named
+        /* `named` is derived from `built?.name`, so inside this branch `built` exists — but the
+           checker cannot see through the derivation, and it is right to ask: a refactor that
+           loosened `named` would have made this a crash on the one screen she cannot go back from. */
+        revealed && named && built
           ? t('ob.buildSummary', { muscles: built.muscles.length, lifts: built.lifts })
           : null
       }
+      note={importFailed ? t(`import.fail.${importFailed}`) : null}
+      /* Only when she wrote one — an empty ask is still the coach path, and there is nothing to
+         quote. See `askedFor` on the view for why this is the AI signature and a badge is not. */
+      askedFor={coachAsk?.trim() ? coachAsk.trim() : null}
     />
   );
 }

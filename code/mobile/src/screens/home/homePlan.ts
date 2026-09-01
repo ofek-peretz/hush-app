@@ -15,7 +15,6 @@
  * so (`pending`) rather than the whole section standing down. Pulled out here so that law can be
  * asserted directly, without mounting a navigator.
  */
-// @ts-nocheck
 
 // 
 

@@ -12,17 +12,17 @@
  * is a launcher tab: its press opens the full-screen Cardio stage on the Main stack (so a live run
  * carries no tab bar), and History folded out of the bar into the Progress surface.
  */
-// @ts-nocheck
 
 // 
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Linking } from 'react-native';
+import { View, StyleSheet, Linking, I18nManager } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HushTabBar } from './HushTabBar';
 import { useApp } from '@/state/stores/appStore';
+import { usePair } from '@/state/stores/pairStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { fullLayerAnimation, sheetAnimation } from './navAnimations';
 import { onReloadRequested } from './reload';
@@ -41,18 +41,20 @@ import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './na
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { Start } from '@/screens/onboarding/Start';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
-import { BodyMap } from '@/screens/onboarding/BodyMap';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
+import { ProgramTab } from '@/screens/program/ProgramTab';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
+import { PlanBuilder } from '@/screens/plan/PlanBuilder';
 import { ImportPlan } from '@/screens/import/ImportPlan';
 import { SessionFlow } from '@/screens/session/SessionFlow';
 import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
+import { FreeLogScreen } from '@/screens/history/FreeLog';
 import { WorkoutDetail } from '@/screens/history/WorkoutDetail';
 import { LiftDetail } from '@/screens/progress/LiftDetail';
 import { PainWhere } from '@/screens/pain/PainWhere';
@@ -65,6 +67,7 @@ import { Paywall } from '@/screens/subscription/Paywall';
 import { ShareCardModal } from '@/screens/share/ShareCardModal';
 import { PreWorkoutScreen } from '@/screens/plan/PreWorkoutScreen';
 import { SharePlanScreen } from '@/screens/plan/SharePlanScreen';
+import { Together } from '@/screens/together/Together';
 import { PlanReceivedScreen } from '@/screens/plan/PlanReceivedScreen';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
@@ -104,6 +107,7 @@ function HomeTabs() {
       tabBar={(props) => <HushTabBar {...props} />}
     >
       <Tabs.Screen name="Today" component={Home} />
+      <Tabs.Screen name="Program" component={ProgramTab} />
       <Tabs.Screen name="Cardio" component={CardioTab} />
       <Tabs.Screen name="Progress" component={Progress} />
       <Tabs.Screen name="You" component={ProfileSheet} />
@@ -145,12 +149,30 @@ function OnboardingNavigator() {
         component={AboutYou}
         options={{ fullScreenGestureEnabled: false }}
       />
-      {/* ⛔ HEALTH SECOND, THE BODY MAP LAST (founder 2026-08-10). The map is the only step that
-          shapes the week, so it is the peak — and the peak belongs beside the payoff. A permission
-          ask was a fine thing to put in front of a conversation and a poor thing to put between her
-          and her programme. */}
+      {/* ⛔ HEALTH SECOND, THE WEEK LAST (founder 2026-08-10, and 2026-08-29). The last answering
+          step is the one that shapes the week, because the peak belongs beside the payoff — a
+          permission ask was a fine thing to put in front of a conversation and a poor thing to put
+          between her and her programme. That step was the body map; it is the builder now. */}
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
-      <OnboardingStack.Screen name="BodyMap" component={BodyMap} />
+      {/*
+        ⛔ THE BUILDER IS AN INTAKE STEP (founder 2026-08-29) — the same dual registration the import
+        has, for the same reason: `OnboardingStack` and `MainStack` are separate navigators, so a
+        route registered only on the main one is a tap that finds nothing at runtime. One component,
+        two chromes; which one it wears it reads from its own params.
+      */}
+      {/*
+        ⛔ THE HORIZONTAL GESTURE IS OFF HERE TOO, AND IT SHOULD HAVE MOVED WITH THE WHEEL
+        (found on the onboarding sweep, 2026-08-30).
+
+        `AboutYou` has carried `fullScreenGestureEnabled: false` since 2026-07-13 for one reason,
+        written down twice: *"a horizontal gesture over a horizontal rule is the rule losing"* —
+        every attempt to set a value would drag the screen back instead of turning the ruler. On
+        2026-08-29 the days wheel LEFT that screen and landed on this one (`AskTheCoach`), and the
+        protection did not come with it. So the one control the founder has a standing instruction
+        about — *"אל תיגע בפונקציונליות של הסרגלים, הם עובדים מושלם"* — spent a day sitting on the
+        only intake step that pops backwards when you touch it.
+      */}
+      <OnboardingStack.Screen name="PlanBuilder" component={PlanBuilder} options={{ fullScreenGestureEnabled: false }} />
       {/*
         ⛔ REGISTERED IN BOTH STACKS, AND IT HAS TO BE (2026-08-11). `OnboardingStack` and
         `MainStack` are separate navigators, so the line on the body-map step could not have reached
@@ -166,7 +188,22 @@ function OnboardingNavigator() {
       {/* The body map (Rev 7) — a vertical list, so the default horizontal back-swipe is fine. */}
       {/* THE INTAKE. Swipe-back is left ON: nothing is committed until a plan lands, so returning
           to the body map is as reversible as every step before it. */}
-      <OnboardingStack.Screen name="BuildingProgramme" component={BuildingProgramme} />
+      {/*
+        ⛔ AND THE BUILD STEP MEANT IT (found on the same sweep). The comment below has claimed since
+        it was written that this is *"the ONE place with no way back: the program exists"* — and only
+        `ProgramCreated` was actually given the option. This screen was swipe-back-able.
+
+        On the `authored` path that is not a cosmetic gap: `saveBuiltProgram` has ALREADY written her
+        week before the navigation, and the navigation is a `replace`, so `PlanBuilder` is off the
+        stack — a swipe lands her on `ConnectHealth` (2/3), whose Continue builds a fresh relay with
+        `daysPerWeek: 0` and re-opens the doors over a week that is already hers. The comment was
+        right; the registration was not.
+      */}
+      <OnboardingStack.Screen
+        name="BuildingProgramme"
+        component={BuildingProgramme}
+        options={{ gestureEnabled: false, fullScreenGestureEnabled: false }}
+      />
       {/* The build/ready step is the ONE place with no way back: the program exists. */}
       <OnboardingStack.Screen
         name="ProgramCreated"
@@ -202,8 +239,11 @@ function MainNavigator() {
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
       <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} />
       <MainStack.Screen name="ExerciseLibrary" component={ExerciseLibrary} />
+      {/* Same wheel, same reason — see the note on the onboarding registration. */}
+      <MainStack.Screen name="PlanBuilder" component={PlanBuilder} options={{ fullScreenGestureEnabled: false }} />
       <MainStack.Screen name="ImportPlan" component={ImportPlan} />
       <MainStack.Screen name="History" component={History} />
+      <MainStack.Screen name="FreeLog" component={FreeLogScreen} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="LiftDetail" component={LiftDetail} />
       {/*
@@ -222,6 +262,7 @@ function MainNavigator() {
       */}
       <MainStack.Screen name="PreWorkout" component={PreWorkoutScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="SharePlan" component={SharePlanScreen} />
+      <MainStack.Screen name="Together" component={Together} />
       <MainStack.Screen name="PlanReceived" component={PlanReceivedScreen} />
       <MainStack.Screen name="PainWhere" component={PainWhere} />
       {/* The live cardio stage — full-screen focus, fades in like the session flow, and opens
@@ -248,6 +289,11 @@ function routeNotificationIntent(intent: NotificationIntent | null, enrolled: bo
   void track('notification_opened', { kind: intent.kind });
   // The weekly notification opens the Saturday letter (what changed + Why).
   if (intent.kind === 'weekly_program_ready') navigateMain('WeeklyUpdate');
+  // The wrist's save receipt opens History — where the workout it announces now sits.
+  if (intent.kind === 'watch_workout_saved') navigateMain('History');
+  // The training-day reminder (opt-in, 2026-08-23) opens the app — Home IS the day it names, so
+  // no navigation is the navigation.
+
   // A KILOMETRE note routes NOWHERE. It is delivered mid-run, and the run is already the screen
   // she is on — bringing the app forward is the whole of it. Navigating anywhere from here would
   // take her off her own live run to show her a fact she has just been told.
@@ -260,6 +306,11 @@ export function Root() {
   const enrolledRef = useRef(false);
   enrolledRef.current = !!app.profile;
   const coldStartRouted = useRef(false);
+  /* The pair, behind a ref: the link listener is subscribed ONCE for the app's lifetime, and a
+     handler that closed over the first render's `pair` would join into a stale room for ever. */
+  const pair = usePair();
+  const pairRef = useRef(pair);
+  pairRef.current = pair;
   // A tap that arrives BEFORE the container is ready (cold start emits the response
   // event during boot, while Root still renders the empty canvas) must not be lost —
   // navigateMain would silently no-op. Stash it; onReady flushes it.
@@ -287,6 +338,28 @@ export function Root() {
   useEffect(() => {
     const open = (url: string | null) => {
       if (!url) return;
+      /*
+       * §11.2 — A PAIR ARRIVES AS A LINK TOO. `hush://pair?c=<code>`.
+       *
+       * It JOINS and does not navigate anywhere loud: she tapped a message from her brother, and
+       * being thrown into a screen is not what she asked for. Home notices the room on its next
+       * render and opens the sheet, which is the only place a room is legible (`joinedByLink`).
+       *
+       * An athlete with no profile yet is skipped for the same reason a shared plan is: there is
+       * nothing to train, so there is nothing to train together.
+       */
+      /* BOTH FORMS, and the path is matched rather than the word. `hush://pair?c=…` is what the
+         landing page's own button uses and what older builds send; `https://…/pair?c=…` is the
+         universal link, which is the one that reaches a phone with no app on it yet. */
+      const pairCode = /[?&]c=([^&]+)/.exec(url)?.[1];
+      if (pairCode && /(^hush:\/\/pair)|(\/pair(\?|$))/.test(url)) {
+        if (!enrolledRef.current) return;
+        void pairRef.current.join(decodeURIComponent(pairCode).toUpperCase(), true);
+        // Today, because the room is only legible where the sheet is — and quietly, because she
+        // tapped a message from her brother, not a button asking to be taken somewhere.
+        navigateMain('HomeTabs', { screen: 'Today' });
+        return;
+      }
       const token = /[?&]p=([^&]+)/.exec(url)?.[1];
       if (!token || !url.includes('plan')) return;
       if (!enrolledRef.current) return; // nothing to adopt a plan INTO yet
@@ -314,8 +387,24 @@ export function Root() {
   }
 
   return (
+    /*
+     * ⛔ THE DIRECTION IS DECLARED ON OUR OWN TREE, NOT INHERITED FROM THE HOST (device QA
+     * 2026-08-23: Hebrew stuck on the left in the TestFlight build).
+     *
+     * On iOS, Yoga resolves every node's direction from the ROOT HOST VIEW, and that view is
+     * created once, at process start, with whatever `I18nManager` said at that instant. The
+     * language switch flips the manager and remounts THIS subtree — but a subtree remount cannot
+     * recreate the host, so the resolved direction never changed and every `textAlign`/flex
+     * start-end kept rendering LTR. `reload.ts`'s own note said to verify exactly this on a
+     * Hebrew device; verified, and it fails.
+     *
+     * An explicit `direction` style on our outermost View is the fix RN itself provides: every
+     * node under it resolves against IT rather than the host, and it is re-read on every render —
+     * so the remount applies it, and a first launch on a Hebrew phone is right regardless of who
+     * won the boot race. Read straight off `I18nManager` (not the bidi latch): render-time truth.
+     */
+    <View style={[styles.direction, { direction: I18nManager.isRTL ? 'rtl' : 'ltr' }]} key={reloadKey}>
     <NavigationContainer
-      key={reloadKey}
       ref={navigationRef}
       theme={navTheme}
       onReady={() => {
@@ -342,9 +431,12 @@ export function Root() {
     >
       {app.profile ? <MainNavigator /> : <OnboardingNavigator />}
     </NavigationContainer>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  /** The direction owner — see the note on the render. Must fill the screen, or nothing under it does. */
+  direction: { flex: 1 },
   canvas: { flex: 1, backgroundColor: color.bgBase },
 });

@@ -38,14 +38,13 @@
  * WHEN is not this screen's business — `platform/watch/watchPresence` owns the split, holds the one
  * flag both surfaces share, and never lets either speak to a phone with no watch paired to it.
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { color, font, radius, signal } from '@/design/tokens';
@@ -79,17 +78,22 @@ export function OnYourWristView({ offer, onDone }: OnYourWristViewProps) {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <Legend size={17} track={0.16}>{t('onWrist.legend')}</Legend>
+        {/* ✦ IT ARRIVES (2026-08-27) — see the note at `HomeView`. Two beats: the claim this screen
+            makes, then the proof of it. The three promise rows land with the card, because they are
+            one list of what the wrist does and not three separate announcements. */}
+        <Arrive order={0}>
+          <Legend size={17} track={0.16}>{t('onWrist.legend')}</Legend>
 
-        <Text style={styles.title} accessibilityRole="header">
-          {install ? t('onWrist.titleInstall') : t('onWrist.title')}
-        </Text>
-        <Text style={styles.sub}>{install ? t('onWrist.subInstall') : t('onWrist.sub')}</Text>
+          <Text style={styles.title} accessibilityRole="header">
+            {install ? t('onWrist.titleInstall') : t('onWrist.title')}
+          </Text>
+          <Text style={styles.sub}>{install ? t('onWrist.subInstall') : t('onWrist.sub')}</Text>
+        </Arrive>
 
         {/* The card 1.3 built, with the switch taken out of it — there is nothing here to flip.
             It carries moss only when the watch already has the app: moss is "a decision made",
             and on the install face no decision has been made yet. */}
-        <View style={[styles.card, !install && styles.cardOn]}>
+        <Arrive order={1} style={[styles.card, !install && styles.cardOn]}>
           <View style={styles.iconBox}>
             <Icon name="watch" size={23} color={install ? color.textSecondary : color.accent} strokeWidth={1.8} />
           </View>
@@ -99,7 +103,7 @@ export function OnYourWristView({ offer, onDone }: OnYourWristViewProps) {
               {t('onWrist.cardLegend')}
             </Legend>
           </View>
-        </View>
+        </Arrive>
 
         <View style={styles.rows}>
           <Row text={t('onWrist.willSet')} />

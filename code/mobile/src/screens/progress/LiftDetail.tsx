@@ -17,7 +17,6 @@
  * the change ledger is the engine's own stamped `changeLog`, read back off persisted state. Nothing
  * here decides a load, a band or a verdict — the engine did that at the end of each occurrence.
  */
-// @ts-nocheck
 
 // 
 
@@ -25,7 +24,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Climb, Legend } from '@/components/ds';
+import { Arrive, Climb, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -37,9 +36,11 @@ import type { CoachDecision } from '@/domain/coachLog';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { exerciseById, exerciseDisplayName } from '@/data/exercises';
 import { milestoneCopy } from '@/domain/milestoneCopy';
+import { liftKnowledge, knowsAnything, type LiftKnowledge } from '@/domain/whatIKnow';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import {
   changeDirection,
+  liftChanges,
   liftChangesFromCoach,
   liftClimb,
   liftMoments,
@@ -51,6 +52,8 @@ import {
 import type { Session } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, radius, signal, press } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+// The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
+import { currentLocale } from '@/i18n';
 
 type Props = NativeStackScreenProps<MainParamList, 'LiftDetail'>;
 
@@ -89,22 +92,29 @@ export function LiftDetail({ navigation, route }: Props) {
 
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [coachLog, setCoachLog] = useState<CoachDecision[] | null>(null);
+  /** The engine's own stamped decisions for this lift — the source, see the read below. */
+  const [engineLog, setEngineLog] = useState<any[] | null>(null);
   const [plan, setPlan] = useState<CoachPlan | null>(null);
 
   useEffect(() => {
     let active = true;
     db.loadHistory().then((all) => active && setSessions(all));
     /*
-     * The coach's own decisions about this lift, read back.
+     * ⛔ EVERY DECISION ABOUT THIS LIFT — FROM THE THING THAT MAKES THEM (2026-08-19).
      *
-     * This read the ENGINE's stamped changeLog, and nothing writes that any more — so on any athlete
-     * who started after the fold was deleted this tab would be permanently empty. Empty is not "no
-     * changes": it is "we stopped recording", on the one screen that exists to answer *why did this
-     * lift move?*
+     * This read the coach's log, on the stated grounds that *"nothing writes the engine's changeLog
+     * any more"*. That was true of the v4 fold and has been false since v5: `foldEngine` stamps
+     * `state.changeLog` at the end of every workout. So the tab was drawing the empty half of the
+     * product — and drawing it as five identical rows saying "held", because the coach mapper has
+     * no from→to figures to give (see `liftChangesFromCoach`).
+     *
+     * The engine leads; the coach's log stays for an athlete whose history predates v5, where those
+     * really are the only decisions on record.
      */
-    void Promise.all([db.loadCoachLog(), loadWeekPlan()])
-      .then(([l, p]) => {
+    void Promise.all([db.loadEngineV5().catch(() => null), db.loadCoachLog(), loadWeekPlan()])
+      .then(([eng, l, p]) => {
         if (!active) return;
+        setEngineLog(eng?.changeLog ?? []);
         setCoachLog(l);
         setPlan(p);
       })
@@ -119,9 +129,24 @@ export function LiftDetail({ navigation, route }: Props) {
     () => liftMoments(sessions ?? [], app.profile, exerciseId, climb),
     [sessions, app.profile, exerciseId, climb],
   );
-  const changes = useMemo<LiftChange[]>(
-    () => liftChangesFromCoach(coachLog ?? undefined, exerciseId),
-    [coachLog, exerciseId],
+  const changes = useMemo<LiftChange[]>(() => {
+    const fromEngine = liftChanges(engineLog ?? undefined, exerciseId);
+    if (fromEngine.length > 0) return fromEngine;
+    return liftChangesFromCoach(coachLog ?? undefined, exerciseId);
+  }, [engineLog, coachLog, exerciseId]);
+
+  /*
+   * ⛔ WHAT THE ENGINE HAS MEASURED ABOUT THIS LIFT (founder 2026-08-22, authorising the redesign).
+   *
+   * Four facts about HER — her slope, her rungs, her ceiling, her rest — every one of them a
+   * statistic the loops already compute to make a decision, and every one of them shown to nobody
+   * until now. `domain/whatIKnow` asks the engine's own façade rather than deriving any of it a
+   * second time, and returns null wherever the evidence gate has not been cleared.
+   */
+  const band = bandOf(plan, exerciseId);
+  const knowledge = useMemo(
+    () => liftKnowledge(exerciseId, sessions ?? [], band?.[0] ?? 8),
+    [exerciseId, sessions, band],
   );
 
   return (
@@ -131,7 +156,8 @@ export function LiftDetail({ navigation, route }: Props) {
       climb={climb}
       moments={moments}
       changes={changes}
-      band={bandOf(plan, exerciseId)}
+      band={band}
+      knowledge={knowledge}
       loaded={sessions != null}
       onBack={() => navigation.goBack()}
     />
@@ -146,18 +172,61 @@ export interface LiftDetailViewProps {
   changes: LiftChange[];
   /** The engine's own rep band for this lift; null until it has one. */
   band: [number, number] | null;
+  /**
+   * What the engine has MEASURED about this lift. Every field is null until its own evidence gate is
+   * cleared — see `domain/whatIKnow`, and the law that holds it there.
+   */
+  knowledge?: LiftKnowledge;
   /** History has been read. False = still reading, and the page says nothing rather than "empty". */
   loaded: boolean;
   onBack: () => void;
 }
 
-export function LiftDetailView({ exerciseId, units, climb, moments, changes, band, loaded, onBack }: LiftDetailViewProps) {
+export function LiftDetailView({ exerciseId, units, climb, moments, changes, band, knowledge, loaded, onBack }: LiftDetailViewProps) {
   const { t } = useCopy();
   const [tab, setTab] = useState<Tab>('moments');
   const [tapped, setTapped] = useState<number | null>(null);
-  // The trace is drawn into the LIVE window width, not a Dimensions snapshot taken at import: a
-  // rotation, a split view or the web harness all change it after the module has loaded.
-  const graphW = Math.round(useWindowDimensions().width - 60);
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE CLIMB WAS DRAWN INTO THE WINDOW, NOT INTO ITS OWN SLOT (2026-08-27).
+   *
+   * It read `useWindowDimensions().width - 60` — the live window, correctly, and then guessed the
+   * rest. `60` is `styles.graph`'s two 30-point margins, restated as a number a hundred lines away
+   * from the style that owns them. It happens to be right on a phone and it is a guess everywhere
+   * else, and the guess is exactly the kind this file's neighbours keep getting caught by:
+   * **measured, not reserved.**
+   *
+   * ⚠️ AND IT MADE THE SCREEN UNREVIEWABLE. Measured in the harness, where the window is the
+   * BROWSER and not the simulated phone: `width` came back 2880, so the trace was drawn **2,820
+   * points wide inside a 390-point frame** and clipped at the gutter. What showed was the first
+   * thirteen per cent of the line — its earliest, flattest stretch — so a 34 → 47.5 climb, a rise of
+   * forty per cent, read on `3.2b` as a horizontal grey line. The one graph on the screen showed
+   * none of the climb it exists to draw.
+   *
+   * The slot measures itself now. The margins can change in the stylesheet without a constant
+   * elsewhere going stale, and a frame that is not the window gets the width it actually has.
+   *
+   * ⚠️ AND THE OLD SUM SURVIVES AS THE FIRST GUESS, deliberately. `onLayout` lands one frame after
+   * mount and never at all in the test renderer — measuring from zero drew nothing on the first
+   * paint and made `theClimbStartsOnTheSecondDay` fail, which is the law noticing correctly that
+   * the graph had stopped existing. So the window's width opens the slot and the slot's own
+   * measurement takes over the moment it arrives: right immediately, and right afterwards.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  /*
+   * ⛔ AND THE FIRST WRITE OF THIS PUT A HOOK INSIDE A TERNARY (2026-08-27, caught on glass):
+   * `measuredW > 0 ? measuredW : useWindowDimensions().width - 60`. The moment `onLayout` landed,
+   * `useWindowDimensions` stopped being called and every hook after it shifted a slot — React threw
+   * `Cannot read properties of undefined (reading 'length')` out of `areHookInputsEqual` and the
+   * whole screen went to the error boundary.
+   *
+   * ⚠️ AND THE SUITE COULD NOT HAVE CAUGHT IT. `onLayout` never fires in the test renderer, so
+   * `measuredW` is always 0 there, so the hook is always called and the order never changes. 3,559
+   * tests passed on a screen that crashed on the second frame. The browser found it in one load.
+   */
+  const windowW = useWindowDimensions().width;
+  const [measuredW, setMeasuredW] = useState(0);
+  const graphW = measuredW > 0 ? measuredW : Math.round(windowW - 60);
 
   const isReps = climb.mode === 'reps';
   const conv = (v: number) => (isReps ? v : displayWeight(v, units) ?? 0);
@@ -212,7 +281,10 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
     const mark = moments.find((m) => pointIndexAt(climb.points, m.atMs) === i && m.kind !== 'origin');
     if (mark) {
       const word = mark.kind === 'best' ? t('progress.bestWord') : t('progress.markWord');
-      return `${conv(mark.milestone ? mark.value : p.dayBest)} · ${word}`;
+      // ⚠️ WITH ITS UNIT. The ordinary-day branch below keeps it and this one dropped it, so a
+      // ringed point read "100 · best" beside a plain point reading "95 kg" — and in pounds the
+      // figure was a converted number with nothing saying what it had been converted to.
+      return `${conv(mark.milestone ? mark.value : p.dayBest)} ${unit} · ${word}`;
     }
     const change = changes.find((c) => pointIndexAt(climb.points, c.atMs) === i);
     if (change && change.loadTo != null) {
@@ -241,8 +313,12 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
         <View style={styles.headSpacer} />
       </View>
 
-      {/* the lift, and where it stands */}
-      <View style={styles.titleRow}>
+      {/* the lift, and where it stands
+
+          ✦ AND IT ARRIVES (2026-08-27) — see the note at `HomeView`. Two beats: the lift and where
+          it stands, then the climb that got it there. The rows below land with the climb, because a
+          lift's history is one record and not a sequence of reveals. */}
+      <Arrive order={0} style={styles.titleRow}>
         <View style={styles.titleLeft}>
           <Text style={styles.name} accessibilityRole="header" numberOfLines={2}>
             {exerciseDisplayName(exerciseId)}
@@ -255,7 +331,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
             <Text style={styles.standUnit}>{unit}</Text>
           </View>
         ) : null}
-      </View>
+      </Arrive>
 
       {/* ════ THE CLIMB — AND WHAT STANDS THERE BEFORE THERE IS ONE (founder C.18) ════
           "No graph when you open a lift."
@@ -267,7 +343,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
           looking broken it says what it is waiting for. (Her CURRENT figure is beside the title
           throughout — the number she has is never withheld, only the shape it has not made yet.) */}
       {climb.points.length > 1 ? (
-        <View style={styles.graph}>
+        <View style={styles.graph} onLayout={(e) => setMeasuredW(Math.round(e.nativeEvent.layout.width))}>
           {graphW > 0 ? (
             <Climb
               data={climb.points.map((p) => conv(p.value))}
@@ -292,7 +368,83 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
       ) : null}
 
       <View style={styles.body}>
-        {/* the two stories, with their counts */}
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ WHAT I HAVE MEASURED ABOUT THIS LIFT (founder 2026-08-22)
+          ════════════════════════════════════════════════════════════════════════════════════════
+
+          The engine knows four things about her on this lift and had never shown her one of them.
+          They are not derived here and they are not new: `perRungForV5`, `observedLoads`,
+          `railCeilingFor` and `learnedInterRestS` are the same functions the loops call to decide a
+          load, read back out (`domain/whatIKnow`).
+
+          ⚠️ AND EVERY ROW IS ABSENT UNTIL IT IS EARNED, which is the half that makes the panel
+          honest rather than impressive. Below F-12's four like-for-like pairs there is no slope;
+          below F-17's three samples there is no learned rest; on a lift with no completed set at her
+          target there is no rail at all (L11 — and nothing replaces it: the one predicted physical
+          ceiling this engine ever had was deleted as theory, and a panel is not the place to bring
+          it back). **A panel that filled itself with bootstraps would be showing her the ledger's
+          assumptions wearing her name.**
+
+          ⚠️ THE RETIRED ROW IS DELIBERATELY NOT NAMED HERE, and the law caught me naming it.
+          `everySurfacedSituationNamesAScreen` refuses a surface that cites a retired ledger code —
+          even in order to say it is dead — because a reader scanning the screens for what this app
+          implements cannot tell a citation from a resurrection. The reasoning is what belongs in a
+          screen; the code belongs in the register.
+
+          ⚠️ IT REPORTS, IT DOES NOT CLAIM — Progress's standing rule. Nothing here is a forecast, a
+          score or a grade; every figure is a statistic the engine already acted on.
+        */}
+        {knowledge && knowsAnything(knowledge) ? (
+          <View style={styles.known}>
+            <Legend track={0.18} tone="muted">{t('progress.measuredLegend')}</Legend>
+            <View style={styles.knownRows}>
+              {knowledge.perRung != null ? (
+                <KnownRow
+                  label={t('progress.knownSlope')}
+                  value={t('progress.knownSlopeValue', { n: Math.round(knowledge.perRung * 10) / 10 })}
+                />
+              ) : null}
+              {knowledge.ceiling != null ? (
+                <KnownRow
+                  label={t('progress.knownCeiling')}
+                  value={`${displayWeight(knowledge.ceiling, units)} ${unitLabel(units)}`}
+                />
+              ) : null}
+              {knowledge.restS != null ? (
+                <KnownRow
+                  label={t('progress.knownRest')}
+                  value={t('progress.knownRestValue', { n: knowledge.restS })}
+                />
+              ) : null}
+              {knowledge.rungs.length > 1 ? (
+                <KnownRow
+                  label={t('progress.knownRungs')}
+                  value={String(knowledge.rungs.length)}
+                />
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
+        {/*
+          ⛔ THE SELECTOR DREW ITSELF WITH NOTHING BEHIND EITHER TAB (2026-08-27).
+
+          On `3.2c` — a lift on its FIRST day, which is the state an athlete opens a new lift in —
+          the page read: the name, the load, `העלייה מתחילה ביום השני שלך.`, and then a two-tab
+          control saying `אבני דרך 0` / `כל השינויים 0` over an empty list. Two controls, both
+          counting nothing, offering a choice between two empty rooms.
+
+          ⚠️ AND ONLY ONE OF THE TWO HAD AN EMPTY LINE. `changes` says `changesEmpty`; `moments`
+          renders `[].map(…)`, which draws nothing at all — so tapping the tab that is already
+          selected did nothing visible, and the screen looked unfinished rather than young.
+
+          The page already says the honest thing above: the climb has not started. A selector for
+          two empty stories is not information, and it is the same fault the founder found on
+          2026-08-26 — *"three controls that could never appear."* It appears when there is
+          something to choose between.
+        */}
+        {moments.length + changes.length > 0 ? (
         <View style={styles.tabs}>
           <TabButton
             active={tab === 'moments'}
@@ -309,6 +461,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
             onPress={() => setTab('changes')}
           />
         </View>
+        ) : null}
 
         <ScrollView style={styles.rows} contentContainerStyle={styles.rowsContent} showsVerticalScrollIndicator={false}>
           {empty ? (
@@ -335,7 +488,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
 /** "26 JUN" — day + month, composed to avoid the locale comma. Uppercased by the Legend/row. */
 function shortDate(ms: number): string {
   const d = new Date(ms);
-  return `${d.toLocaleDateString(undefined, { day: 'numeric' })} ${d.toLocaleDateString(undefined, { month: 'short' })}`;
+  return `${d.toLocaleDateString(currentLocale(), { day: 'numeric' })} ${d.toLocaleDateString(currentLocale(), { month: 'short' })}`;
 }
 
 /** Today reads as TODAY — a date the athlete has to decode is a date she has to decode. */
@@ -462,10 +615,18 @@ function ChangeRow({ change, conv, unit }: { change: LiftChange; conv: (v: numbe
           )}
           <Legend size={17} track={0.06}>{dateWord(change.atMs)}</Legend>
         </View>
+        {/*
+          ⛔ AND THE COACH'S OWN SENTENCE WAS THROWN AWAY. `LiftChange.decision` carries the line the
+          coach wrote about this lift — the only thing a coach-era row has to say, since that mapper
+          stamps no from→to figures — and this printed a generic verdict word over it instead. An
+          ENGINE row's `decision` is a code, never a sentence, so it is `spoken` that decides.
+        */}
         <Text style={styles.rowLine}>
-          {structural || !moved
-            ? t(`progress.changeWord_${change.kind ?? dir}`)
-            : t('progress.changeFromTo', { from, to, unit })}
+          {change.spoken && change.decision
+            ? change.decision
+            : structural || !moved
+              ? t(`progress.changeWord_${change.kind ?? dir}`)
+              : t('progress.changeFromTo', { from, to, unit })}
         </Text>
       </View>
     </View>
@@ -473,6 +634,22 @@ function ChangeRow({ change, conv, unit }: { change: LiftChange; conv: (v: numbe
 }
 
 const HAIRLINE = 'rgba(241,238,229,0.10)';
+
+/**
+ * One measured fact: what it is, and the figure.
+ *
+ * ⚠️ THE LABEL IS SANS AND THE FIGURE IS MONO, which is the app's standing split — a translated
+ * phrase cannot go through IBM Plex Mono at all (`monoCarriesNoWords`), and a reading wants the
+ * column. `Legend` would uppercase; these are sentence-case labels, so they are plain text.
+ */
+function KnownRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.knownRow}>
+      <Text style={styles.knownLabel}>{label}</Text>
+      <Text style={styles.knownValue}>{value}</Text>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
@@ -502,9 +679,32 @@ const styles = StyleSheet.create({
   // C.18 — the climb's own slot, holding the reason it is not drawn yet. Same box, so the page
   // below it does not move when the second day arrives and the graph takes the space over.
   graphWaiting: { marginHorizontal: 30, marginTop: 14, height: 138, justifyContent: 'center' },
-  climbWaiting: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 23, color: color.textMuted, textAlign: 'left' },
+  climbWaiting: { fontFamily: font.serif, fontSize: 17, lineHeight: 23, color: color.textMuted, textAlign: 'left' },
 
   body: { flex: 1, minHeight: 0, paddingHorizontal: 30, paddingTop: 12 },
+
+  /* Its own band above the tabs — it is a different KIND of thing from the two stories under it:
+     they are what happened, this is what was learned from it. */
+  known: { paddingTop: 4, paddingBottom: 22, gap: 10 },
+  knownRows: { gap: 0 },
+  knownRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(241,238,229,0.08)',
+  },
+  knownLabel: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  knownValue: {
+    fontFamily: font.monoMedium,
+    fontVariant: ['tabular-nums'],
+    fontSize: 20,
+    lineHeight: 26,
+    color: color.textPrimary,
+    textAlign: 'right',
+  },
 
   tabs: {
     flexDirection: 'row',
@@ -544,9 +744,9 @@ const styles = StyleSheet.create({
   // The unit is a translated slot (he: "ק״מ" / "חזרות") — sans, never mono.
   rowUnit: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textMuted }, // rtl-ok: nested span inside rowValue, which sets textAlign
   // The line the mark earns is the coach speaking — serif italic, the one voice on this page.
-  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 19, color: color.textSecondary, textAlign: 'left' },
+  rowLine: { fontFamily: font.serif, fontSize: 17, lineHeight: 19, color: color.textSecondary, textAlign: 'left' },
 
-  emptyLine: { paddingTop: 22, fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  emptyLine: { paddingTop: 22, fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 
   hint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 12, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.08)' },
   hintText: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'center' },

@@ -8,13 +8,22 @@
  *   Authentication (sign-in + consent, merged 2026-07-12) → Name → Connect Health
  *   → the conversation → Program Created → Home. Four screens, and one of them is a coach.
  * Invite-token enrollment is removed.
+ *
+ * ⛔ AND THE THIRD ANSWERING STEP IS THE BUILDER NOW (founder 2026-08-29):
+ *
+ *     Authentication → Start → AboutYou (1/3) → ConnectHealth (2/3) → PlanBuilder (3/3)
+ *       → BuildingProgramme → ProgramCreated → Home
+ *
+ * The body map held that seat because it was the only step that shaped the week. The builder is
+ * that step now, and it does not merely shape the week — it IS the week, written by her: build one
+ * for me, start from a blank sheet, or take a proven shelf and change it. `BodyMap` is deleted from
+ * the intake (the map itself lives on at `BodyMapEdit` and in the pain flow).
  */
-// @ts-nocheck
 
 // 
 
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSummary, Units } from '@/data/local/models';
+import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
 import type { ShareCard } from '@/domain/shareCard';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
 import type { WristOffer } from '@/platform/watch/watchPresence';
@@ -33,7 +42,11 @@ export type OnboardingParamList = {
    * week she brought still FINISHES the intake — see `BodyMap.bringYourOwn`. Absent params mean it
    * was opened from the profile instead, where there is no intake to finish.
    */
-  ImportPlan: { fromOnboarding?: true; review?: true; inputs?: OnboardingInputs } | undefined;
+  /* ⚠️ `coachAsk` RIDES THROUGH THE REVIEW ROUND-TRIP (2026-08-30). When the build step hands this
+     screen a landed import, it carries the sentence she typed on the ask step — because declining
+     the photograph has to return her to the build she was watching, and a decline that quietly
+     dropped her words would build a different week under the same words. */
+  ImportPlan: { fromOnboarding?: true; review?: true; inputs?: OnboardingInputs; coachAsk?: string } | undefined;
   // Sign-in AND consent (merged 2026-07-12): continuing with a provider records the
   // versioned agreement — the line under the buttons says so before it is pressed.
   Authentication: undefined;
@@ -122,13 +135,20 @@ export type OnboardingParamList = {
    * was granted — because it is where `OnboardingInputs` is assembled. One place builds that object;
    * which place is the last one is what changed.
    */
-  BodyMap: {
-    sex?: 'male' | 'female';
-    weightKg?: number;
-    daysPerWeek?: number;
-    healthConnected?: boolean;
-    units?: Units;
-  };
+  /*
+   * ⛔ THE THIRD ANSWERING STEP — HER WEEK, AND WHO WRITES IT (founder 2026-08-29):
+   *   *"אני לא יכול לבנות את התוכנית בעצמי מההתחלה … אפשר להוריד את מפת הגוף מהאונבורדינג."*
+   *
+   * The builder was reachable from the Program tab and nowhere else, so the one thing an athlete
+   * coming from Hevy asks for first — *I'll write my own week* — was behind an account she did not
+   * have yet. It is a step of the intake now, and it carries the whole relay because it is the last
+   * answering step: whichever door she takes, `OnboardingInputs` leaves from here.
+   *
+   * ⚠️ REGISTERED IN BOTH STACKS, exactly as `ImportPlan` is, and for the same reason: an intake
+   * step and a main-app screen are the same screen wearing different chrome. Absent params mean it
+   * was opened from the Program tab, where there is no intake to finish.
+   */
+  PlanBuilder: { inputs: OnboardingInputs };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
@@ -148,21 +168,20 @@ export type OnboardingParamList = {
     previewWrist?: WristOffer;
   } | undefined;
   /*
-   * ════ THE BODY MAP LEFT ONBOARDING ════
+   * ════ THE BODY MAP LEFT ONBOARDING — THE SECOND TIME, AND FOR GOOD (founder 2026-08-29) ════
    *
-   * Founder, 2026-08-01: *"I really did ask you to get rid of the body map in onboarding... and I
-   * think we don't need a body map at all, because we said this is something the AI handles in the
-   * case of an injury."*
+   * It left once already (2026-08-01: *"I really did ask you to get rid of the body map in
+   * onboarding"*), came back on 2026-08-08 as the replacement for the prose goal screen, and is
+   * gone again now that the step in its seat is the builder. The reason is the same one that put it
+   * there: it was the only step that shaped the week. It is not any more, and asking a stranger to
+   * mark ten muscles off / normal / emphasis BEFORE she has ever trained — one screen away from a
+   * sheet where she can write the week itself — is the same question asked twice, worse.
    *
-   * He asked, and it was still there — reachable in the product, absent from the gallery, so it
-   * looked gone to the only person who reads the gallery.
-   *
-   * The screen asked her to mark ten muscles off / normal / emphasis BEFORE she had ever trained,
-   * and then the very next screen asked a coach the same question in words. Two answers to one
-   * question, and the coach's is the better one: it can ask WHY, and it can change its mind.
-   *
-   * The MAP itself is not gone — it is the pain flow's own surface (13.2) and the profile editor
-   * (4.1). What is gone is asking a stranger to fill one in.
+   * ⚠️ THE MAP ITSELF IS NOT GONE, and it is the only thing that keeps this honest: `BodyMapEdit`
+   * (4.1) is hers from her first minute in the app, and the pain flow (13.2) reaches it. What is
+   * gone is asking her to fill one in before she has a programme. The engine door therefore builds
+   * her first week from an ABSENT map — a full-body week with nothing switched off — which is the
+   * one thing this ruling costs and the founder was told so before he made it.
    */
   // THE INTAKE — the first conversation, and the step that produces the programme. Everything
   // before it collects what a coach cannot ask for twice (name, gender, bodyweight, days); this is
@@ -176,9 +195,38 @@ export type OnboardingParamList = {
    * more — six facts come off a form and two come from her own words — so what replaced it makes ONE
    * call and hands her a programme.
    */
-  BuildingProgramme: { inputs: OnboardingInputs };
+  /**
+   * ⛔ `authored` — THE WEEK IS ALREADY WRITTEN, AND IT IS HERS (founder 2026-08-29): *"אני חושב
+   * שאנו לא צריכים לוותר על החלק של האנימציה בסוף … התרגילים שנבנו נכנסים לאנימציה."*
+   *
+   * The reveal — the dark body, the muscles arriving one at a time, the programme named over a lit
+   * figure — is the payoff of the intake, and it belongs to a week she wrote every bit as much as to
+   * one the engine assembled. With this flag the screen READS the sealed week off disk instead of
+   * generating one; nothing else about the theatre changes.
+   */
+  /*
+   * ⛔ `coachAsk` — HER OWN WORDS, AND THE FLAG THAT SAYS WHO WRITES THE WEEK (2026-08-29).
+   *
+   * Present ⇒ the model was asked, and this screen's simulation finally has something to wait for
+   * (see `BuildingProgramme.askTheModel`). Absent ⇒ the local assembler, exactly as before. An
+   * EMPTY STRING is a real value: she pressed straight through the ask step without writing a line,
+   * which is still the coach path — so the flag is `!= null`, never truthiness.
+   */
+  BuildingProgramme: { inputs: OnboardingInputs; authored?: true; coachAsk?: string };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
-  ProgramCreated: { inputs: OnboardingInputs };
+  /*
+   * ⛔ `coachMissed` — SHE TYPED A SENTENCE AND IT REACHED NOBODY (2026-08-30).
+   *
+   * Measured on the production Worker, 16 consecutive builds: 13 answered, 3 came back truncated,
+   * and four of the 13 arrived after the intake's budget. **Nine of sixteen** landed a usable week
+   * in time. The rest fall through to the local assembler, which is the right week to hand her —
+   * but until now the screen said nothing, by design: *"she never learns there was a call."*
+   *
+   * That was a fair ruling when the fallback was rare. At better than one in three it is the app
+   * quietly dropping the one thing she wrote in her own words, on the screen that exists to show
+   * her it listened. She is told, and she is offered the ask again.
+   */
+  ProgramCreated: { inputs: OnboardingInputs; coachMissed?: boolean; coachAsk?: string };
 };
 
 /**
@@ -196,6 +244,9 @@ export type HomeTabsParamList = {
   // TODAY — the daily loop (the Home component). Renamed from "Home" in v7: the tab bar carries a
   // measured-range mark under it and the design calls the destination "Today".
   Today: undefined;
+  // PROGRAM — the whole week, managed (founder 2026-08-23): every day opens the pre-workout card,
+  // the library one row away. The map of the week; every edit verb routes to the surface owning it.
+  Program: undefined;
   // CARDIO — a launcher tab. Open training is a full-screen STAGE (no tab bar during a live run),
   // so this tab intercepts its own press and pushes the Main-stack Cardio screen instead of
   // rendering anything itself (Root.tsx). The working run/walk flow is untouched.
@@ -256,6 +307,9 @@ export type MainParamList = {
   // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the
   // Progress surface and is pushed here on the Main stack (opened from Progress).
   History: undefined;
+  // FREE-FORM LOG (2026-08-24) — "I trained without Hush; keep it." Opened from the Log's ledger;
+  // saves a `freeform` session the record keeps whole and the engine folds none of (models.ts).
+  FreeLog: undefined;
   // Edit body data after onboarding (opened from Settings).
   /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
   // The live workout. `previewFirstGym` is the v7 GALLERY's seam and nothing else: 2.0 is an
@@ -270,7 +324,13 @@ export type MainParamList = {
   WorkoutDetail: { sessionId: string };
   // WHEN SOMETHING HURTS (v7 §13). `exerciseId` = the lift the session was on, so the response can
   // offer the ordinary swap for it; absent when the report is made outside a session.
-  PainWhere: { exerciseId?: string } | undefined;
+  /*
+   * `previewDone` is the GALLERY's seam and nothing else — the same shape as `previewFirstGym` and
+   * `previewWeekOpen`. The RECEIPT (the state after she has told us) is reachable only by filing a
+   * real report against a real profile, so in the harness this screen could only ever be looked at
+   * as the PICKER — and the receipt is the half that was 55% empty black. Never passed by the app.
+   */
+  PainWhere: { exerciseId?: string; previewDone?: { muscle: string; severity: 'twinge' | 'pain' | 'sharp' } } | undefined;
   // ONE LIFT'S CARD (v7 3.2b) — its climb, the marks it crossed, and the engine's stamped log for
   // it. Pushed from a chip on Progress · Lifts, so it opens above the tabs, not inside them.
   LiftDetail: { exerciseId: string };
@@ -298,6 +358,14 @@ export type MainParamList = {
    * stands in front of deciding whether the numbers are right.
    */
   PreWorkout: { workoutId: string };
+  /** The plan builder (founder 2026-08-25) — full authorship of the week, with the steward layer.
+   *  Door: the Program tab. Saving seals `authored: 'athlete_or_coach'` (the imported week's own
+   *  passport), so every engine rebuild gate refuses the week from then on.
+   *
+   *  ⚠️ AND IT IS ALSO AN ONBOARDING STEP (2026-08-29) — see `OnboardingParamList.PlanBuilder`. NO
+   *  PARAMS HERE, deliberately: the relay is what tells the screen which of the two it is, so the
+   *  main-stack door cannot accidentally put it in intake chrome. */
+  PlanBuilder: undefined;
   /*
    * ⛔ HER BODY, EDITABLE (founder 2026-08-11). The map used to exist on ONE screen, in onboarding —
    * drawn once and never reachable again — while the pain copy already told her *"adjust it any time
@@ -313,6 +381,8 @@ export type MainParamList = {
   /** The programme she already has — photographed or typed. See `screens/import`. */
   ImportPlan: undefined;
   SharePlan: undefined;
+  /** The social home (2026-08-23) — the cards on demand, the plan in/out, the future circle. */
+  Together: undefined;
   PlanReceived: { token: string };
   // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent
   // modal over whatever surfaced it (a completed workout, the week's close). `card` carries the

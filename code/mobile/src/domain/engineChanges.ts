@@ -9,11 +9,10 @@
  * These are ENGINE changes, not athlete swaps (S-72): the integration writes them straight to
  * `substitutes`, bypassing the learned-swap occurrence counter — so a rotation never reads as a swap.
  */
-// @ts-nocheck
 
 // 
 
-import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, progressionRule } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, progressionRule } from '@/data/exercises';
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
 import type { Session } from '@/data/local/models';
 
@@ -45,7 +44,9 @@ export function graduationTarget(exerciseId: string): string | undefined {
 export function rotationTarget(exerciseId: string, history: Session[], profile?: LoadProfile): string | undefined {
   const ex = exerciseById(exerciseId);
   if (!ex) return undefined;
-  const all = exercisesForMuscle(ex.muscle).filter((e) => !isSwapOnly(e.id) && e.id !== exerciseId);
+  // A rotation is the ENGINE assigning (S-71/S-72) — the choice-only shelf (21s, the EZ bar) is
+  // hers to pick and never a rotation target, exactly as a regression never is (2026-08-26).
+  const all = exercisesForMuscle(ex.muscle).filter((e) => engineMayAssign(e.id) && e.id !== exerciseId);
   const fits = all.filter((e) => canLoad(e, profile));
   const pool = fits.length > 0 ? fits : all;
   if (pool.length === 0) return undefined;

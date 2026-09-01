@@ -27,7 +27,7 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
-import { runImport, type AskFn, type ImportResult, type ImportOutcome } from '@/domain/runImport';
+import { runImport, type AskFn, type ImportResult, type ImportOutcome, type ImportFailure } from '@/domain/runImport';
 import type { ImportedWeek } from '@/domain/importedPlan';
 
 export type ImportPhase = 'reading' | 'matching';
@@ -64,12 +64,19 @@ export function peekImport(): PendingState {
  * ⚠️ IGNORING THE SECOND CALL IS DELIBERATE AND IS NOT A RACE GUARD. She can reach the import screen
  * twice (back out of onboarding, come in again). Starting a second read would spend a second call on
  * the same photograph and leave two answers competing over one programme.
+ *
+ * ⛔ BUT IT GUARDS ON THE **PHASE**, NOT ON THE HANDLE. It was `if (inFlight) return`, and `inFlight`
+ * was only ever cleared on the success path (`ImportPlan` calls `clearImport` when she keeps the
+ * week). So one failed read locked the importer shut for the rest of the session: she photographed
+ * the sheet again, `startImport` no-opped, and the build step re-read the same old failure and told
+ * her the same thing. A read that failed is exactly the read she is entitled to try again.
  */
 export function startImport(
   ask: AskFn,
   input: { week?: ImportedWeek; images?: { mime: string; data: string }[]; locale?: 'en' | 'he' },
 ): void {
-  if (inFlight) return;
+  if (state.phase === 'running') return; // one photograph, one call — the deliberate no-op above
+  if (state.phase === 'done' && state.result.ok) return; // she already has a programme waiting
   set({ phase: 'running', step: 'reading', partial: null });
   inFlight = runImport(ask, {
     ...input,
@@ -103,6 +110,27 @@ export async function settledImport(): Promise<ImportResult | null> {
   if (state.phase === 'done') return state.result;
   if (!inFlight) return null;
   return inFlight;
+}
+
+/**
+ * ⛔ THE FAILURE HAS TO SURVIVE THE SCREEN THAT COULD HAVE EXPLAINED IT (v7, 2026-08-18).
+ *
+ * From the intake, `ImportPlan` starts the read and calls `goBack` in the same breath — so when the
+ * read later fails there is no import screen left to say so. `BuildingProgramme` waits for the
+ * result, replaces the route when it is good, and until now said NOTHING when it was not, under a
+ * comment claiming "the import screen told her why it could not read her sheet". That screen was
+ * dismissed four steps before the answer arrived. She finished onboarding with a generated week and
+ * no idea her own programme had never been read.
+ *
+ * ⚠️ THE REASON IS ALREADY IN THE STATE — this only names the question, so a waiting screen can ask
+ * it in one line instead of unpicking a union. The SENTENCE already exists too: `import.fail.<reason>`
+ * is the same honest line the import screen would have shown her, and `import.title` names the way
+ * back to it. A waiting screen owes her both — the line and the door — before it moves on.
+ *
+ * Null when nothing was started, when it is still running, and when it succeeded.
+ */
+export function importFailure(): ImportFailure | null {
+  return state.phase === 'done' && !state.result.ok ? state.result.reason : null;
 }
 
 /** Forget it — she chose her week, or she abandoned the intake. */

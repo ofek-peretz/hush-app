@@ -2,7 +2,6 @@
  * Athlete-owned ordering helper (Program Ownership Contract). Pure + deterministic so the
  * reorder UX and its persistence stay in lock-step. Athlete Order > Model Default, always.
  */
-// @ts-nocheck
 
 // 
 

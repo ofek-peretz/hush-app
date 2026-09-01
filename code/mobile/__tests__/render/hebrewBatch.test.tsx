@@ -157,7 +157,7 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     brief: null,
     briefCount: null,
     briefUnseen: false,
-    trialLeft: 9,
+    trialLeft: 2, // inside the news window — see `TRIAL_NEWS_AT`
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
@@ -205,7 +205,30 @@ describe('the one act is never below the fold', () => {
       j.children?.forEach(walk);
     };
     walk(r.toJSON());
-    expect(said.join(' ')).toContain(tg('home.trialLeft', { count: 9 }).toUpperCase());
+    expect(said.join(' ')).toContain(tg('home.trialLeft', { count: 2 }).toUpperCase());
+  });
+
+  /**
+   * ⛔ AND BEFORE THAT IT SAYS NOTHING AT ALL (founder, 2026-08-21).
+   *
+   * This law used to assert the line with NINE left, which is what made it a countdown: the last
+   * thing she read before training, every session from the first, was how few she had. The claim
+   * above is unchanged and still worth holding — when the line is drawn it must ride with the act
+   * rather than sink below the fold. What changed is WHEN it is drawn: inside the last few, where it
+   * is news. `TRIAL_NEWS_AT`, and the standing fact lives on You's membership row.
+   */
+  it('and outside the last few it is silent — a countdown is not news', () => {
+    const r = mount(<HomeView {...props({ trialLeft: 9 })} />);
+    const said: string[] = [];
+    const walk = (n: unknown): void => {
+      if (n == null) return;
+      if (typeof n === 'string') return void said.push(n);
+      if (Array.isArray(n)) return void n.forEach(walk);
+      const j = n as { children?: unknown[] };
+      j.children?.forEach(walk);
+    };
+    walk(r.toJSON());
+    expect(said.join(' ')).not.toContain(tg('home.trialLeft', { count: 9 }).toUpperCase());
   });
 
   it('Recovery has no act, so nothing is pinned there', () => {

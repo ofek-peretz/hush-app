@@ -23,7 +23,6 @@
  * holds. The coach decides; this only says what is usual. Nothing reads it to reject a prescription.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

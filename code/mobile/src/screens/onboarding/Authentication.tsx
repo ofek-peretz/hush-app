@@ -34,7 +34,6 @@
  * The hero ARRIVES rather than appearing: mark, wordmark, promise, affirmation, then the buttons,
  * in reading order at one step apart (`components/ds/Arrive`). Everything is home in under 700 ms.
  */
-// @ts-nocheck
 
 // 
 
@@ -50,8 +49,10 @@ import { useApp } from '@/state/stores/appStore';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, press } from '@/design/tokens';
-import { monoCanDraw } from '@/design/monoVoice';
+import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { LegalSheet } from '@/components/LegalSheet';
+import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, press, motion } from '@/design/tokens';
+import { legendVoice } from '@/design/monoVoice';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList } from '@/app/navigation';
 
@@ -73,6 +74,21 @@ export function Authentication({ navigation }: Props) {
   const [failed, setFailed] = useState<null | 'network' | 'apple' | 'google'>(null);
   const locale = currentLocale();
   const affirm = t('ob.signinAffirm').toUpperCase();
+  /*
+   * ⛔ THE FACE SWAPPED AND THE TRACKING DID NOT — ON THE FIRST SCREEN OF THE APP (2026-08-26).
+   *
+   * This slot has asked the STRING which face to use since it was built (`affirmSans`), and then
+   * merged that answer on top of a style still carrying `.22em`. So the product's one claim —
+   * the only thing this screen asserts — was drawn to a Hebrew reader as
+   * `כ ל  מ ש ק ל  מ ס ט  ש ה ר מ ת`: a sentence spelled out letter by letter, at the top of the
+   * funnel, on the screen that has to earn the download.
+   *
+   * `Legend` fixed exactly this on 2026-08-21 and the fix stayed inside `Legend`. It is one shared
+   * question now (`legendVoice`), and `noTrackedHebrew` in `lint-rtl` stops it being asked twice.
+   */
+  /* ⚠️ SIZED AT `md`, NOT `sm` — see the style. The tracking is computed from the size it is
+     actually drawn at, or the two drift and Latin gets the wrong track. */
+  const affirmVoice = legendVoice(affirm, textScale.md, 0.22);
 
   /**
    * LANGUAGE LIVES ON THE FRONT DOOR (founder 2026-07-12). It used to be buried in Settings,
@@ -97,12 +113,14 @@ export function Authentication({ navigation }: Props) {
 
   /** The ochre ignition: the instrument coming to life, once, under the mark. */
   const halo = useRef(new Animated.Value(0)).current;
+  /* The legal sheet — consent may not point at nothing (founder 2026-09-01). */
+  const [legalOpen, setLegalOpen] = useState(false);
   useEffect(() => {
     if (reduced) {
       halo.setValue(1);
       return;
     }
-    Animated.timing(halo, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(halo, { toValue: 1, duration: motion.dur.bloom, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [halo, reduced]);
 
   async function onSignIn(provider: AuthProvider) {
@@ -162,7 +180,7 @@ export function Authentication({ navigation }: Props) {
       <View style={styles.hero}>
         {/* v7 1.1 mark: a moss ring blooms behind the cream span-bracket, and a moss dot
             rests at its centre — "line grows, ticks strike, the dot rolls home". */}
-        <Arrive order={0} style={styles.markWrap}>
+        <Arrive order={0} style={[styles.markWrap, styles.markLockup]}>
           <Animated.View
             pointerEvents="none"
             style={[
@@ -182,7 +200,7 @@ export function Authentication({ navigation }: Props) {
         </Arrive>
         {/* v7 1.1: just "hush" in the coach's serif — no trailing moss dot. The moss on this
             screen lives once, in the mark's halo above (the pulse ring), not after the word. */}
-        <Arrive order={1} style={styles.brand}>
+        <Arrive order={1} style={[styles.brand, styles.brandLockup]}>
           <Text style={styles.wordmark}>hush</Text>
         </Arrive>
         {/* ONE CLAIM, NOT TWO (2026-07-17).
@@ -191,16 +209,44 @@ export function Authentication({ navigation }: Props) {
             Hush cannot measure (R7), on the one screen the brief says "sells nothing". The deal is
             better in every way — first person, provable, and it IS the promise. So it takes the
             size the boast was wearing, and the boast is gone. */}
-        <Arrive order={2}><Text style={styles.promise}>{t('ob.signinTagline')}</Text></Arrive>
+        <Arrive order={2} style={styles.promiseLockup}><Text style={styles.promise}>{t('ob.signinTagline')}</Text></Arrive>
         {/* v7 1.1: the coach's affirmation under the promise — IBM Plex Mono 500 at .22em,
             exactly as the handoff draws it. The face is chosen from the STRING: a locale mono
             cannot draw falls back to Assistant rather than breaking mid-line. */}
+        {/*
+          ⛔ THE HAIRLINE OVER THE AFFIRMATION IS DELETED (2026-08-26, the elevation pass).
+
+          It was 30 × 1 points of cream, meant as *"a seal on the promise above rather than a stray
+          caption"*. Read on glass at the real size it is the opposite: a floating dash with nothing
+          either side of it, the only fragment on a screen otherwise made of whole objects. The
+          affirmation is already a different register — different face, different size, different
+          ink, thirty points of air — and none of those needed a rule to be seen.
+
+          The app's own copy law, arriving in a graphic: *a label that explains a control steals its
+          job; delete, don't shorten.* A rule that separates a line from a line is that label.
+        */}
         <Arrive order={3}>
-          <View style={styles.affirmRule} />
-          <Text style={[styles.affirm, !monoCanDraw(affirm) && styles.affirmSans]}>{affirm}</Text>
+          <Text
+            /* ⚠️ `affirmSans` STAYS BEFORE THE INLINE OBJECT. `monoCarriesNoWords` reads this style
+               expression with a regex that stops at the first `}`, and its escape hatch is seeing a
+               sans key in it — so a non-Latin fallback declared AFTER an inline object is invisible
+               to the law that exists to require one. The two keys set different properties, so the
+               order is free; being legible to the law is not. */
+            style={[styles.affirm, !affirmVoice.latin && styles.affirmSans, { letterSpacing: affirmVoice.letterSpacing }]}
+          >
+            {affirm}
+          </Text>
+        </Arrive>
+        {/* ⛔ THE VALUE, BEFORE THE WALL (founder 2026-09-01 · F5). The front door asked for an
+            account before showing anything but a slogan — and the one hesitation everyone brings
+            to that wall is "what will this cost me". One measured fact answers it: the fourteen
+            free sessions, from the same constant the trial actually runs on. No extra screen, no
+            demo mode — the door itself carries the reason to walk through it. */}
+        <Arrive order={4}>
+          <Text style={styles.trialFact}>{t('ob.signinTrialFact', { n: FREE_SESSION_LIMIT })}</Text>
         </Arrive>
       </View>
-      <Arrive order={4} style={styles.actions}>
+      <Arrive order={5} style={styles.actions}>
         {failed ? (
           <Text style={styles.error}>
             {t(failed === 'network' ? 'ob.signinFailedNetwork' : failed === 'apple' ? 'ob.signinFailedProvider' : 'ob.signinFailedGoogle')}
@@ -221,7 +267,7 @@ export function Authentication({ navigation }: Props) {
           label={t('ob.google')}
           onPress={() => onSignIn('google')}
           disabled={busy}
-          logo={null}
+          logo={<GoogleLogo />}
           style={styles.google}
           pressedStyle={styles.googlePressed}
           labelStyle={styles.googleLabel}
@@ -229,17 +275,33 @@ export function Authentication({ navigation }: Props) {
         {/* The agreement, in one line, where the decision is actually made. Legible ink —
             a legal line the athlete cannot read is not consent (founder 2026-07-12). One
             weight, one tone: the handoff draws it as a single 12px muted sentence. */}
-        <Text style={styles.legal}>
-          {t('ob.signinLegalPre')}
-          {t('ob.signinLegalTerms')}
-          {t('ob.signinLegalPost')}
-        </Text>
+        {/* ⛔ THE ONLY TWO WORDS THAT MUST BE PRESSABLE, MADE PRESSABLE (design review 2026-09-01).
+            "תנאי השימוש והפרטיות" was dead text — consent pointing at a document she cannot open
+            fails her and App Review alike. The phrase is a link now (underlined, one ink up), and
+            the whole line is the touch target so 44pt is met without growing the type. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('ob.signinLegalTerms')}
+          hitSlop={10}
+          /* ⛔ IN-APP, NOT A URL (founder 2026-09-01): the document she consents to opens HERE,
+             readable, in her language — an external link was the interim and a dead one was the
+             bug. `LegalSheet` carries the actual terms + privacy text from the copy pack. */
+          onPress={() => setLegalOpen(true)}
+          style={styles.legalPress}
+        >
+          <Text style={styles.legal}>
+            {t('ob.signinLegalPre')}
+            <Text style={styles.legalLink}>{t('ob.signinLegalTerms')}</Text>
+            {t('ob.signinLegalPost')}
+          </Text>
+        </Pressable>
         {/* The "your data is only used for your recommendations, they are never sold" line is
             GONE (founder 2026-07-12). Nobody arrives at a training app suspecting we sell them;
             volunteering the denial is what plants the thought. The agreement above is the record;
             the promise belongs in the policy it links to, not on the front door. */}
       </Arrive>
-    </SafeAreaView>
+          {legalOpen ? <LegalSheet onClose={() => setLegalOpen(false)} /> : null}
+      </SafeAreaView>
   );
 }
 
@@ -285,6 +347,22 @@ function ProviderButton({
 }
 
 /** Apple's mark exactly as the handoff draws it — 17 × 20 on a 17 × 20 box. */
+/**
+ * The four-colour G — Google's own sign-in mark (design review 2026-09-01). Apple's button carried
+ * its apple while Google's carried nothing: an asymmetry that reads as carelessness, and Google's
+ * brand guidelines ask for the G on sign-in buttons. Path data is the standard identity asset.
+ */
+function GoogleLogo() {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 48 48">
+      <Path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <Path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <Path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <Path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </Svg>
+  );
+}
+
 function AppleLogo({ color: c }: { color: string }) {
   return (
     <Svg width={17} height={20} viewBox="0 0 17 20">
@@ -303,21 +381,63 @@ const styles = StyleSheet.create({
   /* The language offer: a word with a hairline under it, so it reads as something to press without
      wearing the chrome of a control. Muted — it is the one thing on this screen that is not the
      decision she came to make. */
-  langSwap: { paddingVertical: 4 },
+  /*
+   * ⛔ IT WEARS A CAPSULE NOW (2026-08-26). The note below argues, rightly, that this is a WORD and
+   * not a switch — and then dressed it as nothing at all: bare cream type in the corner of an
+   * otherwise empty screen, which reads as a debug label rather than an offer. The app has one
+   * vocabulary for a small quiet control (a cream wash at the pill radius) and it is used on every
+   * other screen; wearing it here costs the word nothing and stops it looking like a leftover.
+   */
+  langSwap: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: color.fillSubtle,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.14)',
+  },
   /* Same law as everywhere else: a press is a WASH under the word, never a fade of it (A.13). */
-  langSwapPressed: { backgroundColor: 'rgba(241,238,229,0.06)', borderRadius: radius.sm },
+  langSwapPressed: { backgroundColor: color.fillSubtleStrong },
+  /**
+   * ⛔ THE ONLY UNDERLINE IN THE APP, AND IT IS GONE (2026-08-21).
+   *
+   * `textDecorationLine: 'underline'` appeared exactly once in `src` — here, on the first screen an
+   * athlete ever sees. An underline is a WEB affordance; this product's vocabulary for "you may press
+   * this" is cream in the light, a hairline, or a wash under the finger, and it uses those everywhere
+   * else. One rule under one word made the first object on the first screen look like a hyperlink.
+   *
+   * ⚠️ THE DECISION ABOVE IT STANDS — it is still a WORD and not a switch, for the reason the note at
+   * the markup gives. What changed is only how it says it is pressable.
+   *
+   * ⚠️ AND IT GOT BRIGHTER, NOT QUIETER. Dropping the rule from a muted grey would have left the one
+   * way a Hebrew speaker escapes an English screen almost invisible. In the light it carries its own
+   * affordance, and at 13 pt beside a 60 pt wordmark it competes with nothing.
+   */
   langSwapText: {
     fontFamily: font.sansMedium,
     fontSize: textScale.sm,
-    color: color.textMuted,
-    textDecorationLine: 'underline',
+    color: color.textPrimary,
     textAlign: 'left',
   },
-  // One 30px rhythm down the whole hero (mark → wordmark → promise → affirmation).
-  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20, gap: 30 },
+  /*
+   * ⛔ THE 30px RHYTHM WAS FOUR EQUAL GAPS BETWEEN FOUR UNEQUAL THINGS (2026-08-26).
+   *
+   * Even spacing is what makes a group read as a LIST. This is not a list — it is a mark, its
+   * wordmark, the promise they make, and the seal under it, and the eye should read one object.
+   *
+   * So the rhythm is graded the way the meaning is: the mark and the word are a LOCKUP and sit
+   * close (18); the promise is what they say, one register out (34); the affirmation is a different
+   * voice again and takes the most air (34). Same total height, one object instead of four.
+   */
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20 },
+  markLockup: { marginBottom: 18 },
+  brandLockup: { marginBottom: 34 },
+  promiseLockup: { marginBottom: 34 },
   markWrap: { width: 180, height: 120, alignItems: 'center', justifyContent: 'center' },
   // The ignition — a moss ring that blooms once behind the mark and settles (118px).
-  halo: { position: 'absolute', width: 118, height: 118, borderRadius: 59, borderWidth: 1.5, borderColor: signal[0] },
+  /* borderWidth 1.5 → 2 (design review 2026-09-01): at 0.5 opacity a 1.5 hairline ring is nearly
+     invisible on glass, and on this screen the mark IS the personality. */
+  halo: { position: 'absolute', width: 118, height: 118, borderRadius: 59, borderWidth: 2, borderColor: signal[0] },
   // The span-bracket: a cream hairline between two end ticks, wider than the ring (150×26).
   bracket: { width: 150, height: 26 },
   bracketBar: { position: 'absolute', left: 0, right: 0, top: 12, height: 2, backgroundColor: color.textPrimary },
@@ -340,7 +460,7 @@ const styles = StyleSheet.create({
      is in the copy now (`\n`), so it is the same break in every locale and at every text size. */
   promise: {
     fontFamily: font.serif,
-    fontStyle: 'italic',
+   
     fontSize: 30,
     lineHeight: 42,
     color: color.textPrimary,
@@ -352,16 +472,23 @@ const styles = StyleSheet.create({
      (founder 2026-07-28). Up two rungs and out of the muted tone: still a legend, no longer a
      whisper. It sits under a hairline so it reads as a seal on the promise above rather than a
      stray caption. */
+  /* ⚠️ NO `letterSpacing` HERE. It is supplied at the call site from `legendVoice`, because it is
+     an answer about the STRING and a StyleSheet cannot see one. See the note there. */
+  /*
+   * ⛔ 17 → 18, TO OUTRANK THE LEGAL LINE (2026-08-26).
+   *
+   * The type floor made `sm` and `xs` the same number, so the product's ONE CLAIM and the consent
+   * fine print were being set at the identical size — separated only by ink. On the screen that has
+   * to earn the download, the claim has to be the larger of the two, and `md` is the next rung the
+   * scale actually has.
+   */
   affirm: {
     fontFamily: font.monoMedium,
-    fontSize: textScale.sm,
-    letterSpacing: trackingPx(textScale.sm, 0.22),
+    fontSize: textScale.md,
     textTransform: 'uppercase',
     color: color.textSecondary,
     textAlign: 'center',
   },
-  // The hairline the seal rests on — as wide as the words, never a full rule across the screen.
-  affirmRule: { width: 30, height: 1, backgroundColor: 'rgba(241,238,229,0.28)', marginBottom: 14 },
   // …and the sans sibling the same slot swaps to when the string is not Latin. Naming a sans
   // style here is also the contract `monoCarriesNoWords` reads: this mono slot keeps its promise.
   affirmSans: { fontFamily: font.sansMedium },
@@ -400,11 +527,26 @@ const styles = StyleSheet.create({
    * Sign in with Apple's dark variant requires a WHITE mark and label (Apple HIG), full stop.
    */
   appleLabel: { color: color.onAccent },
-  // Google — the dark outline SECONDARY, cream label, no logo.
-  google: { backgroundColor: color.fillSubtle, borderColor: color.borderControl },
-  googlePressed: { backgroundColor: color.fillSubtleStrong },
+  /*
+   * ⛔ GOOGLE IS A TRUE OUTLINE NOW — NO FILL (2026-08-26).
+   *
+   * It carried BOTH a 5% cream fill and a 16% cream border, which on absolute black is the muddiest
+   * of the three options available: too faint to read as a surface, too faint to read as an edge.
+   * On glass it looks like a dark box that failed to load, directly under a cream slab that looks
+   * finished — so the PAIR reads as one button and one mistake rather than a primary and a
+   * secondary.
+   *
+   * Transparent ground, a real hairline, cream label. The rank is then unmistakable — light versus
+   * line — and the press obeys the app's own law that *a press changes the SURFACE*: the fill
+   * arrives under the finger instead of the edge dimming.
+   */
+  google: { backgroundColor: 'transparent', borderColor: 'rgba(241,238,229,0.26)' },
+  googlePressed: { backgroundColor: color.fillSubtleStrong, borderColor: 'rgba(241,238,229,0.34)' },
   googleLabel: { color: color.textPrimary },
 
   // The legal line is READ, not decoration: one weight, one muted tone, 12px, 4px under the pair.
-  legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'center', marginTop: 4, lineHeight: 18 },
+  legalPress: { marginTop: 4, minHeight: 44, justifyContent: 'center' },
+  trialFact: { fontFamily: font.sansMedium, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'center', marginTop: 18 },
+  legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'center', lineHeight: 18 },
+  legalLink: { color: color.textSecondary, textDecorationLine: 'underline' }, // rtl-ok: nested span, inherits the centred line
 });

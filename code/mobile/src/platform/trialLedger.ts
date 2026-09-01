@@ -9,7 +9,6 @@
  * her training — see `trialUsed` for why an unreadable ledger loses to the ordinary count rather
  * than winning.
  */
-// @ts-nocheck
 
 // 
 

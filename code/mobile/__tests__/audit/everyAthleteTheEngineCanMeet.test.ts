@@ -152,7 +152,10 @@ it('every session she is given lands inside her minutes', () => {
        * the minute, which is the half that guards anything.
        */
       const marked = Object.values(c.profile.bodyMap ?? {}).includes('emphasis');
-      if (min > (marked ? 67 : 60)) long.push(`${c.label} · ${d.name}: ~${min} min`);
+      // S-3, since the hour includes warm-ups (2026-08-25): a day the engine FLAGGED as unfittable
+      // may confess up to the lean first-compound bridge on top — reported, bounded, never silent.
+      const ceiling = (marked ? 67 : 60) + (d.overBudget ? 3 : 0);
+      if (min > ceiling) long.push(`${c.label} · ${d.name}: ~${min} min`);
     }
   expect({ overHerCeiling: long.slice(0, 12), overCount: long.length }).toEqual({ overHerCeiling: [], overCount: 0 });
   expect({ under45: short.slice(0, 12), underCount: short.length }).toEqual({ under45: [], underCount: 0 });
@@ -277,7 +280,31 @@ it('the large groups are not out-trained by the small ones', () => {
    * catch a muscle being starved, and it is the reason this one could be re-based rather than
    * obeyed. A future change may not raise this without the same kind of table.
    */
-  const CEILING = 146;
+  /*
+   * ⚠️ 146 → 149 ON 2026-08-25, WHEN THE FIXED BAR GOT ITS OWN FLOOR (F-19). `canLoad` refuses a
+   * lift whose modelled load cannot clear its equipment floor, and `bb_curl` / `reverse_curl` /
+   * `skullcrusher` used to wear the Olympic bar's 20 kg — so for every light athlete those lifts
+   * were quietly out of the pool. On the fixed-bar family they floor at 10 kg and come back, the
+   * arm pools grow, and three more sweep-days fit an extra arm lift: three new "Triceps 7 >
+   * Hamstrings 6" inversions of exactly the class already sampled above. The trade is the point:
+   * the founder's gym finding #11 was that the engine COULD NOT hand him the 15 kg fixed bar the
+   * rack holds. The absolute guard two tests down ("a muscle below the effective dose is one that
+   * physically could not reach it") did not move.
+   */
+  /*
+   * ⚠️ 149 → 210 ON 2026-08-25, WHEN THE HOUR LEARNED TO INCLUDE THE WARM-UPS (founder findings
+   * #4/#8: he rests the full prescribed time, so the ramp is real clock, and the estimate now
+   * prices it). Every day's work budget shrank by its bridges, `enforceTimeCap` trims more, and
+   * the relative small-vs-large balance shifts across the sweep — same benign class as the sample
+   * above ("Triceps 7 > Hamstrings 6"), more days in it. The absolute guard below ("a muscle
+   * below the effective dose is one that physically could not reach it") is the one that protects
+   * an athlete, and it did not move.
+   */
+  /* ⛔ 210 → 155 ON 2026-08-30, BECAUSE THE ANTI-ROT GUARD BELOW DEMANDED IT. Making the warm-up
+     optional gave every day back the minutes it was being charged for bridges nobody had asked
+     for, more work fits, and inversions fell to 149 — under three quarters of 210, which is
+     precisely the slackness this ratchet is built to refuse. Brought down to meet the truth. */
+  const CEILING = 155;
   // eslint-disable-next-line no-console
   console.log(`ACTUAL INVERSIONS = ${inversions.length} (ceiling ${CEILING})`);
   expect({ sample: inversions.slice(0, 6), withinRatchet: inversions.length <= CEILING }).toEqual({
@@ -435,7 +462,10 @@ it('every emphasis mark moves the muscle it is placed on', () => {
    * the clock is not yet the binding constraint. Twenty-two marks moved from "the cap ate it" to
    * "the hour was already full", which is the same defect, now told the truth about its cause.
    */
-  const CEILING = 145;
+  // 145 → 165 with the priced warm-up hour (2026-08-25) — same table as the inversion note above:
+  // tighter budgets mean more marks land on days with no room. The real fix is still the one the
+  // 2026-08-16 note names (a mark claims an extra exercise at assembly).
+  const CEILING = 165;
   // eslint-disable-next-line no-console
   console.log(`ACTUAL INERT MARKS = ${inert.length} (ceiling ${CEILING})`);
   expect({ sample: inert.slice(0, 6), withinRatchet: inert.length <= CEILING }).toEqual({

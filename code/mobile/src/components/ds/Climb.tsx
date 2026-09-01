@@ -10,7 +10,6 @@
  * and a callout can hold one ("40 · plate"). Defensive by construction — 0–1 points draw a dot, a
  * flat series draws level, and it never throws, because a progress screen must not crash.
  */
-// @ts-nocheck
 
 // 
 
@@ -49,8 +48,17 @@ interface Props {
 }
 
 const PAD_X = 12;
-const TOP = 32; // headroom for the callout box + the end reading
-const CALLOUT_H = 22;
+/*
+ * ⛔ THE CALLOUT WAS A 22px BOX AROUND 17pt TYPE — the same bug as `ds/Badge`, found in the same
+ * pass. She taps a day on Progress · LiftDetail and the one thing the tap exists to produce ("40 ·
+ * plate") comes back with its own caps clipped by the bordered pill drawn around it.
+ *
+ * 22 was the geometry from when the smallest rung of the scale was 11px. 17pt Assistant needs ~23px
+ * of line box, so the box is 23 + 6 of padding, and `TOP` grows with it — `TOP` is described here as
+ * "headroom for the callout", and headroom that no longer clears the callout is not headroom.
+ */
+const CALLOUT_H = 29;
+const TOP = 40; // headroom for the callout box + the end reading — moves with CALLOUT_H, always
 
 export function Climb({
   data,
@@ -220,5 +228,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  calloutText: { fontSize: 17, color: signal[0], textAlign: 'center' },
+  // The line box is STATED, so the pill's height above and the type inside it are one decision.
+  calloutText: { fontSize: 17, lineHeight: 23, color: signal[0], textAlign: 'center' },
 });

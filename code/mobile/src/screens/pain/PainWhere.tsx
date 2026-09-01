@@ -36,7 +36,6 @@
  * the three things a person in pain cannot do and no app should ask of them.
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
@@ -44,8 +43,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { BodyMapFigure, type Face } from '@/components/BodyMapFigure';
-import { Arrive, Button, Legend } from '@/components/ds';
+import { BodyMapFigure, viewOf, type Face } from '@/components/BodyMapFigure';
+import { Arrive, Button, Legend, SegmentedControl } from '@/components/ds';
 import { useApp } from '@/state/stores/appStore';
 import { useSession } from '@/state/stores/sessionStore';
 import { tg } from '@/i18n';
@@ -53,6 +52,23 @@ import { EASE_DAYS, liftsForbiddenNow, restsTheMuscle, type PainSeverity } from 
 import { exerciseById, muscleOf } from '@/data/exercises';
 import { color, font, stage, textScale } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+
+/**
+ * The receipt's body is INERT — see the note at its markup. Declared once, at module scope, so the
+ * figure is not handed a new function on every render (it memoises nothing, but a stable prop is
+ * the honest way to say "this does not do anything").
+ */
+const NOOP = () => {};
+
+/**
+ * The receipt's figure height.
+ *
+ * ⚠️ A NUMBER, UNLIKE THE PICKER'S. The picker above takes its own height because it is the subject
+ * of its screen and the page scrolls around it (see the note at `figure`). This one shares a page
+ * with a headline, a sentence and an act, so it is given a budget rather than allowed to set one —
+ * a body that pushed the "Got it" button off a small screen would be a receipt she cannot dismiss.
+ */
+const FIGURE_H = 300;
 
 type Props = NativeStackScreenProps<MainParamList, 'PainWhere'>;
 
@@ -71,7 +87,7 @@ export function PainWhere({ navigation, route }: Props) {
   const fromLift = route.params?.exerciseId ? muscleOf(route.params.exerciseId) : undefined;
   const [face, setFace] = useState<Face>('front');
   const [muscle, setMuscle] = useState<string | null>(fromLift ?? null);
-  const [done, setDone] = useState<{ muscle: string; severity: PainSeverity } | null>(null);
+  const [done, setDone] = useState<{ muscle: string; severity: PainSeverity } | null>(route.params?.previewDone ?? null);
   const [busy, setBusy] = useState(false);
 
   async function report(severity: PainSeverity) {
@@ -117,8 +133,20 @@ export function PainWhere({ navigation, route }: Props) {
             <Arrive order={0}>
               <Legend size={17} track={0.2} tone="accent">{tg('pain.adjusted', { muscle: name })}</Legend>
             </Arrive>
+            {/*
+              ⛔ A TWINGE WAS BEING ANSWERED WITH A REST IT DOES NOT GET (2026-08-19).
+              Both lines here were unconditional. `painReport` states the rule in as many words —
+              *"a TWINGE is a warning — keep training the muscle, leave the movement that provoked it
+              alone"* — and `restsTheMuscle('twinge')` is false. She reported a twinge, was told her
+              muscle rests for three days, and met it in her next session. The screen contradicted
+              the engine on the one screen whose whole job is to say what the engine just did.
+            */}
             <Arrive order={1}>
-              <Text style={styles.title}>{tg('pain.responseTitleRested', { muscle: name })}</Text>
+              <Text style={styles.title}>
+                {restsTheMuscle(done.severity)
+                  ? tg('pain.responseTitleRested', { muscle: name })
+                  : tg('pain.responseTitleTwinge', { muscle: name })}
+              </Text>
             </Arrive>
             {/*
               ⚠️ THE WINDOW IS STATED, AND SO IS ITS ENDING. "It comes back on its own" is the half
@@ -129,8 +157,44 @@ export function PainWhere({ navigation, route }: Props) {
               <Text style={styles.line}>
                 {restsTheMuscle(done.severity)
                   ? tg('pain.easedFor', { muscle: name, days: EASE_DAYS[done.severity] }) + tg('pain.easedTail')
-                  : tg('pain.resting', { n: EASE_DAYS[done.severity] })}
+                  : tg('pain.twingeFor', { count: EASE_DAYS[done.severity] })}
               </Text>
+            </Arrive>
+
+            {/*
+              ════════════════════════════════════════════════════════════════════════════════════════
+              ⛔ SHE IS TOLD WHAT HAPPENED TO HER BODY, SO SHE IS SHOWN HER BODY (2026-08-22)
+              ════════════════════════════════════════════════════════════════════════════════════════
+
+              FOUNDER, 2026-08-22, on the whole redesign: *"העדפה להראות במקום לכתוב כי העין של בן
+              אדם אוהבת לצפות במקום לקרוא."*
+
+              This screen said *"Your Chest keeps training — the movement that provoked it stands
+              down"* over **fifty-five percent of empty black**, on the one surface in the product
+              that exists to prove a report was acted on. It is the screen an athlete is most likely
+              to distrust — `BodyMapEdit`'s own header records why: before that editor existed, *"she
+              reports a painful shoulder, the engine rests it and rebuilds her week — and no surface
+              anywhere says so."*
+
+              ⚠️ IT IS THE SAME FIGURE, NOT A DRAWING OF ONE. `BodyMapFigure` is her map, drawn from
+              her map, with the reported muscle in clay — so what she sees here is exactly what she
+              will find in You → Body map when she goes to check, down to the limb. A bespoke
+              illustration would have been a second picture of a fact, which is how two surfaces
+              start disagreeing.
+
+              ⚠️ AND IT IS INERT. `onSelect` is a no-op: this is a receipt, not an editor. Changing
+              her map is a decision made with time to think, and it has a screen of its own.
+            */}
+            <Arrive order={3} style={styles.figureArrive}>
+              <BodyMapFigure
+                face={viewOf(done.muscle)}
+                map={app.profile?.bodyMap ?? {}}
+                tender={restsTheMuscle(done.severity) ? [done.muscle] : []}
+                selected={restsTheMuscle(done.severity) ? null : done.muscle}
+                onSelect={NOOP}
+                sex={app.profile?.sex === 'male' ? 'male' : 'female'}
+                height={FIGURE_H}
+              />
             </Arrive>
           </ScrollView>
           <View style={styles.footer}>
@@ -152,29 +216,47 @@ export function PainWhere({ navigation, route }: Props) {
             <Text style={styles.sub}>{tg('pain.whereSub')}</Text>
           </Arrive>
 
+          {/* ⛔ ONE FRONT/BACK TOGGLE, ONE SHAPE (2026-08-27) — the long note is at `BodyMap`.
+                This one was outlined where the body map's was a filled cream pill: the same control,
+                two costumes, one tap apart in her journey.
+
+                ⚠️ THE KEYS THE BODY MAP ALREADY USES. A second pair of words for "front" and
+                "back" is two vocabularies for one idea, and the map is where she learnt them. */}
           <Arrive order={1} style={styles.tabs}>
-            {(['front', 'back'] as Face[]).map((f) => (
-              <Pressable
-                key={f}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: face === f }}
-                accessibilityLabel={tg(f === 'front' ? 'ob.mapFront' : 'ob.mapBack')}
-                onPress={() => setFace(f)}
-                style={({ pressed }) => [styles.tab, face === f && styles.tabOn, pressed && styles.pressWash]}
-              >
-                {/* ⚠️ THE KEYS THE BODY MAP ALREADY USES. A second pair of words for "front" and
-                    "back" is two vocabularies for one idea, and the map is where she learnt them. */}
-                <Text style={[styles.tabText, face === f && styles.tabTextOn]}>
-                  {tg(f === 'front' ? 'ob.mapFront' : 'ob.mapBack')}
-                </Text>
-              </Pressable>
-            ))}
+            <SegmentedControl
+              size="pill"
+              options={[
+                { value: 'front', label: tg('ob.mapFront') },
+                { value: 'back', label: tg('ob.mapBack') },
+              ]}
+              value={face}
+              onChange={(v: string) => setFace(v as Face)}
+            />
           </Arrive>
 
           <Arrive order={2} style={styles.figure}>
+            {/*
+              ⚠️ THE ANSWER TO "WHERE DOES IT HURT" IS DRAWN IN CLAY, NOT IN MOSS (audit 2026-08-24).
+
+              This figure used to take `selected` alone — and `selected` only thickens the stroke.
+              The FILL came from her training stance, so the muscle she was pointing at to report
+              pain rendered moss if she happened to emphasise it and cream if she did not. Two
+              things went wrong at once: the pain answer had no colour of its own, and on the
+              commonest case it wore the one colour this codebase reserves for "a decision made / a
+              load going up" — a raise, on the screen where she is telling us something hurts.
+
+              The founder's token ruling already settles it: *"דברים שיש להם קשר לפציעה או לכמה
+              שכואב לא יכולים להופיע בכחול; אדום הוא החלק שקשור לכאב"* — `tokens.alert` is the ONLY
+              thing pain may draw in. The RECEIPT next door already obeyed it (`tender={[muscle]}`);
+              the screen that ASKS did not. Pointing IS the report, so the pointed muscle is tender
+              from the moment she touches it, and the two pain screens finally agree with the law
+              and with each other.
+            */}
             <BodyMapFigure
               face={face}
               map={app.profile?.bodyMap ?? {}}
+              sex={app.profile?.sex}
+              tender={muscle ? [muscle] : []}
               selected={muscle}
               onSelect={(m) => {
                 void Haptics.selectionAsync().catch(() => {});
@@ -222,13 +304,19 @@ const styles = StyleSheet.create({
   sub: { fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: color.textSecondary, marginTop: 8, textAlign: 'left' },
   line: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
 
-  tabs: { flexDirection: 'row', gap: 8 },
-  tab: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)' },
-  tabOn: { borderColor: color.textPrimary },
-  tabText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textMuted, textAlign: 'center' },
-  tabTextOn: { color: color.textPrimary },
+  /* The receipt's body: centred, and holding the room the sentence above it used to leave black. */
+  figureArrive: { alignSelf: 'stretch', alignItems: 'center', marginTop: 6 },
 
-  figure: { height: 320 },
+  /* The control draws itself; this only says where it sits. */
+  tabs: { alignSelf: 'flex-start' },
+
+  /*
+   * ⛔ NO SEAT HEIGHT (2026-08-18). It was 320 — a number that only ever worked because the figure
+   * drew INSIDE a box `aspectRatio` had made far taller and letterboxed itself down to fit. Now that
+   * the figure's box is its drawing, a 320 seat is a body cut off at the knees by the grades below
+   * it. It takes its own height here and the page scrolls, which is what a scroller is for.
+   */
+  figure: { alignSelf: 'stretch' },
 
   grades: { borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.12)', paddingTop: 6 },
   grade: {

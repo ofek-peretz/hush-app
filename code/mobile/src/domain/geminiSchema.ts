@@ -28,7 +28,6 @@
  * Pure and I/O-free. Knows nothing about the transport, the key, or the request.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

@@ -112,7 +112,9 @@ describe('the register and the surface speak the same language (L5, one layer ou
     'S-56': 'src/screens/weekly/WeeklyUpdate.tsx',        // the one "want it back?" the mirror may ask
     'S-24': 'src/screens/session/WellDone.tsx',           // "nothing changed" is a real verdict, said
     'S-45': 'src/screens/session/WellDone.tsx',           // Saturday decides nothing — it was all told already
-    'S-13': 'src/screens/session/SessionFlow.tsx',        // the 2-corrections-per-exercise cap
+    /* S-13 since 2026-08-26: the live-correction cap retired with the loop it capped — the
+       stage's Logged beat is where the retirement is named. */
+    'S-13': 'src/screens/session/SessionFlow.tsx',        // the correction cap, retired with its loop
     'S-17': 'src/screens/home/Home.tsx',                  // her learned rest rides to the wrist
     /*
      * ════ S-64 AND F-4 LOST THEIR SURFACES, AND THAT IS THE RIGHT ANSWER ════

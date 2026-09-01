@@ -4,7 +4,6 @@
  * still fires), Portrait bars draw fully. No Hush moment depends on motion to
  * be understood.
  */
-// @ts-nocheck
 
 // 
 

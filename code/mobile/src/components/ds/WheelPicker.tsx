@@ -41,7 +41,6 @@
  * the active detent between two exact-width spacers, so content size never changes and
  * far targets are always populated.
  */
-// @ts-nocheck
 
 // 
 
@@ -51,6 +50,7 @@ import {
   Text,
   ScrollView,
   StyleSheet,
+  Pressable,
   type AccessibilityActionEvent,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
@@ -68,7 +68,7 @@ interface Props {
   min: number;
   max: number;
   unit?: string;
-  size?: 'md' | 'lg';
+  size?: 'md' | 'lg' | 'xl';
   format?: (v: number) => string;
   /** Accessibility label (e.g. "Age", "Actual weight") — the visible field legend, for VoiceOver. */
   label?: string;
@@ -77,6 +77,14 @@ interface Props {
   onStage?: boolean;
   /** How the track's ends read — see the render for why the edit dial differs from a ruler. */
   ends?: 'fade' | 'chevron';
+  /**
+   * A quiet moss point struck under ONE value on the track — the owner names its meaning (the
+   * live stage marks "last time" with it, 2026-08-26). It rides the scrolling numerals, so it is
+   * simply where that value is: under the centre when she stands on it, off in the margin when
+   * she has moved, out of the window when it is far. Values off the detent grid round to the
+   * nearest cell; values outside [min, max] draw nothing.
+   */
+  marker?: number;
   style?: ViewStyle | ViewStyle[];
 }
 
@@ -92,7 +100,7 @@ interface Props {
  * header's "five at a time". The alternative was a smaller numeral, which is the opposite of what
  * the founder asked for twice (2026-07-28, and C.8).
  */
-const ITEM_W = { md: 96, lg: 120 } as const;
+const ITEM_W = { md: 96, lg: 120, xl: 132 } as const;
 
 /**
  * ════ ONE WHEEL, ONE SIZE, EVERYWHERE (founder 2026-07-28) ════
@@ -108,11 +116,13 @@ const ITEM_W = { md: 96, lg: 120 } as const;
  * one and there is nothing left to drift. The `size` prop survives only so existing call sites keep
  * compiling; it selects nothing. `everyWheelIsTheSameWheel` holds this shut.
  */
-export const WHEEL_HEIGHT = { md: 112, lg: 146 } as const;
+export const WHEEL_HEIGHT = { md: 112, lg: 146, xl: 164 } as const;
 
 /** The numeral sizes by distance from centre. Past ±2 the numeral is gone — five read at a time,
  *  the rest is the tick texture. One ladder, both sizes (see WHEEL_HEIGHT). */
-const NUM_SIZE = { md: [48, 24, 18], lg: [64, 30, 22] } as const;
+/* xl (2026-08-26): the live stage's own tier — the founder's gym rule, 'בזמן אימון הכל צריך
+   להיות ברור מהרגע הראשון'. One step over the editor-era lg, still inside numCellW's arithmetic. */
+const NUM_SIZE = { md: [48, 24, 18], lg: [64, 30, 22], xl: [78, 34, 24] } as const;
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -137,7 +147,96 @@ const NUM_SIZE = { md: [48, 24, 18], lg: [64, 30, 22] } as const;
  */
 /** IBM Plex Mono's advance, measured: 0.6 em. Six glyphs is the widest prescribable value + room. */
 const GLYPH_EM = 0.6;
-const numCellW = (size: 'md' | 'lg'): number => Math.ceil(NUM_SIZE[size][0] * GLYPH_EM * 6);
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE NUMERAL OUTGREW ITS OWN PITCH (found 2026-08-27, on `2.2d` — "the widest load")
+ *
+ * The note above ends *"the overhang lands over the dimmed neighbour's CELL, not its glyphs: at
+ * distance 1 the numeral is less than half this size and centred too."* That is a RELATIONSHIP —
+ * the centre's ink must stop before the neighbour's ink starts — and it was asserted rather than
+ * enforced. It was true when it was written, at `md`, and it stopped being true twice since:
+ *
+ *     size  pitch   ink of "137.5" (half)   room before the neighbour's ink
+ *     md      96          144  (72)                  74      ✓ by 2 points
+ *     lg     120          192  (96)                  93      ⛔ over by 3
+ *     xl     132          234 (117)                 101      ⛔ over by 16
+ *
+ * The numeral was enlarged twice on founder rulings (48 → 64 → 78, ×1.63) and the pitch followed at
+ * ×1.38. On the live stage the result is measurable: `137.5` renders 55→336 on a 390-point frame
+ * while its neighbours render −77→204 and 187→468. **Both neighbours are partly off the screen and
+ * underneath the value.** This is the same shape as C.2 and its two recurrences — *"THE FIRST FIX
+ * PINNED A CONSTANT, NOT A RELATIONSHIP"* — one level up: the constant this time was the SIZE.
+ *
+ * ── WHY SHRINKING, AND ONLY HERE ────────────────────────────────────────────────────────────────
+ * Widening the pitch until five glyphs fit needs ~264 points, which puts one and a half numerals on
+ * a phone and stops it being a wheel. Hiding the neighbours removes the only thing that says which
+ * way the track runs. So the centre numeral yields — and ONLY for the values that cannot physically
+ * fit: at `xl` a four-glyph value like "82.5" needs 94 of its 101 points and keeps the full 78.
+ * `137.5` takes 67. Every founder ruling about size is about the numeral being BIG, and it stays
+ * big; what it may not be is bigger than the room it has.
+ *
+ * ⚠️ AND IT IS DERIVED. The app already had this pattern — `ShareCard`'s figure scales by glyph
+ * count — but as a hand-tuned ladder (`cells <= 4 ? 1 : cells <= 5.5 ? 0.78 : 0.66`). A ladder is a
+ * constant wearing a function's clothes; it would have to be re-tuned the next time the numeral
+ * grows. This computes the room and fills it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+/**
+ * Air between the value's last glyph and the neighbour's first.
+ *
+ * Without it the arithmetic fills the room exactly and the two numbers TOUCH — measured on `2.2d`,
+ * `137.5` ended at 294 and `140` began at 294. Two numerals that meet read as one longer numeral,
+ * which is the same lie truncation tells, arriving from the other side.
+ *
+ * ⚠️ SEVEN, AND THE NUMBER IS CHOSEN AGAINST THE FOUNDER'S RULINGS, NOT FOR COMFORT. Every ruling
+ * about this control is that the numeral must be BIG (2026-07-28, C.8, *"בזמן אימון הכל צריך להיות
+ * ברור מהרגע הראשון"*). Twelve points of air reads better and costs `82.5` — a FOUR-glyph value, the
+ * common case — four points of size at `xl`. Seven is the most air that can be taken before the
+ * common case pays for it: at every tier a three- or four-glyph value keeps the full mandated size,
+ * and only the five-glyph values, which cannot fit at any price, yield.
+ */
+const INK_GAP = 7;
+
+/** How far from the wheel's centre the nearest neighbour's INK begins, less the air between them. */
+const inkRoom = (size: 'md' | 'lg' | 'xl'): number =>
+  ITEM_W[size] - (3 * GLYPH_EM * NUM_SIZE[size][1]) / 2 - INK_GAP;
+
+/** The centre numeral's size for a value of `glyphs` characters — its own size, or as much of it
+ *  as fits before the neighbour's ink. */
+const centreSize = (size: 'md' | 'lg' | 'xl', glyphs: number): number => {
+  const base = NUM_SIZE[size][0];
+  const halfInk = (glyphs * GLYPH_EM * base) / 2;
+  const room = inkRoom(size);
+  return halfInk <= room ? base : Math.floor((room * 2) / (glyphs * GLYPH_EM));
+};
+
+/*
+ * ══════ ⚠️ THE OUTERMOST NEIGHBOUR IS CLIPPED, AND THAT IS THE SETTLED ANSWER (2026-08-27) ══════
+ *
+ * Recorded so it is not re-opened a fourth time. The window shows about 2.6 cells of an `xl` track,
+ * so the dimmed neighbours are half outside BY CONSTRUCTION — that is the instrument. Measured on
+ * `2.2h`: `32.5` inks 15→87 in a scroller clipping at 26, so about eleven points of the leading
+ * digit is cut. Three cures were built and measured, and all three are worse:
+ *
+ *   · RESTORE `EdgeFade` UNDER THE CHEVRONS. It paints a gradient of an OPAQUE colour. The set
+ *     stage's band is transparent over a breathing ground, so on stage it draws a visible slab with
+ *     hard corners around the whole wheel. A scrim can only dissolve what it matches.
+ *   · WIDEN THE APERTURE to the screen's edges. `styles.scale` clips at its own width and does not
+ *     stretch with the scroller, so the two disagree and the numerals leave.
+ *   · SHRINK THE NEIGHBOUR until its ink fits, the rule `centreSize` uses at the other edge. Built
+ *     and measured: the analytic cell centre (`width / 2 - dist * itemW`) misses the laid-out box by
+ *     about twelve points, so 34 → 30 STILL cut, and fitting honestly needs about 21 — a neighbour a
+ *     quarter of the hero, illegible. Smaller and still cut is worse than bigger and still cut.
+ *
+ * ⚠️ AND IT READS. The cut lands on the left stem of the leading digit, on a numeral that is
+ * already dimmed and is never the value she is acting on; the detent she is on is 78 points tall in
+ * the middle of the window. A dial whose track runs past its window is what a dial looks like.
+ */
+/** The numeral's box, derived from the numeral ACTUALLY drawn — see `numCellW`'s note. A neighbour
+ *  is drawn at a third of the centre's size and was being given the centre's box, which is why its
+ *  overhang ran off the screen rather than over the cell beside it. */
+const numCellW = (size: 'md' | 'lg' | 'xl', px: number): number => Math.ceil(px * GLYPH_EM * 6);
 /**
  * The TONE ladder by distance, per size — and the two are deliberately different.
  *
@@ -149,6 +248,7 @@ const numCellW = (size: 'md' | 'lg'): number => Math.ceil(NUM_SIZE[size][0] * GL
 const NUM_TONE = {
   md: ['#948c77', '#8b8474'],
   lg: ['#8b8474', '#57534a'],
+  xl: ['#8b8474', '#57534a'],
 } as const;
 // (The TONE ladder stays per-context — how far the neighbours recede is about the room the wheel is
 // turned in, not about its size. Under a bar only the struck number matters; in onboarding the
@@ -156,7 +256,7 @@ const NUM_TONE = {
 /** How many detents each side of centre still render a numeral (five total). */
 const SHOW_SPAN = 2;
 /** The engraved tick strip beneath the numerals — an even graduation, scaled with the wheel. */
-const TICK_STRIP = { md: { w: 230, h: 16 }, lg: { w: 300, h: 22 } } as const;
+const TICK_STRIP = { md: { w: 230, h: 16 }, lg: { w: 300, h: 22 }, xl: { w: 316, h: 24 } } as const;
 /** How far the graduation sits off the bottom hairline — the old flow layout's own breathing room
  *  (frame 112 − numerals 62 − gap 8 − strip 16, halved), kept exactly so nothing visibly moved when
  *  the strip left the flow and went behind the touch surface (C.3). */
@@ -173,12 +273,72 @@ const WINDOW_GUARD = 24;
  *  haptic should fire (see onScroll). */
 const HAPTIC_MIN_MS = 45;
 
-/** Build the value track min..max inclusive (rounded to kill float drift). */
-function buildValues(min: number, max: number, step: number): number[] {
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * Build the value track min..max inclusive (rounded to kill float drift).
+ *
+ * ════ ⛔ AND THE CONTROLLED VALUE IS ALWAYS ON IT (2026-08-26) ════
+ *
+ * The ladder used to be `min + n·step` and nothing else, and the wheel then drew **the nearest rung
+ * to the value it was handed** — silently, because `indexOfValue` rounds. On the live set stage that
+ * is not a rounding error, it is a different number:
+ *
+ *     prescribed 34    kg, barbell (floor 20, step 2.5)  → the dial read 35
+ *     prescribed 31.5  kg, after Loop 2 eased her        → the dial read 32.5
+ *     prescribed 12.5  kg, dumbbell (floor 0, step 1)    → the dial read 13
+ *
+ * …while `Complete Set` logs the PRESCRIPTION. So the largest figure on the most-used screen in the
+ * product disagreed with the set that went into her history, and it disagreed upwards.
+ *
+ * ⚠️ THE TWO GRIDS WERE NEVER THE SAME GRID, and that is the root of it. This ladder is naive
+ * arithmetic; the ENGINE prescribes off `grid.snapDown`, which uses **her own performed rungs**
+ * inside the range she has actually lifted in (a machine stack, the plates her gym owns) and B-6's
+ * increment only outside it. Any load she has really used that is not `floor + n·step` — which is
+ * most machine stacks — could not be drawn by this control at all.
+ *
+ * ── WHY INSERTED RATHER THAN PHASE-SHIFTED ──────────────────────────────────────────────────────
+ * Re-phasing the whole ladder onto the value (`value ± n·step`) also draws it truthfully, and it
+ * takes every ROUND number away from her: at 31.5 the detents become 29 / 31.5 / 34 and 30 stops
+ * existing. Inserting keeps every rung the wheel could reach before and adds the one it could not,
+ * so nothing she could select yesterday is unreachable today. The cost is one irregular gap beside
+ * the inserted value, on a strip whose ticks are continuous texture anyway.
+ *
+ * ⚠️ NOTHING CHANGES FOR A VALUE ALREADY ON THE LADDER — which is every intake ruler in the app.
+ */
+function buildValues(min: number, max: number, step: number, value?: number): number[] {
   const out: number[] = [];
   const n = Math.round((max - min) / step);
-  for (let i = 0; i <= n; i++) out.push(Math.round((min + i * step) * 1000) / 1000);
+  for (let i = 0; i <= n; i++) out.push(round3(min + i * step));
+  if (value == null || !Number.isFinite(value)) return out;
+  const v = round3(value);
+  /* Out of range is CLAMPED, not inserted: `min`/`max` are the room's own bounds (the empty bar,
+     the top of the stack) and a control may not mint a load outside them to be honest about one. */
+  if (v < min || v > max || out.includes(v)) return out;
+  const at = out.findIndex((x) => x > v);
+  out.splice(at < 0 ? out.length : at, 0, v);
   return out;
+}
+
+/**
+ * The index of the detent nearest `v` on a track that is no longer arithmetic.
+ *
+ * ⚠️ IT REPLACED `Math.round((v - min) / step)`, WHICH IS NOW WRONG BY ONE for every value above an
+ * inserted one — and the wrongness is invisible: the wheel would simply position on, and mark, the
+ * neighbouring cell. Binary search because the track runs to ~1,100 cells (1,100 lb at 1 lb) and
+ * this is called from a layout effect on every value change.
+ */
+function nearestIndex(values: number[], v: number): number {
+  let lo = 0;
+  let hi = values.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (values[mid] < v) lo = mid + 1;
+    else hi = mid;
+  }
+  // `lo` is the first value >= v; the answer is it or the one before it.
+  if (lo > 0 && Math.abs(values[lo - 1] - v) <= Math.abs(values[lo] - v)) return lo - 1;
+  return lo;
 }
 
 /**
@@ -208,15 +368,17 @@ export function wheelWindow(anchor: number, count: number, win: number = WINDOW)
   return { start: Math.max(0, anchor - win), end: Math.min(count, anchor + win + 1) };
 }
 
-export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, ends = 'fade', style }: Props) {
+export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', size = 'md', format, label, onStage = false, ends = 'fade', marker, style }: Props) {
   const itemW = ITEM_W[size];
-  /* ⛔ The numeral's own box, derived from the numeral — see `numCellW`. */
-  const cellW = numCellW(size);
+  /* ⛔ The box and the overhang are now computed PER NUMERAL, from the size that numeral is
+     actually drawn at — see the note over `centreSize`. They were computed once, from the CENTRE's
+     size, and handed to every numeral including the ones a third of it. */
   const tick = TICK_STRIP[size];
   const h = WHEEL_HEIGHT[size];
   const numSize = NUM_SIZE[size];
   const numTone = NUM_TONE[size];
-  const values = useMemo(() => buildValues(min, max, step), [min, max, step]);
+  /* `value` joins the deps because the track now guarantees it is ON the ladder — see buildValues. */
+  const values = useMemo(() => buildValues(min, max, step, value), [min, max, step, value]);
   const listRef = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
   const lastIndexRef = useRef<number>(-1);
@@ -226,10 +388,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
     (i: number) => Math.min(values.length - 1, Math.max(0, i)),
     [values.length],
   );
-  const indexOfValue = useCallback(
-    (v: number) => clampIndex(Math.round((v - min) / step)),
-    [clampIndex, min, step],
-  );
+  const indexOfValue = useCallback((v: number) => clampIndex(nearestIndex(values, v)), [clampIndex, values]);
   const [activeIndex, setActiveIndex] = useState(() => indexOfValue(value));
   const [anchor, setAnchor] = useState(() => indexOfValue(value));
 
@@ -357,30 +516,76 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
               {values.slice(win.start, win.end).map((item, k) => {
                 const index = win.start + k;
                 const dist = Math.abs(index - activeIndex);
-                if (dist > SHOW_SPAN) return <View key={item} style={{ width: itemW }} />;
+                /* The owner's marked value (see `marker`): the dot lives INSIDE its value's cell,
+                   so it scrolls with the track for free — no layout arithmetic to drift. Drawn in
+                   the spacer branch too: a marked value just past the numeral window still shows
+                   its point in the margin, which is the "it is over there" the mark exists for. */
+                /* ⚠️ THROUGH `indexOfValue`, NOT ARITHMETIC. This read `Math.round((marker - min) / step)`,
+                   which is off by one for every cell above an inserted value — so last time's dot
+                   would sit on the wrong detent on exactly the sets where the load is interesting. */
+                const marked = marker != null && marker >= min && marker <= max && index === indexOfValue(marker);
+                if (dist > SHOW_SPAN)
+                  return (
+                    <View key={item} style={[styles.item, { width: itemW }]}>
+                      {marked ? <View style={styles.markerDot} /> : null}
+                    </View>
+                  );
                 const active = dist === 0;
+                /*
+                  ⛔ THE SIZE, THE BOX AND THE OVERHANG ARE ONE DECISION, MADE PER NUMERAL
+                  (2026-08-27 — see the note over `centreSize`).
+
+                  All three were computed once, from the CENTRE's size, and given to every numeral —
+                  so a neighbour drawn at 34 carried the 78-point numeral's 281-point box and hung it
+                  77 points off the edge of the phone. And the centre kept its full size even when
+                  its own ink would reach the neighbour's.
+                */
+                const text = format ? format(item) : String(item);
+                const px = active ? centreSize(size, text.length) : numSize[dist];
+                const box = numCellW(size, px);
+                const inset = Math.max(0, (box - itemW) / 2);
                 return (
                   <View key={item} style={[styles.item, { width: itemW }]}>
+                    {marked ? <View style={styles.markerDot} /> : null}
                     {/*
-                      ⛔ THE NUMERAL IS OUT OF THE FLEX ROW ENTIRELY (founder, 2026-08-12 — third
-                      attempt, and the first two were both treating a symptom).
+                      ⛔ FOURTH ATTEMPT, AND THE FIRST ONE THAT NAMES THE FAILURE (founder, 2026-08-21).
 
-                      "37…" survived a wider cell (build 36) and `flexShrink: 0` (this morning),
-                      which between them prove the box's DECLARED width was never what decided it.
-                      A `numberOfLines={1}` Text inside a `width: itemW` flex item can be given less
-                      than it asks for by any of a dozen layout paths, and the moment it is, the
-                      ellipsis does the rest.
+                      He photographed the edit dial reading a huge **5** with a clipped `41.` above
+                      it, where the value was 41.5 and the header beside it said "planned 41.5".
 
-                      **So it is absolutely positioned and carries no width at all.** A Text that is
-                      out of the flow cannot be compressed by the flow, and one with no width cannot
-                      be truncated to it — the glyphs measure themselves and the parent centres them.
-                      `numberOfLines` goes with the constraint that made it necessary.
+                      The third attempt removed `numberOfLines={1}` and made this absolute, on the
+                      reasoning that "one with no width cannot be truncated". Half true, and the
+                      dangerous half: an absolutely-positioned Text with neither `left` nor `right`
+                      is still laid out against its parent's width, so 41.5 at 64pt mono (~192pt)
+                      inside a 120pt cell no longer ellipsised — **it WRAPPED**. `bottom: 0` then put
+                      the last line on the baseline and pushed `41.` up out of the strip.
+
+                      ⚠️ THAT IS WORSE THAN THE BUG IT REPLACED. "41…" tells her a number is cut off.
+                      A lone `5` reads as the value, at the size of a fist, on the one control that
+                      writes to her training history.
+
+                      **A definite box, wider than its cell, centred by symmetric negative insets.**
+                      Six glyphs at the ACTIVE size (`numCellW`) — the widest thing the engine can
+                      prescribe is five ("137.5") — so the text has a real width to centre in, cannot
+                      wrap, and cannot be squeezed by the row. `numberOfLines={1}` comes back as the
+                      backstop it always should have been: with a box this wide nothing reaches it,
+                      and if anything ever did, an ellipsis SAYS so where a wrap lies.
                     */}
                     <Text
+                      numberOfLines={1}
                       style={[
                         styles.num,
                         {
-                          fontSize: numSize[dist],
+                          // The overhang lands over the dimmed neighbour's CELL, not its glyphs:
+                          // at distance 1 the numeral is less than half this size and centred too.
+                          left: -inset,
+                          right: -inset,
+                          // react-native-web gives Text a default `maxWidth: 100%`, which clamps
+                          // the overhung box back to the cell and re-creates "37…" ON WEB ONLY —
+                          // the third arrival of C.2, through a platform default this time
+                          // (eye-pass 2026-08-26). Stating the box's own width closes it on both.
+                          maxWidth: box,
+                          fontSize: px,
                           fontFamily: active ? font.monoSemibold : font.mono, // rtl-ok — `styles.num` centres it; this only swaps the face
                           // Three distances, three tones — see NUM_TONE for why the ladder differs
                           // between an onboarding ruler and the in-workout edit dial.
@@ -388,7 +593,7 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
                         },
                       ]}
                     >
-                      {format ? format(item) : String(item)}
+                      {text}
                     </Text>
                   </View>
                 );
@@ -405,24 +610,41 @@ export function WheelPicker({ value, onChange, step = 1, min, max, unit = '', si
           <TickStrip w={tick.w} h={tick.h} />
         </View>
 
-        {/* THE ENDS SAY WHAT THEY ARE. On a ruler they dissolve into the stage — a window onto a
-            longer track. On the edit dial (2.2b) they carry a chevron each way instead: mid-workout
-            the athlete has not browsed this axis before and needs telling that it moves at all. */}
-        {ends === 'fade' ? (
+        {/*
+          ════════ ⛔ THE NUDGE WAS DRAWN THROUGH THE NUMERAL IT NUDGES (2026-08-27) ════════
+
+          Measured on `2.2h`: the ghost `32.5` inks 17→100 and the start chevron sat at 34→50, on the
+          same line. `2.2d` had it on both ends at once. **On the primary instrument of the product,
+          the thing she reads mid-set**, the control was struck through the value.
+
+          ⚠️ AND THE FIRST CURE WAS WORSE, which is worth recording so it is not tried again. The
+          two ends treatments are written as alternatives (`fade` OR `chevron`), so choosing the
+          control deletes the dissolve — and restoring the dissolve looked like the fix. It is not:
+          `EdgeFade` paints a gradient of an OPAQUE colour, and the set stage's band is transparent
+          over a breathing ground. On stage it drew a visible slab with hard corners around the
+          whole wheel. A scrim can only dissolve what it matches.
+
+          ⚠️ SO THEY ARE SEPARATED BY ROW, NOT BY LAYER. The chevron belongs to the TRACK, not to
+          the numerals — it moves the track by one detent — so it sits on the graduation's own line,
+          where the only ink is hairlines. It reads better there too: a mark at each end of the
+          ruler says "this ruler runs further", which is the sentence it was always trying to say.
+        */}
+        {ends === 'chevron' ? (
           <>
-            <EdgeFade side="start" color={surfaceNow} />
-            <EdgeFade side="end" color={surfaceNow} />
-          </>
-        ) : (
-          <>
-            <View pointerEvents="none" style={[styles.endChevron, styles.endChevronStart]}>
+            {/* A chevron that LOOKS tappable must BE tappable (eye-pass 2026-08-25): each end
+                nudges one detent. The track runs low→high left→right in BOTH layout directions
+                (the ruler is an instrument, not prose), so left is always the previous value.
+
+                ⚠️ Mid-workout the athlete has not browsed this axis before and needs telling that
+                it moves at all — which is why this wheel, alone, carries them. */}
+            <Pressable hitSlop={14} onPress={() => nudge(-1)} style={[styles.endChevron, styles.endChevronStart]}>
               <Icon name="chevronLeft" size={16} color={color.textMuted} strokeWidth={2} noMirror />
-            </View>
-            <View pointerEvents="none" style={[styles.endChevron, styles.endChevronEnd]}>
+            </Pressable>
+            <Pressable hitSlop={14} onPress={() => nudge(1)} style={[styles.endChevron, styles.endChevronEnd]}>
               <Icon name="chevronRight" size={16} color={color.textMuted} strokeWidth={2} noMirror />
-            </View>
+            </Pressable>
           </>
-        )}
+        ) : null}
       </View>
 
       {unit ? (
@@ -518,6 +740,9 @@ const styles = StyleSheet.create({
   // that separated the two — now that the scroller owns the full frame height for touch (C.3).
   scrollContent: { alignItems: 'flex-end', paddingBottom: TICK_INSET + TICK_STRIP.lg.h + 8 },
   item: { alignItems: 'center', justifyContent: 'flex-end', overflow: 'visible' },
+  /* The owner's marked value — a moss point riding above its numeral. Top, not foot: the numerals
+     hang at the cells' bottom edge and `numRow` clips overflow, so the foot has no air to give. */
+  markerDot: { position: 'absolute', top: 2, alignSelf: 'center', width: 6, height: 6, borderRadius: 3, backgroundColor: color.accent },
   /**
    * The box the numeral is actually measured in — wider than its cell, centred on it by symmetric
    * negative margins (C.2). Sized for SIX glyphs at the active size so nothing the engine can
@@ -558,9 +783,13 @@ const styles = StyleSheet.create({
   // The fixed engraved graduation, centred under the numerals.
   tickStrip: { alignItems: 'center', justifyContent: 'center' },
   // The edit dial's end marks — 8 in from each edge, vertically centred, never in the way.
-  endChevron: { position: 'absolute', top: '50%', marginTop: -8 },
-  endChevronStart: { left: 8 },
-  endChevronEnd: { right: 8 },
+  /* On the graduation's line, not the numerals' — see the note at the markup. The strip sits
+     `TICK_INSET` off the bottom and is `h` tall, so this centres on it for the `xl` dial that is
+     the only one carrying chevrons; `left`/`right` are deliberate here rather than `start`/`end`,
+     because the track runs low→high left→right in both layout directions and so must its ends. */
+  endChevron: { position: 'absolute', bottom: TICK_INSET + TICK_STRIP.xl.h / 2 - 8 },
+  endChevronStart: { left: 10 },
+  endChevronEnd: { right: 10 },
 
   // the ends dissolve into the stage
   fade: { position: 'absolute', top: 0, bottom: 0, width: FADE_W },

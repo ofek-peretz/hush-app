@@ -11,14 +11,20 @@
  * catalog/name/equipment resolution reuses the same sources the live mirror uses
  * (exerciseById + loadSetup), keeping the wrist presentation identical whether a
  * set is mirrored live or executed locally.
+ *
+ * ⚠️ THE WARM-UP RAMP IS DELIBERATELY NOT IN THE SNAPSHOT (2026-08-24). The phone's stage runs
+ * bridge sets before its compounds (domain/warmupRamp) and the LIVE mirror labels them; a
+ * standalone plan carries WORKING sets only, because a watch build that predates the `isWarmup`
+ * flag would render a half-weight bridge as "Set 1 of 5" — the exact looks-broken defect Rev 8
+ * was about. A phone-less workout simply starts at the working weight, as it always has; the ramp
+ * returns to the wrist when the standalone engine learns the label.
  */
-// @ts-nocheck
 
 // 
 
 import type { ProgramDay, SetTarget, Session } from '@/data/local/models';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
-import { exerciseById } from '@/data/exercises';
+import { exerciseById, muscleGroupsLabel } from '@/data/exercises';
 import type { PlannedItem } from '@/domain/coachPlan';
 import { loadSetup } from '@/domain/loadPresentation';
 import {
@@ -151,7 +157,10 @@ export function buildWatchPlanSnapshot(inp: WatchPlanInputs): WatchPlanSnapshot 
     workouts.push({
       id: day.id,
       name: day.name,
-      muscles: day.muscleGroups.join(' · '),
+      // ⛔ THE SAME RAW JOIN, AND THIS ONE LEFT THE PHONE. `watchCopyPack` exists precisely so the
+      // wrist speaks her language; this line shipped `Chest · Back` past it, so the watch showed
+      // English muscle names beside Hebrew everything-else.
+      muscles: muscleGroupsLabel(day.muscleGroups),
       steps,
     });
   }

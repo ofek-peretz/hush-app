@@ -1,6 +1,6 @@
 ﻿/**
- * Local fixture model — the runnable program engine for the app today (every signed-in
- * user runs on this until a backend session/token exchange exists; see selectModel).
+ * Local fixture model — THE model. Every athlete runs on this, by design (founder 2026-08-25:
+ * the v4 backend swap point is deleted; the v8 engine decides everything on the device).
  *
  * It builds the athlete's programme and personalized cold-start loads:
  *  - generateProgram: the programme is ASSEMBLED from her body map (engine v5, register Part 3) —
@@ -14,7 +14,6 @@
  *
  * One goal: hypertrophy (register Part 9 §A) — goal and experience are no longer engine inputs.
  */
-// @ts-nocheck
 
 // 
 
@@ -28,21 +27,24 @@ import type {
   SetTarget,
   Slot,
 } from '@/data/local/models';
-import { EXERCISES, exerciseById, exercisesForMuscle, isSwapOnly, patternFamily, indirectMusclesOf, INDIRECT_SHARE, type Exercise, type MuscleGroup } from '@/data/exercises';
-import { swapScore } from '@/domain/swapPool';
+import { EXERCISES, exerciseById, exercisesForMuscle, engineMayAssign, patternFamily, indirectMusclesOf, INDIRECT_SHARE, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { swapScore, effectiveSubstitutes } from '@/domain/swapPool';
 import { startingWeight, personalScale, snapToStock } from '@/domain/startingLoad';
 import { retainedAfterGap, daysSinceLastSession } from '@/engine/v5/detraining';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
-import { advanceV5, currentV5Targets, applyDetrainingV5, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
+import { advanceV5, currentV5Targets, applyDetrainingV5, activeDeloadV5, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
 import { assembleV5DayLists, ESSENTIAL_PATTERNS, essentialPatternOf } from '@/engine/v5/programAssembly';
+import { weeklyTargets } from '@/engine/v5/assembler';
 import { repairWeek } from '@/domain/weekRepair';
-import { learnedRestS, learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
-import { learnedTransitionRestS, REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN, perSetSeconds } from '@/domain/restPrescription';
+import { learnedExecSFor } from '@/domain/setDwell';
+import { learnedInterRestS, learnedTransitionRestS, REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN, perSetSeconds, pairedRestSavedS } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SESSION_MIN, SESSION_MAX, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
+// The same ban `pickExercises` reads for every other muscle — see `addWeeklyCore`'s note.
+import { forbiddenFor } from '@/domain/painReport';
 import { enginePattern, type Pattern, type Equipment } from '@/engine/catalog';
 import { epley, normalizeLoad } from '@/engine/loadMath';
 import { db, EMPTY_PREFERENCES, type OwnedPreferences } from '@/data/local/db';
@@ -204,7 +206,7 @@ function dayFromBlueprint(
 // Generation pool = accessible core only (cable/machine crunch). The advanced movements
 // (hanging leg raise, ab wheel) are swap-only: a first-week athlete is never assigned a
 // movement that requires strength they don't have yet; anyone can swap into them.
-const CORE_POOL = EXERCISES.filter((e) => e.muscle === 'Core' && !isSwapOnly(e.id)).map((e) => e.id);
+const CORE_POOL = EXERCISES.filter((e) => e.muscle === 'Core' && engineMayAssign(e.id)).map((e) => e.id);
 const CORE_SETS = 3;
 
 /** The session a weekly core block attaches to: upper-preferred, then full-body, then first. */
@@ -291,12 +293,44 @@ export function estimateSessionMinutes(
   execSecFor?: (id: string) => number | null,
   transitionSec?: number | null,
 ): number {
-  return day.slots.reduce((m, s) => {
+  /*
+   * ⛔ THE WARM-UP RAMP IS NOT PRICED — CLOSED 2026-08-30, BY THE RULING THAT MADE IT OPTIONAL.
+   *
+   *   > *"לא לקבוע מראש לאף אחד חימום ומי שרוצה שילחץ על הפקד."*
+   *
+   * The 2026-08-25 argument for charging was sound while the bridges were COMPULSORY: the founder
+   * rested the full prescribed time on every set, so there was no slack for them to ride inside,
+   * and an hour promised without work the session would certainly perform is not a promise. Both
+   * halves of that sentence depended on "certainly". Now nothing is warmed up unless the athlete
+   * presses for it at the station, and a structural charge for a request nobody has made yet is a
+   * charge against the wrong person — most days it buys nothing, and on a tight day it was
+   * `enforceTimeCap`'s Step 0 spending WORKING SETS on it.
+   *
+   * ⚠️ AND THE OVERRUN IT WAS PAYING FOR DOES NOT COME BACK, because the minutes are now spent only
+   * when they are asked for — by an athlete standing at the rack who has decided the bridge is
+   * worth them. The promise prices the session as written; a bridge she adds is time she chose to
+   * add, in front of a clock she can see.
+   */
+  const serial = day.slots.reduce((m, s) => {
     let mins = s.setCount * perSetMinutes(s.exerciseId, restSecFor, execSecFor);
     const rest = restSecFor?.(s.exerciseId) ?? null;
     if (rest != null && transitionSec != null) mins += (transitionSec - rest) / 60;
     return m + mins;
   }, 0);
+  /*
+   * A SUPERSET RESTS ONCE PER ROUND (founder mandate 2026-08-26). The serial sum above charged each
+   * partner its own rest; a paired couple keeps the longer one and saves the shorter, once per
+   * shared round (`pairedRestSavedS` — the same rest ruler as `perSetSeconds`, so the price and
+   * the saving cannot diverge). The builder is today the only writer of `pairedWithNext`; when
+   * the engine learns to pair under the time cap this line is already its honest clock.
+   */
+  const saved = day.slots.reduce((s, slot, i) => {
+    const partner = day.slots[i + 1];
+    if (!slot.pairedWithNext || !partner) return s;
+    const rounds = Math.min(slot.setCount, partner.setCount);
+    return s + (rounds * pairedRestSavedS(slot.exerciseId, partner.exerciseId, restSecFor)) / 60;
+  }, 0);
+  return Math.max(0, serial - saved);
 }
 
 /**
@@ -385,6 +419,12 @@ function enforceTimeCap(
   trainedOnOtherDays: ReadonlySet<string> = new Set(),
 ): void {
   const over = () => estimateSessionMinutes(day, restSecFor, execSecFor, transitionSec) > budgetMin;
+  /*
+   * ⛔ STEP 0 IS GONE WITH THE CHARGE IT ANSWERED (2026-08-30). It set `leanWarmup` on an
+   * over-budget day so the cheapest legal cut was a bridge and never a working set — correct, and
+   * unnecessary the moment the estimate stopped charging for bridges at all. There is no warm-up
+   * minute left on the table to trim, because none were ever added.
+   */
   /** How many non-supplemental exercises each muscle currently keeps on this day. Recomputed on every
    *  pass, because dropping a slot is what changes the answer. */
   const exCountByMuscle = (): Record<string, number> => {
@@ -934,6 +974,22 @@ function addWeeklyCore(
    * old frequency-only entry point, which is what every existing caller and test expects.
    */
   coreOccurrences?: number,
+  /*
+   * ⛔ THE PATTERNS HER CORE MAY NOT BE GIVEN — AND THIS ARGUMENT DID NOT EXIST (2026-08-19).
+   *
+   * Every other muscle's pool is filtered by `forbiddenFor` inside `pickExercises`. Core is
+   * supplemental and is dealt HERE, on a path that never asked. So a Core TWINGE — which bans
+   * `crunch` and `rotation` and, correctly, does not rest the muscle (`restsTheMuscle('twinge')`
+   * is false) — left Core switched on and the pool went on dealing her sit-ups and Russian twists.
+   * The report was stored, the report was honoured everywhere else, and it never reached her week.
+   *
+   * ⚠️ AND THE INJURY AUDIT KNEW. `theProgrammeUnderAnInjury` skips Core with the note *"supplemental
+   * — its own path (addWeeklyCore), tested there"*, and no such test existed. It does now.
+   *
+   * A `pain` or `sharp` report switches the muscle off and never reached this function either; that
+   * one was safe only by accident, through `coreStance === 'off'`.
+   */
+  bannedPatterns?: ReadonlySet<string>,
 ): void {
   if (!days.length || !CORE_POOL.length || coreStance === 'off') return;
   const host = days[coreHostIndex(days)];
@@ -961,9 +1017,19 @@ function addWeeklyCore(
   const start = coreOccurrences == null
     ? (Math.max(1, daysPerWeek) - 1) % CORE_POOL.length
     : ((Math.max(1, daysPerWeek) - 1) + Math.max(0, coreOccurrences)) % CORE_POOL.length;
-  for (let k = 0; k < count; k++) {
+  /*
+   * ⚠️ THE BAN IS WALKED PAST, NOT COUNTED AGAINST HER. `count` is how many core lifts she gets;
+   * a banned entry must not consume one of them, or a twinge would quietly halve her core work on
+   * top of taking the movement away. The cursor advances until it has placed `count` lifts or
+   * exhausted the pool — and if every core pattern is banned, she gets none, which is the honest
+   * outcome and the same one a fully-banned muscle gets everywhere else.
+   */
+  let placed = 0;
+  for (let k = 0; k < CORE_POOL.length && placed < count; k++) {
     const ex = exerciseById(CORE_POOL[(start + k) % CORE_POOL.length]);
+    if (ex && bannedPatterns?.has(ex.pattern)) continue;
     if (!ex || host.slots.some((s) => s.exerciseId === ex.id)) continue; // skip a duplicate movement
+    placed += 1;
     host.slots.push({ capability: ex.capability, exerciseId: ex.id, setCount: CORE_SETS, supplemental: true });
     if (!host.muscleGroups.includes(ex.muscle)) host.muscleGroups.push(ex.muscle);
   }
@@ -1185,6 +1251,72 @@ function setsFor(tier: Tier, muscle?: string): number {
  * (`claimOf`), so it is not the first thing cut back off.
  */
 /**
+ * ⛔ THE ENGINE'S WEEKLY VOLUME ACCOUNTING — ONE FUNCTION, AND EVERY SURFACE ASKS IT (2026-08-18).
+ *
+ * ── WHAT WAS WRONG ────────────────────────────────────────────────────────────────────────────────
+ * This body used to be a closure INSIDE `raiseToWeeklyFloor`, so it was the engine's private opinion
+ * about how much work a muscle gets — and the screens grew their own. `domain/whyLiftIsHere` counted
+ * DIRECT sets, supplemental included; the floor pass counted direct PLUS `INDIRECT_SHARE` of every
+ * compound that also drives the muscle, and skipped supplemental. Two accountings of one quantity.
+ *
+ * What the athlete met: her biceps take 4 direct sets and about 3.5 more from her rows and pulldowns,
+ * so the engine considers them fed and will never add another set — while the WHY sheet told her, in
+ * its own closing sentence, *"6 sets a week is the least that grows a muscle. This one has 4, and
+ * your hour is why."* A complaint about a shortfall the engine does not believe in, on a screen whose
+ * only job is to read the engine's decisions back, and no regeneration could ever have cleared it.
+ *
+ * ── WHY IT IS EXPORTED FROM HERE, AND NOT COPIED ─────────────────────────────────────────────────
+ * ⚠️ A COPY IS HOW THIS HAPPENED. The fix is not a shared reading of the same rule — it is the SAME
+ * FUNCTION: `raiseToWeeklyFloor` calls this, `domain/weekQuality` calls this, `domain/whyLiftIsHere`
+ * calls this. If the accounting is ever wrong it is wrong everywhere at once, which is the only state
+ * in which a defect is findable.
+ *
+ * It lives beside the assembler rather than in a new neutral module because the assembler is the one
+ * that ACTS on it — the floor pass spends her minutes on this number — and a helper the engine merely
+ * imports could drift from what the engine does the moment someone edits the pass. `domain/weekQuality`
+ * already reaches in here for `estimateSessionMinutes` for the identical reason: the judge must price
+ * the week with the enforcer's own arithmetic or it is judging a different week.
+ *
+ * ⚠️ AND IT IS A MEASUREMENT, NEVER A PRESCRIPTION (`indirectMusclesOf`, and the third block of
+ * `theVolumeAMuscleActuallyReceives` pins it). Indirect work is what a muscle RECEIVES; a set is
+ * still only ever ADDED to a lift that trains it directly, and a muscle she switched off is never
+ * given work because a row happens to feed it.
+ *
+ * Rest days are skipped here rather than at the call sites: the assembler hands it workout days only,
+ * so nothing moves, and a caller holding a whole programme cannot get it wrong.
+ */
+/**
+ * ⚠️ THE SHAPE IT ACTUALLY CONSUMES, AND NOT ONE FIELD MORE.
+ *
+ * It read `readonly ProgramDay[]`, which is what the assembler happens to hold — but the function
+ * touches four fields, and demanding `id`, `name` and `muscleGroups` on top of them shut out the one
+ * caller that has a WEEK rather than a programme (`domain/whyLiftIsHere`, whose `PlacementWeek`
+ * carries exactly this). A cast at that call site would have compiled and would have been a lie: it
+ * would claim the day has an id it does not have.
+ *
+ * `ProgramDay[]` is assignable to this, so the assembler and `domain/weekQuality` are unchanged.
+ */
+export interface EffectiveSetsDay {
+  isRest?: boolean;
+  slots: readonly { exerciseId: string; setCount: number; supplemental?: boolean }[];
+}
+
+export function weeklyEffectiveSets(days: readonly EffectiveSetsDay[]): Record<string, number> {
+  const n: Record<string, number> = {};
+  for (const d of days) {
+    if (d.isRest) continue;
+    for (const s of d.slots) {
+      if (s.supplemental) continue;
+      const m = exerciseById(s.exerciseId)?.muscle;
+      if (!m) continue;
+      n[m] = (n[m] ?? 0) + s.setCount;
+      for (const im of indirectMusclesOf(s.exerciseId)) n[im] = (n[im] ?? 0) + s.setCount * INDIRECT_SHARE;
+    }
+  }
+  return n;
+}
+
+/**
  * ════ THE WEEKLY FLOOR UNDER A MUSCLE (founder 2026-08-10) ════
  *
  * There is a floor under a SESSION (`fillToSessionFloor`) and a ceiling over it (`enforceTimeCap`),
@@ -1229,21 +1361,13 @@ function raiseToWeeklyFloor(
    * (the `taker` below is unchanged), because indirect work is what a muscle receives, never what it
    * can be prescribed. See `indirectMusclesOf` for why this reads movement patterns rather than
    * `capability` itself.
+   *
+   * ⛔ AND THE READING NOW HAS A NAME — `weeklyEffectiveSets`, just above (2026-08-18). It was a
+   * closure here, which meant the screens could not ask the engine what a muscle receives and each
+   * grew its own answer. It is the same code, moved up and exported; nothing about this pass changed.
    */
-  const weekly = (): Record<string, number> => {
-    const n: Record<string, number> = {};
-    for (const d of days)
-      for (const s of d.slots) {
-        if (s.supplemental) continue;
-        const m = exerciseById(s.exerciseId)?.muscle;
-        if (!m) continue;
-        n[m] = (n[m] ?? 0) + s.setCount;
-        for (const im of indirectMusclesOf(s.exerciseId)) n[im] = (n[im] ?? 0) + s.setCount * INDIRECT_SHARE;
-      }
-    return n;
-  };
   for (let guard = 0; guard < 200; guard++) {
-    const sets = weekly();
+    const sets = weeklyEffectiveSets(days);
     const short = Object.entries(sets)
       .filter(([, n]) => n < floorSets)
       .sort((a, b) => a[1] - b[1]) // the thinnest muscle first
@@ -1536,7 +1660,51 @@ async function editPreferences(edit: (p: OwnedPreferences) => void): Promise<voi
  * Idempotent and cursor-driven (`lastFoldedAt`): calling it twice folds nothing the second time,
  * so the extra call at completion costs one no-op pass on the next session start.
  */
+/**
+ * ⛔ ONE FOLD AT A TIME, AND THE LOCK BELONGS HERE (2026-08-19).
+ *
+ * The fold is an unlocked read-modify-write over TWO stored blobs — `hush.engine.v5` (loaded,
+ * mutated and saved by `advanceV5`) and `hush.preferences` (`p.substitutes[…] = …` at the enactment
+ * below). Two folds in flight interleave as load-A, load-B, save-A, save-B: B's save carries B's
+ * copy of a state A had already advanced, so a graduation or a rotation A enacted is erased and the
+ * lift the engine retired comes back the following week.
+ *
+ * ⚠️ THE CALLER WAS FIXED FIRST, AND THAT WAS NOT ENOUGH. `WellDone` fired `sessionEarned` and
+ * `sessionForward` unawaited in one effect; awaiting them in sequence closed that pair. But there
+ * are three call sites in this file and nothing stops the next one — a screen that refreshes while
+ * a session is closing, a retry, a future caller — from reopening it. A guarantee that lives in a
+ * caller is a guarantee the next caller does not have.
+ *
+ * So the fold serialises against itself: an in-flight fold is awaited, and the next one runs after
+ * it, reading the state the first one wrote. Callers are unchanged and cannot get this wrong.
+ *
+ * ⚠️ AND IT CARRIES NO REGRESSION TEST, WHICH IS WORTH SAYING OUT LOUD. One was written and deleted:
+ * at the `db` seam a fold's own read is indistinguishable from the read-back `getSessionEarnedV5`
+ * takes right after it, so the trace of two concurrent calls — `load save save load load save save
+ * load` — cannot be graded without a classifier that would be testing the instrumentation rather
+ * than the engine. The symptom (a lost enactment) needs an athlete whose session happens to trigger
+ * a graduation or a rotation, which makes the test about the fixture. What that trace DOES show is
+ * the property this queue exists for: neither fold's write window contains the other's. The rest is
+ * inspection — it is a promise chain — plus 1,157 green engine, audit and flow tests.
+ */
+let foldInFlight: Promise<void> | null = null;
+
 async function foldEngine(
+  program: Program,
+  profile: Awaited<ReturnType<typeof loadProfileSafe>>,
+  history: Session[],
+  prefs: OwnedPreferences,
+  bucketOpenMs: number | undefined,
+): Promise<void> {
+  // Chain onto whatever is running; a rejected predecessor must not poison the queue.
+  const run = Promise.resolve(foldInFlight)
+    .catch(() => {})
+    .then(() => foldEngineUnsynchronised(program, profile, history, prefs, bucketOpenMs));
+  foldInFlight = run.catch(() => {});
+  return run;
+}
+
+async function foldEngineUnsynchronised(
   program: Program,
   profile: Awaited<ReturnType<typeof loadProfileSafe>>,
   history: Session[],
@@ -1676,11 +1844,71 @@ export const fixtureModel: ModelClient = {
     // The instant the pain windows are judged against — read ONCE, here, and handed down. The
     // assembler may not read a clock (I-24); see the note on `assembleV5DayLists`.
     const assembledAtMs = Date.now();
-    let dayLists = assembleV5DayLists(profile.bodyMap, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile, assembledAtMs, { chosenByMuscle: prefs.chosenByMuscle, refusedIds: prefs.refusedIds });
+    /* ⛔ DECLARED FIRST, LEARNED BEHIND IT (2026-08-22) — `swapPool.effectiveSubstitutes`. A 1:1
+       replacement she named herself outranks the K=2 fold's belief about what she keeps doing, and
+       the learned entry is left standing underneath rather than deleted, so taking a declaration
+       back falls to what she has actually been doing. */
+    const subs = effectiveSubstitutes(prefs);
+
+    /*
+     * ════ THE HYBRID WEEK — her days are ground the engine builds AROUND (founder 2026-08-25) ════
+     *
+     * "יום שנגעה בו — שלה; יום שלא — שלו." A day carrying `authored: true` (stamped only by the
+     * plan builder's diff-seal) is preserved byte-for-byte through EVERY rebuild — this function is
+     * every rebuild — and the engine's own days are assembled against the RESIDUAL volume: the
+     * weekly per-muscle pot minus what her days already deliver. A muscle her days cover fully is
+     * taken off the engine's map for this assembly (covered, not refused); one they cover partly
+     * hands the assembler an explicit volume target for the remainder, through the same
+     * `volumeByMuscle` door Loop 3 already uses. A fully-authored week never reaches here (the
+     * `engineMayRebuild` gate), so `keptDays` is only ever read off an `'engine'` program.
+     */
+    const priorProgram = await db.loadProgram().catch(() => null);
+    const keptWithIdx =
+      (priorProgram?.authored ?? 'engine') === 'engine'
+        ? (priorProgram?.days ?? [])
+            .map((d, i) => ({ day: d, idx: i }))
+            .filter((k) => !!k.day.authored && !k.day.isRest && k.day.slots.length > 0)
+            .map((k) => ({ idx: k.idx, day: { ...k.day, slots: k.day.slots.map((sl) => ({ ...sl })), muscleGroups: [...k.day.muscleGroups] } }))
+        : [];
+    const keptDays = keptWithIdx.map((k) => k.day);
+    if (keptDays.length >= n) {
+      // Her days already fill (or exceed) the week she asked for — nothing left for the engine to
+      // write. The week is hers in content while staying 'engine' in citizenship, so un-marking a
+      // day in the builder hands it straight back to the next rebuild.
+      return { id: 'program_v1', frequency: keptDays.length, days: keptDays };
+    }
+    const nEngine = n - keptDays.length;
+    const keptSetsByMuscle: Record<string, number> = {};
+    for (const kd of keptDays)
+      for (const sl of kd.slots) {
+        if (sl.supplemental) continue;
+        const m = exerciseById(sl.exerciseId)?.muscle;
+        if (m) keptSetsByMuscle[m] = (keptSetsByMuscle[m] ?? 0) + sl.setCount;
+      }
+    let assemblyMap = profile.bodyMap;
+    let assemblyVolume = learnedVolume;
+    if (keptDays.length > 0) {
+      const fullTargets = weeklyTargets(profile.bodyMap, CANONICAL_MUSCLE_ORDER, n);
+      delete fullTargets['Core']; // supplemental — addWeeklyCore owns it, on an engine day
+      const hybridMap: Record<string, string> = { ...(profile.bodyMap ?? {}) };
+      const residual: Record<string, number> = {};
+      for (const m of Object.keys(fullTargets)) {
+        const target = learnedVolume[m] ?? fullTargets[m];
+        const left = target - (keptSetsByMuscle[m] ?? 0);
+        // Below one honest scheme there is nothing worth a slot — the muscle is covered by her days.
+        if (left >= V5_SETS_MIN) residual[m] = left;
+        else if ((keptSetsByMuscle[m] ?? 0) > 0) hybridMap[m] = 'off';
+        else residual[m] = target; // untouched by her days — the full target stands
+      }
+      assemblyMap = hybridMap as Profile['bodyMap'];
+      assemblyVolume = residual;
+    }
+
+    let dayLists = assembleV5DayLists(assemblyMap, nEngine, prefs.leaveItsByMuscle, subs, assemblyVolume, profile, assembledAtMs, { chosenByMuscle: prefs.chosenByMuscle, refusedIds: prefs.refusedIds });
     const everythingOff =
       CANONICAL_MUSCLE_ORDER.length > 0 && CANONICAL_MUSCLE_ORDER.every((m) => profile.bodyMap?.[m] === 'off');
-    if (dayLists.length === 0 && !everythingOff) {
-      dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, prefs.substitutes, learnedVolume, profile, assembledAtMs, { chosenByMuscle: prefs.chosenByMuscle, refusedIds: prefs.refusedIds });
+    if (dayLists.length === 0 && !everythingOff && keptDays.length === 0) {
+      dayLists = assembleV5DayLists(undefined, n, prefs.leaveItsByMuscle, subs, learnedVolume, profile, assembledAtMs, { chosenByMuscle: prefs.chosenByMuscle, refusedIds: prefs.refusedIds });
     }
     const emphasisedMuscles = new Set(
       Object.entries(profile.bodyMap ?? {}).filter(([, v]) => v === 'emphasis').map(([m]) => m),
@@ -1709,7 +1937,14 @@ export const fixtureModel: ModelClient = {
     // Her own core sessions are the cursor the pool advances on — a fact of her training, never a
     // calendar (register Part 5). One session that contained any core work is one step.
     const coreOccurrences = history.filter((h) => h.sets.some((l) => exerciseById(l.exerciseId)?.muscle === 'Core')).length;
-    addWeeklyCore(days, n, (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal', coreOccurrences);
+    addWeeklyCore(
+      days,
+      n,
+      (profile.bodyMap?.['Core'] as MuscleStance | undefined) ?? 'normal',
+      coreOccurrences,
+      // The same call `pickExercises` makes for every other muscle — see the note on the parameter.
+      forbiddenFor('Core', profile.painEases, assembledAtMs),
+    );
     /*
      * ⛔ ONE LENGTH FOR EVERYONE (founder 2026-08-10, F-15). This read `profile.workoutMinutes`, a
      * field NOTHING has ever written: onboarding stopped asking on 2026-08-05 and no settings control
@@ -1721,31 +1956,35 @@ export const fixtureModel: ModelClient = {
     // S-64 from FACTS: the time budget uses HER MEASURED REST (the median of her recorded restBeforeS
     // per lift, S-17), not v4's rest-blind fixed estimate. No rest data yet → the day-one bootstrap.
     const restCache = new Map<string, number | null>();
+    /*
+     * ⛔ THE ONE IMPLEMENTATION, ACTUALLY CALLED (engine audit 2026-08-23). `restPrescription`'s
+     * header records that THREE copies of "her rest on this lift" once disagreed and says *"they
+     * call this now"* — and this one still did not: it hand-rolled the median with NO recency
+     * window (F-8) and NO evidence gate (F-17), so the TIME BUDGET priced her hour off a statistic
+     * the REST TIMER refuses to run. One recorded rest — a mis-tap, a phone call — became the
+     * lift's standing per-set cost, and a rest she took months ago never aged out of her budget.
+     * `learnedInterRestS` is the gated, windowed read both the timer and the wrist already use;
+     * under the gate it returns null and the B-4 bootstrap prices the set, exactly as day one.
+     */
     const restSecFor = (id: string): number | null => {
       let r = restCache.get(id);
       if (r === undefined) {
-        const rests: (number | null | undefined)[] = [];
-        // INTER samples only (setIndex > 0): a first-set rest is the TRANSITION — priced separately
-        // below, and it must not drag this lift's between-sets median up (S-17, one clean fact each).
-        for (const s of history) for (const l of s.sets) if (l.exerciseId === id && !l.isApproach && l.setIndex > 0) rests.push(l.restBeforeS);
-        r = learnedRestS(rests);
+        r = learnedInterRestS(history, id);
         restCache.set(id, r);
       }
       return r;
     };
     // B-4's other half: her measured SET DURATION, from the timestamps already on every logged set.
     // Only consecutive same-exercise sets inside one session can yield it (see learnedExecS).
+    /* ⚠️ THE WALK MOVED OUT ON 2026-08-31 (`domain/setDwell.learnedExecSFor`) — it was hand-rolled
+       here and the set-dwell nudge needed the same number, which is exactly how the three
+       disagreeing copies of "her rest on this lift" got written. The cache stays; the arithmetic
+       has one home now. */
     const execCache = new Map<string, number | null>();
     const execSecFor = (id: string): number | null => {
       let e = execCache.get(id);
       if (e === undefined) {
-        const samples: ExecSample[] = [];
-        for (const s of history) for (const l of s.sets) {
-          if (l.exerciseId !== id || l.isApproach) continue;
-          samples.push({ exerciseId: l.exerciseId, sessionId: s.id, atMs: Date.parse(l.persistedAt), restBeforeS: l.restBeforeS });
-        }
-        samples.sort((a, b) => a.atMs - b.atMs);
-        e = learnedExecS(samples);
+        e = learnedExecSFor(history, id);
         execCache.set(id, e);
       }
       return e;
@@ -1769,7 +2008,9 @@ export const fixtureModel: ModelClient = {
      */
     const stillTrainedTwice = (): ReadonlySet<string> => {
       const n: Record<string, number> = {};
-      for (const d of days)
+      // Hybrid: her preserved days train muscles too — a drop from an engine day is legal exactly
+      // when the WEEK (hers included) still holds the muscle twice.
+      for (const d of [...days, ...keptDays])
         for (const m of new Set(d.slots.map((s) => exerciseById(s.exerciseId)?.muscle).filter(Boolean)))
           n[m as string] = (n[m as string] ?? 0) + 1;
       /*
@@ -1806,7 +2047,13 @@ export const fixtureModel: ModelClient = {
     for (const d of days) growEmphasised(d, emphasisedMuscles, budgetMin, restSecFor, execSecFor, transitionS, weeklyByMuscleNow());
     // …and no muscle she left ON leaves the week below the minimum effective dose, where the clock
     // has room to prevent it (B-2's WEEKLY_SETS_FLOOR).
-    raiseToWeeklyFloor(days, WEEKLY_SETS_FLOOR, budgetMin, restSecFor, execSecFor, transitionS);
+    if (keptDays.length === 0) {
+      raiseToWeeklyFloor(days, WEEKLY_SETS_FLOOR, budgetMin, restSecFor, execSecFor, transitionS);
+    }
+    /* ^ Hybrid: skipped, deliberately. The raise reads only the engine's days, so a muscle her days
+     * already feed would be raised to the full floor AGAIN on the engine's side — double dose. The
+     * residual targets above already respect the weekly pot; what the floor loses in the hybrid
+     * case, her own days are carrying. */
 
     /*
      * ════════════════════════════════════════════════════════════════════════════════════════════
@@ -1831,23 +2078,81 @@ export const fixtureModel: ModelClient = {
      * engine SAYS about the week it is handing over, and repairs move sets between days — so a flag
      * stamped first would describe a week that no longer exists.
      */
-    const repaired = repairWeek({ id: 'program_v1', frequency: n, days }, { bodyMap: profile.bodyMap, daysPerWeek: n });
+    /*
+     * ⛔ AND IT IS HANDED HER CLOCK, NOT THE BOOTSTRAP'S (2026-08-18).
+     *
+     * `weekFindings` priced a day with `estimateSessionMinutes(d)` — no readers — which is the day-one
+     * guess: the 150-second compound rest every athlete starts on. Every pass ABOVE this line prices
+     * the same day with her MEASURED rest and set duration (S-17 / B-4), and so does the verdict
+     * stamped below it. So the repair pass, which MUTATES the programme she is given, was judging a
+     * week nobody else in this function was looking at: an athlete who rests 90 seconds had days
+     * priced ten minutes long and "repaired" — sets moved off a session the engine had already fitted
+     * inside her hour — while `overBudget` two lines later, reading her real rest, said it fit.
+     *
+     * ⚠️ IT RIDES IN `inputs` RATHER THAN AS AN ARGUMENT, because `repairWeek` re-judges the board
+     * four times per move through three call layers. A positional parameter would have to be threaded
+     * through every one of them and the first one forgotten would silently restore the bootstrap —
+     * which is exactly the shape of the bug being closed. How the week is priced is a fact about the
+     * week, so it travels with the other facts about it.
+     */
+    const repaired = repairWeek(
+      { id: 'program_v1', frequency: nEngine, days },
+      {
+        // Hybrid: the judge sees only the engine's days, so it must judge them against the map and
+        // frequency the engine actually assembled for — a muscle her days cover reads as 'off'
+        // here, or the repair pass would "rescue" volume her own days already deliver.
+        bodyMap: assemblyMap,
+        daysPerWeek: nEngine,
+        /*
+         * ⛔ AND HERE IS WHERE IT STOPS, ON PURPOSE — MEASURED 2026-08-19.
+         *
+         * The line that belongs here is
+         *   `minutesOf: (d) => estimateSessionMinutes(d, restSecFor, execSecFor, transitionS)`
+         * and everything the note above says about it is true: every other pass in this function
+         * prices the day with her MEASURED rest, and the repair pass — which MUTATES the week she is
+         * given — prices it with the 150-second bootstrap. Two accountings, one week.
+         *
+         * ⚠️ IT WAS ENABLED, AND THE ENGINE GOT WORSE. `thePrescriptionIsAccurate`, the ratchet that
+         * grades the forecast against a simulated athlete, moved every one of its three numbers the
+         * wrong way:
+         *
+         *     in-band            58.31 %  →  55.03 %
+         *     mean miss           0.871   →   0.946  reps
+         *     first-set in-band  40.38 %  →  37.53 %
+         *
+         * The mechanism is not mysterious: priced with her real 90-second rest, more work fits, so
+         * the repair pass moves fewer sets off — her days come out fuller, and a fuller day is one
+         * the rep forecast misses more often. The inconsistency is real; closing it costs three
+         * points of the accuracy the whole product rests on.
+         *
+
+         * ⛔ SETTLED, 2026-08-19: THE BOOTSTRAP STAYS, AND IT IS NOT A REST ESTIMATE.
+         *
+         * The measurement decides it — three points of in-band accuracy is not a price worth paying to
+         * close an internal inconsistency. What was wrong was what this number is CALLED. Priced with the
+         * day-one rest, the repair pass leaves room in every session: that is not a mis-timing, it is a
+         * **volume governor**, and it is the only thing in assembly holding the week below what the clock
+         * would technically allow.
+         *
+         * ⚠️ AND THAT IS WHERE THE REAL WORK IS, IF ANYONE WANTS IT. Conservatism arrived here as a side
+         * effect of using the wrong rest number. The honest shape is an explicit conservatism parameter on
+         * `repairWeek`, tuned against this same board — a coach who leaves room in a session does it on
+         * purpose, not because he mis-measured the rest. Until that exists, this is the knob.
+         */
+      },
+    );
     if (repaired.program) days = repaired.program.days;
     // S-3 — "If honouring both leaves nothing else to cut, the workout genuinely cannot fit her
     // minutes: that is S-3, and the engine says so rather than quietly starving a muscle." A day can
     // now finish over budget, and that is the CORRECT outcome when every trained muscle is down to
     // its last lift (S-35's two protected drops).
     //
-    // TODO(screens · S-3) — THE ENGINE HALF IS DONE; THE SENTENCE IS NOT. The register says the
-    // engine "says so", and today it only says so to telemetry. She should be told, in words, that
-    // this workout does not fit the minutes she declared and what her options are (more minutes, or
-    // a muscle off). Held deliberately for the founder's redesign of the programme surfaces —
-    // 2026-07-21. The engine emits everything the copy needs: the day, its real minutes, her budget.
-    //
-    // TODO(screens · S-59) — the other half of the same family. "Her leave-its do not fit inside her
-    // declared minutes": the ASSEMBLY rule is built (a leave-it is cut last, here and in
-    // trimV5ToBudget), and Rev 10 deleted the old prompt because a declarative pin no longer exists.
-    // If the redesign wants to surface anything here, it is the same S-3 sentence, not a question.
+    // ✅ S-3 / S-59 — BOTH HALVES NOW EXIST (closed 2026-08-24; the sentences landed 2026-08-12/16
+    // and these notes were never updated). The engine half stamps the verdict below; the sentence
+    // half reads it in two places: `domain/weekNotice` ranks the week's one most actionable notice
+    // for Home, and PreWorkoutScreen prints `budgetNote.over`/`budgetNote.short` on the card she
+    // reads with her bag on her shoulder. S-59 surfaces as the same S-3 sentence, per Rev 10 —
+    // a leave-it that does not fit is a day that does not fit, not a question.
     for (const d of days) {
       // Priced with BOTH measured halves (rest + exec) — the same estimate the trims enforce, so the
       // report can never disagree with the enforcement about whether a day fits.
@@ -1884,8 +2189,26 @@ export const fixtureModel: ModelClient = {
       }
     }
     for (const d of days) applyExerciseOrder(d, prefs.exerciseOrderByWorkout[d.key ?? '']); // athlete order
+    /*
+     * The hybrid merge: her days return to the seats they held; engine days fill the rest in their
+     * assembled order. Engine day ids are suffixed on collision so two "day_1"s can never share a
+     * key (her preserved day KEEPS the original id — history and order prefs point at it).
+     */
+    if (keptDays.length > 0) {
+      const keptIds = new Set(keptDays.map((d) => d.id));
+      for (const d of days) if (keptIds.has(d.id)) d.id = `${d.id}_e`;
+      const merged: (ProgramDay | null)[] = Array.from({ length: n }, () => null);
+      for (const k of keptWithIdx) {
+        let at = Math.min(k.idx, n - 1);
+        while (merged[at] != null) at = (at + 1) % n;
+        merged[at] = k.day;
+      }
+      const queue = [...days];
+      for (let i = 0; i < n; i++) if (merged[i] == null) merged[i] = queue.shift() ?? null;
+      days = merged.filter((d): d is ProgramDay => d != null).concat(queue);
+    }
     const ordered = applyWorkoutOrder(days, prefs.workoutOrder); // athlete-owned workout order
-    return { id: 'program_v1', frequency: n, days: ordered };
+    return { id: 'program_v1', frequency: keptDays.length > 0 ? ordered.length : n, days: ordered };
   },
 
   /**
@@ -2024,6 +2347,30 @@ export const fixtureModel: ModelClient = {
         return {};
       });
     }
+    /*
+     * THE LIGHT WEEK, ON THE PRESCRIPTION SHE IS HANDED (engine/v5/deload). Read AFTER the fold —
+     * a deload can open inside the `foldEngine` call above — and carried on every target as
+     * `deloadHold`, so the live loop knows not to raise a deliberately light bar. The loads
+     * themselves are already the engine's own decayed state (same discipline as detraining: a
+     * decision that was written and stamped, never a filter on this function's output).
+     */
+    const deloadActive = program ? await activeDeloadV5().catch(() => false) : false;
+    if (program) {
+      /*
+       * The light week's moves become arrows in BOTH directions — the open (a lighter bar with its
+       * why) and the close (the standing weight walking back). Both are stamped during THIS call's
+       * fold/read, so the early `decided` read above cannot know them; and both go silent the same
+       * way every arrow does: once a LATER occurrence of the lift has folded (`at` falls behind
+       * `lastTrainedAt`), or once the prescription is no longer the entry's `to` (the emit-time
+       * `move.to === weight` guard).
+       */
+      const fresh = await db.loadEngineV5().catch(() => null);
+      for (const c of fresh?.changeLog ?? []) {
+        if ((c.kind !== 'deload' && c.kind !== 'ease') || c.loadFrom == null || c.loadTo == null) continue;
+        if (c.at < (lastTrainedAt.get(c.exerciseId) ?? 0)) continue; // superseded — a hold says nothing
+        decided.set(c.exerciseId, { from: c.loadFrom, to: c.loadTo });
+      }
+    }
     // Cover EVERY renderable set with a real target. A slot's setCount can exceed MAX_SETS once Loop 3
     // has LEARNED a muscle's volume — distributeMuscleSets assigns up to SETS_MAX (5, F-1) to a single
     // lift, so a grown compound can be a 5-set slot. buildPlan renders slot.setCount sets and falls back
@@ -2076,7 +2423,7 @@ export const fixtureModel: ModelClient = {
        * 68.1) instead of decaying. A predictive ramp lowers what Loop 1 has already lowered.
        */
       for (let s = 0; s < maxSetCount; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo: reps, repBandHi, perRung, reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo: reps, repBandHi, perRung, ...(deloadActive ? { deloadHold: true } : {}), reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

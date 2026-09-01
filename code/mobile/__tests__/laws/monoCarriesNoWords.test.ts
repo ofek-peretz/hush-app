@@ -76,7 +76,14 @@ describe('the mono voice carries figures, never words', () => {
       let j: RegExpExecArray | null;
       while ((j = jsx.exec(src))) {
         const [, styleExpr, body] = j;
-        if (!/\bt\(/.test(body)) continue;
+        /*
+         * ⛔ `tg(` COUNTS TOO. This tested `\bt\(` alone — and the exercise library feeds its
+         * muscle names through the GLOBAL translator, so a mono row carrying "יד אחורית" with 1.4
+         * of tracking was invisible to the one law written to stop exactly that. Found by opening
+         * the screen, 2026-08-19; the tracking pulled the Hebrew word apart on a face that has no
+         * Hebrew glyphs to track.
+         */
+        if (!/\bt\(/.test(body) && !/\btg\(/.test(body)) continue;
         // A slot that holds a figure MOST of the time and a word in one state (a load that is
         // "bodyweight", a countdown that ends in "GO") is allowed to stay mono — provided it
         // hands the word to a sans style when that state arrives. Seeing a sans key in the same

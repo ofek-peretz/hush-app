@@ -5,7 +5,6 @@
  * True scale is what makes the lift instantly recognizable; the ghost treatment is what keeps the
  * figure — the actual demonstration — readable through it. Pure data, no dependencies.
  */
-// @ts-nocheck
 
 // 
 
@@ -17,7 +16,18 @@ import { BAR_R, PLATE_R } from './anthro';
 export function plateGhost(bar: Vec2, r = PLATE_R): Primitive[] {
   return [
     { kind: 'circle', c: bar, r, fill: 'ink4', fillOpacity: 0.2, stroke: 'ink3', w: 2.2 },
-    { kind: 'circle', c: bar, r: Math.min(4.6, r * 0.32), fill: 'paper1', fillOpacity: 0.75, stroke: 'ink3', w: 1.5 }, // sleeve hub
+    /*
+     * The sleeve collar — a RING, not a filled disc.
+     *
+     * It used to carry `fill: 'paper1'` at 75 %, and in every side-view barbell rig the plate is
+     * concentric with the HAND: the collar was an opaque paper disc laid exactly over the fist,
+     * and the athlete's grip — the one thing that says he is holding the bar rather than standing
+     * next to it — was erased in the back squat, the row, the deadlift, the shrug and the curl
+     * alike. A real collar is out at the sleeve, a foot outboard of the hand; it is only
+     * concentric because we see it end-on, and drawing it opaque is a projection artifact, not the
+     * object. Unfilled it still reads as the collar, and the fist reads through it.
+     */
+    { kind: 'circle', c: bar, r: Math.min(4.6, r * 0.32), stroke: 'ink3', w: 1.5 },
     { kind: 'circle', c: bar, r: BAR_R, fill: 'ink0' }, // the bar, end-on
   ];
 }
@@ -63,6 +73,58 @@ export function linePathTicks(a: Vec2, b: Vec2, tick = 4.5): Primitive[] {
     cap: 'round',
   });
   return [{ kind: 'dash', a, b, w: 2, color: 'ink0', dash: [1.5, 6.5], opacity: 0.9 }, t(a), t(b)];
+}
+
+/**
+ * The range statement for a CURVED tracked path (hinges, curls, flies — anything whose motion is
+ * a rotation, not a rail). Same grammar as `barPathTicks` — the same pencil (`ink0`), the same
+ * ~19% duty cycle, a perpendicular tick at each canonical endpoint — but the dash follows the
+ * SAMPLED true path instead of claiming a straight line the tracked point never travels. The
+ * caller hands in the actual path (poseAt sampled across rom); nothing is idealized.
+ */
+export function sampledPathTicks(pts: Vec2[], tick = 4.5): Primitive[] {
+  if (pts.length < 2) return [];
+  const out: Primitive[] = [];
+  // walk the polyline emitting 1.5u marks every 8u of arc length — the barPathTicks duty cycle
+  const MARK = 1.5;
+  const PERIOD = 8;
+  let carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (seg < 1e-6) continue;
+    const u = { x: (b.x - a.x) / seg, y: (b.y - a.y) / seg };
+    let s = carry <= 0 ? 0 : carry;
+    while (s < seg) {
+      const e = Math.min(s + MARK, seg);
+      out.push({
+        kind: 'line',
+        a: { x: a.x + u.x * s, y: a.y + u.y * s },
+        b: { x: a.x + u.x * e, y: a.y + u.y * e },
+        w: 2,
+        color: 'ink0',
+        opacity: 0.9,
+        cap: 'butt',
+      });
+      s += PERIOD;
+    }
+    carry = s - seg;
+  }
+  const tickAt = (p: Vec2, q: Vec2): Primitive => {
+    const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    const n = { x: -(q.y - p.y) / len, y: (q.x - p.x) / len };
+    return {
+      kind: 'line',
+      a: { x: p.x - n.x * tick, y: p.y - n.y * tick },
+      b: { x: p.x + n.x * tick, y: p.y + n.y * tick },
+      w: 2,
+      color: 'ink0',
+      cap: 'round',
+    };
+  };
+  out.push(tickAt(pts[0], pts[1]), tickAt(pts[pts.length - 1], pts[pts.length - 2]));
+  return out;
 }
 
 /** A soft grounding shadow under the support — mass meets the floor. */

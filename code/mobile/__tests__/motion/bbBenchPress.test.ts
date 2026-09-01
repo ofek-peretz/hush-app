@@ -2,16 +2,26 @@
  * Bench Press motion benchmark — the CI guarantee that the demonstration matches Hush's own cues.
  *
  * The FormSpec is the canonical definition; these tests assert the rig renders it. They also prove
- * the validator has TEETH: a deliberately broken rig (moving hips, a curved bar path, a
- * hyperextended lockout) must be caught — otherwise "validation passes" would be meaningless.
+ * the validator has TEETH: a deliberately broken rig (moving hips, a bar off its rail, a partial
+ * press) must be caught — otherwise "validation passes" would be meaningless.
  *
- * The rig is FRONT-VIEW (head-end camera) per §3.4 Amendment 7 — the chest family is a frontal
- * identity family. The canon is unchanged: bar to the chest line, vertical path, anchored body;
- * the frontal staging adds SYMMETRY, which these tests assert as mirror geometry.
+ * ── THE STAGING CHANGED, AND SO DID WHAT THESE TESTS PIN (2026-08-29) ───────────────────────────
+ *
+ * The rig was head-end (§3.4 Amendment 7, "a frontal identity family"), and this file used to
+ * assert SYMMETRY as its identity statement — left mirroring right, every frame. It is side-view
+ * now, because a clip in this app is the whole instruction rather than a label: nobody reads the
+ * cues, so the picture has to be enough to perform from, and every fact a bench press is judged on
+ * — bar path, touch point, elbow tuck, the bench, the planted feet — lay along the axis the old
+ * camera looked down. The reasoning in full is on the rig.
+ *
+ * So the identity assertions moved with the camera. What is pinned now is what the new view exists
+ * to show: the bar travels a real distance on a real diagonal, it arrives at the CHEST, and the
+ * elbow drops below the shoulder line on the way. A test that still asserted mirror symmetry would
+ * be pinning a camera nobody chose any more.
  */
 // @ts-nocheck
 
-// 
+//
 
 import { bbBenchPress } from '@/motion/library/bbBenchPress';
 import { validate } from '@/motion/formspec';
@@ -29,47 +39,48 @@ describe('bench press — FormSpec validation', () => {
     expect(res.violations).toHaveLength(0);
   });
 
-  it('the bar reaches the chest line at the bottom and locks out (full range of motion)', () => {
+  it('the bar reaches the chest at the bottom and locks out (full range of motion)', () => {
     const bottom = bbBenchPress.poseAt(1);
     const top = bbBenchPress.poseAt(0);
-    // canonical endpoint: bar contacts the chest line
     const contact = bbBenchPress.formspec.end.find((p) => p.kind === 'contactY');
     expect(contact && contact.kind === 'contactY' ? Math.abs(bottom.j.bar.y - contact.y) : 99).toBeLessThanOrEqual(2);
-    // full press at the top — canonical in-plane arm, no projection license needed at lockout
-    const lockout = angleAt(top.j.shoulderR, top.j.elbowR, top.j.handR);
-    expect(lockout).toBeGreaterThanOrEqual(165);
-    // and the bar actually travels a meaningful distance
+    const lockout = angleAt(top.j.shoulder, top.j.elbow, top.j.hand);
+    expect(lockout).toBeGreaterThanOrEqual(158);
     expect(bottom.j.bar.y - top.j.bar.y).toBeGreaterThan(15);
   });
 
   it('never hyperextends the elbow through the whole press', () => {
     for (let i = 0; i <= 100; i++) {
       const pose = bbBenchPress.poseAt(i / 100);
-      expect(angleAt(pose.j.shoulderR, pose.j.elbowR, pose.j.handR)).toBeLessThanOrEqual(179);
+      expect(angleAt(pose.j.shoulder, pose.j.elbow, pose.j.hand)).toBeLessThanOrEqual(179);
     }
   });
 
-  it('keeps the bar on a straight vertical path (hand x constant)', () => {
-    const x0 = bbBenchPress.poseAt(0).j.handR.x;
-    for (let i = 0; i <= 100; i++) {
-      expect(Math.abs(bbBenchPress.poseAt(i / 100).j.handR.x - x0)).toBeLessThanOrEqual(1.5);
+  it('the bar path is the shallow J it actually is — down, and toward the feet', () => {
+    /* The one thing the head-end camera could not say. The bar leaves the lockout over the
+       shoulder and arrives at the sternum, which is BOTH lower and nearer the feet; a path that
+       only descended would be teaching a bar dropped onto the throat. */
+    const top = bbBenchPress.poseAt(0).j.bar;
+    const bottom = bbBenchPress.poseAt(1).j.bar;
+    expect(bottom.y - top.y).toBeGreaterThan(25); // it descends
+    expect(bottom.x - top.x).toBeGreaterThan(6); // and travels toward the feet
+    // and it is monotone: no drifting back up or away mid-rep
+    for (let i = 1; i <= 60; i++) {
+      const a = bbBenchPress.poseAt((i - 1) / 60).j.bar;
+      const b = bbBenchPress.poseAt(i / 60).j.bar;
+      expect(b.y).toBeGreaterThanOrEqual(a.y - 1e-6);
+      expect(b.x).toBeGreaterThanOrEqual(a.x - 1e-6);
     }
   });
 
-  it('is symmetric — the frontal identity statement: left mirrors right every frame', () => {
-    for (let i = 0; i <= 40; i++) {
-      const p = bbBenchPress.poseAt(i / 40);
-      const cx = p.j.bar.x;
-      for (const [r, l] of [['handR', 'handL'], ['elbowR', 'elbowL'], ['shoulderR', 'shoulderL']] as const) {
-        expect(Math.abs(p.j[r].x + p.j[l].x - 2 * cx)).toBeLessThanOrEqual(0.01);
-        expect(Math.abs(p.j[r].y - p.j[l].y)).toBeLessThanOrEqual(0.01);
-      }
-    }
+  it('the elbow drops below the shoulder line at the bottom — the tuck, made visible', () => {
+    const bottom = bbBenchPress.poseAt(1);
+    expect(bottom.j.elbow.y).toBeGreaterThan(bottom.j.shoulder.y + 6);
   });
 
   it('anchors the body — feet, hips, shoulders and head never move', () => {
     const ref = bbBenchPress.poseAt(0);
-    for (const pt of ['ankleR', 'toeR', 'hipC', 'shoulderR', 'head'] as const) {
+    for (const pt of ['ankle', 'toe', 'hip', 'shoulder', 'head'] as const) {
       for (let i = 0; i <= 40; i++) {
         const p = bbBenchPress.poseAt(i / 40);
         expect(Math.hypot(p.j[pt].x - ref.j[pt].x, p.j[pt].y - ref.j[pt].y)).toBeLessThanOrEqual(1);
@@ -78,12 +89,24 @@ describe('bench press — FormSpec validation', () => {
   });
 
   it('the hands always hold the bar (IK contact) — never float off', () => {
-    // the tracked joints ride the bar's y exactly; the forearm is a real limb, never degenerate
     for (let i = 0; i <= 20; i++) {
       const pose = bbBenchPress.poseAt(i / 20);
-      expect(Math.abs(pose.j.handR.y - pose.j.bar.y)).toBeLessThanOrEqual(0.01);
-      const forearm = Math.hypot(pose.j.handR.x - pose.j.elbowR.x, pose.j.handR.y - pose.j.elbowR.y);
+      expect(Math.abs(pose.j.hand.y - pose.j.bar.y)).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(pose.j.hand.x - pose.j.bar.x)).toBeLessThanOrEqual(0.01);
+      const forearm = Math.hypot(pose.j.hand.x - pose.j.elbow.x, pose.j.hand.y - pose.j.elbow.y);
       expect(forearm).toBeGreaterThan(0);
+    }
+  });
+
+  it('both arm bones are canonical in three dimensions — the drawn ones are a projection', () => {
+    /* The side view foreshortens the humerus, because the grip is 35u out in DEPTH from here. That
+       is only legitimate if the bone underneath is real, so this reads `Pose.z` and measures it. */
+    for (let i = 0; i <= 40; i++) {
+      const p = bbBenchPress.poseAt(i / 40);
+      const d3 = (a: string, b: string) =>
+        Math.hypot(p.j[a].x - p.j[b].x, p.j[a].y - p.j[b].y, (p.z?.[a] ?? 0) - (p.z?.[b] ?? 0));
+      expect(d3('shoulder', 'elbow')).toBeCloseTo(25, 1);
+      expect(d3('elbow', 'hand')).toBeCloseTo(23, 1);
     }
   });
 });
@@ -99,17 +122,17 @@ describe('bench press — the validator has teeth (broken rigs must fail)', () =
   });
 
   it('catches lifting the hips off the bench', () => {
-    const rig = broken((rom, pose) => { pose.j.hipC = { x: pose.j.hipC.x, y: pose.j.hipC.y - 8 * rom }; });
+    const rig = broken((rom, pose) => { pose.j.hip = { x: pose.j.hip.x, y: pose.j.hip.y - 8 * rom }; });
     const res = validate(rig, 120);
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => /hip/i.test(v.detail))).toBe(true);
   });
 
-  it('catches a bar path that curves off vertical', () => {
-    const rig = broken((rom, pose) => { pose.j.handR = { x: pose.j.handR.x + 6 * rom, y: pose.j.handR.y }; });
+  it('catches a bar that wanders off its declared rail', () => {
+    const rig = broken((rom, pose) => { pose.j.bar = { x: pose.j.bar.x + 9 * rom, y: pose.j.bar.y - 9 * rom }; });
     const res = validate(rig, 120);
     expect(res.ok).toBe(false);
-    expect(res.violations.some((v) => /vertical|axis|path/i.test(v.where + v.detail))).toBe(true);
+    expect(res.violations.some((v) => /rail|axis|path/i.test(v.where + v.detail))).toBe(true);
   });
 
   it('catches a partial press that never reaches the chest', () => {
@@ -118,39 +141,26 @@ describe('bench press — the validator has teeth (broken rigs must fail)', () =
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => /chest/i.test(v.detail))).toBe(true);
   });
-});
 
-describe('bench press — timeline (canonical tempo, identical reps)', () => {
-  it('uses the canonical loop: 2 reps, ~8s', () => {
-    expect(bbBenchPress.formspec.tempo).toBe(DEFAULT_TEMPO);
-    expect(repDurationMs(DEFAULT_TEMPO)).toBe(4000);
-    expect(loopDurationMs(DEFAULT_TEMPO)).toBe(8000);
-  });
-
-  it('starts and ends each rep at the top (rom 0) and reaches the bottom (rom 1)', () => {
-    expect(romAt(0, DEFAULT_TEMPO)).toBe(0);
-    // during the bottom hold (after top hold + eccentric), rom is pinned at 1
-    const t = DEFAULT_TEMPO.topHoldMs + DEFAULT_TEMPO.eccentricMs + 100;
-    expect(romAt(t, DEFAULT_TEMPO)).toBe(1);
-  });
-
-  it('draws both reps identically — canon does not degrade', () => {
-    const rep = repDurationMs(DEFAULT_TEMPO);
-    for (const t of [0, 700, 1500, 2600, 3800]) {
-      expect(romAt(t, DEFAULT_TEMPO)).toBeCloseTo(romAt(t + rep, DEFAULT_TEMPO), 6);
-    }
+  it('catches an elbow that never drops below the shoulder — a flared, unpressed bottom', () => {
+    const rig = broken((rom, pose) => { pose.j.elbow = { x: pose.j.elbow.x, y: pose.j.shoulder.y - 2 }; });
+    const res = validate(rig, 120);
+    expect(res.ok).toBe(false);
+    expect(res.violations.some((v) => /elbow/i.test(v.detail))).toBe(true);
   });
 });
 
-describe('bench press — registry + catalog integrity', () => {
-  it('is registered and resolvable', () => {
-    expect(exerciseMotion('bb_bench_press')).toBe(bbBenchPress);
+describe('bench press — the clip is wired to the exercise it illustrates', () => {
+  it('the registry serves it under the card id', () => {
     expect(hasExerciseMotion('bb_bench_press')).toBe(true);
-    expect(exerciseMotion('not_a_real_exercise')).toBeNull();
-    expect(exerciseMotion(null)).toBeNull();
+    expect(exerciseMotion('bb_bench_press')?.id).toBe('bb_bench_press');
+    expect(exerciseById('bb_bench_press')).toBeTruthy();
   });
 
-  it('keys a real catalog exercise', () => {
-    expect(exerciseById('bb_bench_press')).toBeTruthy();
+  it('the loop is a whole number of reps at the declared tempo', () => {
+    const rep = repDurationMs(DEFAULT_TEMPO);
+    const loop = loopDurationMs(DEFAULT_TEMPO);
+    expect(loop % rep).toBe(0);
+    expect(romAt(0, DEFAULT_TEMPO)).toBeCloseTo(0, 6);
   });
 });

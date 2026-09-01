@@ -1,10 +1,12 @@
 /**
  * RouteTrace — the path the athlete actually ran, drawn as an engraved line.
  *
- * FOUNDER RULING 2026-07-12 — CLOSED, do not reopen: no map SDK, ever. A tiled map drags in
- * API keys, third-party tracking, heavy data use on a run, and it destroys the minimal language
- * with foreign colours and street labels. The athlete is not navigating to Paris; they want to
- * see the shape of the effort they just made. The engraved polyline on graphite is the answer.
+ * ⛔ THE 2026-07-12 RULING ("no map SDK, ever") WAS RELEASED BY ITS AUTHOR on 2026-08-23 —
+ * *"חלק מהפסיקות שלי הן ישנות מאוד… אל תיתן לשום פסיקה כזו להגביל אותך."* The run's record now
+ * draws the route on Apple Maps (`CardioDetail.RouteMap` — no key, no account, dressed dark and
+ * mute in the product's own moss). THIS component survives as the map's fallback on runtimes with
+ * no native map (jest, the web gallery) — the engraved line finally mounting for the reason it
+ * was built. The old ruling's TASTE survives in the map's dress; its ban does not.
  *
  * This is deliberately NOT a tiled map: a Google/Apple map tile drops a foreign visual language (someone else's
  * roads, someone else's typography, someone else's colour) into the middle of an
@@ -21,7 +23,6 @@
  * A run with no lock (treadmill, no permission) has no route, and the caller renders
  * nothing rather than an empty box.
  */
-// @ts-nocheck
 
 // 
 

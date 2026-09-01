@@ -40,10 +40,53 @@ afterEach(() => {
   delete process.env.EXPO_PUBLIC_COACH_TOKEN;
 });
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ HALF AN ANSWER IS NOT AN ANSWER — one call in five, and nothing was looking (2026-08-30).
+ *
+ * The Worker has read `finishReason` off the SSE stream since it was written and passed it through
+ * to the app, and **nothing on either side ever read it**. So a stream that died mid-sentence
+ * arrived as `{ ok: true }` carrying a fragment of JSON, and every caller charged it to the model:
+ * the plan build fell through to the local assembler, and the import told her the photograph of her
+ * coach's programme could not be read.
+ *
+ * Measured on the production Worker over 80 real calls: **16 stopped early**, at 11 to 552
+ * characters, after 2.6–5.5 seconds. `finishReason` separates them perfectly — `"STOP"` on every
+ * answer that parsed, `null` on every one that did not. Prompt length was ruled out: the rate held
+ * across five variants from 468 characters down to 135.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('an answer that stopped halfway', () => {
+  it('⛔ is a FAILURE, not text — a fragment blames the model for the pipe', async () => {
+    const { askCoach } = load();
+    // A real one, copied off the wire: the JSON opens correctly and stops inside a day's name.
+    fetchOnce({ json: async () => ({ text: '{\n  "days": [\n    {\n      "name": "יום', model: 'm', finishReason: null }) });
+    await expect(askCoach(request)).resolves.toEqual({ ok: false, reason: 'truncated' });
+  });
+
+  it('⚠️ …and an ABSENT finish reason counts as one, which is the shape it actually takes', async () => {
+    // Every measured truncation arrived with no `finishReason` at all. Treating "absent" as "fine"
+    // is precisely how this survived for as long as the field has existed.
+    const { askCoach } = load();
+    fetchOnce({ json: async () => ({ text: '{"days":', model: 'm' }) });
+    await expect(askCoach(request)).resolves.toEqual({ ok: false, reason: 'truncated' });
+  });
+
+  it('⚠️ it is its OWN reason, so it can be counted and retried — never `upstream`', async () => {
+    /* `upstream` is a 500: the call is not worth making again. A truncation is transient and the
+       same request a second later simply works, which is why `planBuild` retries once on this one
+       and on nothing else. */
+    const { askCoach } = load();
+    fetchOnce({ json: async () => ({ text: 'half', model: 'm', finishReason: 'MAX_TOKENS' }) });
+    const r = await askCoach(request);
+    expect(r).toEqual({ ok: false, reason: 'truncated' });
+  });
+});
+
 describe('an answer', () => {
   it('returns the text, the model that answered, and what it cost', () => {
     const { askCoach } = load();
-    fetchOnce({ json: async () => ({ text: '{"v":2}', model: 'gemini-2.5-flash-lite', usage: { totalTokenCount: 5138 } }) });
+    fetchOnce({ json: async () => ({ text: '{"v":2}', model: 'gemini-2.5-flash-lite', finishReason: 'STOP', usage: { totalTokenCount: 5138 } }) });
     return askCoach(request).then((r) => {
       expect(r).toEqual({
         ok: true,
@@ -56,7 +99,7 @@ describe('an answer', () => {
 
   it('sends the blocks in the order the prompt chose, and the token in a header', async () => {
     const { askCoach } = load();
-    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm' }) });
+    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm', finishReason: 'STOP' }) });
     await askCoach(request, { type: 'object' });
 
     const [url, init] = spy.mock.calls[0] as [string, RequestInit];
@@ -71,14 +114,14 @@ describe('an answer', () => {
   it('omits the schema entirely for a chat turn', async () => {
     // A prose answer locked to a plan schema comes back as JSON nobody reads.
     const { askCoach } = load();
-    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm' }) });
+    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm', finishReason: 'STOP' }) });
     await askCoach(request);
     expect('schema' in JSON.parse((spy.mock.calls[0][1] as RequestInit).body as string)).toBe(false);
   });
 
   it('never sends the Gemini key, because it does not have one', async () => {
     const { askCoach } = load();
-    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm' }) });
+    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm', finishReason: 'STOP' }) });
     await askCoach(request);
     const call = JSON.stringify(spy.mock.calls[0]);
     expect(call).not.toContain('GEMINI');
@@ -140,7 +183,7 @@ describe('every failure is the same failure', () => {
     // Keyed on the shared token alone the ceiling would have to be low enough to hurt a real
     // athlete; the token ships in the bundle and cannot identify anyone.
     const { askCoach } = load();
-    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm' }) });
+    const spy = fetchOnce({ json: async () => ({ text: 'ok', model: 'm', finishReason: 'STOP' }) });
     await askCoach(request);
     expect('x-hush-install' in ((spy.mock.calls[0][1] as RequestInit).headers as Record<string, string>)).toBe(true);
   });

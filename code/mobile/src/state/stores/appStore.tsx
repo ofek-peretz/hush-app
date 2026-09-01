@@ -2,7 +2,6 @@
  * App state — profile, program, and athlete-mode, persisted locally.
  * Routes the whole app (Root reads `mode` to decide which screens exist).
  */
-// @ts-nocheck
 
 // 
 
@@ -11,10 +10,9 @@ import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Prof
 import type { LearnedAboutHer } from '@/domain/coachPlan';
 import { applyLearned } from '@/domain/coachLearned';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
-import { trialUsed, nextLedger } from '@/domain/trialLedger';
-import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
+import type { AthleteRecord } from '@/domain/record';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
-import { currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
+import { applyWeekOpenDow, currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
 import { agedProfile } from '@/domain/profileAge';
 import { CONSENT_VERSION } from '@/domain/consent';
 import {
@@ -25,15 +23,10 @@ import {
   type AthleteModeState,
 } from '@/state/machines/athleteMode';
 import { fixtureModel } from '@/data/api/fixtureModel';
-import { selectModel, resetModelSelection } from '@/data/api/selectModel';
-import { selfEnroll } from '@/data/api/enroll';
-import { setToken, clearToken, adoptDevTokenIfPresent } from '@/data/api/config';
-import { setUnauthorizedHandler } from '@/data/api/authEvents';
 import { HttpError } from '@/data/api/httpErrors';
-import { track, flush as flushTelemetry } from '@/platform/telemetry';
+import { track, flush as flushTelemetry, refreshTelemetryOptOut } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
-import { undoEngineRotation } from '@/domain/swapLearning';
 import { activeEases, awaitingAnswer, easeFor, effectiveBodyMap, ANSWER_SEVERITY, type EaseAnswer, type PainEase, type PainSeverity } from '@/domain/painReport';
 import { muscleOf } from '@/data/exercises';
 import { notifier } from '@/platform/notifications';
@@ -41,11 +34,23 @@ import { health } from '@/platform/health';
 import { ingestHealth } from '@/platform/health/healthIngestion';
 import { INITIAL_HEALTH_STATE } from '@/platform/health/healthModel';
 import { signInWith, type AuthProvider } from '@/platform/auth';
+import { circleExchange, circleSignOut, deleteIdentity } from '@/platform/circleClient';
 import { setGender, resetGender } from '@/i18n/gender';
 import { resetWristOffered } from '@/platform/watch/watchPresence';
-import { billing, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
+import { billing, onEntitlementArrived, trackEntitlementChange, type ProductId, type PurchaseResult } from '@/platform/billing';
+// Aliased: this file already declares its own `AppState` interface for the store's shape.
+import { AppState as RNAppState } from 'react-native';
 import { BILLING_EVENTS } from '@/platform/events';
-import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
+import { trialUsed, nextLedger } from '@/domain/trialLedger';
+import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
+import { cloud } from '@/platform/cloud';
+import { cloudAutoBackup } from '@/platform/cloudBackup';
+import { updateHomeWidget } from '@/platform/homeWidget';
+import { syncTrainingRemindersFromPlan } from '@/platform/trainingReminders';
+import { armGapCatch } from '@/platform/gapCatch';
+import { armTrialLast } from '@/platform/trialCatch';
+import { readRecord as readAthleteRecord, restoreVerdict } from '@/domain/record';
+import { NO_ENTITLEMENT, entitlementNow, type Entitlement } from '@/domain/entitlement';
 
 /** Derive the calibration mode from the backend's completed-session count
  *  (source of truth, §2.3). Reinstall/device-change safe. */
@@ -96,7 +101,6 @@ interface AppState {
   justUnlockedPortrait: boolean; // one-shot flag consumed by the Well Done → Portrait route
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
-  revoked: boolean; // the invite was revoked (401) — show the explanation on Enrollment
   weekOpenMs: number | null; // Saturday-20:30-local the current bucket was built for (calendar cadence)
   entitlement: Entitlement; // subscription state (StoreKit truth, locally cached for gating)
 }
@@ -111,7 +115,6 @@ type Action =
   | { type: 'CALIBRATION_SYNCED'; mode: AthleteModeState }
   | { type: 'PORTRAIT_RESOLVED'; snapshots: PortraitSnapshot[] }
   | { type: 'CLEAR_PORTRAIT_FLAG' }
-  | { type: 'REVOKED' }
   | { type: 'RESET' };
 
 const initial: AppState = {
@@ -122,21 +125,23 @@ const initial: AppState = {
   justUnlockedPortrait: false,
   snapshots: [],
   recents: [],
-  revoked: false,
   weekOpenMs: null,
   entitlement: NO_ENTITLEMENT,
 };
 
 function reducer(s: AppState, a: Action): AppState {
   switch (a.type) {
+    // Both doors an entitlement enters state through pass `entitlementNow` — an expired cache
+    // stops saying "active" the moment it is read, not the day StoreKit is next reachable
+    // (domain/entitlement, audit finding 5).
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: a.entitlement, weekOpenMs: a.weekOpenMs };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: entitlementNow(a.entitlement), weekOpenMs: a.weekOpenMs };
     case 'ENTITLEMENT':
-      return { ...s, entitlement: a.entitlement };
+      return { ...s, entitlement: entitlementNow(a.entitlement) };
     case 'PROGRAM_UPDATED':
       return { ...s, program: a.program, recents: a.recents, ...(a.weekOpenMs !== undefined ? { weekOpenMs: a.weekOpenMs } : {}) };
     case 'ONBOARDED':
-      return { ...s, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, weekOpenMs: a.weekOpenMs, revoked: false };
+      return { ...s, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, weekOpenMs: a.weekOpenMs };
     case 'PROFILE_UPDATED':
       return { ...s, profile: a.profile };
     case 'SESSION_COMPLETED':
@@ -154,10 +159,6 @@ function reducer(s: AppState, a: Action): AppState {
       return { ...s, snapshots: a.snapshots };
     case 'CLEAR_PORTRAIT_FLAG':
       return { ...s, justUnlockedPortrait: false };
-    case 'REVOKED':
-      // Authenticated state cleared; the athlete is returned to Enrollment with
-      // the one-line explanation. No continued training on a revoked identity.
-      return { ...initial, booted: true, revoked: true };
     case 'RESET':
       return { ...initial, booted: true };
     default:
@@ -192,13 +193,28 @@ interface AppApi extends AppState {
   refreshProgram: () => Promise<void>;
   /** Undo an engine ROTATION and pin the lift back (S-71, asked out loud). No-op for anything that
    *  is not a live rotation — a graduation is not resistible, and her own swap is not ours to undo. */
-  undoEngineSwap: (anchorExerciseId: string) => Promise<void>;
   /**
    * What she DECLARED in the exercise library: the lifts she picked per muscle, and the ones she
    * refused. Saved together and the week rebuilt on the same road a body-map edit travels — both
    * are her reshaping which work the engine may deal her, so both must land the same way.
    */
   saveLibrary: (chosenByMuscle: Record<string, string[]>, refusedIds: string[]) => Promise<boolean>;
+  /**
+   * ⛔ "GIVE ME THIS ONE INSTEAD OF THAT ONE" — a DECLARED 1:1 replacement (founder 2026-08-22).
+   *
+   * Returns true when a new week was actually built, false when it was not — the same contract
+   * `saveLibrary` keeps, and for the same reason: the declaration is saved either way, and what she
+   * is TOLD about her week is the caller's job.
+   *
+   * Naming the anchor's current stand-in as the replacement REMOVES the declaration: she is saying
+   * the other thing, which is how a declaration is taken back.
+   */
+  declareSwap: (fromExerciseId: string, toExerciseId: string) => Promise<boolean>;
+  /**
+   * ⛔ READ A SAVED RECORD BACK ONTO THIS PHONE. `domain/record` decides whether a file MAY be
+   * restored and the screen says the sentence; this writes it and makes sure she lands somewhere.
+   */
+  restoreRecord: (record: AthleteRecord) => Promise<void>;
   /** Reconcile calibration/mode to the backend's completed-session count (source of truth). */
   syncCalibration: () => Promise<void>;
   /** Drain offline-completed sessions to the backend (reconcile on reconnect, §6.4). */
@@ -219,7 +235,11 @@ interface AppApi extends AppState {
    * lapses (domain/painReport), and the lift the session was on is swapped through the ordinary
    * pool by the caller. Returns the ease so the response screen can state it as a fact.
    */
-  reportPain: (muscle: string, severity: PainSeverity) => Promise<void>;
+  /** Returns whether a new week was actually built — the same contract `saveLibrary` and
+   *  `declareSwap` keep, and for the same reason: the report always lands; what she is told about
+   *  the WEEK is the caller's job. (Declared `void` until 2026-08-23 while the implementation had
+   *  answered with a boolean for weeks — `@ts-nocheck` was why nobody had to reconcile them.) */
+  reportPain: (muscle: string, severity: PainSeverity) => Promise<boolean | undefined>;
   /**
    * ⛔ ADOPT A WEEK SHE BROUGHT — the only writer of `authored`, and the only way it is ever set.
    *
@@ -231,10 +251,26 @@ interface AppApi extends AppState {
    * raise. `importedPlan.toProgram` already stamped it; this writes it to disk and tells the app.
    */
   adoptImportedProgram: (program: Program) => Promise<void>;
+  /**
+   * ════ THE BUILDER'S DOOR (founder, 2026-08-25) ════
+   * Saves a week SHE built in the plan builder — sealed by `planBuilder.sealAuthored`, so it
+   * carries `authored: 'athlete_or_coach'` and every rebuild gate refuses it from here on. Same
+   * naked-save contract as `adoptImportedProgram`: not one clamp on the way past.
+   */
+  saveBuiltProgram: (program: Program) => Promise<void>;
+  /**
+   * Hands the pen back: regenerates a fresh ENGINE week (stamped `authored: 'engine'` by absence)
+   * and saves it over her built one. Only she calls this, from the builder's own door — it is the
+   * single sanctioned way out of authorship, and it is loud in the UI, never implied.
+   */
+  revertProgramToEngine: () => Promise<boolean>;
   /** The rest windows that have run out and are still waiting on her. */
   easeChecks: () => PainEase[];
   /** Her answer to one of them: clear, still tender, or still hurting. */
-  answerEaseCheck: (muscle: string, answer: EaseAnswer) => Promise<void>;
+  answerEaseCheck: (muscle: string, answer: EaseAnswer) => Promise<boolean | undefined>;  // ^ same reconciliation as reportPain — the implementation has answered with the rebuild verdict for weeks.
+  /** ⚠️ RESOLVES TRUE ONLY IF THE WEEK WAS REBUILT AND SAVED. A week she brought is not ours to
+   *  rewrite, so the save can land while the programme stays exactly as it was — and the screen that
+   *  tells her what happened must be able to tell those two apart (see the implementation's note). */
   updateProfileInfo: (fields: {
     age?: number;
     heightCm?: number;
@@ -252,7 +288,15 @@ interface AppApi extends AppState {
     /** Engine v5 — the per-muscle rep band (register Part 9). Whole-object, same reason. Loads and
      *  progression re-read it live (S-43 recomputes from her history at the new T), so no rebuild. */
     repBandByMuscle?: Record<string, RepBandChoice>;
-  }) => Promise<void>;
+    /** THE ROOM (2026-09-01, audit 06) — which equipment families exist where she trains. The pools
+     *  the engine chooses from follow it (`domain/room`), so a change rebuilds the week exactly
+     *  like a body-map change. `null` clears back to the full-gym default; `undefined` leaves it. */
+    equipment?: import('@/data/exercises').EquipmentFamily[] | null;
+    /** WHEN HER WEEK TURNS (audit 07) — the JS weekday of the roll. Applied live and persisted;
+     *  the weekly note re-schedules itself onto the new day. No rebuild: the week's CONTENT is
+     *  untouched, only the boundary walks. */
+    weekOpensDow?: number;
+  }) => Promise<boolean>;
   /**
    * ════ SHE TOLD THE COACH SOMETHING ABOUT HERSELF, AND THE APP WRITES IT DOWN ════
    *
@@ -334,6 +378,22 @@ export const AppContext = Ctx;
  * So the rebuild asks this first. It is a FUNCTION rather than a flag checked in four places for the
  * reason `programProfile` above it is: four copies of a rule are three places for it to drift.
  *
+ * ⛔ AND IT IS ASKED OF THE WEEK ON DISK, NEVER OF `state.program` (found 2026-08-18).
+ *
+ * The gate was airtight and the thing it was asked about was empty. Boot dispatches `program: null`
+ * on purpose — the store does not carry a week, every screen reads one through `loadWeekPlan` — and
+ * `engineMayRebuild(null)` is TRUE, because absent must mean "engine" for every athlete who predates
+ * the field. So on the first launch after any cold start, the first profile edit, pain report, rest
+ * answer or library save asked the question of `null`, was told yes, and replaced her coach's week
+ * with a Hush one. She would have seen the import work, closed the app, and lost it to the next
+ * thing she touched.
+ *
+ * ⚠️ THE READ IS THE FIX, NOT A BOOT LOAD. Restoring `db.loadProgram()` to the boot list would put a
+ * second copy of her week in React state for every screen to disagree with — the exact reason it was
+ * taken out. One disk read at the four moments that rebuild costs nothing and cannot go stale, and it
+ * is the same road `completeOnboarding` already takes (`const brought = await db.loadProgram()`).
+ * A read that FAILS falls back to `state.program`: never better than before, never worse.
+ *
  * ⚠️ IT GUARDS THE SHAPE, NOT THE LOADS. Loop 1 and Loop 2 never come through here — they write
  * `SetTarget`s against the programme that exists, which is exactly the management she wants.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -350,60 +410,27 @@ function programProfile(profile: Profile, nowMs = Date.now()): Profile {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
-  // Active model: the real backend when configured + enrolled, else the fixture.
-  // Resolved once at boot (selectModel); read at call time so the app store
-  // never cares which implementation answers (spec §8.7).
+  /*
+   * ⛔ THE MODEL IS THE FIXTURE, FULL STOP (founder ruling, 2026-08-25: "איזה V4? אנחנו ב-v8").
+   *
+   * Until today this ref was resolved through `selectModel()` — the v4 swap point that would have
+   * returned an `HttpModelClient` aimed at a Python backend, if `EXPO_PUBLIC_API_BASE_URL` had ever
+   * been set. It was set in no build; the backend is not in this repository; the v8 engine decides
+   * every load ON THE DEVICE. So `selectModel`, `enroll`, `config` (the token vault), `authEvents`
+   * (the 401 → wipe-the-phone handler) and the 327-line HTTP client were 580 lines of dead
+   * machinery, deleted whole. The two workers Hush actually talks to (identity/circle, coach) have
+   * their own clients and never went through this ref.
+   *
+   * The ref itself STAYS, deliberately: every store call still reads `modelRef.current`, so the day
+   * a remote model earns its way back it is one assignment — not an archaeology dig — away.
+   */
   const modelRef = useRef<ModelClient>(fixtureModel);
-  // Latest "is the athlete enrolled?" for the revocation guard, and a one-shot
-  // latch so a burst of 401s triggers a single revocation.
-  const enrolledRef = useRef(false);
-  enrolledRef.current = !!state.profile;
-  const revokingRef = useRef(false);
   // Name captured from Apple at sign-in (returned only on first authorization) —
   // applied to the profile at completeOnboarding. No PII is persisted before that.
   const pendingNameRef = useRef<string | null>(null);
 
-  // A 401 on an authenticated request = the session is no longer valid (signed out
-  // elsewhere / token expired). Clear the identity + ALL local state and return to
-  // the Authentication front door. Guarded so it fires once per session and is a
-  // no-op before the athlete has a profile (pre-onboarding sign-in failures are
-  // handled inline by the Authentication screen).
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      if (!enrolledRef.current || revokingRef.current) return;
-      revokingRef.current = true;
-      (async () => {
-        void track('session_invalidated');
-        await flushTelemetry(); // ship before the wipe
-        await notifier.cancelAll(); // no scheduled notes survive an invalidated session
-        await db.clearAll();
-        await clearToken();
-        resetModelSelection();
-        modelRef.current = await selectModel();
-        // The device goes back to a stranger. Nothing about the last athlete may survive into the
-        // next one's onboarding: not their gender (the app would address the next person in her
-        // person, in Hebrew, all the way to the step where they finally get to say who they are),
-        // and certainly not their NAME, which is still sitting in the pending ref.
-        resetGender();
-        // …and not the in-memory latch that says the wrist has already been named. `db.clearAll`
-        // removed the key; this drops the shadow over it, or a wiped phone goes on telling the
-        // next athlete "already told" until the app is force-quit.
-        resetWristOffered();
-        pendingNameRef.current = null;
-        dispatch({ type: 'RESET' });
-      })();
-    });
-    return () => setUnauthorizedHandler(null);
-  }, []);
-
   useEffect(() => {
     (async () => {
-      // Internal "connected" builds: adopt a baked test-athlete token BEFORE model
-      // selection so selectModel() picks the real backend (HTTP) instead of the
-      // fixture. No-op in production (no token baked in). See config.adoptDevTokenIfPresent.
-      await adoptDevTokenIfPresent();
-      modelRef.current = await selectModel();
-
 
       // Schema-version guard: detect persisted-shape drift (e.g. an upgrade/
       // downgrade) so corruption is OBSERVABLE rather than silent. Shapes are
@@ -464,10 +491,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       /*
-       * ⛔ `db.loadProgram()` WAS IN THIS LIST. Nothing writes a `Program` any more, so it could only
-       * ever return a stale week from before the generator went — and reading one would put it back
-       * on screen behind the coach's. The store carries `program: null` and always will.
+       * ⛔ `db.loadProgram()` IS NOT IN THIS LIST, AND THE REASON IT GIVES IS NO LONGER TRUE.
+       *
+       * It said "nothing writes a `Program` any more". Things do — onboarding assembles one on
+       * 2026-08-10, `adoptImportedProgram` writes the week she brought, and every rebuild saves what
+       * it built. What survives is the RULING: the store carries `program: null` at boot, because
+       * every screen reads her week through `loadWeekPlan` and a second copy in React state is a
+       * second answer to drift from the first.
+       *
+       * ⚠️ AND THE GATE THAT PROTECTS AN IMPORTED WEEK KNOWS IT (found 2026-08-18). It used to ask
+       * `state.program`, which is this `null`, and `engineMayRebuild(null)` is true — so after any
+       * cold start the first thing she changed rewrote her coach's week. It asks the disk now; see
+       * `engineMayRebuild`.
        */
+      /*
+       * ════ ⛔ THE ACCOUNT IS HER APPLE ID — the silent restore (founder, 2026-08-23) ════
+       *
+       * A fresh install on a phone signed into her iCloud finds the record her last device wrote
+       * (`platform/cloudBackup`) and simply puts it back — no sign-in screen, no button, nothing
+       * to know about. This is the whole "account server", and it runs ONLY onto an EMPTY phone
+       * (`restoreVerdict`'s no-confirm case): a phone with any history keeps the manual,
+       * confirmed restore in You, because silently merging two lives is how records get eaten.
+       *
+       * ⚠️ A null read is NOT proof of absence — iCloud materialises the container lazily on a
+       * fresh install, and the native side has already asked it to download. One quiet retry
+       * after boot covers the common case; the next launch covers the rest.
+       */
+      try {
+        if (cloud.available()) {
+          const bare = await db.loadProfile().catch(() => null);
+          const hist = bare ? [] : await db.loadHistory().catch(() => []);
+          if (!bare && hist.length === 0) {
+            const raw = await cloud.readBackup();
+            if (raw != null) {
+              const read = readAthleteRecord(JSON.parse(raw));
+              if (read.ok && restoreVerdict(read.record, 0).do === 'restore') {
+                await db.restoreRecord(read.record);
+                void track('cloud_restored', { sessions: read.record.sessions.length });
+              }
+            }
+          }
+        }
+      } catch {
+        /* a failed cloud read costs the restore, never the boot — she starts fresh, as before */
+      }
+
       const [storedProfile, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs, ledger] = await Promise.all([
         db.loadProfile(),
         db.loadMode(),
@@ -481,6 +549,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // year per full year elapsed, so program construction always sees the current
       // age. Best-effort persist; the aged value is used this session regardless.
       let profile = storedProfile;
+      // Her week-opening day (audit 07) applies BEFORE anything derives from the cadence this boot.
+      if (storedProfile?.weekOpensDow != null) applyWeekOpenDow(storedProfile.weekOpensDow);
       if (storedProfile) {
         const aged = agedProfile(storedProfile, Date.now());
         if (aged) {
@@ -508,7 +578,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
        * app; `trialUsed` takes the HIGHER of the two so an unreadable Keychain never gifts a second
        * trial. See `domain/trialLedger` for why that direction and what it honestly buys.
        */
-      const used = trialUsed(ledger, mode.completedSessions);
+      const used = trialUsed(ledger, mode.completedSessions, cloud.ledgerGet());
       if (used > mode.completedSessions) mode = { ...mode, completedSessions: used };
       // CREDIT A SALVAGED WORKOUT (founder 2026-07-11): the app died mid-workout, but the athlete
       // TRAINED it (>= half the prescribed sets) — a crash is not their fault, so it counts exactly
@@ -527,6 +597,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // (Hebrew conjugates every verb by gender — i18n/gender.ts).
       setGender(profile?.sex);
       dispatch({ type: 'BOOTED', profile, program: null, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
+      // The widget catches up with whatever changed while the app was closed (a week roll, a
+      // restore) — after BOOTED, so it never stands in the boot path.
+      void updateHomeWidget();
 
       /**
        * THE WEEK'S RECEIPT (founder 2026-07-13). Re-scheduled on every boot rather than once at
@@ -538,7 +611,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
        * Only for an enrolled athlete: there is no week to report on before there is a program.
        */
       if (profile) void notifier.scheduleWeeklyUpdate();
+      // The training-day reminder resyncs on every boot too — same self-healing discipline.
+      if (profile) void syncTrainingRemindersFromPlan();
       else void notifier.cancelWeeklyProgramReady();
+      // The day-six catch re-derives at boot as well (permission flips, restores, lost notes) —
+      // and clears itself for a signed-out phone. See `platform/gapCatch`.
+      void armGapCatch();
+      // The trial's last-workout note re-derives on the same cadence (`platform/trialCatch`).
+      void armTrialLast();
+      // The analytics opt-out latch loads before any flush can ship (audit finding 4).
+      void refreshTelemetryOptOut();
       // …and sweep any note a PREVIOUS build scheduled and this one no longer sends. Deleting the
       // code that schedules a repeating push does not cancel the push — it lives in iOS's queue.
       void notifier.cancelRetiredNotes();
@@ -561,6 +643,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await db.saveEntitlement(next);
           trackEntitlementChange(prev, next);
           dispatch({ type: 'ENTITLEMENT', entitlement: next });
+          void armTrialLast(); // a member's pending trial note cancels itself here
         } catch {
           /* store unavailable — keep the cached entitlement */
         }
@@ -593,6 +676,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  /*
+   * ════ THE ENTITLEMENT LISTENS (2026-09-01, audit finding 5) ════
+   *
+   * Two ears, one reconcile: the StoreKit persistent listener rings when an Ask-to-Buy approval
+   * or a renewal is finished mid-run (until today that unlock waited for the next cold boot), and
+   * every return from background re-reads too — collecting whatever Apple decided while the phone
+   * was in a pocket. `prev` is read from the cache, not from a stale closure; a throwing store
+   * keeps the cache, same contract as the boot reconcile.
+   */
+  useEffect(() => {
+    const reconcile = async () => {
+      try {
+        const prev = (await db.loadEntitlement()) ?? NO_ENTITLEMENT;
+        const next = await billing.getEntitlement();
+        await db.saveEntitlement(next);
+        trackEntitlementChange(prev, next);
+        dispatch({ type: 'ENTITLEMENT', entitlement: next });
+        void armTrialLast();
+      } catch {
+        /* store unavailable — keep the cached entitlement */
+      }
+    };
+    onEntitlementArrived(() => void reconcile());
+    const sub = RNAppState.addEventListener('change', (st) => {
+      if (st === 'active') void reconcile();
+    });
+    return () => sub.remove();
+  }, []);
+
   const api = useMemo<AppApi>(() => {
     const model = modelRef.current;
     async function persistMode(m: AthleteModeState) {
@@ -601,14 +713,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       /*
        * …and the same number into the Keychain, which outlives the app.
        *
-       * The founder's question was whether someone can take fourteen free workouts, not subscribe,
-       * delete the app and do it again. They could: this count lived only in AsyncStorage, which a
-       * reinstall clears and which "erase account" clears from inside the app.
-       *
        * Best-effort and never awaited-on for correctness — a device that cannot keep the ledger
        * still counts locally, and `trialUsed` takes the higher of the two. See `domain/trialLedger`.
        */
-      void writeTrialLedger(nextLedger(null, m.completedSessions));
+      void readTrialLedger().then((prev) => writeTrialLedger(nextLedger(prev, m.completedSessions)));
+      // …and the CLOUD half — per Apple ID, so a new device does not restart the fourteen either.
+      cloud.ledgerSet(nextLedger(cloud.ledgerGet(), m.completedSessions));
     }
 
     return {
@@ -626,13 +736,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Capture the provider name (Apple returns it on first sign-in only) for the
         // profile created later at completeOnboarding.
         if (result.name) pendingNameRef.current = result.name;
-        if (result.identityToken) {
-          await setToken(result.identityToken);
-          resetModelSelection();
-          modelRef.current = await selectModel();
-        }
+        // The circle's session (2026-08-24): trade the fresh Apple token for the identity worker's
+        // own, fire-and-forget — the front door never waits on a network, and a build with no
+        // EXPO_PUBLIC_CIRCLE_URL makes this a no-op by construction (platform/circleClient).
+        // (The v4 path ALSO vaulted the Apple token here for a backend that no longer exists —
+        // the circle exchange is the only consumer the token ever really had.)
+        void circleExchange(result.identityToken);
         void track('signed_in', { provider });
-        revokingRef.current = false; // re-arm the session-invalidation guard
         // No profile yet → Root keeps the onboarding stack (Name → … → Program Created).
       },
 
@@ -694,22 +804,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // and hers when she told the coach how long she actually has (`withLearned`).
           workoutMinutes: inputs.workoutMinutes ?? 60,
         };
-        // SELF-ENROLL (zero-friction): create the backend athlete from the onboarding
-        // stats + adopt its token, so the REAL model drives the program from the first
-        // workout — no extra screen, no operator step. Best-effort: on failure (no backend
-        // / offline) the app stays on the local fixture, still fully usable. Must run
-        // BEFORE the model calls below so they hit the backend; re-select the model after.
-        const enrolled = await selfEnroll({
-          sex: inputs.sex,
-          age: inputs.age,
-          experience: inputs.experience,
-          bodyweightKg: inputs.weightKg,
-        });
-        if (enrolled) {
-          resetModelSelection();
-          modelRef.current = await selectModel();
-        }
-        const live = modelRef.current; // the (possibly just-swapped) live model
+        const live = modelRef.current; // the fixture — the v8 engine's local data layer
 
         /*
          * ⛔ THE PROGRAMME IS GENERATED HERE AGAIN (founder 2026-08-10). It was `null`.
@@ -776,10 +871,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // note used to be armed here too; it was not on the founder's list of what may ever fire,
         // and the screen that announced it no longer promises it. The twelve-week window is still
         // a place she can walk to on Progress — nothing pushes her there.
-        // The weekly receipt, from the first Saturday on. `true` = this is the ONE call
-        // allowed to raise the permission dialog: the athlete has just finished building their
-        // program, which is the only honest moment to ask whether Hush may tell them it changed.
-        void notifier.scheduleWeeklyUpdate(true);
+        /*
+         * ⚠️ REVERSED 2026-09-01 (audit finding 3). This call carried `true` — the one flag that
+         * raises the iOS permission dialog — and it fired the instant she tapped the CTA, before a
+         * single workout. iOS answers that question ONCE per install; burning it here meant the
+         * honest pre-ask in WellDone (§8.2, "deliberately after this screen has been earned …
+         * never at onboarding, before value is felt") could NEVER render on a real device. Two
+         * written policies disagreed and the worse one won by executing first.
+         *
+         * Now: schedule only if permission already exists (a reinstall, an upgrade). The dialog
+         * belongs to WellDone's ask, after the first finished session — which re-arms this exact
+         * letter the moment she says yes.
+         */
+        void notifier.scheduleWeeklyUpdate();
       },
 
       async recordSessionCompleted() {
@@ -800,6 +904,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         }
         dispatch({ type: 'SESSION_COMPLETED', mode: next, unlocked, snapshots });
+        // Her whole record to iCloud, after the workout that changed it — fire-and-forget,
+        // throttled, never load-bearing (see `platform/cloudBackup`).
+        void cloudAutoBackup();
+        // …and the home-screen widget learns the week moved (same discipline: never load-bearing).
+        void updateHomeWidget();
+        // …and the reminders re-derive: a FINISHED week goes silent until the next roll (N-of-M).
+        void syncTrainingRemindersFromPlan();
+        // …and the day-six catch re-arms from THIS session — training pushes it six days out,
+        // so a consistent athlete never sees it (`domain/gapCatch`).
+        void armGapCatch();
+        // …and the trial note re-derives: this session may be the one that left exactly one.
+        void armTrialLast();
         return { unlockedPortrait: unlocked };
       },
 
@@ -1031,8 +1147,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * from a body map that does not yet know about the injury, which is the exact defect that
          * function's own comment warns about.
          */
-        // ⛔ A week she brought is not ours to rewrite — see `engineMayRebuild`.
-        if (!engineMayRebuild(state.program)) return;
+        // ⛔ A week she brought is not ours to rewrite — asked of the week ON DISK, because
+        // `state.program` is null after every cold start and answered yes for everyone.
+        if (!engineMayRebuild(await db.loadProgram().catch(() => state.program))) return;
         const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
@@ -1040,6 +1157,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!rebuilt) return false;
         await db.saveProgram(rebuilt);
         dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        return true;
+      },
+
+      async saveBuiltProgram(program) {
+        // Same law as adoptImportedProgram below: what she sealed is what lands on disk.
+        await db.saveProgram(program);
+        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        void track('plan_built', {
+          sessions: program.days.filter((d) => !d.isRest).length,
+          lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
+        });
+      },
+
+      async revertProgramToEngine() {
+        const profile = state.profile ?? (await db.loadProfile().catch(() => null));
+        if (!profile) return false;
+        /*
+         * A full pen-back clears DAY-LEVEL ownership too: `generateProgram` preserves `authored`
+         * days by design (the hybrid week), so a revert that left the flags standing would rebuild
+         * around the very days she is asking to be rid of. The stripped copy is written FIRST so
+         * the rebuild reads a clean week even if it re-reads disk.
+         */
+        const prior = await db.loadProgram().catch(() => null);
+        if (prior) {
+          await db.saveProgram({ ...prior, authored: undefined, days: prior.days.map((d) => ({ ...d, authored: undefined })) } as Program);
+        }
+        // Deliberately NOT gated on engineMayRebuild — this is the one door that hands the pen
+        // back, and it exists precisely for a week the gate protects. Her tap IS the authority.
+        const program = await model.generateProgram(programProfile(profile)).catch((e: unknown) => {
+          void track('engine_error', { op: 'generateProgram', message: String(e) });
+          return null;
+        });
+        if (!program) return false;
+        await db.saveProgram(program);
+        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+        void track('plan_reverted_to_engine', {});
         return true;
       },
 
@@ -1085,8 +1238,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('pain_ease_answered', { muscle, answer });
-        // ⛔ A week she brought is not ours to rewrite — see `engineMayRebuild`.
-        if (!engineMayRebuild(state.program)) return;
+        // ⛔ A week she brought is not ours to rewrite — asked of the week ON DISK, because
+        // `state.program` is null after every cold start and answered yes for everyone.
+        if (!engineMayRebuild(await db.loadProgram().catch(() => state.program))) return;
         const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
@@ -1097,13 +1251,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return true;
       },
 
+      /*
+       * ⚠️ IT REPORTS WHETHER THE WEEK WAS REBUILT (found 2026-08-18), and the reason is `BodyMapEdit`.
+       *
+       * That screen toasted *"Saved. Your week was rebuilt to match."* on every save — including the
+       * one that returns three lines below without rebuilding anything, because the week is her
+       * coach's. She read a claim about her programme that the store had just decided not to make.
+       * `ExerciseLibrary` has said the true thing since `saveLibrary` started answering; this is the
+       * same answer, so the same sentence can be picked from it.
+       */
       async updateProfileInfo(fields) {
-        if (!state.profile) return;
+        if (!state.profile) return false;
         const daysChanged = fields.daysPerWeek != null && fields.daysPerWeek !== state.profile.daysPerWeek;
         const minutesChanged = false; // F-15 — the session length is a constant; nothing can change it
         // The map decides which muscles exist and how much of the week each one owns — a change is a
         // reshape, so it rebuilds on the same road as frequency and the time cap.
         const mapChanged = fields.bodyMap != null && JSON.stringify(fields.bodyMap) !== JSON.stringify(state.profile.bodyMap ?? {});
+        // The room decides which pools the engine may choose from — a change is a reshape too.
+        const roomChanged =
+          fields.equipment !== undefined &&
+          JSON.stringify(fields.equipment ?? null) !== JSON.stringify(state.profile.equipment ?? null);
         // Merge only the provided fields; undefined leaves the existing value intact.
         const profile: Profile = {
           ...state.profile,
@@ -1121,12 +1288,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.bodyMap != null ? { bodyMap: fields.bodyMap } : {}),
           ...(fields.repBandByMuscle != null ? { repBandByMuscle: fields.repBandByMuscle } : {}),
         };
+        // The room: null clears to the full-gym default (the key leaves the profile), a list sets it.
+        if (fields.equipment === null) delete profile.equipment;
+        else if (fields.equipment !== undefined) profile.equipment = fields.equipment;
+        if (fields.weekOpensDow != null) {
+          profile.weekOpensDow = fields.weekOpensDow;
+          applyWeekOpenDow(fields.weekOpensDow); // live — the cadence readers follow immediately
+          void notifier.scheduleWeeklyUpdate(); // …and the Saturday note walks to the new evening
+        }
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('profile_edited', {
           changed: Object.keys(fields).filter((k) => (fields as Record<string, unknown>)[k] != null),
         });
-        if (daysChanged || minutesChanged || mapChanged) {
+        if (daysChanged || minutesChanged || mapChanged || roomChanged) {
           /*
            * ⛔ SHE CHANGED SOMETHING STRUCTURAL, AND THE WEEK IS REBUILT HERE AGAIN (founder
            * 2026-08-10, item 3). This was `void askCoachToRevise(...)` — the third instance of the
@@ -1149,8 +1324,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
            * Generation touches no engine state — that is what makes a rebuild safe to do on an edit
            * rather than something to save for a Saturday.
            */
-          // ⛔ A week she brought is not ours to rewrite — see `engineMayRebuild`.
-          if (!engineMayRebuild(state.program)) return;
+          // ⛔ A week she brought is not ours to rewrite — asked of the week ON DISK, because
+          // `state.program` is null after every cold start and answered yes for everyone.
+          if (!engineMayRebuild(await db.loadProgram().catch(() => state.program))) return false;
           const rebuilt = await model.generateProgram(programProfile(profile)).catch((e) => {
             void track('engine_error', { op: 'generateProgram', message: String(e) });
             return null;
@@ -1158,8 +1334,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           if (rebuilt) {
             await db.saveProgram(rebuilt);
             dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+            return true;
           }
         }
+        // Nothing structural changed, or the build failed: the profile is saved and the week is not
+        // new. Only a week that was actually rebuilt may be announced as one.
+        return false;
       },
 
       async learnFromCoach(learned) {
@@ -1192,41 +1372,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // The programme-edit swap (replaceSlotExercise → setExercisePreference, S-31) and the pin/lock
       // toggle (toggleSlotLock, S-30) are DELETED (Rev 7, S-73). Exercise selection is owned through
-      // the IN-WORKOUT swap (learned into a standing choice, S-69), the body map (S-56), and — since
-      // 2026-07-17 — the UNDO below, which is S-71's outcome asked for out loud instead of inferred.
+      // the IN-WORKOUT swap (learned into a standing choice, S-69), the body map (S-56), and the
+      // DECLARED replacement (`declareSwap`, founder 2026-08-22) — see the deletion note below.
 
-      /**
-       * "No — give me that lift back." The one explicit lever over an engine ROTATION.
+      /*
+       * ⛔ THE ENGINE-ROTATION UNDO IS DELETED (2026-08-26, the founder's "decide it" pass).
        *
-       * Founder 2026-07-17: show the engine's exercise change on Home and let her undo it. This is
-       * the same state S-71 reaches after two silent swap-backs (`learnedLeaveIts`), reached in one
-       * tap: the substitute is cleared, the rotation mark with it, and the anchor becomes a learned
-       * pin the engine will not rotate again (S-30/S-59 roles included).
+       * Founder 2026-07-17: *"when the engine changes an exercise, show it in the engine's review
+       * and offer an undo of that change."* It was built — `undoEngineSwap` here, `undoEngineRotation`
+       * in `domain/swapLearning`, `undoable`/`onUndoSwap` on Home — and the SURFACE never landed:
+       * `HomeView` read neither prop, and `setUndoable` was only ever called with `null`. A control
+       * that cannot appear was wired end to end for six weeks.
        *
-       * The pure rule lives in `domain/swapLearning.undoEngineRotation` — including the guard that
-       * only a LIVE engine rotation can be undone, so a graduation (not resistible, S-52/S-71) and
-       * her own learned swap are both out of reach, and a double tap cannot invent a pin.
+       * ⚠️ IT IS DELETED RATHER THAN FINISHED, and the argument is the product's own, written at the
+       * door that replaced it (`PreWorkoutScreen`): *"naming the original again takes it back. A
+       * declaration is reversible the way she made it — by saying the other thing — rather than by a
+       * second control that exists only to undo the first."* `declareSwap` (founder 2026-08-22) is
+       * that door: it is reachable from the pre-workout card, it covers a rotation and every other
+       * case, and it is the same shape as his swap ruling — *"להחליף תרגיל יש את כפתור ה-SWAP"*.
        *
-       * Rebuilding the week travels the exact road a body-map or frequency change does, `healWeek
-       * Completion` included: the fresh days come back `completed: false`, and a mid-week undo must
-       * not resurrect a workout she already trained.
+       * ⚠️ AND THE STATE IS NOT LOST. S-71's implicit path is alive and writes the identical
+       * `leaveItsByMuscle` pin on two swap-backs (`sessionStore`'s fold, every session save). What
+       * went is the second, narrower lever — not the outcome.
+       *
+       * ⛔ THE NOTE THAT STOOD HERE WAS ALSO WRONG, and it is worth recording: it said *"there are
+       * no engine rotations left to undo — rotation was Loop 2's, and Loop 2 is gone."* **Loop 2 is
+       * not gone.** `stall_rotate` is still one of its decisions (`engine/v5/loop2`), `fixtureModel`
+       * still writes `engineRotated`, and the fold still reads it. What left the product on
+       * 2026-08-26 was LOOP 1, from the live session. A comment that retires the wrong loop is how a
+       * live feature comes to be treated as residue.
        */
-      async undoEngineSwap(anchorExerciseId) {
-        if (!state.profile) return;
-        const prefs = await db.loadPreferences();
-        const next = undoEngineRotation(prefs, anchorExerciseId, (id) => muscleOf(id) ?? null);
-        if (next === prefs) return; // not a live rotation — nothing to undo, nothing to write
-        await db.savePreferences(next);
-        void track('engine_rotation_undone', { exerciseId: anchorExerciseId });
-        /*
-         * ⚠️ THERE ARE NO ENGINE ROTATIONS LEFT TO UNDO. Rotation was Loop 2's, and Loop 2 is gone.
-         *
-         * The preference write above still runs so a rotation enacted BEFORE the deletion can still
-         * be taken back by an athlete who is living with one. Nothing rebuilds a week here: if she
-         * wants a different exercise she can say so, which is a better door than a double tap that
-         * had to infer what she meant.
-         */
-      },
 
       /**
        * ════ HER PICKS AND HER REFUSALS, AND THE WEEK THAT COMES BACK ════
@@ -1246,6 +1421,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
        * ⚠️ AND HER LOADS SURVIVE IT (S-29). v5 keys every decision to the EXERCISE, never to a slot, so
        * a lift still in the week after the reshape keeps the weight it earned.
        */
+      /**
+       * ⛔ A DECLARED SUBSTITUTION, ON THE LIBRARY'S OWN ROAD (founder 2026-08-22).
+       *
+       * *"אי אפשר ממש להכנס לתוכנית האימון שלנו ולהחליף תרגיל לתרגיל שנמצא בספרייה."*
+       *
+       * ⚠️ IT WRITES `declaredSubs`, NEVER `substitutes`. The second map is the K=2 fold's belief
+       * about what she keeps doing, and the fold CLEARS entries it stops believing — a declaration
+       * living there could be deleted by inference. `db.OwnedPreferences` states the doctrine; this
+       * is the one place that obeys it on the write side.
+       *
+       * ⚠️ AND IT REBUILDS, for the reason `saveLibrary` records: a substitution is not a preference
+       * the engine consults later, it changes which lifts her week is made of — so it must produce
+       * the same thing switching a muscle on does, which is a new week she can look at now. Her
+       * loads survive it: v5 keys every decision to the EXERCISE, never to a slot (S-29).
+       */
+      /**
+       * ⛔ THE RESTORE, AND THE ONE THING IT MUST NOT LEAVE HER WITH: NO WEEK.
+       *
+       * `Root` gates on the PROFILE, and boot builds no programme — only `completeOnboarding` does.
+       * So a record written before the programme travelled (or one taken from a phone that had
+       * none) would put her in the app with a full history and nothing on Today.
+       *
+       * ⚠️ AND IT ONLY BUILDS WHEN THERE IS NOTHING THERE. If the record carried a week, that week
+       * stands — including one she BROUGHT, which nothing may regenerate over
+       * (`aWeekSheBroughtIsNotOursToRewrite`, and `engineMayRebuild` is asked here exactly as it is
+       * at every other build).
+       */
+      async restoreRecord(record) {
+        await db.restoreRecord(record);
+        if (!record.program) {
+          const profile = await db.loadProfile().catch(() => null);
+          const onDisk = await db.loadProgram().catch(() => null);
+          if (profile && !onDisk && engineMayRebuild(onDisk)) {
+            const built = await model.generateProgram(programProfile(profile)).catch((e) => {
+              void track('engine_error', { op: 'generateProgram', message: String(e) });
+              return null;
+            });
+            if (built) await db.saveProgram(built);
+          }
+        }
+      },
+
+      async declareSwap(fromExerciseId, toExerciseId) {
+        if (!state.profile) return false;
+        const prefs = await db.loadPreferences();
+        const declared = { ...(prefs.declaredSubs ?? {}) };
+        /*
+         * ⚠️ THE ANCHOR IS THE LIFT THE WEEK WAS BUILT FROM, not the one she is looking at. After a
+         * first declaration the row shows the REPLACEMENT — so a second swap on that row must edit
+         * the entry that produced it, or the map grows a chain of one-offs and the original lift is
+         * never reachable again.
+         */
+        const anchor = Object.keys(declared).find((k) => declared[k] === fromExerciseId) ?? fromExerciseId;
+        if (anchor === toExerciseId) delete declared[anchor];
+        else declared[anchor] = toExerciseId;
+        await db.savePreferences({ ...prefs, declaredSubs: declared });
+        void track('swap_declared', { from: anchor, to: toExerciseId, cleared: anchor === toExerciseId });
+        // ⛔ A week she brought is not ours to rewrite — the same guard every rebuild passes.
+        if (!engineMayRebuild(await db.loadProgram().catch(() => state.program))) return false;
+        const rebuilt = await model.generateProgram(programProfile(state.profile)).catch((e) => {
+          void track('engine_error', { op: 'generateProgram', message: String(e) });
+          return null;
+        });
+        if (!rebuilt) return false;
+        await db.saveProgram(rebuilt);
+        dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        return true;
+      },
+
       async saveLibrary(chosenByMuscle, refusedIds) {
         if (!state.profile) return false;
         const prefs = await db.loadPreferences();
@@ -1254,9 +1498,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           chosen: Object.values(chosenByMuscle).reduce((n, ids) => n + ids.length, 0),
           refused: refusedIds.length,
         });
-        // ⛔ A week she brought is not ours to rewrite — the same guard every rebuild passes. Her
-        // declarations are saved above regardless; what she is told about the WEEK is the caller's job.
-        if (!engineMayRebuild(state.program)) return false;
+        // ⛔ A week she brought is not ours to rewrite — the same guard every rebuild passes, asked
+        // of the week ON DISK. Her declarations are saved above regardless; what she is told about
+        // the WEEK is the caller's job.
+        if (!engineMayRebuild(await db.loadProgram().catch(() => state.program))) return false;
         const rebuilt = await model.generateProgram(programProfile(state.profile)).catch((e) => {
           void track('engine_error', { op: 'generateProgram', message: String(e) });
           return null;
@@ -1328,6 +1573,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await db.saveEntitlement(next);
           trackEntitlementChange(state.entitlement, next);
           dispatch({ type: 'ENTITLEMENT', entitlement: next });
+          void armTrialLast(); // a member's pending trial note cancels itself here
         } catch {
           /* store unavailable — keep the cached entitlement */
         }
@@ -1340,6 +1586,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await db.saveEntitlement(result.entitlement);
           trackEntitlementChange(state.entitlement, result.entitlement);
           dispatch({ type: 'ENTITLEMENT', entitlement: result.entitlement });
+          void armTrialLast(); // a member's pending trial note cancels itself here
           void track(BILLING_EVENTS.purchaseSucceeded, { productId, source: result.entitlement.source });
         } else if (result.status === 'cancelled') {
           void track(BILLING_EVENTS.purchaseCancelled, { productId });
@@ -1356,6 +1603,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           await db.saveEntitlement(result.entitlement);
           trackEntitlementChange(state.entitlement, result.entitlement);
           dispatch({ type: 'ENTITLEMENT', entitlement: result.entitlement });
+          void armTrialLast(); // a member's pending trial note cancels itself here
           void track(BILLING_EVENTS.restoreSucceeded, { productId: result.entitlement.productId });
         } else {
           void track(BILLING_EVENTS.restoreEmpty);
@@ -1368,9 +1616,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         await flushTelemetry(); // ship before the wipe
         await notifier.cancelAll(); // cancel the weekly note so a signed-out device stays silent
         await db.clearAll();
-        await clearToken(); // sign out of the issued invite
-        resetModelSelection();
-        modelRef.current = await selectModel();
+        await circleSignOut(); // the circle session is IDENTITY — a stranger's phone keeps nobody's circle
         // The device goes back to a stranger. Nothing about the last athlete may survive into the
         // next one's onboarding: not their gender (the app would address the next person in her
         // person, in Hebrew, all the way to the step where they finally get to say who they are),
@@ -1386,11 +1632,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async deleteAccount() {
         void track('account_deleted');
-        await flushTelemetry(); // ship telemetry while the token is still VALID (erase invalidates it)
-        // Erase (anonymize) server-side FIRST, while the token is present (OD-2). Best-effort: a
-        // transient/offline failure must not strand the athlete on a half-deleted device, so we
-        // still wipe locally and telemeter the failure (the operator can complete erasure
-        // out-of-band). In the normal online case this genuinely deletes the athlete server-side.
+        await flushTelemetry(); // journal the act before the wipe erases the journal
+        /*
+         * SERVER FIRST, AND FOR REAL (2026-09-01, audit finding 4). Until today "delete account"
+         * deleted the phone and left the Apple sub → circle mapping on Cloudflare forever — the
+         * model's erase hook below is a fixture no-op, and nothing else called out. `deleteIdentity`
+         * erases the worker's copy (user record, week publications, circle membership, session)
+         * while the token that authenticates it still exists; a failure is journaled, never a
+         * blocker — her right to wipe the device in her hand does not depend on the network.
+         */
+        if (!(await deleteIdentity().catch(() => false))) {
+          void track('account_erase_failed', { kind: 'identity_worker' });
+        }
+        // The model's erase hook (OD-2), kept best-effort: today the fixture's is a no-op — her
+        // record IS the device (+ her iCloud), so wiping locally below IS the deletion — but any
+        // future remote model must erase server-side FIRST, and this is where that happens. A
+        // transient failure must never strand the athlete on a half-deleted device.
         try {
           await model.eraseAccount();
         } catch (e) {
@@ -1398,9 +1655,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         await notifier.cancelAll();
         await db.clearAll();
-        await clearToken();
-        resetModelSelection();
-        modelRef.current = await selectModel();
+        await circleSignOut(); // the circle session is IDENTITY — a stranger's phone keeps nobody's circle
         // The device goes back to a stranger. Nothing about the last athlete may survive into the
         // next one's onboarding: not their gender (the app would address the next person in her
         // person, in Hebrew, all the way to the step where they finally get to say who they are),

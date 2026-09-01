@@ -332,6 +332,49 @@ export default {
       });
     }
 
+    /*
+     * ════ THE HOSTED LEGAL PAGES (2026-09-01, audit finding 4) ════
+     *
+     * App Store Connect requires a privacy-policy URL; `platform/legal.ts` points here. The
+     * in-app LegalSheet stays the athlete-facing summary; these are the documents of record —
+     * same voice, fuller facts. ⚠️ The TEXT is a draft pending the founder's legal review; the
+     * route and the wiring are not.
+     */
+    if (req.method === 'GET' && (path === '/privacy' || path === '/terms')) {
+      const page = (title: string, sections: [string, string][]) =>
+        `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Hush — ${title}</title>
+<style>body{margin:0;background:#000;color:#f1eee5;font:400 17px/1.65 -apple-system,system-ui,sans-serif;padding:48px 24px}
+main{max-width:38rem;margin:0 auto}.mark{color:#a9c49f;letter-spacing:.18em;font-size:12px;text-transform:uppercase;margin-bottom:16px}
+h1{font:400 30px/1.25 Georgia,serif;margin:0 0 8px}h2{font:600 15px/1.4 -apple-system,system-ui,sans-serif;margin:28px 0 6px;color:#d8d3c4}
+p{color:#a8a290;margin:0 0 12px}.stamp{color:#6d675a;font-size:13px;margin-top:36px}</style></head><body><main>
+<div class="mark">hush</div><h1>${title}</h1>
+${sections.map(([h, b]) => `<h2>${h}</h2><p>${b}</p>`).join('\n')}
+<p class="stamp">Hush · com.hushfitness.app · privacy@hushfitness.app · Last updated 2026-09-01</p>
+</main></body></html>`;
+      const body =
+        path === '/privacy'
+          ? page('Privacy Policy', [
+              ['What stays on your device', 'Your workouts, loads, body map, pain reports and training history are stored on your phone. An encrypted backup lives in iCloud under your own Apple ID; we cannot read it.'],
+              ['The coach', 'When you ask the coach to build or review a week, the training data needed for that request is processed on our behalf by Google (Gemini) over our own relay. It is not used to train Google’s models, and we never store the request.'],
+              ['Measurement', 'Product usage is measured with PostHog under a random install identifier — never your name, email or Apple ID. Crash reports reach Sentry with personal data disabled. Neither is sold or used for advertising, ever.'],
+              ['The circle', 'If you join a circle or a shared workout, your first name and weekly workout counts are held on Cloudflare servers so your partners can see them, until you leave or delete the account.'],
+              ['Sign in', 'Sign in with Apple gives us a pseudonymous identifier and, if you share it, your name. We never receive your password.'],
+              ['Deletion', 'Delete Account, in the You tab, erases what our servers hold and what the device holds, immediately. The iCloud backup is under your Apple ID and yours to remove. You can also write to us for any access, correction or deletion request.'],
+              ['Where and on what basis', 'Data is processed in the EU and the US by the processors named above, under our instructions, on the basis of performing the service you asked for. Server records live only as long as the account does; sessions expire within 90 days.'],
+            ])
+          : page('Terms of Use', [
+              ['The service', 'Hush is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional.'],
+              ['Your licence', 'You receive a personal, non-transferable licence to use the app. Its content, code and figures are Hush’s property.'],
+              ['Membership', 'The subscription is billed by Apple under their terms; the trial is free and takes no card. Your history, records and export stay yours with or without a membership.'],
+              ['Conduct', 'Use that breaks the law or harms the service can close the account.'],
+            ]);
+      return new Response(body, {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+      });
+    }
+
     // Rate limit per caller IP — identity endpoints are where credential-stuffing scripts go.
     const ip = req.headers.get('cf-connecting-ip') ?? 'unknown';
     if (env.ID_LIMIT) {
@@ -403,8 +446,16 @@ export default {
         ];
       });
       if (batch.length === 0) return json(400, { error: 'bad_batch' });
-      // No forward address yet → accepted and dropped, by explicit decision (see Env.EVENTS_URL).
-      if (!env.EVENTS_URL || !env.EVENTS_KEY) return new Response(null, { status: 204 });
+      /*
+       * ⚠️ REVERSED 2026-09-01 (audit finding 2). This used to answer 204 — a success — and the
+       * app, told its batch was delivered, cleared the outbox. An unarmed sink was therefore a
+       * fully-instrumented pipeline that PROVABLY DELETED every event in production, silently,
+       * with a green test suite. "The app is never broken by an unarmed sink" was the design; the
+       * app was never broken by a 503 either — its client keeps the outbox on any non-2xx and
+       * retries at the next flush, which is exactly what "not delivered" should do. A sink that
+       * cannot deliver says so.
+       */
+      if (!env.EVENTS_URL || !env.EVENTS_KEY) return json(503, { error: 'sink_unarmed' });
       try {
         const res = await fetch(env.EVENTS_URL, {
           method: 'POST',
@@ -415,6 +466,81 @@ export default {
         return res.ok ? new Response(null, { status: 204 }) : json(502, { error: 'sink_unavailable' });
       } catch {
         return json(502, { error: 'sink_unavailable' });
+      }
+    }
+
+    /*
+     * ════ APP STORE SERVER NOTIFICATIONS V2 — THE CHURN THE DATASET COULD NOT SEE ════
+     * (2026-09-01, audit finding 2)
+     *
+     * Apple POSTs `{ signedPayload: <JWS> }` here for every subscription lifecycle event —
+     * DID_RENEW, EXPIRED, DID_CHANGE_RENEWAL_STATUS, REFUND, GRACE_PERIOD… Until this route
+     * existed, a cancellation was invisible everywhere except App Store Connect: the product
+     * dataset could see a purchase (client-side event) and then nothing, forever. Churn — the
+     * number a subscription business lives or dies by — was not measurable at all.
+     *
+     * ⚠️ MEASUREMENT-GRADE, NOT ENTITLEMENT-GRADE, and the difference is the design:
+     * nothing is granted, stored, or revoked from what arrives here. It is decoded, reduced to an
+     * allow-list, and forwarded to the analytics store — the same trust level as `/events` one
+     * block up, which is also unauthenticated by explicit decision. A forged POST can pollute a
+     * chart; it cannot touch an athlete's access, because the entitlement authority stays where it
+     * always was (StoreKit, on the device). The day this worker starts ANSWERING entitlement
+     * questions, the x5c chain must be verified to Apple's root first — that line is the boundary
+     * between the two grades, and it is load-bearing.
+     *
+     * The URL for App Store Connect (per environment): https://<worker>/appstore/notifications
+     */
+    if (req.method === 'POST' && path === '/appstore/notifications') {
+      let signed: string;
+      try {
+        const body = (await req.json()) as { signedPayload?: string };
+        signed = String(body.signedPayload ?? '');
+      } catch {
+        return json(400, { error: 'bad_request' });
+      }
+      // A JWS is three dot-joined base64url parts; a payload past 64 KB is not one of Apple's.
+      const parts = signed.split('.');
+      if (parts.length !== 3 || signed.length > 65_536) return json(400, { error: 'bad_request' });
+      try {
+        const outer = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1]))) as {
+          notificationType?: string; subtype?: string; data?: {
+            bundleId?: string; environment?: string; signedTransactionInfo?: string; signedRenewalInfo?: string;
+          };
+        };
+        // Not our app → not our chart. (Also the cheapest possible forgery filter.)
+        if (outer.data?.bundleId !== 'com.hushfitness.app') return json(400, { error: 'bad_request' });
+        // The transaction JWS inside carries the ids that make the event joinable.
+        let originalTransactionId = '';
+        let productId = '';
+        const txJws = String(outer.data?.signedTransactionInfo ?? '');
+        const txParts = txJws.split('.');
+        if (txParts.length === 3) {
+          const tx = JSON.parse(new TextDecoder().decode(b64urlToBytes(txParts[1]))) as {
+            originalTransactionId?: string; productId?: string;
+          };
+          originalTransactionId = String(tx.originalTransactionId ?? '').slice(0, 64);
+          productId = String(tx.productId ?? '').slice(0, 64);
+        }
+        // Rebuilt field-by-field like every other inbound body in this worker. Apple's own retry
+        // policy handles a 5xx from us, so an unarmed sink answers 503 here too — Apple re-sends.
+        if (!env.EVENTS_URL || !env.EVENTS_KEY) return json(503, { error: 'sink_unarmed' });
+        const event = {
+          event: `appstore_${String(outer.notificationType ?? 'UNKNOWN').toLowerCase().slice(0, 48)}`,
+          distinct_id: originalTransactionId || 'unknown',
+          properties: {
+            subtype: String(outer.subtype ?? '').slice(0, 48),
+            product_id: productId,
+            environment: String(outer.data?.environment ?? '').slice(0, 16),
+          },
+        };
+        const res = await fetch(env.EVENTS_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ api_key: env.EVENTS_KEY, batch: [event] }),
+        });
+        return res.ok ? new Response(null, { status: 204 }) : json(502, { error: 'sink_unavailable' });
+      } catch {
+        return json(400, { error: 'bad_request' });
       }
     }
 
@@ -471,6 +597,36 @@ export default {
     // A used session stays alive — renew the TTL. Awaited: a Worker may cancel promises still
     // floating when the response returns, and a silently dropped renewal is a slow sign-out.
     await env.HUSH_KV.put(`session:${bearer}`, sub, { expirationTtl: SESSION_TTL_S });
+
+    /*
+     * ════ THE DELETION THAT FINALLY DELETES (2026-09-01, audit finding 4) ════
+     *
+     * Until this route existed, the app's "Delete Account" wiped the phone and NOTHING here: the
+     * Apple sub → circle mapping sat in KV forever, written with no TTL. That fails GDPR Art. 17
+     * and Apple's own account-deletion rule for apps with Sign in with Apple. This is the erase
+     * hook the client's `deleteAccount` was always written to call FIRST, before the local wipe.
+     *
+     * What goes: her user record, her week publications, her circle membership (the circle itself
+     * dies only when she was its last member — the other members keep theirs), and the session
+     * that made this call. Sessions on OTHER devices cannot be enumerated (KV has no index by
+     * sub) — they expire on their own inside 90 days, and from this moment they point at nobody:
+     * every authenticated route resolves the sub to an empty record.
+     */
+    if (req.method === 'POST' && path === '/account/delete') {
+      const user = await userOf(env, sub);
+      if (user.circle) {
+        const circle = (await env.HUSH_KV.get(`circle:${user.circle}`, 'json')) as CircleRec | null;
+        if (circle) {
+          const members = circle.members.filter((m) => m !== sub);
+          if (members.length === 0) await env.HUSH_KV.delete(`circle:${user.circle}`);
+          else await env.HUSH_KV.put(`circle:${user.circle}`, JSON.stringify({ members }));
+        }
+        await env.HUSH_KV.delete(`week:${user.circle}:${sub}`);
+      }
+      await env.HUSH_KV.delete(`user:${sub}`);
+      await env.HUSH_KV.delete(`session:${bearer}`);
+      return json(200, { ok: true });
+    }
 
     if (req.method === 'POST' && path === '/circle/create') {
       const user = await userOf(env, sub);

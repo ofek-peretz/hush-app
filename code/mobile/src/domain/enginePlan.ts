@@ -41,6 +41,7 @@
 
 import type { CoachPlan, PlannedBlock, PlannedSession } from '@/domain/coachPlan';
 import type { Program, ProgramDay, SetTarget } from '@/data/local/models';
+import { exerciseById } from '@/data/exercises';
 
 /** The band a lift is prescribed in, from the engine's own target for it. */
 function bandOf(target: SetTarget | undefined, fallback: [number, number]): [number, number] {
@@ -58,26 +59,44 @@ function sessionOf(day: ProgramDay, byExercise: Map<string, SetTarget>, band: [n
    * exactly this. Grouping several lifts into one block would claim a circuit the engine never
    * wrote, and the session runner would then interleave them.
    */
-  const blocks: PlannedBlock[] = day.slots.map((slot) => {
+  const itemOf = (slot: (typeof day.slots)[number]) => {
     const target = byExercise.get(slot.exerciseId);
+    // A FIXED scheme (bicep 21s) IS the movement — the band collapses to its count. Choice-only,
+    // so this only ever fires on a lift the athlete authored herself.
+    const fixed = exerciseById(slot.exerciseId)?.fixedReps;
     return {
-      rounds: slot.setCount,
-      items: [
-        {
-          kind: 'reps',
-          ex: slot.exerciseId,
-          reps: bandOf(target, band),
-          /*
-           * ⚠️ NULL IS A REAL ANSWER HERE AND IT IS NOT "BODYWEIGHT". A lift she has never performed
-           * has no load until her first set decides it (S-38), and `recommendedWeight` is null for
-           * exactly those — the same null a pull-up carries. The surfaces already draw both the same
-           * way (no weight, the scheme alone), which is the honest rendering of either.
-           */
-          load: target?.recommendedWeight ?? null,
-        },
-      ],
+      kind: 'reps' as const,
+      ex: slot.exerciseId,
+      reps: fixed ? ([fixed, fixed] as [number, number]) : bandOf(target, band),
+      /*
+       * ⚠️ NULL IS A REAL ANSWER HERE AND IT IS NOT "BODYWEIGHT". A lift she has never performed
+       * has no load until her first set decides it (S-38), and `recommendedWeight` is null for
+       * exactly those — the same null a pull-up carries. The surfaces already draw both the same
+       * way (no weight, the scheme alone), which is the honest rendering of either.
+       */
+      load: target?.recommendedWeight ?? null,
     };
-  });
+  };
+  /*
+   * ════ HER SUPERSET BECOMES THE BLOCK SHAPE THE RUNNER HAS ALWAYS SPOKEN (2026-08-26) ════
+   *
+   * The warning above ("grouping several lifts into one block would claim a circuit the engine
+   * never wrote") still binds the ENGINE's own slots — none of them carry `pairedWithNext`. When
+   * the ATHLETE wrote the pair in the builder, the circuit is exactly what she asked for: one
+   * block, two items, `rounds` = the shared set count, and the session runner interleaves it the
+   * way it has interleaved coach circuits since they existed. Nothing is claimed that nobody wrote.
+   */
+  const blocks: PlannedBlock[] = [];
+  for (let i = 0; i < day.slots.length; i++) {
+    const slot = day.slots[i];
+    const partner = day.slots[i + 1];
+    if (slot.pairedWithNext && partner) {
+      blocks.push({ rounds: Math.min(slot.setCount, partner.setCount), items: [itemOf(slot), itemOf(partner)] });
+      i += 1;
+      continue;
+    }
+    blocks.push({ rounds: slot.setCount, items: [itemOf(slot)] });
+  }
   return { name: day.name, blocks };
 }
 

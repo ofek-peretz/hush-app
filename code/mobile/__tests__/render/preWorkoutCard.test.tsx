@@ -21,7 +21,7 @@ import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
-import { PreWorkoutView, type PreWorkoutProps } from '@/screens/plan/PreWorkout';
+import { PreWorkoutView, PreWorkoutMovedView, type PreWorkoutProps } from '@/screens/plan/PreWorkout';
 import type { PlanLift } from '@/components/PlanLifts';
 import { initI18n, tg } from '@/i18n';
 
@@ -94,7 +94,10 @@ describe('⛔ the card carries the workout', () => {
     expect(said).toContain('Upper Body A');
     expect(said).toContain('3'); // lifts
     expect(said).toContain('10'); // 4 + 3 + 3 sets — the figure the old line never carried
-    expect(said).toContain('~35');
+    // No "~" — the founder struck the approximation mark (device QA 2026-08-23): the minutes are
+    // the engine's own pricing, and hedging them read as the app unsure of itself.
+    expect(said).toContain('35');
+    expect(said).not.toContain('~');
     // …and the line that duplicated the row is not drawn twice.
     expect(said).not.toContain('3 LIFTS · ~35 MIN');
   });
@@ -129,7 +132,9 @@ describe('⛔ the card carries the workout', () => {
 
   it('every load names its unit — and a bodyweight lift names none', () => {
     const said = texts(mount()).join('|');
-    expect(said).toContain(' kg');
+    /* 2026-09-01: the prescription is a table of cells (`FigureCells`) — the unit is its own
+       fixed column beside the load, so it is its own text node rather than ' kg' in a string. */
+    expect(said).toContain('|kg');
     // The pull-up prints its scheme with no load and therefore no unit before it.
     const pullUpFigure = texts(mount()).find((s) => s === '3×5–8');
     expect(pullUpFigure).toBeDefined();
@@ -215,5 +220,46 @@ describe('⛔ and the one act', () => {
     const said = texts(mount());
     const prose = said.filter((s) => s.split(' ').length > 8);
     expect(prose).toEqual([]);
+  });
+});
+
+/**
+ * ⛔ THE SHEET FOR A WORKOUT THE WEEK NO LONGER HOLDS.
+ *
+ * `PreWorkoutScreen` carries only a `workoutId` and reads the plan live, so a plan that has been
+ * rewritten since she tapped leaves it with nothing to draw. It answered that with `return null`:
+ * on a modal presentation, a sheet risen over Today with no title, no lifts and no ✕ — the close
+ * control lives inside the card that did not draw — and the only way out an edge drag nothing on
+ * the glass admitted to.
+ */
+describe('⛔ a workout that is not in the week any more', () => {
+  function mountMoved(onClose = () => {}): ReactTestRenderer {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = renderer.create(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <PreWorkoutMovedView onClose={onClose} />
+        </SafeAreaProvider>,
+      );
+    });
+    mounted.push(r);
+    return r;
+  }
+
+  it('says so, rather than drawing nothing at all', () => {
+    const said = texts(mountMoved()).join('|');
+    expect(said).toContain(tg('program.sheetMovedTitle'));
+    expect(said).toContain(tg('program.sheetMovedBody'));
+  });
+
+  it('⛔ keeps the way out — a sheet whose only exit is a drag traps anyone who does not know it', () => {
+    let closed = 0;
+    const r = mountMoved(() => void closed++);
+    const close = r.root.findAll(
+      (n) => n.props?.accessibilityLabel === tg('common.close') && typeof n.props.onPress === 'function',
+    );
+    expect(close.length).toBeGreaterThan(0);
+    act(() => close[0].props.onPress());
+    expect(closed).toBe(1);
   });
 });

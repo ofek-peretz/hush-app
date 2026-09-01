@@ -5,7 +5,6 @@
  * so no load can travel), and hands the encoded link to the OS share sheet. Hush never sends it;
  * it offers the finished link and steps back, exactly as the share card does.
  */
-// @ts-nocheck
 
 // 
 

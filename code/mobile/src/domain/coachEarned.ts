@@ -25,7 +25,6 @@
  * Pure and I/O-free. The caller supplies the update and the log.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

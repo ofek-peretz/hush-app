@@ -24,11 +24,11 @@
  * · It never logs the request. The request is her training record.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
 import type { CoachRequest } from '@/domain/coachPrompt';
+import { identitySessionToken } from '@/platform/circleClient';
 import { deviceContext } from '@/platform/deviceContext';
 
 /**
@@ -90,7 +90,27 @@ export type CoachFailure =
    */
   | 'rate_limited'
   | 'upstream'
-  | 'empty';
+  | 'empty'
+  /**
+   * ⛔ THE ANSWER STOPPED HALFWAY — MEASURED AT ONE CALL IN FIVE (2026-08-30).
+   *
+   * The Worker reads `finishReason` off the SSE stream and has passed it through since it was
+   * written. **Nothing on either side ever looked at it.** So a stream that died mid-sentence came
+   * back as `{ ok: true }` carrying half a JSON document, and every caller blamed the model for it:
+   * the plan build fell through to the local assembler, and the import told her the photograph of
+   * her programme could not be read.
+   *
+   * Measured on the production Worker over 80 real calls: **16 of them stopped early**, at 11 to
+   * 552 characters, after 2.6–5.5 seconds. `finishReason` is a perfect discriminator — `"STOP"` on
+   * every answer that parsed, and `null` on every single one that did not. Prompt length made no
+   * difference (the rate was the same across five variants from 468 characters down to 135), so
+   * this was never a prompt problem; it is the stream ending without saying so.
+   *
+   * ⚠️ IT IS ITS OWN REASON, NOT `upstream`, for the same argument `rate_limited` makes: this one is
+   * TRANSIENT and worth trying again, where a 500 is not. `planBuild` retries once on it, and the
+   * difference between a silent downgrade and a second six-second call is her actual programme.
+   */
+  | 'truncated';
 
 export type CoachReply =
   | {
@@ -158,6 +178,18 @@ export async function askCoach(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+  /*
+   * ════ THE SESSION RIDES ALONG — THE HEADER THAT MAKES THE LIMIT REAL ════
+   *
+   * The install id below is a rate-limit KEY an attacker can mint; the session token is one they
+   * cannot — hush-identity issued it at sign-in and the Worker verifies it against the same KV.
+   * Sign-in is a hard wall at onboarding, so every athlete has one; its absence here means the
+   * Keychain read failed or the exchange never landed, and the Worker's REQUIRE_AUTH flag decides
+   * whether that is still allowed to work. Sent conditionally so the legacy world stays byte-
+   * identical: no header at all, not an empty one.
+   */
+  const session = await identitySessionToken().catch(() => null);
+
   let response: Response;
   try {
     response = await fetch(COACH_URL, {
@@ -175,7 +207,7 @@ export async function askCoach(
        * survives no reinstall, and it says nothing about who she is. It never leaves as anything
        * but a rate-limit key.
        */
-      headers: { 'content-type': 'application/json', 'x-hush-token': COACH_TOKEN, 'x-hush-install': await installId() },
+      headers: { 'content-type': 'application/json', 'x-hush-token': COACH_TOKEN, 'x-hush-install': await installId(), ...(session ? { 'authorization': `Bearer ${session}` } : {}) },
       body: JSON.stringify({
         blocks: request.blocks,
         ...(schema ? { schema } : {}),
@@ -199,7 +231,7 @@ export async function askCoach(
   if (response.status === 429) return { ok: false, reason: 'rate_limited' };
   if (!response.ok) return { ok: false, reason: 'upstream' };
 
-  let body: { text?: unknown; model?: unknown; usage?: unknown };
+  let body: { text?: unknown; model?: unknown; usage?: unknown; finishReason?: unknown };
   try {
     body = (await response.json()) as typeof body;
   } catch {
@@ -210,6 +242,19 @@ export async function askCoach(
   // An empty 200 is not an answer. Handing "" to the parse would count as an unreadable PLAN and
   // blame the model for something that happened in the pipe.
   if (text.length === 0) return { ok: false, reason: 'empty' };
+
+  /*
+   * ⛔ AND NEITHER IS HALF AN ANSWER — see `truncated` on the enum for the measurement.
+   *
+   * `STOP` is the model saying it finished. Anything else, including the `null` a died stream
+   * leaves behind, means the text in hand is a fragment: it will fail to parse, and the caller will
+   * report that as the MODEL's failure rather than the pipe's.
+   *
+   * ⚠️ A MISSING `finishReason` COUNTS AS TRUNCATED, which is the whole point — that is exactly the
+   * shape of every one of the sixteen truncations measured, and treating "absent" as "fine" is how
+   * this went unnoticed for as long as the field has existed.
+   */
+  if (body.finishReason !== 'STOP') return { ok: false, reason: 'truncated' };
 
   return {
     ok: true,

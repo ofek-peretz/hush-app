@@ -30,6 +30,7 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { SharePlanView } from '@/screens/plan/SharePlan';
 import { initI18n, tg } from '@/i18n';
 import type { SharedPlan } from '@/domain/planShare';
+import { bidi } from '@/i18n/bidi';
 import { signal } from '@/design/tokens';
 
 const METRICS: Metrics = {
@@ -157,5 +158,29 @@ describe('the card is dressed as the poster it is', () => {
     expect(said).toContain('Lower A');
     expect(said).toContain(tg('planShare.structureOnly').trim());
     expect(said).not.toMatch(/\bkg\b/);
+  });
+});
+
+/**
+ * ⛔ NOTHING TRAVELS THAT THE PREVIEW DOES NOT SHOW.
+ *
+ * The card IS the payload rendered, and this file's own docblock promises "there is nothing on the
+ * screen she cannot see in the preview". `SharePlanScreen` has always passed `from: profile.name`
+ * and `sharedPlan` has always encoded it — the receiving screen is built around it — but the preview
+ * never drew it. The one identifying thing in the payload was the one thing she could not read
+ * before she sent it.
+ */
+describe('the preview shows her that her name is attached', () => {
+  it('names the sender, in the card that is about to become a link', () => {
+    expect(texts(mount(view())).join(' ')).toContain(tg('planShare.fromYou', { name: bidi('Dana') }));
+  });
+
+  it('and says nothing at all when no name travels', () => {
+    // A profile with no name sends an unsigned plan, and the card states what it carries — a sender
+    // line over an empty name would be the preview describing a field that is not in the payload.
+    const said = texts(mount(view({ plan: { ...PLAN, from: undefined } }))).join(' ');
+    expect(said).not.toContain('Dana');
+    expect(said).not.toContain(tg('planShare.fromYou', { name: bidi('Dana') }));
+    expect(said).toContain('Upper A'); // …and the rest of the card is untouched
   });
 });

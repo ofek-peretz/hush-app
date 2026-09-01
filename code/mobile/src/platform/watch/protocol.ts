@@ -18,7 +18,6 @@
  *    after a reconnect is rejected. The phone remains able to complete a workout
  *    entirely on its own, online or offline.
  */
-// @ts-nocheck
 
 // 
 

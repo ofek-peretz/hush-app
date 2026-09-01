@@ -90,15 +90,10 @@ describe('the letter reads the same number the pill did', () => {
       letter().indexOf('const changedCount ='),
     );
     /*
-     * ⚠️ AND BOTH READ THE WEEK'S ANCHOR, not `coachPlanPrev`.
-     *
-     * The coach answers after EVERY workout, so `prev` is one session old by Wednesday. Counting
-     * against it gives Today the right number ("what that workout changed") and the letter the
-     * wrong one — a screen titled "what changed this week" reporting only its last session. Both
-     * ask `loadCoachPlanWeek`, which rotates once per week rather than once per call.
+     * ⚠️ THE LETTER READS THE WEEK'S ANCHOR, not `coachPlanPrev`. The coach answers after every
+     * workout, so `prev` is one session old by Wednesday, and a screen titled "what changed this
+     * week" would report only its last session. `loadCoachPlanWeek` rotates once per week.
      */
-    expect(read('src/screens/home/Home.tsx')).toContain('coachChanges(coachPlan, weekAnchor)');
-    expect(read('src/screens/home/Home.tsx')).toContain('db.loadCoachPlanWeek()');
     expect(letter()).toContain('db.loadCoachPlanWeek()');
   });
 
@@ -115,8 +110,30 @@ describe('the letter reads the same number the pill did', () => {
   });
 
   it('Today counts it the same way', () => {
-    // Both sides of the disagreement, asserted together — this is the pair that must not drift.
-    expect(read('src/screens/home/Home.tsx')).toContain('coachBrief(log, app.weekOpenMs)');
+    /*
+     * ════ ⛔ "THE SAME WAY" IS THE DERIVATION, NOT THE NUMBER (rewritten 2026-08-26) ════
+     *
+     * This asserted that Home computed `coachBrief(log, app.weekOpenMs)` and `coachChanges(coachPlan,
+     * weekAnchor)` — the WEEK's totals — so that its pill and the letter could never disagree. Two
+     * things have since made that the wrong seam to hold:
+     *
+     *   1. ⛔ FOUNDER, 2026-08-12: *"a count belongs to the thing it counts."* Today's pill draws
+     *      `todayChanges` — the rows of the session ON THE CARD — precisely so that a load moved in
+     *      Lower B is not counted on a card that does not contain it. Today and the letter are
+     *      SUPPOSED to show different numbers now: one session, one week.
+     *   2. The week totals it pinned reached a view that read neither (`briefCount`, `briefUnseen`),
+     *      so this law was holding a seam between the letter and a number nobody could see — and
+     *      passing on it. They were deleted on 2026-08-26.
+     *
+     * What must still never drift is what they are counting FROM. Both sides read the engine's own
+     * stamped changes; the letter over the week, Today over one session. One derivation, two scopes.
+     */
+    const home = read('src/screens/home/Home.tsx');
+    // Today: the engine's stamped directions, filtered to the rows of the card she is looking at.
+    expect(home).toContain("const engineDirections: Record<string, 'up' | 'down'> = {};");
+    expect(home).toContain('setChangedDir(directions);');
+    expect(read('src/screens/home/HomeView.tsx')).toContain('todayChanges > 0');
+    // …and the letter, over the same stamped record.
     expect(letter()).toContain('coachBrief(coachLog, app.weekOpenMs)');
   });
 });
@@ -188,11 +205,33 @@ describe('⛔ and on day one there is nothing to have changed', () => {
    */
   it('the pill counts differences against the week it opened on, and nothing before there is one', () => {
     const src = read('src/screens/home/Home.tsx');
-    expect(src).toContain('setBriefCount(coachChanges(coachPlan, weekAnchor)?.length ?? null);');
-    // …and the anchor is stored, not derived on the spot — and it is absent on the first
-    // programme, which is what makes the count `null` rather than zero on day one.
-    expect(src).toContain('db.loadCoachPlanWeek()');
-    expect(read('src/data/local/db.ts')).toContain('if (!anchor || anchor.at < weekOpen)');
+    /*
+     * ⛔ AND ON 2026-08-19 THE SOURCE MOVED AGAIN — from the two coach programmes to the engine.
+     *
+     * The law is unchanged and is the reason for the move: the pill counts DIFFERENCES, and
+     * `coachChanges` subtracts two `CoachPlan` snapshots that nothing has written since the coach
+     * was taken out on 2026-08-12. So it answered null on every device, and the pill went dark on
+     * every week the engine actually changed something — the same failure this law exists to catch,
+     * with the count too low instead of too high.
+     *
+     * `changeLog` only ever holds a move (a hold stamps nothing), so a hold still cannot be counted
+     * — which is the 2026-08-05 half of this law, kept by the source rather than by a filter.
+     */
+    expect(src).toContain("engineDirections[c.exerciseId] = c.loadTo > c.loadFrom ? 'up' : 'down';");
+    /*
+     * ⛔ THE WEEK'S TOTAL IS NO LONGER COMPUTED HERE (2026-08-26), and the day-one rule is kept by a
+     * stronger thing than a null.
+     *
+     * `engineMoved` / `coachChanges(coachPlan, weekAnchor)` fed `briefCount` — the WEEK's count —
+     * and `HomeView` had stopped reading it when the pill moved onto the workout it belongs to. So
+     * the null-on-day-one guard was protecting a number nobody drew, while the pill she actually
+     * sees was already governed by something better: `changedDir` is built from `changeLog`, which
+     * has NOTHING in it until the engine moves something. On day one there are no entries, so
+     * `todayChanges` is 0 and the pill does not render — no count to be null about.
+     */
+    expect(src).toContain('const directions = Object.keys(engineDirections).length > 0 ? engineDirections : fromPlans;');
+    // …and the pill is drawn from that map, filtered to the card's own rows.
+    expect(read('src/screens/home/Home.tsx')).toContain('.filter((r) => changedDir[r.ex]).length');
   });
 
   it('⚠️ and the pill is hidden on an absent count, not drawn as zero', () => {

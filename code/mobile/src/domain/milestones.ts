@@ -15,20 +15,26 @@
  *   • engine  — the engine proved itself: the FIRST time Hush raised a compound's
  *               load (once ever), and a compound's working load DOUBLING from its
  *               starting point (per compound). Compounds only (founder).
+ *   • weeks   — distinct TRAINING WEEKS on record (4 … 104), added 2026-08-24 (the competitive
+ *               review's retention finding, founder-approved): weekly consistency is the one
+ *               habit mechanic with real evidence behind it, and the honest, nag-free form of it
+ *               is a COUNT that only grows. A week counts if it holds ANY whole workout —
+ *               rest-day-safe and sickness-forgiving by construction. This is NOT a streak: no
+ *               chain to break, nothing resets, nothing nags. The founder's streak ban stands.
  *
  * Pure & I/O-free, derived ENTIRELY from saved strength sessions — nothing is
  * persisted, nothing touches the engine, always retroactively correct. Rejected
  * forever (founder): bodyweight-relative standards, e1RM marks, daily streaks.
  */
-// @ts-nocheck
 
 // 
 
 import type { Profile, Session } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
 import { startingWeight, type LoadProfile } from '@/domain/startingLoad';
+import { currentWeekOpen } from '@/domain/weekCadence';
 
-export type MilestoneFamily = 'count' | 'tonnage' | 'club' | 'engine';
+export type MilestoneFamily = 'count' | 'tonnage' | 'club' | 'engine' | 'weeks';
 
 export interface Milestone {
   /** Stable identity, e.g. 'count_100', 'tonnage_500000', 'club_bb_back_squat_140',
@@ -57,6 +63,9 @@ export interface NextMilestone {
 
 /** Cumulative workouts. Starts at 10 — the first workout already has its own moment. */
 export const COUNT_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1000] as const;
+
+/** Distinct training weeks. Starts at 4 — a month of showing up; ends at two years of it. */
+export const WEEKS_THRESHOLDS = [4, 12, 26, 52, 104] as const;
 
 /** Cumulative kg moved. First one lands after ~2–3 months of consistent work;
  *  the ladder ends at the Eiffel Tower — a mark measured in years. */
@@ -231,6 +240,8 @@ export function earnedMilestones(sessions: Session[], profile?: MilestoneProfile
   let tonnage = 0;
   let countIdx = 0; // next unearned index into COUNT_THRESHOLDS
   let tonnageIdx = 0;
+  let weeksIdx = 0; // next unearned index into WEEKS_THRESHOLDS
+  const weekBuckets = new Set<number>(); // distinct training-week buckets seen so far
   const clubIdx: Record<string, number> = {}; // exerciseId → next unearned club index
   let firstRaiseEarned = false;
   // exerciseId → max recommendedWeight of its PREVIOUS session (engine-raise detection)
@@ -246,6 +257,16 @@ export function earnedMilestones(sessions: Session[], profile?: MilestoneProfile
       while (countIdx < COUNT_THRESHOLDS.length && count >= COUNT_THRESHOLDS[countIdx]) {
         earn({ id: `count_${COUNT_THRESHOLDS[countIdx]}`, family: 'count', value: COUNT_THRESHOLDS[countIdx] }, s);
         countIdx += 1;
+      }
+      // weeks — distinct training-week buckets (the same Sat-20:30 boundary the whole product
+      // keeps, `weekCadence`). Any whole workout claims its week; a second one changes nothing.
+      const at = Date.parse(s.startedAt);
+      if (Number.isFinite(at)) {
+        weekBuckets.add(currentWeekOpen(at));
+        while (weeksIdx < WEEKS_THRESHOLDS.length && weekBuckets.size >= WEEKS_THRESHOLDS[weeksIdx]) {
+          earn({ id: `weeks_${WEEKS_THRESHOLDS[weeksIdx]}`, family: 'weeks', value: WEEKS_THRESHOLDS[weeksIdx] }, s);
+          weeksIdx += 1;
+        }
       }
     }
 
@@ -349,6 +370,15 @@ export function nextUp(sessions: Session[], profile?: MilestoneProfile | null): 
   const nextTon = TONNAGE_THRESHOLDS_KG.find((n) => !earned.has(`tonnage_${n}`));
   if (nextTon != null) {
     out.push({ milestone: { id: `tonnage_${nextTon}`, family: 'tonnage', value: nextTon }, current: tonnage, target: nextTon });
+  }
+
+  // weeks — the same bucket rule the earning loop keeps.
+  const weeks = new Set(
+    hist.filter(countsAsWorkout).map((s) => Date.parse(s.startedAt)).filter(Number.isFinite).map((at) => currentWeekOpen(at)),
+  ).size;
+  const nextWeeks = WEEKS_THRESHOLDS.find((n) => !earned.has(`weeks_${n}`));
+  if (nextWeeks != null) {
+    out.push({ milestone: { id: `weeks_${nextWeeks}`, family: 'weeks', value: nextWeeks }, current: weeks, target: nextWeeks });
   }
 
   // nearest club: all-time peak per club lift → the closest un-earned rung

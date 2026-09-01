@@ -22,7 +22,6 @@
  * It is hidden entirely on the deeper screens (a live workout, cardio, a modal) — those are pushed
  * ABOVE the tab navigator, so the bar is simply not in their tree. A stage has no navigation.
  */
-// @ts-nocheck
 
 // 
 
@@ -37,6 +36,7 @@ import { color, font, textScale } from '@/design/tokens';
 /** v7 2.1 draws these four exactly: the range mark, the activity waveform, a bare trace, a head. */
 const ICON: Record<string, IconName> = {
   Today: 'todayRange',
+  Program: 'program',
   Cardio: 'activity',
   Progress: 'lineChart',
   You: 'user',
@@ -44,6 +44,7 @@ const ICON: Record<string, IconName> = {
 
 const LABEL: Record<string, string> = {
   Today: 'nav.today',
+  Program: 'nav.program',
   Cardio: 'nav.cardio',
   Progress: 'nav.progress',
   You: 'nav.you',

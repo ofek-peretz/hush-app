@@ -19,16 +19,35 @@
  *
  * Pure + I/O-free so it is fully unit-testable and deterministic given a clock.
  */
-// @ts-nocheck
 
 // 
 
 import type { Program, ProgramDay, Session } from '@/data/local/models';
 import { sessionTrained } from '@/domain/completion';
 
-export const WEEK_OPEN_DOW = 6; // Saturday (JS Date.getDay(): 0=Sun … 6=Sat)
+/*
+ * ════ THE OPENING DAY IS HERS TO MOVE (2026-09-01, audit finding 07) ═══════════════════════════
+ *
+ * Saturday 20:30 STAYS THE DEFAULT — the founder's witnessable hour, unchanged for every athlete
+ * who never touches the control and for every existing test. What changed is only that the DAY is
+ * a preference now (`Profile.weekOpensDow`, edited in You): Saturday evening is the quietest
+ * evening of an Israeli week, and for most of the world that evening is Sunday. A weekly ritual
+ * pinned to the wrong culture's calendar reads as a bug she cannot name.
+ *
+ * A LIVE BINDING + a clamped setter, the same shape as `FREE_SESSION_LIMIT`: every reader — the
+ * cadence walkers below, the weekly note's trigger — reads the binding at use time, so the roll,
+ * the letter and the lock can never disagree about when the week turns. The HOUR stays fixed:
+ * one witnessable evening hour is the product's call, not a preference to fragment.
+ */
+export let WEEK_OPEN_DOW = 6; // Saturday (JS Date.getDay(): 0=Sun … 6=Sat) — the default
 export const WEEK_OPEN_HOUR = 20; // 20:xx local
-export const WEEK_OPEN_MINUTE = 30; // :30 — the updated plan swaps in at Sat 20:30 (founder 2026-07-13)
+export const WEEK_OPEN_MINUTE = 30; // :30 — the updated plan swaps in at 20:30 (founder 2026-07-13)
+
+/** Apply her preference (boot / the You control). Anything not a real weekday leaves the default. */
+export function applyWeekOpenDow(dow: unknown): void {
+  if (typeof dow !== 'number' || !Number.isInteger(dow) || dow < 0 || dow > 6) return;
+  WEEK_OPEN_DOW = dow;
+}
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**

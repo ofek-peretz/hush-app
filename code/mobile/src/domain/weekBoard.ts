@@ -32,7 +32,6 @@
  * It answers the only question the athlete asked: which session sits on which weekday now.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

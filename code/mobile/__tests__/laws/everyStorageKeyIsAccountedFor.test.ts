@@ -34,6 +34,21 @@ const SURVIVES_A_WIPE: Record<string, string> = {
   'hush.locale': 'a DEVICE preference — erasing the athlete must not change the phone language',
   'hush.device.id': 'the device identity for telemetry, deliberately outlives every account',
   'hush.billing.stub.entitlement': 'the dev-only stub store, never present in a real build',
+  // Remote config (2026-09-01, audit 03): a fact about the BUILD's tuning, not about the athlete —
+  // an account wipe must not reset an experiment arm mid-flight (its own header says so).
+  'hush.config.cache': 'the remote-config cache — build tuning, deliberately not athlete data',
+};
+
+/**
+ * SecureStore keys wiped OUTSIDE `db.clearAll` — the Keychain is not AsyncStorage, so `clearAll`
+ * cannot reach them, and each one names the exported eraser that does. The test below VERIFIES
+ * both halves: the eraser really deletes the key, and `resetAccount` really calls the eraser —
+ * a moved or forgotten wipe fails here instead of silently outliving the athlete.
+ */
+const WIPED_BY_ERASER: Record<string, { declaredIn: string; eraser: string }> = {
+  // The circle's identity session (2026-08-24). Identity, not preference — a device going back
+  // to a stranger keeps nobody's circle.
+  'hush.circle.session': { declaredIn: 'platform/circleClient.ts', eraser: 'circleSignOut' },
 };
 
 /**
@@ -46,8 +61,11 @@ const NOT_STORAGE = new Set([
   'hush.quarterly_report',
   'hush.rest_warn',
   'hush.rest_done',
+  'hush.set_nudge', // a notification identifier, like the two above — nothing is persisted under it
   'hush.cardio_km',
   'hush.cardio.location',
+  'hush.gap_catch', // the day-six note's identifier (2026-09-01) — an iOS notification id, like the rest
+  'hush.trial_last', // the trial's last-workout note (2026-09-01, audit 3) — an iOS notification id
 ]);
 
 /** The `K` map in db.ts, read as source — the one place the wipe list is written. */
@@ -76,7 +94,7 @@ describe('every persisted key is either wiped with the account or excused', () =
 
   it('no key is left to outlive the athlete by accident', () => {
     const unaccounted = declaredKeys()
-      .filter(({ key }) => !wiped.has(key) && !SURVIVES_A_WIPE[key] && !NOT_STORAGE.has(key))
+      .filter(({ key }) => !wiped.has(key) && !SURVIVES_A_WIPE[key] && !WIPED_BY_ERASER[key] && !NOT_STORAGE.has(key))
       .map(({ key, file }) => `${key} (${file})`);
     expect({ neitherWipedNorExcused: unaccounted }).toEqual({ neitherWipedNorExcused: [] });
   });
@@ -84,6 +102,16 @@ describe('every persisted key is either wiped with the account or excused', () =
   it('the three once-per-athlete flags are wiped — each one is "we already said this to HER"', () => {
     for (const key of ['hush.notifications.asked', 'hush.watch.offered', 'hush.recovery.sealed']) {
       expect({ key, wipedOnAccountReset: wiped.has(key) }).toEqual({ key, wipedOnAccountReset: true });
+    }
+  });
+
+  it('every eraser-wiped Keychain key really has its eraser, and resetAccount really calls it', () => {
+    const appStore = readFileSync(join(SRC, 'state/stores/appStore.tsx'), 'utf8');
+    for (const [key, { declaredIn, eraser }] of Object.entries(WIPED_BY_ERASER)) {
+      const src = readFileSync(join(SRC, declaredIn), 'utf8');
+      expect({ key, declares: src.includes(`'${key}'`) }).toEqual({ key, declares: true });
+      expect({ key, erases: new RegExp(`function ${eraser}[\\s\\S]{0,200}deleteItemAsync`).test(src) }).toEqual({ key, erases: true });
+      expect({ key, calledOnReset: appStore.includes(`${eraser}()`) }).toEqual({ key, calledOnReset: true });
     }
   });
 

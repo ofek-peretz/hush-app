@@ -25,7 +25,7 @@
  *
  * ── THE MODEL ──────────────────────────────────────────────────────────────────────────────────
  * Not chosen here, and deliberately not choosable by the app: `server/worker.ts` names
- * `gemini-3.6-flash` and refuses a `model` from the caller, so a client cannot spend our money on a
+ * the model (`gemini-3.7-flash` since 2026-08-30) and refuses one from the caller, so a client cannot spend our money on a
  * model we did not pick. That decision is documented there against real prices and real usage.
  *
  * What IS chosen here is `think: 'low'`, and the reasoning is the worker's own measurements:

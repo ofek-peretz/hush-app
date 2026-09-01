@@ -11,11 +11,11 @@
  * (lift = handle travel × rom, the honest 1:1 cable). Pure data, no dependencies beyond the kit
  * vocabulary and the shared IK.
  */
-// @ts-nocheck
 
 // 
 
-import type { Primitive, Vec2 } from './types';
+import type { Primitive, Vec2, Vec3 } from './types';
+import { project, type Camera } from './camera';
 import { cable, pulley } from './kit';
 import { twoBoneIK } from './geometry';
 
@@ -179,54 +179,89 @@ export function machineRowStation(hand: Vec2, lift: number): Primitive[] {
   ];
 }
 
-// ── seated machine chest press (FRONT view, §3.4 Amendment 7) — high-back pad, twin press
-// arms sweeping toward the viewer under the PERSPECTIVE LICENSE, fused tower ──
-// The press stroke travels along the camera axis, so the station draws depth as SCALE: the
-// struts track handles that grow with the stroke, and the stack rides 1:1 with the true 3D
-// stroke (shroud license — the routing is inside the frame). The family signature (§3.5 Am. 5)
-// stays the HIGH-BACK seat: the pad runs past the shoulders to head height, its top edge and
-// side slivers reading past the trunk — never the machine row's floating chest pad.
+// ── seated machine chest press (SIDE view) ─────────────────────────────────────
+/*
+ * THIS STATION WAS FRONT-VIEW, AND THE FRONT VIEW CANNOT DRAW THIS EXERCISE.
+ *
+ * The chest family is frontal by founder directive, and for the LYING members that is right: a
+ * bench press stroke is world-vertical, so face-on it lives entirely in the drawing plane. This
+ * machine's stroke does the opposite — it runs straight down the camera axis. The old rig met that
+ * with a perspective license (screen = centre + offset · D/(D−depth)) and hand-authored 3D
+ * endpoints, and the result failed on its own terms:
+ *
+ *   · The elbow interior angle ran 14.7° → 5.5° → 130° across the rep. The arm was drawn as a
+ *     horizontal black bar for two thirds of the clip and then turned inside out, because the
+ *     elbow's projected x CROSSED the fist's mid-rep.
+ *   · The bones were not preserved by anything. Solving the authored triples in 3D, the upper arm
+ *     ran 23.1 → 16.5 against a canonical 25 and the forearm 17.4 → 14.1 against 23: the whole arm
+ *     shrank by a quarter through the press.
+ *
+ * Neither is a tuning error. Face-on, the hand at the stretch sits ~8u from its own shoulder in
+ * projection while the arm is 48u long, so the arm MUST fold flat — every frontal staging of a
+ * chest press has that property, and no constant changes it.
+ *
+ * Side-on, the same stroke is fully in the drawing plane: the handle travels 25u horizontally, the
+ * elbow opens 58° → 168°, and the press arm, the high back pad, the seat and the stack are all
+ * unoccluded. The recognition the directive was protecting is not lost — it moves from the
+ * symmetry of two arms to the SIGNATURE of the station, which is what §3.5 says names a machine
+ * anyway: a high back pad with a press arm swinging forward off a pivot behind the shoulder.
+ */
+export interface PressStationSpec {
+  /** The back pad, as the two ends of its upholstered stroke (top, bottom). */
+  padA: Vec2;
+  padB: Vec2;
+  /** The press-arm hinge on the rear column. */
+  pivot: Vec2;
+  /** Seat pad left edge and top. */
+  seatX: number;
+  seatY: number;
+  /** The linkage segments, proximal then distal. */
+  arm: [number, number];
+}
 
-export function chestPressStation(cx: number, fistR: Vec2, fistL: Vec2, scale: number, lift: number): Primitive[] {
-  const TOWER: TowerSpec = { x0: 254, x1: 276, capY: 88, stackTopY: 142 };
-  const PAD_HW = 21;
+/** The flat seated chest press. */
+export const CHEST_PRESS: PressStationSpec = {
+  padA: { x: 124, y: 92 },
+  padB: { x: 126, y: 156 },
+  pivot: { x: 110, y: 116 },
+  seatX: 128,
+  seatY: 161,
+  arm: [44, 38],
+};
+
+/**
+ * The INCLINE seated press: the same station with its back pad laid further back and its press arm
+ * hinged lower, so the handles swing up-and-forward instead of straight out. The pad angle is the
+ * whole difference between the two machines and it is the only thing that changes here.
+ */
+export const INCLINE_PRESS: PressStationSpec = {
+  padA: { x: 108, y: 96 },
+  padB: { x: 132, y: 158 },
+  pivot: { x: 112, y: 132 },
+  seatX: 130,
+  seatY: 163,
+  arm: [44, 38],
+};
+
+export function chestPressStation(hand: Vec2, lift: number, spec: PressStationSpec = CHEST_PRESS): Primitive[] {
+  const TOWER: TowerSpec = { x0: 62, x1: 84, capY: 58, stackTopY: 142 };
   const { prims: tower } = stackTower(TOWER, lift);
-  // a press-arm strut: from its pivot at the pad's top corner (behind the athlete) out to the
-  // top of its handle — it lengthens, swings outward, AND thickens toward its near end as the
-  // handle approaches the camera (the perspective license applies to the machine too)
-  const strut = (pivot: Vec2, fist: Vec2): Primitive[] => {
-    const tip: Vec2 = { x: fist.x, y: fist.y - 8 * scale };
-    const len = Math.hypot(tip.x - pivot.x, tip.y - pivot.y) || 1;
-    const n = { x: -(tip.y - pivot.y) / len, y: (tip.x - pivot.x) / len };
-    const w0 = 1.3; // half-width at the far pivot
-    const w1 = 1.7 * scale; // half-width at the near handle
-    return [
-      {
-        kind: 'poly',
-        pts: [
-          { x: pivot.x + n.x * w0, y: pivot.y + n.y * w0 },
-          { x: tip.x + n.x * w1, y: tip.y + n.y * w1 },
-          { x: tip.x - n.x * w1, y: tip.y - n.y * w1 },
-          { x: pivot.x - n.x * w0, y: pivot.y - n.y * w0 },
-        ],
-        fill: 'ink3',
-      },
-      { kind: 'circle', c: pivot, r: 3, fill: 'paper1', stroke: 'ink3', w: 2 },
-    ];
-  };
   return [
     ...tower,
-    baseRail(cx - 30, 276),
-    // the high-back pad (signature) + seat + legs — the interface, grounded
-    { kind: 'rect', x: cx - PAD_HW, y: 88, width: PAD_HW * 2, height: 68, rx: 8, fill: 'paper3', stroke: 'ink3', w: 2 },
-    { kind: 'rect', x: cx - 26, y: 161, width: 52, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
-    { kind: 'line', a: { x: cx - 18, y: 168 }, b: { x: cx - 18, y: FLOOR - 2 }, w: 2.5, color: 'ink3' },
-    { kind: 'line', a: { x: cx + 18, y: 168 }, b: { x: cx + 18, y: FLOOR - 2 }, w: 2.5, color: 'ink3' },
-    // the fusing beam into the tower — one machine, not parts (below the elbow flare)
-    { kind: 'line', a: { x: cx + PAD_HW, y: 132 }, b: { x: 254, y: 132 }, w: 2.5, color: 'ink3' },
-    // twin press arms tracking the handles toward the viewer
-    ...strut({ x: cx + PAD_HW + 2.6, y: 99 }, fistR),
-    ...strut({ x: cx - PAD_HW - 2.6, y: 99 }, fistL),
+    baseRail(62, 196),
+    // the rear column carrying the pivot, fused into the tower cap — one machine, not parts
+    { kind: 'line', a: { x: 104, y: 62 }, b: { x: 104, y: FLOOR - 2 }, w: 3, color: 'ink3' },
+    { kind: 'line', a: { x: 84, y: 58 }, b: { x: 105.5, y: 58 }, w: 3, color: 'ink3' },
+    { kind: 'line', a: { x: 104, y: spec.pivot.y }, b: { x: spec.pivot.x, y: spec.pivot.y }, w: 2.5, color: 'ink3' },
+    // the HIGH BACK PAD (the family signature): it runs past the shoulders to head height
+    ...pad(spec.padA, spec.padB, 9),
+    { kind: 'line', a: { x: spec.padA.x - 3, y: (spec.padA.y + spec.padB.y) / 2 }, b: { x: 104, y: (spec.padA.y + spec.padB.y) / 2 }, w: 2.5, color: 'ink3' },
+    // seat + posts
+    { kind: 'rect', x: spec.seatX, y: spec.seatY, width: 44, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
+    { kind: 'line', a: { x: spec.seatX + 8, y: spec.seatY + 7 }, b: { x: spec.seatX + 8, y: FLOOR - 2 }, w: 2.5, color: 'ink3' },
+    { kind: 'line', a: { x: spec.seatX + 38, y: spec.seatY + 7 }, b: { x: spec.seatX + 38, y: FLOOR - 2 }, w: 2.5, color: 'ink3' },
+    // transmission: the press arm folds from the pivot out to the handle
+    ...machineArm(spec.pivot, hand, spec.arm[0], spec.arm[1], 1),
   ];
 }
 
@@ -263,24 +298,70 @@ export function shoulderPressStation(cx: number, gripX: number, handY: number, l
 // carriage, high pulley above the head, rope V taut to both fists, stack visible where the body
 // honestly does not occlude it (between and beside the legs).
 
-export function facePullStation(cx: number, handR: Vec2, handL: Vec2, restR: Vec2, restL: Vec2): Primitive[] {
-  const PULLEY: Vec2 = { x: cx, y: 31 }; // high enough that the strands clear the head at the reach
-  // rope payout is stack rise: the plate climbs by exactly the rope drawn past the pulley
-  const d = (p: Vec2) => Math.hypot(p.x - PULLEY.x, p.y - PULLEY.y);
-  const lift = Math.max(0, d(handR) + d(handL) - d(restR) - d(restL));
+/**
+ * THE CABLE COLUMN, seen from wherever the camera is standing.
+ *
+ * This used to be a flat function that took two fists and drew a mast on the athlete's own centre
+ * line — which meant the body erased the whole machine, and the stack's rise was computed from the
+ * sum of two hand-to-pulley distances (a rope has one cable, so that lifted at double rate).
+ *
+ * It now takes the column's real position in the athlete's space and the CAMERA, and projects its
+ * own hardware: equipment depth is scene knowledge, and a rig that orbits owns the projection of
+ * the things standing around it (see `frame.ts`). Two consequences worth naming:
+ *
+ *   · the mast is a vertical line at any azimuth, because the orbit runs about the vertical — so
+ *     the column stays a column and only MOVES ACROSS, out from behind the athlete;
+ *   · a weight plate is a box, and the silhouette of a box under an orthographic three-quarter is
+ *     `width·|cos| + depth·|sin|` wide — WIDER than face-on, not narrower. Scaling the drawn width
+ *     by cos alone (the obvious thing) makes a stack that visibly slims as the camera turns.
+ */
+export function facePullStation(p: {
+  cam: Camera;
+  cx: number;
+  z: number;
+  pulley: Vec3;
+  carabiner: Vec3;
+  lift: number;
+}): Primitive[] {
+  const P = (q: Vec3): Vec2 => {
+    const r = project({ x: q.x, y: q.y }, q.z, p.cam);
+    return { x: r.x, y: r.y };
+  };
+  const rad = (p.cam.azimuth * Math.PI) / 180;
+  const kx = Math.abs(Math.cos(rad));
+  const kz = Math.abs(Math.sin(rad));
+  const mastX = P({ x: p.cx, y: 0, z: p.z }).x;
+  const PLATE_W = 18;
+  const PLATE_D = 22;
+  const halfPlate = (PLATE_W * kx + PLATE_D * kz) / 2;
+
+  const pulleyP = P(p.pulley);
   const prims: Primitive[] = [
-    // the mast, frame-top to floor (occluded by the athlete's body on its way down — honest)
-    { kind: 'line', a: { x: cx, y: 26 }, b: { x: cx, y: FLOOR - 1 }, w: 3.5, color: 'ink3' },
-    { kind: 'line', a: { x: cx - 12, y: FLOOR }, b: { x: cx + 12, y: FLOOR }, w: 2.5, color: 'ink3', cap: 'round' }, // base foot
-    // the height-adjuster carriage + high pulley
-    { kind: 'rect', x: cx - 3.5, y: 26, width: 7, height: 10, rx: 1.5, fill: 'paper1', stroke: 'ink3', w: 1.5 },
-    ...pulley(PULLEY),
-    // the rope, taut from the pulley to each fist (thicker than cable stroke — it IS a rope)
-    { kind: 'line', a: PULLEY, b: handR, w: 2.2, color: 'ink2' },
-    { kind: 'line', a: PULLEY, b: handL, w: 2.2, color: 'ink2' },
+    // the mast, frame-top to floor (occluded by the athlete only where he honestly stands in front)
+    { kind: 'line', a: { x: mastX, y: 26 }, b: { x: mastX, y: FLOOR - 1 }, w: 3.5, color: 'ink3' },
+    // the base plate, seen as the parallelogram it is
+    {
+      kind: 'line',
+      a: P({ x: p.cx - 12, y: FLOOR, z: p.z - 11 }),
+      b: P({ x: p.cx + 12, y: FLOOR, z: p.z + 11 }),
+      w: 2.5,
+      color: 'ink3',
+      cap: 'round',
+    },
+    // the height-adjuster carriage + the high pulley
+    { kind: 'rect', x: mastX - 3.5, y: 26, width: 7, height: 10, rx: 1.5, fill: 'paper1', stroke: 'ink3', w: 1.5 },
+    ...pulley(pulleyP),
+    // the steel cable, pulley to carabiner — thinner than the rope, because it is not the rope
+    { kind: 'line', a: pulleyP, b: P(p.carabiner), w: 1.4, color: 'ink3' },
+    { kind: 'circle', c: P(p.carabiner), r: 2.2, fill: 'paper1', stroke: 'ink3', w: 1.4 },
   ];
-  // the stack, behind the athlete's legs — visible through and beside the stance
-  for (let y = 150 + 5; y + 3.5 <= FLOOR - 0.5; y += 5) prims.push(slab(cx, 18, y, 0.35));
-  prims.push(slab(cx, 18, 150 - lift, 0.6));
+  /*
+   * A FULL-HEIGHT stack. The old one was 34u of plates, which is 39 cm — and a face pull pays out
+   * about 62 cm of cable, so the selected plate left the machine behind and floated up the bare
+   * mast on its own. A real column carries ~85 cm of plates and the pull uses most of that travel;
+   * drawn at true height the same lift reads as a stack doing its job.
+   */
+  for (let y = 120; y + 3.5 <= FLOOR - 0.5; y += 5) prims.push(slab(mastX, halfPlate * 2, y, 0.35));
+  prims.push(slab(mastX, halfPlate * 2, Math.max(p.pulley.y + 12, 115 - p.lift), 0.6));
   return prims;
 }

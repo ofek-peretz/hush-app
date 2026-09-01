@@ -3,6 +3,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import { PLAN_BUILD_BUDGET_MS } from '@/platform/coach/planBuild';
+
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
 
 /**
@@ -47,34 +49,168 @@ describe('the last step builds, it does not chat', () => {
     expect(fs.existsSync(path.join(__dirname, '..', '..', 'src/screens/onboarding/CoachIntake.tsx'))).toBe(false);
     // …and nothing routes to it, which is how a deleted screen becomes a blank one instead.
     expect(read('src/app/Root.tsx')).not.toContain('CoachIntake');
-    /* ⛔ THE LAST ANSWERING STEP IS THE BODY MAP (founder 2026-08-10) — health moved to second, so
-       the peak sits beside the payoff instead of a permission ask sitting between them. */
-    expect(read('src/screens/onboarding/BodyMap.tsx')).toContain("navigation.navigate('BuildingProgramme'");
-    expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain("navigation.navigate('BodyMap'");
+    /*
+     * ⛔ THE LAST ANSWERING STEP IS THE BUILDER (founder 2026-08-29) — it was the body map from
+     * 2026-08-10, on the argument that the step which SHAPES the week belongs beside the payoff.
+     * The builder shapes it harder: it is the week. The map is deleted from the intake, and this
+     * clause asserts the deletion rather than the screen name, because the failure that matters is
+     * a screen left registered and reachable after its ruling.
+     */
+    expect(fs.existsSync(path.join(__dirname, '..', '..', 'src/screens/onboarding/BodyMap.tsx'))).toBe(false);
+    expect(read('src/app/Root.tsx')).not.toContain('name="BodyMap"');
+    expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain("navigation.navigate('PlanBuilder'");
+    /* …and the builder's two exits BOTH end on the reveal, which is the beat the founder refused to
+       give up (*"אנו לא צריכים לוותר על החלק של האנימציה בסוף"*): the engine door goes there, and so
+       does a week she sealed herself — the second one carrying `authored`, which is what makes the
+       screen read her week instead of assembling a different one. */
+    const builder = read('src/screens/plan/PlanBuilder.tsx');
+    /*
+     * ⚠️ THE ENGINE DOOR NOW CARRIES THE FREQUENCY IT JUST ASKED FOR (founder 2026-08-29: *"להוריד
+     * את כמות האימונים בשבוע [מהמסך הראשון]. כי זה שייך לבניית התוכנית"*). The wheel left `AboutYou`
+     * and stands on this door — it is the only one of the three with nobody to derive a number from
+     * — so the relay is spread rather than passed through. Both exits still end on the reveal,
+     * which is the beat this clause is actually about.
+     */
+    expect(builder).toContain("navigation.replace('BuildingProgramme', {");
+    expect(builder).toContain('inputs: { ...inputs, daysPerWeek },');
+    expect(builder).toContain('authored: true,');
   });
 
-  it('⛔ ASKS NOBODY — the week is assembled, not requested', () => {
+  it('⛔ THE REVEAL IS WHERE THE MODEL IS ASKED — and it can always answer without one', () => {
     /*
-     * ⛔ FOUNDER, 2026-08-10, closing the arc this clause has been tracking since 2026-08-05.
+     * ⛔ THIS CLAUSE SAID THE OPPOSITE UNTIL 2026-08-29, AND BOTH READINGS WERE RIGHT IN THEIR TIME.
      *
-     * It used to assert TWO calls: a `low`-thinking shape then a full-thinking fill, split because
-     * *"the plan build takes far too long — this is the least SPOTIFY thing there is"*. The split
-     * made a ninety-second wait survivable. Removing the call removes the wait.
+     * It used to assert that this screen makes NO call: the 2026-08-10 removal was a latency
+     * ruling — the two-call split *"existed to make a ninety-second wait survivable"* — and once
+     * the call was gone, a screen that still made one would have been paying for a round trip whose
+     * answer nothing read.
      *
-     * ⚠️ AND THE ASSERTION IS ON THE ABSENCE, not merely on the presence of the assembler. A screen
-     * that generates locally AND still calls the coach is the worse of both: it pays for a network
-     * round trip whose answer nothing reads, and it fails offline for a programme it already has.
+     * The founder brought the model back on 2026-08-29 and then asked for the AI screen to be
+     * designed properly. `BuildingProgrammeView`'s own docblock had been describing this call since
+     * the day it was written — its rows stand as dashes *"until the coach's answer lands"* — so the
+     * call did not arrive on a screen that was innocent of it. It came home.
+     *
+     * ⚠️ WHAT THE OLD CLAUSE ACTUALLY PROTECTED IS KEPT, AND IT IS THE HALF THAT MATTERS: **this
+     * screen can always finish without the network.** Three guarantees, asserted below.
      */
     const src = building();
+
+    // 1 · The local assembler is still here, and is what a failed call falls through to.
     expect(src).toContain('await model.generateProgram(profile)');
-    for (const gone of ['askCoach', 'coachRequest', 'coachFacts', 'COACH_DECISION_SCHEMA', 'COACH_SHAPE_SCHEMA', 'first_programme']) {
+    expect(src).toContain('asked ?? (await model.generateProgram(profile))');
+
+    /*
+     * 2 · THE CALL IS MADE ONLY WHEN SHE ASKED FOR IT. `coachAsk` is the flag, and it is tested for
+     * PRESENCE — an empty string is a real value (she pressed through the ask step without writing
+     * a line, which is still the coach path), so truthiness would silently demote her to the local
+     * assembler for saying nothing.
+     */
+    expect(src).toContain('!authored && coachAsk != null ? await askTheModel() : null');
+
+    /*
+     * 3 · AND A WEEK SHE ALREADY HAS IS NEVER ASKED FOR AGAIN. `authored` reads it off disk; a
+     * network call over a sealed week would be spending money to re-answer a settled question.
+     */
+    /* ⚠️ `readSealed` IS `loadProgram` WITH A CLOCK ON IT (2026-08-30) — this screen draws dashes
+       until a programme is in hand and its ticker stops when the placeholders run out, so any await
+       that can outlive the beat is a dead screen. The ORDER is what this clause pins: a sealed week
+       is read from disk before anything else is considered. */
+    expect(src).toContain('authored ? await readSealed()');
+    expect(src).toMatch(/Promise\.race\(\[db\.loadProgram\(\), late\]\)/);
+
+    // …and the coach's own doctrine still cannot reach this screen: it asks `planBuild`, which
+    // carries no preamble, no conversation and no `CoachPlan` writer.
+    for (const gone of ['coachRequest', 'coachFacts', 'COACH_DECISION_SCHEMA', 'COACH_SHAPE_SCHEMA', 'first_programme', 'recordCoachAnswer']) {
       expect({ gone, present: src.includes(gone) }).toEqual({ gone, present: false });
     }
-    // The guard against a double build when the effect re-runs — two programmes racing to be stored
-    // is still a week nobody chose, network or no network.
-    expect(src).toContain('if (started.current) return;');
   });
 
+});
+
+describe('⛔ the intake never freezes', () => {
+  /*
+   * ⛔ FOUNDER, 2026-08-30: *"למה זה לא עובד. זה נתקע ולא זז."*
+   *
+   * Two screens on the intake render NOTHING until an async read finishes, and both are on the
+   * path the whole of onboarding rides on. Neither can be allowed to depend on something resolving.
+   */
+  it('⛔ the build step waits for a running import — but only for a bounded moment', () => {
+    /*
+     * The wait is worth having: an import in flight WINS (it replaces the route), so building first
+     * pays for a week we throw away. But `settledImport()` resolves when the READ does, and a read
+     * can legitimately take the client's full timeout — **three minutes** of a dark body with
+     * dashed rows on the last step of the intake, with the back gesture correctly disabled.
+     *
+     * ⚠️ THE ATHLETE NEVER WAITS ON AN OPTIMISATION. Past the grace the build runs; if the import
+     * lands after, it still redirects, and all that is lost is the price of a call.
+     */
+    const src = building();
+    expect(src).toContain('const IMPORT_GRACE_MS = 1_500;');
+    expect(src).toContain('if (waitingForImport && !graceOver) return;');
+    // …and the unbounded form may not come back.
+    expect(src).not.toMatch(/if \(waitingForImport\) return;\s+started\.current/);
+  });
+
+  it('⛔ the builder step reads the disk ONCE, and shows its doors even if the disk is slow', () => {
+    /* `PlanBuilder` returns a bare `SafeAreaView` until `loaded`. A dependency list that re-runs
+       the read cancels the in-flight one every time (`alive = false`) and `loaded` never lands — a
+       black screen that never moves. A ref, and a bound, and the fallback is the DOORS: being
+       offered a choice she did not need is a moment's confusion; being sent to a reveal for a week
+       that may not exist ends the intake with no way back. */
+    const builder = read('src/screens/plan/PlanBuilder.tsx');
+    expect(builder).toContain('const readOnce = useRef(false);');
+    expect(builder).toMatch(/setTimeout\(\(\) => \{ if \(alive\) setLoaded\(true\); \}, 2000\)/);
+  });
+
+  it('⛔ THE WHOLE REVEAL HAS A CEILING, and it is measured rather than assumed', () => {
+    /*
+     * ⛔ FOUNDER, 2026-08-30, stating the bar this step has to clear: *"אם זה לא יהיה קצר בזמן ובעל
+     * אפס שגיאות אין לנו סיכוי לצלוח."* Zero errors is what every other clause here is for. This
+     * one is the other half: SHORT.
+     *
+     * ⚠️ AND THE MODEL IS NOW THE ONLY THING THAT DECIDES IT. Until 2026-08-30 it was not: with the
+     * answer in hand INSTANTLY the screen still ran ~22s, because the fill walked one muscle at a
+     * time and a week covers ten of them. The founder named the animation's purpose and it settled
+     * the question: *"האנימציה הייתה בשביל למרוח את הזמן בעת הטעינה של הבינה."* A cover that
+     * outlives what it covers is not a cover. Now: opening, then the wait, then one fill, then the
+     * name — so the screen is as long as the call and no longer.
+     *
+     * So the number to guard is the TOTAL, and it is a product number the founder owns. This law
+     * does not pick it; it holds whatever it is against a ceiling, so that adding a muscle to the
+     * catalogue or a hold to `LiftIn` can never quietly turn 24 seconds into 40.
+     */
+    const screen = building();
+    const view = read('src/screens/onboarding/BuildingProgrammeView.tsx');
+    /* ⚠️ CONCATENATED, NOT A TEMPLATE LITERAL — in JS `"\s"` is just `"s"`, so the template form
+       builds `NAMEs*…` and matches nothing. */
+    const num = (src: string, name: string) => {
+      const m = new RegExp(name + '\\s*(?::[^=]+)?=\\s*([0-9_]+)').exec(src);
+      if (!m) throw new Error(`no ${name}`);
+      return Number(m[1].replace(/_/g, ''));
+    };
+    const beatFor = (lifts: number) =>
+      (Math.max(1, lifts) - 1) * num(view, 'LIFT_STEP_MS') + num(view, 'LIFT_RISE_MS')
+      + num(view, 'LIFT_HOLD_MS') + num(view, 'LIFT_TRAVEL_MS') + num(view, 'MUSCLE_BREATH_MS');
+
+    /*
+     * ⚠️ THE MUSCLE COUNT IS NOT IN THIS SUM ANY MORE, AND THAT IS THE WHOLE CHANGE OF 2026-08-30.
+     * It used to be `MOST_MUSCLES * beatFor(...)` — a walk through the week AFTER the answer was
+     * already in hand, which is what put the screen at 22 seconds even on an instant answer. The
+     * body fills in one beat now, so a week with more muscles in it costs nothing.
+     *
+     * What is left is three things, and each is bounded by something that is itself a law:
+     *   · the WAIT — at most `PLAN_BUILD_BUDGET_MS`, and never less than the opening beat;
+     *   · the FILL — `beatFor(the busiest muscle a week could hold)`, the animation's arithmetic;
+     *   · the NAME — `REVEAL_MS`.
+     */
+    const MOST_LIFTS_IN_A_MUSCLE = 6;
+    const worst =
+      Math.max(num(screen, 'OPENING_MS'), PLAN_BUILD_BUDGET_MS)
+      + beatFor(MOST_LIFTS_IN_A_MUSCLE)
+      + num(screen, 'REVEAL_MS');
+
+    expect({ worstMs: worst, under20s: worst <= 20_000 }).toEqual({ worstMs: worst, under20s: true });
+  });
 });
 
 describe('the ordering that a first run always breaks', () => {
@@ -95,7 +231,11 @@ describe('the ordering that a first run always breaks', () => {
      * assembles one in memory. `ProgramCreated` writes it when she accepts.
      */
     const src = building();
-    expect(src).not.toContain('completeOnboarding');
+    /* ⚠️ AGAINST THE CODE, NOT THE PROSE — which is precisely what `buildingCode` exists for, and
+       it caught me on 2026-08-30: a new comment explaining that the frequency is re-stamped here
+       rather than written mentioned `completeOnboarding` by name, and this clause reported the
+       explanation as the violation. Prose about a rule is not a breach of it. */
+    expect(buildingCode()).not.toContain('completeOnboarding');
     expect(src).toContain('const profile = React.useMemo<Profile>(');
     expect(read('src/app/Root.tsx')).toContain('{app.profile ? <MainNavigator /> : <OnboardingNavigator />}');
     // …and the screen that DOES write it is the one she taps through.
@@ -134,17 +274,55 @@ describe('the ordering that a first run always breaks', () => {
     expect(src).not.toMatch(/askCoach|fetch\(|currentLocale\(\)/);
   });
 
-  it('⚠️ hands the assembler the BODY MAP — the only input that shapes the week', () => {
+  it('⚠️ hands the assembler the BODY MAP — every input it has about her intent', () => {
     /*
      * This asserted `COACH_DECISION_SCHEMA` — that the programme was demanded in the schema rather
      * than merely in the prose. The equivalent guarantee now is about the INPUT: `generateProgram`
      * reads `profile.bodyMap`, and a profile assembled here without it produces a full-body week for
      * an athlete who turned muscles off. Nothing would throw; she would simply be trained on
      * something she did not ask for.
+     *
+     * ⚠️ AND SINCE 2026-08-29 NO INTAKE STEP PRODUCES ONE. The map left onboarding with the builder's
+     * arrival, so at this point in a first run the field is genuinely absent and the engine door
+     * assembles a full-body week — the stated, accepted cost of that ruling. The FIELD stays wired
+     * because this screen is not only reached on a first run's happy path, and because the day a map
+     * is asked for again the relay that carries it must not have been quietly amputated in between.
      */
     const src = building();
-    expect(src).toContain('bodyMap');
+    expect(src).toContain('bodyMap: inputs.bodyMap');
     expect(src).toContain('const profile = React.useMemo<Profile>(');
+  });
+
+  it('⛔ REVEALS A WEEK SHE WROTE — it does not generate one over the top of it', () => {
+    /*
+     * ⛔ FOUNDER, 2026-08-29, on the builder becoming intake step 3: *"אנו לא צריכים לוותר על החלק
+     * של האנימציה בסוף — התרגילים שנבנו נכנסים לאנימציה."*
+     *
+     * The whole failure mode this guards is one line: an `authored` arrival that still called
+     * `generateProgram` would run the reveal — the dark body, the muscles arriving, the naming —
+     * over a week she never wrote and will never train, and NOTHING would look wrong, because the
+     * week she does train is the one already on disk.
+     */
+    const src = building();
+    /*
+     * ⚠️ THE TERNARY GREW A THIRD ARM ON 2026-08-29 (the model writes the week when she asked it
+     * to), and `authored` still wins outright — which is the whole of this clause. Asserted as the
+     * PREFIX so the order is pinned: whatever else the screen learns to do, a sealed week is read
+     * from disk before anything else is considered.
+     */
+    /* ⚠️ `readSealed` IS `loadProgram` WITH A CLOCK ON IT (2026-08-30) — this screen draws dashes
+       until a programme is in hand and its ticker stops when the placeholders run out, so any await
+       that can outlive the beat is a dead screen. The ORDER is what this clause pins: a sealed week
+       is read from disk before anything else is considered. */
+    expect(src).toContain('authored ? await readSealed()');
+    expect(src).toMatch(/Promise\.race\(\[db\.loadProgram\(\), late\]\)/);
+    expect(src).toContain('asked ?? (await model.generateProgram(profile))');
+    // …and an `authored` arrival never asks the model either: a call over a week she already wrote
+    // is money spent re-answering a settled question, and a second week that could disagree.
+    expect(src).toContain('coachAsk != null ? await askTheModel() : null');
+    // …and the read is from DISK, never from a `Program` carried in a navigation param — a second
+    // copy of the week is a second thing that can disagree with what she trains.
+    expect(src).not.toMatch(/route\.params\.program|params\.built/);
   });
 
   it('the week she is shown is the week that is SAVED', () => {
@@ -192,7 +370,18 @@ describe('the ordering that a first run always breaks', () => {
 
   it('⛔ lands on the screen that SHOWS her the week', () => {
     // *"It moved me straight to the transition screen without showing me the plan."*
-    expect(building()).toContain("navigation.replace('ProgramCreated', { inputs })");
+    /* ⚠️ THE PARAMS GREW ON 2026-08-30 (`coachMissed`, `coachAsk`) — what this clause is about is
+       the DESTINATION, which is the founder's own device bug: *"it moved me straight to the
+       transition screen without showing me the plan."* Pinning the exact argument list made an
+       assertion about punctuation out of a law about where onboarding ends. */
+    expect(building()).toMatch(/navigation\.replace\('ProgramCreated', \{[\s\S]{0,200}?inputs/);
+    /*
+     * ⛔ AND THE FREQUENCY IT CARRIES IS THE WEEK'S, NOT THE WHEEL'S (2026-08-30). Found live: the
+     * dial said four days, she typed *"אני מתאמן פעמיים בשבוע בלבד"*, and the model wrote two. The
+     * profile would have claimed four over a two-day programme. Whoever wrote the week decides how
+     * many days it has — the same rule the import path has always followed.
+     */
+    expect(building()).toContain('inputs: authoredDays.current ? { ...inputs, daysPerWeek: authoredDays.current } : inputs,');
     /*
      * ⛔ THE WEEK LIST IS DELETED (founder 2026-08-10): *"אף אחד לא רואה את זה."* It sat below
      * the signature under a real argument — the programme is what she came for, so it ends the

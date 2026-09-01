@@ -8,7 +8,6 @@
  * or device change is detected (a new install id on an athlete with backend
  * history).
  */
-// @ts-nocheck
 
 // 
 

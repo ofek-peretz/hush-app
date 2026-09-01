@@ -9,17 +9,33 @@
  * button because there is no decision here: the whole backdrop dismisses it. "Tap anywhere to
  * close" says so once, under the card, and that is the only instruction on the screen.
  *
+ * ════ AND THIS DOOR IS WHERE MOVEMENT LIVES — NOT THE STAGE (design audit, 2026-08-24) ════
+ *
+ * Ladder is the one competitor whose design does not fall short of ours, and its bet is the exact
+ * opposite of ours: its workout screen is a full-bleed video of a coach PERFORMING the lift, with
+ * the reps, the timer arc and the load as a HUD along the bottom. It works — 80% of their athletes
+ * had never used a fitness app before, and a person to follow is what makes that possible.
+ *
+ * We are not doing it, and the ruling is the same one that removed the drop-set tags the same day:
+ * the programme is decided in advance so that in the workout she thinks about nothing and only
+ * executes. A clip playing beside a live set is a thing to watch, which is a thing to think about,
+ * and the stage's whole job is to hold one decision and nothing else. So the quiet stays on the
+ * stage and the movement lives HERE — behind a door she opens on purpose, between sets, when
+ * looking something up is the thing she actually wants to do.
+ *
+ * ⚠️ WHEN THE VIDEO CONTENT LANDS, IT LANDS IN `FormMedia` ABOVE AND NOWHERE ELSE. The stage takes
+ * no clip, no loop, no thumbnail, and no autoplay.
+ *
  * The cues are NUMBERED, in moss, and they are numbered because they are a sequence — feet, then
  * bar path, then lockout. A bullet says "here are some facts"; an ordinal says "do this, then this".
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { FormMedia } from '@/components/FormMedia';
-import { font, stage, signal } from '@/design/tokens';
+import { font, stage, signal, ramp, rampLine } from '@/design/tokens';
 
 interface Props {
   title: string;
@@ -73,7 +89,19 @@ const styles = StyleSheet.create({
   // The clip runs to the card's own edges — no inset, no rounding of its own.
   media: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#26241f' },
   body: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 22, gap: 13 },
-  title: { fontFamily: font.sansSemibold, fontSize: 18, color: stage.ink0, textAlign: 'left' },
+  /*
+   * ⛔ 18 → 24 (2026-08-27). The lift's NAME was set one point above its own instructions — the cues
+   * below it are 17, and the founder's floor is 17, so the heading of this card had exactly one
+   * point of hierarchy over its body text and read as another cue that happened to be bold.
+   *
+   * This card exists to answer *"how do I do THIS lift"*; the demonstration is its hero and the name
+   * is what the demonstration is OF. `ramp.subhead` is the rung for a card's title, and against the
+   * 17-point cues it gives a 1.4× step — a heading you read first rather than one you find.
+   *
+   * ⚠️ AND IT HAD NO `lineHeight`, which is how a two-line name (`numberOfLines={2}` is right there)
+   * gets whatever the platform decides. Stated now, from the same rung.
+   */
+  title: { fontFamily: font.sansSemibold, fontSize: ramp.subhead, lineHeight: rampLine.subhead, color: stage.ink0, textAlign: 'left' },
   cueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 11 },
   // The ordinal, in moss: this is step one, then two, then three.
   index: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: signal[0], textAlign: 'left' },

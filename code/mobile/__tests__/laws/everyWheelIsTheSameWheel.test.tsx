@@ -102,14 +102,22 @@ describe('⛔ two sizes again — and this time the RELATIONSHIP is what is pinn
        * `numberOfLines={1}` Text inside a fixed-width flex item can be handed less than it asks for
        * by any number of layout paths, and the ellipsis does the rest.
        *
-       * So: absolute, no width, no `numberOfLines`. A Text out of the flow cannot be compressed by
-       * the flow, and one with no width has nothing to be truncated to.
+       * ⛔ AND "NO `numberOfLines`" WAS THE PART THAT WAS WRONG (founder, 2026-08-21). Absolute with
+       * neither `left` nor `right` is STILL laid out against the parent's width, so 41.5 at 64pt in a
+       * 120pt cell stopped ellipsising and started WRAPPING — `bottom: 0` put the last line on the
+       * baseline and the screen showed a huge lone `5` beside a header reading "planned 41.5". A cut
+       * number announces itself; a wrapped one impersonates a different number.
+       *
+       * So: absolute, no declared `width`, symmetric negative insets giving it a definite box six
+       * glyphs wide, and `numberOfLines={1}` as the backstop. See `theWheelNeverBreaksItsOwnNumber`.
        */
       const numeral = scroller.findAllByType(Text)[0];
       const st = flat(numeral.props.style);
       expect({ size, position: st.position }).toEqual({ size, position: 'absolute' });
       expect({ size, width: st.width }).toEqual({ size, width: undefined });
-      expect({ size, lines: numeral.props.numberOfLines }).toEqual({ size, lines: undefined });
+      expect({ size, lines: numeral.props.numberOfLines }).toEqual({ size, lines: 1 });
+      // The insets are what give it a real width to centre in — without them it wraps again.
+      expect({ size, anchored: st.left != null && st.right != null }).toEqual({ size, anchored: true });
     }
   });
 });
@@ -125,18 +133,44 @@ describe('the numeral is never truncated (C.2)', () => {
    * item is a candidate for compression whatever it asks for, and once compressed the ellipsis is
    * automatic.
    *
-   * So the claim moves from "the box is big enough" to "there is no box": the numeral is absolutely
-   * positioned, unconstrained and unlimited in lines. Nothing about the flow can reach it.
+   * So the claim moved from "the box is big enough" to "there is no box".
+   *
+   * ⛔ AND THAT OVERSHOT (2026-08-21). "No box" is not a state React Native has: an absolute child
+   * with no horizontal anchors is measured against its parent all the same, so the numeral stopped
+   * being truncated and started being WRAPPED — which is the same defect wearing a worse disguise.
+   * The claim is now the honest one: out of the flow, anchored on both sides so its box is definite
+   * and wider than its cell, and capped at one line.
    */
-  it("⛔ the numeral is out of the flow, so '82.5' has nothing to be truncated to", () => {
+  it("⛔ the numeral is out of the flow AND anchored, so '82.5' can neither truncate nor wrap", () => {
     const r = draw('md', 82.5);
     const texts = r.root.findAllByType(ScrollView)[0].findAllByType(Text);
     expect(texts.length).toBeGreaterThan(0);
     for (const t of texts) {
-      const st = flat(t.props.style) as { position?: string; width?: number };
+      const st = flat(t.props.style) as {
+        position?: string; width?: number; maxWidth?: number; left?: number; right?: number; fontSize?: number;
+      };
       expect(st.position).toBe('absolute');
       expect(st.width).toBeUndefined();
-      expect(t.props.numberOfLines).toBeUndefined();
+      expect(st.right).toBe(st.left);
+      expect(t.props.numberOfLines).toBe(1);
+
+      /*
+       * ⚠️ THIS ASSERTED `left < 0` FOR EVERY NUMERAL UNTIL 2026-08-27, AND THAT ENCODED THE BUG.
+       *
+       * It was true only because every numeral — including a distance-2 neighbour drawn at 18 points
+       * — was handed the CENTRE numeral's box. That is what put `135` at −77→204 on a 390-point
+       * frame on `2.2d`: a small numeral wearing a big numeral's overhang, off the side of the phone.
+       *
+       * A numeral overhangs its cell WHEN IT NEEDS TO and not otherwise, so the honest properties
+       * are: the inset never pushes inward, and the box is never narrower than the ink it must hold.
+       * The second one is the whole point of C.2 and it is now checked directly rather than through
+       * a proxy that happened to correlate with it.
+       */
+      expect(st.left! <= 0).toBe(true);
+      const ink = String(t.props.children).length * 0.6 * (st.fontSize ?? 0);
+      expect({ box: st.maxWidth, ink: Math.ceil(ink), fits: (st.maxWidth ?? 0) >= ink }).toEqual({
+        box: st.maxWidth, ink: Math.ceil(ink), fits: true,
+      });
     }
   });
 

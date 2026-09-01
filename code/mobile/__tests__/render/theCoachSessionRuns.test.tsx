@@ -52,11 +52,13 @@ describe('the coach session reaches her hands', () => {
     const session = coachSession(plan, coachWorkoutId(0))!;
     const steps = buildPlanFromCoach(session);
 
-    // 4 rounds × 2 items, then 3 rounds × 1.
-    expect(steps.map((s) => s.item?.kind)).toEqual([
+    // 4 rounds × 2 items, then the lift's ramp (the live builder carries the bridges since
+    // 2026-08-25 — item-less, target-only steps), then 3 rounds × 1.
+    expect(steps.filter((s) => !s.warmup).map((s) => s.item?.kind)).toEqual([
       'distance', 'time', 'distance', 'time', 'distance', 'time', 'distance', 'time',
       'reps', 'reps', 'reps',
     ]);
+    expect(steps.filter((s) => s.warmup).every((s) => s.target && !s.item)).toBe(true);
     // The instruction survives all the way to the step she is looking at while she does it.
     expect(steps[0].item?.say).toBe('Faster than conversation pace.');
   });
@@ -65,8 +67,10 @@ describe('the coach session reaches her hands', () => {
     // The rest of the machine drives a load off `target`. A run has no load to drive, and giving it
     // an empty one would put a weight column on a 400 m repeat.
     const steps = buildPlanFromCoach(coachSession(await land(), coachWorkoutId(0))!);
-    expect(steps.filter((s) => s.target).map((s) => s.item?.kind)).toEqual(['reps', 'reps', 'reps']);
-    expect(steps.find((s) => s.target)!.target).toMatchObject({
+    // Working steps: only the reps shape carries a target. (The lift's warm-up bridges carry one
+    // too — that is what a bridge is — and are excluded here by their own mark.)
+    expect(steps.filter((s) => s.target && !s.warmup).map((s) => s.item?.kind)).toEqual(['reps', 'reps', 'reps']);
+    expect(steps.find((s) => s.target && !s.warmup)!.target).toMatchObject({
       recommendedWeight: 40, repBandLo: 8, repBandHi: 12,
     });
   });

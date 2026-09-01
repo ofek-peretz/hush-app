@@ -11,7 +11,6 @@
  * Honesty rule (the cardio precedent, `cardioMath.kcalForKm`): no bodyweight ⇒
  * NO number. Hush never guesses a body to bill calories against.
  */
-// @ts-nocheck
 
 // 
 

@@ -14,7 +14,6 @@
  * reps reach the top of the band — which is a comparison of two recorded numbers, not an inference
  * about the athlete. R7: Hush never states a reason it did not measure.
  */
-// @ts-nocheck
 
 // 
 
@@ -58,7 +57,10 @@ export interface ChangedLiftCase {
 
 /** The reps of every logged set of one lift in one session, in the order they were performed. */
 function repsOf(session: Session, exerciseId: string): SetLog[] {
-  return session.sets.filter((s) => s.exerciseId === exerciseId);
+  // Working sets only — a warm-up bridge (`isApproach`) would put its half weight in `sets[0]`
+  // and its 5·3 reps at the head of the chain, and the case would argue from the road instead of
+  // the work (2026-08-24).
+  return session.sets.filter((s) => s.exerciseId === exerciseId && !s.isApproach);
 }
 
 /**

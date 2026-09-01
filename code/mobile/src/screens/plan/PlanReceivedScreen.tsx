@@ -8,7 +8,6 @@
  * A token that will not read is not a screen: it goes straight back, because a screen offering to
  * adopt something it could not parse is worse than no screen at all.
  */
-// @ts-nocheck
 
 // 
 
@@ -65,6 +64,14 @@ export function PlanReceivedScreen({ navigation, route }: Props) {
          * were encoded by a copy of this app — so there is nothing to match and nothing to guess.
          * `unmatched` is empty by construction.
          *
+         * ⚠️ "ENCODED BY A COPY OF THIS APP" IS AN ASSUMPTION, AND IT WAS LOAD-BEARING. Anyone can
+         * hand-craft the token, and a shared week may legitimately hold a RUN, which is a movement
+         * and by design not in `EXERCISES`. `toProgram` asserted on every id (`exerciseById(id)!`)
+         * and threw inside this async handler; the rejection was swallowed by nothing at all and
+         * the button simply did not respond, however many times she pressed it. `decodePlan` now
+         * drops an id that names neither a lift nor a movement, and `toProgram` skips a slot the
+         * catalogue cannot describe.
+         *
          * ⛔ WHAT SHE GETS IS NOW WHAT THE SCREEN PROMISED. The note this replaces admitted the
          * screen "promised you adopt the shape and adopted nothing but a number". The model was the
          * fix for that; this is the fix that does not need one — her friend's days, her friend's
@@ -72,13 +79,26 @@ export function PlanReceivedScreen({ navigation, route }: Props) {
          * ════════════════════════════════════════════════════════════════════════════════════════
          */
         if (plan.repBandByMuscle) {
-          // Her rep bands are a PREFERENCE she chose, not a measurement — they cross directly.
+          /*
+           * Her rep bands are a PREFERENCE she chose, not a measurement — they cross directly, and
+           * the card above says so before she presses, because this REPLACES hers.
+           *
+           * ⚠️ AND WHAT CROSSES IS VALIDATED, IN `decodePlan`. This spread a link's object straight
+           * onto her stored profile: a hand-crafted payload wrote arbitrary keys into it, and a
+           * value that was not a string made `planBandSummary` throw while this very screen was
+           * rendering. Every key is now checked against `CANONICAL_MUSCLE_ORDER` and every value
+           * against `REP_BAND_CHOICES` before it ever reaches here.
+           */
           await app.updateProfileInfo({ repBandByMuscle: plan.repBandByMuscle as never }).catch(() => {});
         }
         const matched: MatchedWeek = {
           sessions: plan.days.map((d) => ({
             name: d.name,
-            lifts: d.exerciseIds.map((id) => ({ name: exerciseDisplayName(id), match: { id } })),
+            /* `how: 'exact'` — a shared plan carries verified catalogue ids, not free text, so the
+               match IS exact by construction. The literal was missing the required field and
+               `@ts-nocheck` shipped it anyway; downstream readers that switch on `how` were being
+               handed `undefined`. */
+            lifts: d.exerciseIds.map((id) => ({ name: exerciseDisplayName(id), match: { id, how: 'exact' as const } })),
           })),
           unmatched: [],
         };

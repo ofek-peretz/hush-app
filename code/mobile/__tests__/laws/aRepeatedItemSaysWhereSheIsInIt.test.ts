@@ -39,13 +39,40 @@ describe('a repeated item says where she is in it', () => {
      */
     const flow = read('src/screens/session/SessionFlow.tsx');
     expect(flow).toContain('const round = session.setLabel;');
-    // One rail, fed the same label the words used to carry.
-    expect(flow).toContain('setN={session.setLabel?.n}');
-    expect(flow).toContain('setM={session.setLabel?.m}');
+    /*
+     * One rail, fed the same label the words used to carry.
+     *
+     * ⚠️ THE FEED GREW A REST BRANCH (2026-08-18) AND THE LAW IS UNCHANGED BY IT. `setLabel` is the
+     * set on the STAGE — this rule's subject, and still exactly what the rail is given there. A
+     * REST is the gap AFTER that set, and once the rest card began naming the set she comes back to
+     * ("Set 3 of 4"), a rail still reading `setLabel` put **"SET 2/4" eight points above it**: two
+     * numbers for one lift, both wearing the word set. So the rest reads `nextSetLabel`, which is
+     * the same fact the pips beside it already draw — set 2 spent, set 3 lit.
+     *
+     * The assertion carries the whole expression rather than the bare label, so a future edit that
+     * quietly drops the stage's own feed still fails here.
+     */
+    expect(flow).toContain('setN={restingBetweenSets ? session.nextSetLabel?.n : session.setLabel?.n}');
+    expect(flow).toContain('setM={restingBetweenSets ? session.nextSetLabel?.m : session.setLabel?.m}');
+    /* ⚠️ AND THE BRANCH IS SPELLED WITH A PHASE THAT EXISTS. `DisplayPhase` is
+       `'SET_PRESENTED' | 'REST_INTER' | 'REST_TRANSITION'`; the first draft of this tested for
+       `'REST'`, which is not one of them, and went green — the Rest screen is the FALL-THROUGH
+       branch, so an invented phase renders it and every fixture agreed with the mistake. */
+    expect(flow).toContain("const restingBetweenSets = session.displayPhase === 'REST_INTER';");
     // …and the hold no longer says it a second time.
     const stage = read('src/screens/session/ItemStage.tsx');
-    const time = stage.slice(stage.indexOf('export function TimeStage'), stage.indexOf('export function DistanceStage'));
-    expect(time).not.toContain('<RoundLine');
+    /*
+     * ⛔ AND ON 2026-08-19 IT WENT FROM THE DISTANCE STAGE TOO. This law sliced the file down to
+     * `TimeStage` and asked only that one — so `<RoundLine round={round} />` stood untouched in
+     * `DistanceStage`, and a 6 × 400 m interval read its own position twice, in two languages, on
+     * one screen. The ruling was never about the hold; it was about saying a fact once. The
+     * component, its prop and its copy key are deleted.
+     */
+    // The component and its key, not the memory of them: the two notes that record the ruling are
+    // exactly what stops it being rebuilt.
+    expect(stage).not.toContain('<RoundLine');
+    expect(stage).not.toContain('function RoundLine');
+    expect(stage).not.toContain('repOfM');
   });
 
   it('⛔ and the hold is built in the SET stage’s language', () => {
@@ -61,16 +88,24 @@ describe('a repeated item says where she is in it', () => {
     expect(stage).not.toContain('textShadowRadius'); // the bloom that read as a box
   });
 
-  it('⚠️ stays silent when the item does not repeat', () => {
-    // A single 5 km run is not "rep 1 of 1". Saying so puts a number on the stage that means
-    // nothing, which is worse than the silence it replaced.
-    expect(read('src/screens/session/ItemStage.tsx')).toContain('if (!round || round.m <= 1) return null;');
+  it('⚠️ and the rail is the only thing that says where she is', () => {
+    /*
+     * The silence this used to pin — "a single 5 km run is not rep 1 of 1" — is now structural
+     * rather than guarded: neither stage draws a position at all, so there is no `round.m <= 1`
+     * case left to get wrong. `LiftRail` draws it from `session.setLabel`, once, for every shape.
+     */
+    const stage = read('src/screens/session/ItemStage.tsx');
+    expect(stage).not.toContain('round.m <= 1');
+    expect(read('src/screens/session/SessionFlow.tsx')).toContain('<LiftRail');
   });
 
   it('is written in both languages', () => {
     for (const loc of ['en', 'he']) {
       const copy = JSON.parse(read(`src/i18n/locales/${loc}.json`)) as { workout: Record<string, string> };
-      expect(copy.workout.repOfM).toMatch(/\{\{n\}\}[\s\S]*\{\{m\}\}/);
+      // ⛔ `repOfM` IS GONE WITH THE LINE IT LABELLED. Dead copy in a locale file is how a screen
+      // comes back a year later, because someone finds the key and assumes it belongs — which is
+      // the argument this very test makes about `keyPoints` two lines down.
+      expect(copy.workout.repOfM).toBeUndefined();
       /*
        * ⛔ AND `keyPoints` MUST BE GONE, not merely unused — it was the label of the speech disc on
        * the cardio run, the one caller of the sheet that went with it. Dead copy in a locale file is

@@ -117,13 +117,50 @@ describe('⛔ and it asks for nothing', () => {
      * Let's have some class."* The card module still exists and still makes a real record card; what
      * is refused is the ASK.
      */
-    expect(flow()).not.toMatch(/complete\.share|onShare|ShareCardModal/);
+    /*
+     * ⚠️ WORD-BOUNDED, AFTER IT FIRED ON `earnedReasonShared` (2026-08-22) — a style for the ledger's
+     * grouped sentence, which contains the letters `onShare` between "…Reas" and "d" and has nothing
+     * to do with sharing anything.
+     *
+     * **A law that fires on a substring inside an unrelated identifier is a law somebody eventually
+     * deletes**, and the thing it protects here is a founder ruling worth keeping: *"SHARE makes us
+     * look like we want publicity — they can screenshot it and post it. Let's have some class."* So
+     * the pattern asks for the NAME, not for the letters: a prop, a handler or a route by that name.
+     */
+    /*
+     * ⛔⛔ THE LAW WAS DEAD AND NOBODY KNEW (found 2026-08-23, by contradiction). The 2026-08-22
+     * "word-bounded" fix wrote RAW BACKSPACE CHARACTERS (0x08) into this regex instead of the two
+     * source characters backslash-b — so the pattern could only ever match a literal backspace,
+     * matched nothing, and the assertion passed vacuously from the day it was "fixed". It was
+     * caught only because a change that SHOULD have failed it, did not. A law is a claim; a claim
+     * that cannot fail protects nothing.
+     *
+     * ⛔ AND THE RULING IT GUARDS WAS REVERSED THE SAME DAY, BY THE FOUNDER, BY NAME: *"המסך שאותו
+     * אנשים ירצו לשתף ולהעלות לסטורי … מקור הגאווה שלהם + האפשרות לפרסום שלנו בזכות חשיפה ויראלית.
+     * אנו חייבים לעמוד במשימה הזאת."* The 2026-08-02 half that SURVIVES is about the POSTER —
+     * *"let's have some class"* — so the poster half of the screen still carries no share chrome;
+     * the door lives in the FOOTER, quiet, in the record link's own dress, and opens the proudest
+     * TRUE card (the record when one was set, the session story otherwise).
+     */
+    const src = flow();
+    const posterHalf = src.slice(0, src.indexOf('styles.footer'));
+    expect(posterHalf).not.toMatch(/\bonShareStory\b|\bShareCardModal\b/);
   });
 
-  it('⚠️ and it ends on DONE, with exactly one quiet door beside it', () => {
-    // Three controls on a closing beat is three decisions where there should be one.
-    expect(flow()).toContain("label={t('complete.done')}");
-    expect(flow()).toContain("t('complete.viewRecord')");
+  it('⚠️ and it ends on DONE with ONE quiet door — the story (founder, build-58 QA 2026-08-24)', () => {
+    /*
+     * RE-LITIGATED: the footer he photographed carried FOUR rows and buried the decisions box —
+     * *"באג חריף שמסתיר את הכרטיסייה של ההחלטות"*. The record link went (the Log owns the table)
+     * and the together door went (a partner workout gets its OWN screen; an ordinary finish never
+     * asks). One act, one quiet door — and the box breathes again.
+     */
+    const src = flow();
+    expect(src).toContain("t('complete.shareStory')");
+    const footer = src.slice(src.indexOf('styles.footer'));
+    expect(footer).not.toContain("t('complete.viewRecord')");
+    expect(footer).not.toContain("t('complete.togetherDoor')");
+    // The story door stays a QUIET line — never a second primary.
+    expect(src).toMatch(/onPress=\{onShareStory\}[\s\S]{0,220}styles\.recordLink/);
   });
 
   it('⛔ the decisions are NOT deleted — they are below the poster', () => {
@@ -134,5 +171,43 @@ describe('⛔ and it asks for nothing', () => {
      */
     expect(flow()).toContain('THE DECISIONS —');
     expect(flow()).toContain('styles.earned');
+  });
+});
+
+describe('⛔ the story door shares the WORKOUT (founder, device QA 2026-08-23)', () => {
+  /*
+   * *"אני רוצה לשתף את האימון מאיפה הגיע הדדליפט הזה."* The first cut had the record card OUTRANK the
+   * session at this door ("prouder truth wins"), and on his own device the door opened a deadlift
+   * figure instead of the workout with her body on it. The record rides the session card as a
+   * line now (`ShareSessionCard.record`, attached inside `sessionCardFromHistory`); no card may
+   * outrank the workout at its own door again.
+   */
+  const welldone = () => read('src/screens/session/WellDone.tsx');
+
+  it('the door builds the SESSION card, and never the record card', () => {
+    const at = welldone().indexOf('onShareStory={');
+    expect(at).toBeGreaterThan(-1);
+    // A fixed window is enough: the door's whole builder sits within it, and the next use of
+    // either builder name is many hundreds of lines away.
+    const door = welldone().slice(at, at + 2400);
+    expect(door).toContain('sessionCardFromHistory(');
+    expect(door).not.toContain('recordCardFromHistory(');
+  });
+
+  it('…and the record is attached INSIDE the session card, so the pride is not lost', () => {
+    const domain = read('src/domain/shareCard.ts');
+    const at = domain.indexOf('export function sessionCardFromHistory');
+    const body = domain.slice(at, domain.indexOf('export type ShareCard'));
+    expect(body).toContain('recordCardFromHistory(history, units)');
+  });
+
+  it('⛔ and her BODY stands on the finish screen itself, not only behind the door', () => {
+    // *"אמרת שיופיע כאן הדמויות. אין פה שום דבר שקשור לזה."* The pair was built for the share card
+    // and drawn only there; the screen he photographs is this one.
+    const earnedAt = welldone().indexOf('export function SessionEarned');
+    expect(earnedAt).toBeGreaterThan(-1);
+    const poster = welldone().slice(earnedAt, welldone().indexOf('styles.footer', earnedAt));
+    expect(poster).toContain('<MiniBody face="front"');
+    expect(poster).toContain('<MiniBody face="back"');
   });
 });

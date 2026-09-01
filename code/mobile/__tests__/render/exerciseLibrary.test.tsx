@@ -28,15 +28,17 @@
 
 import React from 'react';
 import renderer, { act, type ReactTestRenderer } from 'react-test-renderer';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import fs from 'fs';
 import path from 'path';
 
 import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
 import { libraryPool, refusalBlock, cleanPicks } from '@/domain/exerciseLibrary';
-import { EXERCISES, isSwapOnly, exercisesForMuscle } from '@/data/exercises';
+import { EXERCISES, isSwapOnly, engineMayAssign, exercisesForMuscle } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { initI18n, tg } from '@/i18n';
+import { color } from '@/design/tokens';
 
 const SRC = path.join(__dirname, '..', '..', 'src');
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
@@ -99,13 +101,33 @@ const pressLabel = (r: ReactTestRenderer, label: string) => {
   act(() => n.props.onPress());
 };
 
+/**
+ * A muscle row announces what is behind it — "Chest — 7 lifts", "Back — 2 picked" — so it is
+ * matched on the name it opens with, not on the whole label.
+ *
+ * ⛔ AND THAT IS NOT A CONVENIENCE. In English the BACK muscle and the scaffold's back arrow both
+ * said "Back", so pressing by the bare name found two buttons and this suite failed on the day the
+ * muscle names stopped being engine tokens ("back", "quad", "glute"). The row saying what it holds
+ * is the fix for the athlete and for the test at once.
+ */
+const pressMuscle = (r: ReactTestRenderer, muscle: string) => {
+  const name = tg(`muscle.${muscle}`);
+  const n = r.root.find(
+    (x) =>
+      typeof x.props.accessibilityLabel === 'string' &&
+      x.props.accessibilityLabel.startsWith(`${name} — `) &&
+      typeof x.props.onPress === 'function',
+  );
+  act(() => n.props.onPress());
+};
+
 const texts = (r: ReactTestRenderer): string[] =>
   r.root.findAll((n) => typeof n.type === 'string' && n.props.children != null)
     .map((n) => (Array.isArray(n.props.children) ? n.props.children.join('') : String(n.props.children)));
 
 describe('⛔ she can reach it, or it is not a feature', () => {
-  it('the profile page has a door to it', () => {
-    expect(read('screens/profile/ProfileSheet.tsx')).toMatch(/navigate\('ExerciseLibrary'\)/);
+  it('the Program tab has a door to it — its true home since the tab shipped (You’s copy left 2026-08-23)', () => {
+    expect(read('screens/program/ProgramTab.tsx')).toMatch(/navigate\('ExerciseLibrary'\)/);
   });
 
   it('and the stack registers the screen behind it', () => {
@@ -122,8 +144,12 @@ describe('⛔ she is only offered lifts the engine can actually deal her', () =>
   });
 
   it('⚠️ and the pool is otherwise the whole muscle — nothing else is quietly withheld', () => {
+    /* AMENDED 2026-08-26: "withheld" is measured against what the assembler can DEAL, which is
+       `engineMayAssign` — the choice-only shelf (21s, the EZ bar, the rope) joined swap-only
+       outside it. Same doctrine as line 13 of the domain: a pick the engine cannot deal is a
+       promise the screen cannot keep; the shelf's home is the builder and the swap menu. */
     for (const m of CANONICAL_MUSCLE_ORDER) {
-      const all = exercisesForMuscle(m).filter((e) => !isSwapOnly(e.id)).map((e) => e.id);
+      const all = exercisesForMuscle(m).filter((e) => engineMayAssign(e.id)).map((e) => e.id);
       expect(libraryPool(m).map((e) => e.id)).toEqual(all);
     }
   });
@@ -145,7 +171,7 @@ describe('⛔ the last lift of a muscle she left ON cannot be refused', () => {
   it('⛔ the screen SAYS so rather than dropping the tap', async () => {
     const r = await mount();
     // Open Chest, then refuse every lift in it. The last one must produce the sentence.
-    pressLabel(r, tg('muscle.Chest'));
+    pressMuscle(r, 'Chest');
     const names = libraryPool(muscle).map((e) => e.name);
     for (const n of names.slice(0, -1)) pressLabel(r, `${n} — ${tg('library.stance.refused')}`);
     expect(texts(r)).not.toContain(tg('library.lastLift', { muscle: tg('muscle.Chest') }));
@@ -157,7 +183,7 @@ describe('⛔ the last lift of a muscle she left ON cannot be refused', () => {
 describe('⛔ what she taps is what the engine is handed', () => {
   it('a pick is saved under its MUSCLE, in her order', async () => {
     const r = await mount();
-    pressLabel(r, tg('muscle.Chest'));
+    pressMuscle(r, 'Chest');
     const [a, b] = libraryPool('Chest');
     // Picked second-then-first on purpose: her ORDER is the seating plan `pickExercises` reads.
     pressLabel(r, `${b.name} — ${tg('library.stance.picked')}`);
@@ -170,10 +196,12 @@ describe('⛔ what she taps is what the engine is handed', () => {
 
   it('⚠️ taking a pick back really REMOVES it — absence is how she says "I never said"', async () => {
     const r = await mount();
-    pressLabel(r, tg('muscle.Chest'));
+    pressMuscle(r, 'Chest');
     const a = libraryPool('Chest')[0];
     pressLabel(r, `${a.name} — ${tg('library.stance.picked')}`);
-    pressLabel(r, `${a.name} — ${tg('library.stance.none')}`);
+    // ⛔ The middle rung is gone as a CONTROL (device QA 2026-08-23) — taking a pick back is a
+    // second press on the lit chip, and `none` survives only as the state that leaves.
+    pressLabel(r, `${a.name} — ${tg('library.stance.picked')}`);
     pressLabel(r, tg('library.save'));
     await act(async () => { await Promise.resolve(); });
     expect(savedCalls[0][0]).not.toHaveProperty('Chest');
@@ -181,7 +209,7 @@ describe('⛔ what she taps is what the engine is handed', () => {
 
   it('⛔ a refusal is saved FLAT, across every muscle — the field the assembler reads', async () => {
     const r = await mount();
-    pressLabel(r, tg('muscle.Chest'));
+    pressMuscle(r, 'Chest');
     const a = libraryPool('Chest')[0];
     pressLabel(r, `${a.name} — ${tg('library.stance.refused')}`);
     pressLabel(r, tg('library.save'));
@@ -208,7 +236,7 @@ describe('⛔ a pick for a muscle she switched OFF is not deleted', () => {
 
     const r = await mount();
     const back = libraryPool('Back')[0];
-    pressLabel(r, tg('muscle.Back'));
+    pressMuscle(r, 'Back');
     pressLabel(r, `${back.name} — ${tg('library.stance.picked')}`);
     pressLabel(r, tg('library.save'));
     await act(async () => { await Promise.resolve(); });
@@ -231,5 +259,54 @@ describe('⚠️ a pick she later refused is dropped, not argued with', () => {
   it('⚠️ …including a real lift filed under a DIFFERENT muscle', () => {
     const back = EXERCISES.find((e) => e.muscle === 'Back' && !isSwapOnly(e.id));
     expect(cleanPicks('Chest', [back.id], new Set())).toEqual([]);
+  });
+});
+
+/**
+ * ⛔ THE ACCENT BELONGS TO A DECISION, NOT TO THE ABSENCE OF ONE (founder, 2026-08-19).
+ *
+ * The rung styling was `isOn && (s === 'refused' ? rungNo : rungOn)`, and `none` is the DEFAULT
+ * stance of every lift — so opening a muscle drew a column of moss chips, one per lift, every one
+ * of them lit in the colour this product keeps for progress and every one of them meaning **she has
+ * said nothing yet**. The file's own header states the rule the paint broke: the middle rung is the
+ * absence of a decision.
+ */
+describe('⛔ the accent belongs to a decision, not to the absence of one', () => {
+  /*
+   * RE-LITIGATED (device QA 2026-08-23): the middle rung is gone as a control — *"יש שם פלוס
+   * או מינוס אבל מה זה אומר בכלל?"* — so the 2026-08-19 rule this suite pins ("no moss on the
+   * absence of a decision") is now held by the chips themselves: an untouched lift draws NO lit
+   * chip at all, and taking a pick back (a second press) returns it to that state.
+   */
+  const rungOf = (r: ReactTestRenderer, name: string, stance: string) =>
+    r.root.find(
+      (x) => x.props.accessibilityLabel === `${name} — ${tg(`library.stance.${stance}`)}`
+        && typeof x.props.onPress === 'function',
+    );
+
+  it('a lift she has said nothing about lights NO chip — and never the progress colour', async () => {
+    // The stubbed db persists across this file's tests — start this one from a clean slate.
+    const store = require('@/data/local/db');
+    await store.db.savePreferences({ ...(await store.db.loadPreferences()), chosenByMuscle: {}, refusedIds: [] });
+    const r = await mount();
+    pressMuscle(r, 'Chest');
+    const lift = libraryPool('Chest')[0];
+    for (const st of ['picked', 'refused']) {
+      const chip = rungOf(r, lift.name, st);
+      expect(chip.props.accessibilityState.selected).toBe(false);
+      expect(StyleSheet.flatten(chip.props.style)?.backgroundColor).toBeUndefined();
+    }
+  });
+
+  it('and a pick is moss — and a second press takes it back to nothing', async () => {
+    const store = require('@/data/local/db');
+    await store.db.savePreferences({ ...(await store.db.loadPreferences()), chosenByMuscle: {}, refusedIds: [] });
+    const r = await mount();
+    pressMuscle(r, 'Chest');
+    const lift = libraryPool('Chest')[0];
+    pressLabel(r, `${lift.name} — ${tg('library.stance.picked')}`);
+    expect(StyleSheet.flatten(rungOf(r, lift.name, 'picked').props.style)?.backgroundColor).toBe(color.accent);
+    pressLabel(r, `${lift.name} — ${tg('library.stance.picked')}`);
+    expect(StyleSheet.flatten(rungOf(r, lift.name, 'picked').props.style)?.backgroundColor).toBeUndefined();
   });
 });

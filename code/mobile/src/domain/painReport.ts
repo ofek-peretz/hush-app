@@ -21,7 +21,6 @@
  * never asks the athlete to diagnose, and it does not diagnose either. Severity buys ONE thing: how
  * long the muscle rests.
  */
-// @ts-nocheck
 
 // 
 

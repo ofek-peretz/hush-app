@@ -3,12 +3,12 @@
  * Identity, rendered quietly: initials in mono on a neutral surface. No colorful
  * gradients, no photos — a professional tool, not a social profile.
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import { HushMark } from '@/components/HushMark';
 import { color, radius, font, paper, ink } from '@/design/tokens';
 
 function initials(name?: string): string {
@@ -35,9 +35,20 @@ export function Avatar({ name, size = 40, square = false, solid = false, style }
         style,
       ]}
     >
-      <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }, solid && styles.textSolid]}>
-        {initials(name)}
-      </Text>
+      {/*
+        ⛔ AN EMPTY SLOT IS FILLED BY THE MARK, NEVER BY A CHARACTER (2026-08-21).
+        The one caller used to pass `name ?? '?'`, which drew a question mark in a round avatar — an
+        unknown user, or a help button, at the top of the screen that is supposed to be hers. Naming
+        yourself is optional in this product and always was, so "no name" is a normal state and needs
+        a normal answer. The mark is the one this app already uses when it stands for itself.
+      */}
+      {initials(name) ? (
+        <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }, solid && styles.textSolid]}>
+          {initials(name)}
+        </Text>
+      ) : (
+        <HushMark size={Math.round(size * 0.42)} />
+      )}
     </View>
   );
 }

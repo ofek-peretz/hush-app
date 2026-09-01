@@ -278,21 +278,36 @@ export function applySuggestion(matched: MatchedWeek, name: string, exerciseId: 
   return { ...matched, sessions, unmatched: matched.unmatched.filter((n) => n !== name) };
 }
 
+/**
+ * ⚠️ A MATCH ID IS NOT A PROMISE THE CATALOGUE CARRIES IT. This asserted — `exerciseById(id)!` — on
+ * the strength of the local matcher, which only ever answers with ids it read out of `EXERCISES`.
+ * The SHARED-PLAN path does not go through the matcher: `PlanReceivedScreen` builds a `MatchedWeek`
+ * straight from a link's ids, and a shared week may deliberately contain a run, which is a MOVEMENT
+ * and by design not in `EXERCISES`. Adopting a friend's plan with a run in it threw inside an async
+ * `onPress`, the rejection was swallowed, and the button did nothing however many times she pressed
+ * it. A slot the catalogue cannot describe is skipped — there is no capability to give it.
+ *
+ * ⚠️ AND A DAY LEFT WITH NOTHING IS NOT A DAY. A session whose every lift went unmatched used to
+ * survive as a training day with zero slots: it counted on the review, it was adoptable, and it
+ * opened on a workout with nothing in it. `reviewFindings` reports it by name so the drop is a
+ * sentence she reads rather than a session that quietly stopped existing.
+ */
 export function toProgram(matched: MatchedWeek, id = `imported-${Date.now()}`): Program {
   const days: ProgramDay[] = matched.sessions.map((s, i) => {
-    const slots: Slot[] = s.lifts
-      .filter((l) => l.match.id)
-      .map((l) => {
-        const ex = exerciseById(l.match.id as string)!;
-        return {
+    const slots: Slot[] = s.lifts.flatMap((l) => {
+      const ex = l.match.id ? exerciseById(l.match.id as string) : undefined;
+      if (!ex) return [];
+      return [
+        {
           // The slot's capability is the LIFT's — read from the catalogue, never inferred from her
           // session's name. A day she calls "Push" that holds a row is still a row.
           capability: ex.capability,
           exerciseId: ex.id,
           setCount: l.sets && l.sets > 0 ? Math.floor(l.sets) : SETS_WHEN_UNSTATED,
           supplemental: false,
-        };
-      });
+        },
+      ];
+    });
     return {
       id: `${id}-d${i + 1}`,
       name: s.name,
@@ -301,7 +316,10 @@ export function toProgram(matched: MatchedWeek, id = `imported-${Date.now()}`): 
       isRest: false,
       slots,
     };
-  });
+  })
+    // The day numbering above stays keyed to the SESSION she wrote, so accepting a suggestion later
+    // rebuilds the same day under the same id rather than renumbering the week around it.
+    .filter((d) => d.slots.length > 0);
   return {
     id,
     frequency: days.length,
@@ -315,6 +333,8 @@ export function toProgram(matched: MatchedWeek, id = `imported-${Date.now()}`): 
 
 export type FindingKind =
   | 'unmatched_lift'
+  /** Every lift in one of her sessions went unmatched, so that day is not in the week at all. */
+  | 'session_empty'
   | 'sets_unstated'
   | 'session_over_hour'
   | 'muscle_under_dose'
@@ -345,6 +365,17 @@ export function reviewFindings(matched: MatchedWeek, program: Program): Finding[
   const out: Finding[] = [];
 
   for (const name of matched.unmatched) out.push({ kind: 'unmatched_lift', subject: name });
+
+  /*
+   * ⚠️ A WHOLE DAY LOST IS A SENTENCE, NOT A SILENCE. It reads second, right under the lifts that
+   * caused it: the individual "I couldn't find X" lines are the reason, and this is the consequence.
+   * `toProgram` drops the day — a training day with no slots opens on nothing — so if this were not
+   * reported, "3 sessions" on her sheet would become 2 in her week with nothing said about it.
+   */
+  for (const s of matched.sessions)
+    if (s.lifts.length > 0 && !s.lifts.some((l) => l.match.id)) {
+      out.push({ kind: 'session_empty', subject: s.name });
+    }
 
   for (const s of matched.sessions)
     for (const l of s.lifts) {

@@ -5,8 +5,9 @@
  * four native surfaces (HealthKit, Local Notifications, Live Activity / Dynamic
  * Island, Apple Watch). Each constant is the `type` passed to `track()` — so
  * every one of these flows through the SAME durable, append-only telemetry
- * pipeline (platform/telemetry.ts) to the backend `athlete_event` research
- * dataset. There is no parallel event store: telemetry IS the dataset, which
+ * journal (platform/telemetry.ts) — an on-device record plus Sentry breadcrumbs
+ * when a DSN exists; the v4 `athlete_event` backend sink is deleted (2026-08-25).
+ * There is no parallel event store: telemetry IS the dataset, which
  * keeps a single source of truth and means no interaction is lost (events are
  * persisted before they ship and survive relaunch).
  *
@@ -16,7 +17,6 @@
  * track()/deviceContext — see telemetry.ts — so each event is ordered and
  * reconstructable on its own.
  */
-// @ts-nocheck
 
 // 
 
@@ -120,6 +120,97 @@ export const WATCH_EVENTS = {
 } as const;
 
 /** Subscription / Apple Payments — StoreKit purchases behind the billing seam. */
+/**
+ * ⛔ THE ACTIVATION FUNNEL (2026-08-23, the world-class pass). Until this block, onboarding emitted
+ * ONE event (`health_skipped`) — so the single most important question a subscription product has,
+ * *where do people give up before their first workout*, was unanswerable from the dataset. One
+ * event per step REACHED; the funnel is the differences between counts. No per-field spying — a
+ * step is the granularity a fix can act on, and anything finer is surveillance dressed as product.
+ */
+/**
+ * ════ THE HEARTBEAT (2026-09-01, audit finding 2) ════
+ *
+ * Until this event existed, DAU/WAU and every retention curve — D1, D7, D30 — were not computable
+ * from the dataset: "was she alive today" could only be inferred from whatever product event
+ * happened to fire, and a day of quietly reading the programme fired none. One event per open,
+ * `{ kind: 'cold' | 'warm' }`, and the whole retention layer becomes arithmetic. Cold is a process
+ * launch; warm is a return from background. Nothing finer — an open is the granularity retention
+ * is measured at, and anything finer is surveillance dressed as product.
+ */
+export const LIFECYCLE_EVENTS = {
+  appOpen: 'app_open',
+} as const;
+
+export const FUNNEL_EVENTS = {
+  /** She is past sign-in and standing at the fork. */
+  startReached: 'funnel_start_reached',
+  /** Which door she took: { door: 'build' | 'bring' }. */
+  doorChosen: 'funnel_door_chosen',
+  aboutYouReached: 'funnel_about_you_reached',
+  healthReached: 'funnel_health_reached',
+  /**
+   * ⛔ THE STEP WHERE SHE SAYS WHO WRITES THE WEEK (founder 2026-08-29) — the builder, in intake
+   * chrome. It replaces `bodyMapReached`: the body map left the intake with the same ruling, and a
+   * funnel step that outlives its screen counts nobody while reading as "everyone got here".
+   */
+  yourWeekReached: 'funnel_your_week_reached',
+  /**
+   * Which of the three doors she took: `{ door: 'engine' | 'blank' | 'template' }`. The second
+   * payload in the taxonomy, and it earns its place for the same reason the fork's does — the three
+   * are three different products to fix, and a count that cannot tell them apart cannot say which.
+   */
+  weekDoorChosen: 'funnel_week_door_chosen',
+  buildReached: 'funnel_build_reached',
+} as const;
+
+/**
+ * ⛔ WHAT THE CATALOGUE DID NOT HAVE (founder 2026-08-29): *"שזה לא ישפיע על ההחלטות שלו באיזשהו
+ * אופן, כי אם כן נוסיף עוד תרגילים ככל שנצטרך."*
+ *
+ * The plan-build call gives the model a free hand and one vocabulary. A vocabulary silently bends
+ * what gets said — so the model is asked to NAME the lift it wanted and could not find, and that
+ * name lands here. It is the only signal in the product that says which exercise to author next,
+ * and without it a missing lift is invisible: it shows up as a week slightly worse than the one the
+ * model meant to write, on somebody's phone, for ever.
+ *
+ * ⚠️ ONE EVENT, NOT A FAMILY. There is one question — *what were we asked for and did not have* —
+ * and `{ wanted: string[] }` answers it. A second event counting how often it happens would be the
+ * same fact derived twice.
+ */
+export const BUILD_EVENTS = {
+  catalogueGap: 'build_catalogue_gap',
+  /**
+   * ⛔ THE SAME QUESTION, ASKED BY A LOG SHE BROUGHT (2026-09-01, audit M1).
+   *
+   * `catalogueGap` learns what the MODEL wanted and could not find. The import learns something
+   * strictly better, because it is not a model's preference — it is a list of lifts a real athlete
+   * has really been performing, twice a week, for two years, in another app. A name the local
+   * matcher cannot place is the single most concrete answer there is to *which exercise do we
+   * author next*, and until this line it was counted on screen and thrown away.
+   *
+   * ⚠️ NAMES, BOUNDED, AND NOTHING ELSE. Ten at most and 40 characters each — the point is the
+   * VOCABULARY, and a whole file's worth of strings would be her training record leaving the
+   * phone through a research event. No loads, no dates, no counts per name.
+   */
+  importGap: 'import_catalogue_gap',
+  /**
+   * ⛔ THE ANSWER STOPPED HALFWAY, AND WE TRIED AGAIN (2026-08-30).
+   *
+   * Measured at one call in five on the production Worker — a stream that dies mid-sentence, which
+   * for as long as the `finishReason` field has existed came back as a SUCCESS carrying half a JSON
+   * document. Counted because the rate is the only way anyone learns whether it got better or
+   * worse, and because it had been invisible: every one of those calls used to be charged to the
+   * model as "it wrote something unreadable".
+   */
+  truncated: 'build_truncated_retry',
+} as const;
+/*
+ * ⚠️ THE FUNNEL'S FAR EDGES ARE NOT HERE, DELIBERATELY. `onboarding_completed`,
+ * `session_started` and `session_completed` already exist in the dataset — the funnel JOINS to
+ * them; a `funnel_` duplicate of each would be two names for one fact, and the next analyst
+ * would trust whichever diverged less embarrassingly.
+ */
+
 export const BILLING_EVENTS = {
   /** The paywall was presented (free-trial limit reached, or opened from Profile). */
   paywallViewed: 'paywall_viewed',
@@ -141,6 +232,9 @@ export const BILLING_EVENTS = {
   restoreEmpty: 'restore_empty',
   /** The cached/effective entitlement state changed (refreshed from the store). */
   entitlementChanged: 'entitlement_changed',
+  /** ⚠️ A production iOS build resolved NO StoreKit module (audit finding 5) — the fail-closed
+   *  guard is live and nobody can buy anything. Must never fire on a healthy fleet; alert on any. */
+  storeUnavailable: 'billing_store_unavailable',
 } as const;
 
 export type HealthEvent = (typeof HEALTH_EVENTS)[keyof typeof HEALTH_EVENTS];

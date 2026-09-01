@@ -7,9 +7,15 @@
  * the granted state and, when flipped on, runs the system permission flow right there.
  *
  * v7 1.3: the icon is the moss ACTIVITY waveform (health is a signal, not a heart); the card's
- * fine print is a mono legend — "HR · KCAL · KM — DISPLAY ONLY" — stating what flows and, in
- * caps, that it never decides. A sans helper line under the card carries the law in words, and
- * the footer holds BOTH exits: Continue (paper) and a quiet "Skip for now" ghost.
+ * fine print is a mono legend stating what flows, and the footer holds BOTH exits: Continue (paper)
+ * and a quiet "Skip for now" ghost.
+ *
+ * ⚠️ THERE IS NO HELPER LINE UNDER THE CARD ANY MORE, and this paragraph promised one for six days
+ * after the founder deleted it (2026-08-12; his words are quoted at the scaffold below). Nothing on
+ * this screen states the law in words now — `ob.healthHelper` and `ob.healthSub` stand unrendered in
+ * the locale, held there by `appMatchesEngine`'s guard. The law itself did not move an inch: it is
+ * kept by `healthIngestion`, which may propose a BODYWEIGHT for display and never touches a lifting
+ * load or the model. Enforcement is the promise; the sentence was only ever a report of it.
  *
  * ════ AND THE WRIST, WHEN THERE IS ONE (founder 2026-07-29) ════
  *
@@ -28,7 +34,6 @@
  * would promise a decision that does not exist. It is a ruled row: a glyph, a sentence, no
  * affordance, visibly not the object above it.
  */
-// @ts-nocheck
 
 // 
 
@@ -36,7 +41,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, Switch, Legend } from '@/components/ds';
+import { Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import * as Localization from 'expo-localization';
@@ -44,24 +49,30 @@ import { unitsForDevice } from '@/domain/unitsForDevice';
 import { health } from '@/platform/health';
 import { recordPermissionOutcome } from '@/platform/health/healthIngestion';
 import { track } from '@/platform/telemetry';
+import { FUNNEL_EVENTS } from '@/platform/events';
 import { markWristOffered, readWatchPresence, wristFace } from '@/platform/watch/watchPresence';
 import * as haptics from '@/platform/haptics';
 import { color, font, textScale, radius } from '@/design/tokens';
+import type { OnboardingInputs } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ConnectHealth'>;
 
 export function ConnectHealth({ navigation, route }: Props) {
   const { t } = useCopy();
-  const sex = route.params?.sex;
-  const weightKg = route.params?.weightKg;
-  const age = route.params?.age;
-  const experience = route.params?.experience;
-  const daysPerWeekAsked = route.params?.daysPerWeek;
-  const workoutMinutes = route.params?.workoutMinutes;
-  const goal = route.params?.goal;
-  const limits = route.params?.limits;
-  const bodyMap = route.params?.bodyMap;
+  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. The last step that asks
+     a question with an answer; the one after it asks who writes the week. */
+  React.useEffect(() => {
+    void track(FUNNEL_EVENTS.healthReached);
+  }, []);
+  /*
+   * ⚠️ THIS SCREEN STILL READS NONE OF HER ANSWERS — it only FORWARDS them, in one place.
+   *
+   * Nine of them were once unpacked at the top of this file and never touched again, which reads as
+   * "a permission screen with a bodyweight in scope" and invites exactly what the ratified law
+   * forbids. They stay out of scope; `proceed` reaches into `route.params` at the single moment the
+   * relay is sealed, and nothing here looks at a value it is not carrying forward.
+   */
   const [connected, setConnected] = useState(false);
   /**
    * ════ THE SCREEN FLICKERS WHEN THE TOGGLE IS PRESSED (founder C.1) ════
@@ -124,35 +135,51 @@ export function ConnectHealth({ navigation, route }: Props) {
     // first open that knows. Both exits set it, because both leave the screen having shown it.
     if (wrist) void markWristOffered();
     /*
-     * ⛔ THIS IS NO LONGER THE LAST STEP (founder 2026-08-10). The body map is.
+     * ⛔ THIS IS NO LONGER THE LAST STEP (founder 2026-08-10). The step that shapes the week is —
+     * the body map until 2026-08-29, the BUILDER since. Health sat last because the step after it
+     * was a coach, and a permission ask is a fine thing to put in front of a conversation and a poor
+     * thing to put in front of a PROGRAMME. Ending on "may I read your heart rate" and then handing
+     * her a programme puts the dullest question in the product between her and what she came for.
      *
-     * Health sat last because the step after it was a coach, and a permission ask is a fine thing to
-     * put in front of a conversation. It is a poor thing to put in front of a PROGRAMME: the map is
-     * the only screen in the intake that shapes the week, so it is the emotional peak, and the peak
-     * belongs next to the payoff. Ending on "may I read your heart rate" and then handing her a
-     * programme puts the dullest question in the product between her and the thing she came for.
+     * ⛔ AND THE ASSEMBLY OF `OnboardingInputs` COMES BACK HERE (2026-08-29), whole.
      *
-     * ⚠️ SO THE ASSEMBLY OF `OnboardingInputs` MOVES WITH THE ORDER, whole, to the new last step.
-     * There must be ONE place that builds it — that principle is unchanged and is the reason this
-     * screen does not build half of it here and let the map bolt the rest on. What this step knows
-     * and nothing else does is her units and whether health was granted, so those two ride forward
-     * as params exactly as `sex` always has.
+     * It moved to the body map on 2026-08-10 under the rule that the LAST answering step builds the
+     * object. The last answering step is now the builder, and the builder has THREE ways out — build
+     * one for me, a blank sheet, a shelf — every one of which needs the relay complete on arrival.
+     * A screen with three exits assembling her weight in each of them is three places for it to go
+     * missing; that is the exact bug this relay's own history records. So the LAST STEP THAT COLLECTS
+     * AN ANSWER builds it, which is this one, and the builder only carries it.
+     *
+     * ⚠️ AND THE BODY MAP IS NO LONGER PART OF IT. Nothing in the intake produces one — `bodyMap`
+     * stays on `OnboardingInputs` because the profile still holds one (You → מפת הגוף writes it),
+     * but an absent key here means the engine door builds a full-body week with nothing switched
+     * off. That is the ruling's cost, stated where it is paid.
      */
-    navigation.navigate('BodyMap', {
-      ...(route.params ?? {}),
-      healthConnected: withHealth,
+    const inputs: OnboardingInputs = {
+      // Hush is hypertrophy-first for everyone (register Part 9 §A) — the goal question is gone.
+      goal: 'build_muscle',
+      /*
+       * ⛔ ZERO MEANS NOBODY HAS ASKED HER. This was a literal `4` once and it decided the founder's
+       * week unasked — *"he decides by himself that he'll do 4 workouts for me."* The fallback stays
+       * 0 so a missing answer reads as missing rather than as an answer.
+       */
+      daysPerWeek: route.params?.daysPerWeek ?? 0,
       // ════ THE PHONE ALREADY KNOWS (founder P0b.1) ════
       // This was `'kg'` for everybody, so every American athlete was told her bodyweight in kilos
       // and then had to go and find a switch. `unitsForDevice` reads the measurement system SHE set
       // when she set the phone up, and falls back to its region.
       units: unitsForDevice(Localization.getLocales()[0]),
-    });
+      healthConnected: withHealth,
+      sex: route.params?.sex,
+      ...(route.params?.weightKg != null ? { weightKg: route.params.weightKg } : {}),
+    };
+    navigation.navigate('PlanBuilder', { inputs });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 3 }}
+      progress={{ index: 3, total: 4 }}
       /*
        * ════════════════════════════════════════════════════════════════════════════════════════
        * ⛔ THREE LINES OFF THIS SCREEN (founder, 2026-08-12)
@@ -199,8 +226,12 @@ export function ConnectHealth({ navigation, route }: Props) {
     >
       {/* The card IS the switch — pressing anywhere on it flips Health. */}
       <Pressable
-        accessibilityRole="switch"
-        accessibilityState={{ checked: connected }}
+        /* ⛔ A BUTTON, NOT A SWITCH (design review 2026-09-01). A switch promises an instant flip;
+           behind this press is an OS permission sheet that may answer "no" — a control that flips
+           itself and then snaps back is a promise the interface cannot keep. The card is an ACT
+           ("connect"), and its state is said in words. */
+        accessibilityRole="button"
+        accessibilityState={{ selected: connected }}
         accessibilityLabel={t('ob.healthCardTitle')}
         onPress={() => void toggle()}
         style={({ pressed }) => [styles.card, connected && styles.cardOn, pressed && styles.cardPressed]}
@@ -221,12 +252,17 @@ export function ConnectHealth({ navigation, route }: Props) {
             {connected ? t('ob.healthCardOn') : t('ob.healthCardSub')}
           </Legend>
         </View>
-        {/* The switch is the card's STATE, drawn — not a second control. The card above is the
-            one Pressable and the one accessibility element; nesting a live Switch inside it
-            would announce two switches to VoiceOver and give the athlete two hit targets for
-            one decision. */}
+        {/* The card's STATE, drawn — not a second control (the card is the one Pressable). A
+            drawn "connect" chip before, the moss check after: an act and its receipt, never a
+            switch pretending the OS sheet does not exist. */}
         <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
-          <Switch size="lg" checked={connected} onChange={() => void toggle()} accessibilityLabel={t('ob.healthCardTitle')} />
+          {connected ? (
+            <Icon name="check" size={22} color={color.accent} strokeWidth={2.4} />
+          ) : (
+            <View style={styles.connectChip}>
+              <Text style={styles.connectChipText}>{t('ob.healthConnect')}</Text>
+            </View>
+          )}
         </View>
       </Pressable>
 
@@ -238,13 +274,24 @@ export function ConnectHealth({ navigation, route }: Props) {
           These are not a marketing list — they are exactly the three HealthKit types the app asks
           read access to (`healthKitGate`: HeartRate · ActiveEnergyBurned · DistanceWalkingRunning)
           and nothing else. Each row names the measurement and what having it makes true, which is
-          the promise; the helper line under them still carries the limit, because the ratified law
-          is that Health NEVER decides a weight. Both halves belong on this screen: the reason to
-          say yes, and the reason it is safe to. */}
+          the promise.
+
+          ⚠️ AND THERE IS NO HELPER LINE UNDER THEM. This note said there was, and that it "still
+          carries the limit" — it was deleted with the other two on 2026-08-12 (his words at the
+          scaffold below). What is left here is the reason to say yes; the reason it is safe to is
+          kept by `healthIngestion`, not by a fourth sentence in front of a switch. */}
       <View style={styles.reads}>
         <HealthRead icon="heart" name={t('ob.healthHr')} sub={t('ob.healthHrSub')} />
         <HealthRead icon="flame" name={t('ob.healthKcal')} sub={t('ob.healthKcalSub')} />
-        <HealthRead icon="footprints" name={t('ob.healthKm')} sub={t('ob.healthKmSub')} last />
+        <HealthRead icon="footprints" name={t('ob.healthKm')} sub={t('ob.healthKmSub')} />
+        {/*
+         * ⛔ THE WRITE SIDE, FINALLY SAID (2026-08-23). Hush has written every finished workout back
+         * to Health since the world-class pass — the plist promised it in writing for months — and
+         * the one screen where she decides about Health never mentioned the half that closes her
+         * rings. It is the most differentiating row of the four: every serious competitor reads;
+         * the sentence that matters is that her hour under the bar COUNTS.
+         */}
+        <HealthRead icon="activity" name={t('ob.healthRings')} sub={t('ob.healthRingsSub')} />
       </View>
 
       {/* THE WRIST — a ruled row, and only for someone who has one. No Pressable, no switch, no
@@ -268,12 +315,28 @@ export function ConnectHealth({ navigation, route }: Props) {
 
 /**
  * One measurement Health hands over: a moss glyph, its name, and what having it makes true.
- * Ruled between rows so the three read as a list of facts rather than a paragraph in columns.
+ *
+ * ⛔ THE RULES BETWEEN THEM ARE DELETED (2026-08-26, the elevation pass).
+ *
+ * They were there *"so the three read as a list of facts rather than a paragraph in columns"* — a
+ * real worry, and one the type already answers: every row is a semibold name in full ink over a
+ * muted sentence, which is two tiers before a line is drawn. What the rules added on top was the
+ * texture of an iOS SETTINGS table, on a screen that is an OFFER — a moss-rimmed invitation with
+ * supporting detail under it, not a list of preferences.
+ *
+ * It is the founder's own ruling from the set stage, where he deleted the same lines for the same
+ * reason: *"the air between them is the separator; there is a lot of it, and it is free."*
+ *
+ * ⚠️ THE WRIST ROW KEEPS ITS RULE, and that is the distinction rather than an inconsistency: it
+ * separates two different KINDS of thing (what Health reads / what a watch adds), which is exactly
+ * the job a hairline is still the lightest tool for.
  */
-function HealthRead({ icon, name, sub, last }: { icon: 'heart' | 'flame' | 'footprints'; name: string; sub: string; last?: boolean }) {
+function HealthRead({ icon, name, sub }: { icon: 'heart' | 'flame' | 'footprints' | 'activity'; name: string; sub: string }) {
   return (
-    <View style={[styles.read, !last && styles.readRuled]}>
-      <Icon name={icon} size={17} color={color.accent} strokeWidth={1.8} />
+    <View style={styles.read}>
+      {/* 17 → 24 (design review 2026-09-01): the icon ladder is 20/24/32, and a 17-point stroke
+          glyph in moss on black sat below legibility while the card above drew its own icon at 23. */}
+      <Icon name={icon} size={24} color={color.accent} strokeWidth={1.8} />
       <View style={styles.readText}>
         <Text style={styles.readName}>{name}</Text>
         <Text style={styles.readSub}>{sub}</Text>
@@ -307,15 +370,15 @@ const styles = StyleSheet.create({
   sub: { color: color.textSecondary, marginTop: 3 },
   // The three measurements — a block of rows, not a paragraph.
   reads: { marginTop: 30 },
-  read: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 11 },
-  readRuled: { borderBottomWidth: 1, borderBottomColor: color.border },
+  /* 11 → 14: the air the deleted rules were standing in. A row needs to be parted from its
+     neighbour by SOMETHING, and space is the quieter of the two. */
+  read: { flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14 },
   readText: { flex: 1, minWidth: 0, gap: 1 },
   readName: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
   readSub: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'left' },
-  // The law in words, under the three rows.
-  helper: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, marginTop: 16, textAlign: 'left' },
-  // The wrist row — ruled off the helper above it, so it reads as a separate FACT rather than a
-  // second sentence about Health. A hairline is the lightest thing that can say "and also".
+  // The wrist row — ruled off the three measurement rows above it, so it reads as a separate FACT
+  // rather than a second sentence about Health. A hairline is the lightest thing that can say "and
+  // also". (It used to be ruled off a `helper` line; that line, and its rule here, are gone.)
   wrist: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -327,5 +390,8 @@ const styles = StyleSheet.create({
   },
   wristText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textPrimary, textAlign: 'left' },
   // The quiet second exit.
-  skip: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, textAlign: 'center', paddingVertical: 4 },
+  /* paddingVertical 4 → 13: with the 17px label that makes the quiet exit a real 44pt target. */
+  connectChip: { borderWidth: 1, borderColor: color.borderControl, borderRadius: radius.control, paddingHorizontal: 16, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  connectChipText: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
+  skip: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, textAlign: 'center', paddingVertical: 13 },
 });

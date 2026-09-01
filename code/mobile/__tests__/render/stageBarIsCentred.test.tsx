@@ -150,7 +150,7 @@ function sideGroups(r: ReactTestRenderer) {
 }
 
 describe('the stage bar centres its middle group', () => {
-  it('⛔ carries the swap disc again — offered on set 1, absent on set 2', () => {
+  it('⛔ carries the swap disc again — live on set 1, present-but-quiet on set 2', () => {
     /*
      * ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: a swap disc present on set 1 and absent on set 2,
      * which was the state that made the bar's centring intermittent (the sides carried different
@@ -164,15 +164,24 @@ describe('the stage bar centres its middle group', () => {
      * the product slower than it was. The chip STAYS — the window must still answer "swap this" in
      * words — but the one-tap door is a control again.
      *
-     * So this file is back to watching the state that made the bar's centring intermittent: the end
-     * side carries two discs on set 1 and one on set 2.
+     * ⛔ AND FROM 2026-09-01 THE DISC NO LONGER VANISHES ON SET 2 (design review, F4): a control
+     * that comes and goes teaches her the chrome is unstable, and the rule (swap before the first
+     * set) was taught only by disappearance. The disc STAYS, dimmed (`swapQuiet` — opacity 0.55),
+     * and pressing it states the rule. The bar's centring also stops being intermittent, which is
+     * the fault this whole file was opened for.
      */
     expect(
       draw(1).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
     ).toBeGreaterThan(0);
-    expect(
-      draw(2).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
-    ).toBe(0);
+    const set2 = draw(2).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction'));
+    expect(set2.length).toBeGreaterThan(0);
+    // …and it is QUIET there: somewhere above the disc sits the 0.55 wash that says "past its moment".
+    const quiet = draw(2).root.findAll((n) => {
+      const st = n.props?.style;
+      const flat = Array.isArray(st) ? Object.assign({}, ...st.flat().filter(Boolean)) : st;
+      return !!flat && flat.opacity === 0.55;
+    });
+    expect(quiet.length).toBeGreaterThan(0);
   });
 
   it('⛔ carries NO coach opener — it moved to the paused stage', () => {

@@ -18,13 +18,12 @@
  * lower-rib line · bar vertical under the shoulder · torso frozen 45° ±3° · knees & feet fixed.
  * rom 0 = dead hang (rep start, arms long); rom 1 = bar at the ribs (working endpoint).
  */
-// @ts-nocheck
 
 // 
 
 import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
-import { DEFAULT_TEMPO } from '../timeline';
+import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { barPathTicks, floorScene, plateGhost } from '../kit';
 
@@ -92,7 +91,7 @@ function decorAt(rom: number): Decor {
 const scene = floorScene(FLOOR_Y, 164, 26);
 
 const formspec: FormSpec = {
-  tempo: DEFAULT_TEMPO,
+  tempo: CONCENTRIC_TEMPO,
   start: [
     { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 165, max: 179, label: 'dead hang — arms long (elbow ~170°)' },
   ],

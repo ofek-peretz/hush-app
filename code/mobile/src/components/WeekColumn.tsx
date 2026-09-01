@@ -34,11 +34,11 @@
  * not a nicety here: three of the five states below cannot be produced by a live session at all.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
+import { plannedMinutes } from '@/domain/duration';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 
 import { Icon } from '@/components/Icon';
@@ -48,7 +48,7 @@ import { useCopy } from '@/i18n/useCopy';
 import * as haptics from '@/platform/haptics';
 import { WEEK_ORDER } from '@/domain/trainingDays';
 import type { Weekday } from '@/domain/coachPlan';
-import { color, font, space, stage, tracking, trackingPx, signal, radius } from '@/design/tokens';
+import { color, font, space, stage, ramp, tracking, trackingPx, signal, radius } from '@/design/tokens';
 
 export interface WeekColumnWorkout {
   id: string;
@@ -59,6 +59,10 @@ export interface WeekColumnWorkout {
   done?: boolean;
   /** How many things she does in it, and how long the timed part of it takes. */
   items?: number;
+  /** How many LIFTS — distinct exercises. The word on the line is "lifts", so this is what it
+   *  prints; `items` counts rounds and is the estimate's unit, not the session's shape.
+   *  See `domain/coachWeek.CoachWorkout.lifts`. */
+  lifts?: number;
   minutes?: number;
   /** There is work in it that cannot be timed (a distance) — `minutes` is a floor. */
   timeUnknown?: boolean;
@@ -222,13 +226,26 @@ export function WeekColumn(props: WeekColumnProps) {
      * A row must never be able to say a different thing from its neighbour about the same kind of
      * fact. The workout answers for itself.
      */
-    if (!w.items) return null;
+    /* ⛔ THE COUNT IS `lifts`, NOT `items` (2026-08-18) — see `coachWeek.CoachWorkout.lifts`. The
+       copy says "N lifts" / "N תרגילים" and `items` counts ROUNDS, so this line printed twenty-two
+       exercises inside fifty-four minutes and asked her to believe it. Falls back to `items` only
+       so a caller that has not been taught the new field yet keeps drawing something. */
+    const n = w.lifts ?? w.items;
+    if (!n) return null;
     /* ⚠️ `count` AS WELL AS `lifts` — i18next picks the plural form off `count` and nothing else,
        so without it a one-exercise session read "1 EXERCISES". Found in the harness on the long run
        (`2.1e`), which is exactly the shape that has one item and no honest minute total. */
+    /*
+     * ⛔ ROUNDED TO FIVE, LIKE THE SHEET THIS CARD OPENS. `PreWorkoutScreen` prints
+     * `Math.max(5, Math.round(minutes / 5) * 5)` under a comment that says in as many words:
+     * *"exactly as Today rounds it — '~50 min' on two screens must be the same 50."* Today did not
+     * round it. The card said "~53 MIN" and the sheet behind it said "~55 min", for one workout,
+     * one tap apart. Home already computes the rounded figure (`planMinutes`) and hands it to the
+     * sheet; the card was the one reader still printing the raw number.
+     */
     return w.minutes && !w.timeUnknown
-      ? t('home.planShape', { count: w.items, lifts: w.items, min: w.minutes })
-      : t('home.planShapeNoTime', { count: w.items, lifts: w.items });
+      ? t('home.planShape', { count: n, lifts: n, min: plannedMinutes(w.minutes) })
+      : t('home.planShapeNoTime', { count: n, lifts: n });
   };
 
   return (
@@ -278,11 +295,11 @@ export function WeekColumn(props: WeekColumnProps) {
             ]}
           >
             <View style={styles.cardHead}>
-              <Text style={[styles.letter, done ? styles.letterWas : row.open ? styles.letterNow : styles.letterFaint]}>
+              <Legend size={ramp.body} style={[styles.letter, done ? styles.letterWas : row.open ? styles.letterNow : styles.letterFaint]}>
                 {row.label}
-              </Text>
+              </Legend>
               {/* The day a programme she BROUGHT wrote down. Never derived — see `weekRows`. */}
-              {row.dayTag ? <Text style={styles.dayTag}>{row.dayTag}</Text> : null}
+              {row.dayTag ? <Legend size={ramp.body} style={styles.dayTag}>{row.dayTag}</Legend> : null}
 
               {/* A finished workout puts its name on the head row: there is nothing else to say. */}
               {done ? (
@@ -334,16 +351,56 @@ export function WeekColumn(props: WeekColumnProps) {
                 <Text style={[styles.name, row.open && styles.nameOpen]} numberOfLines={2}>
                   {bidi(w.name)}
                 </Text>
-                {shape ? <Text style={styles.shape}>{shape}</Text> : null}
+                {shape ? <Legend size={ramp.body} weight="regular" style={styles.shape}>{shape}</Legend> : null}
                 {/*
-                  ⛔ WHAT THE SESSION IS FOR — on the queued card only.
+                  ⛔ WHAT THE SESSION IS FOR — ON EVERY CARD SHE MAY STILL CHOOSE (2026-08-18).
                   `HomeWorkoutOption.muscles` has existed since v7 and `Home` passed `''` under a
                   note saying *"the coach names its own sessions and does not state muscles"*. True
                   of the coach; the ENGINE composed this week and `muscleOf` answers for every lift
                   in it. A prop that was always empty because its comment described a machine that
                   is gone.
+
+                  It then drew on the QUEUED card only — and in week one, where the rows are
+                  numbered and nothing is done yet, that leaves three cards reading "Full Body A",
+                  "Full Body B", "Full Body C" with a lift count and no way to tell them apart.
+                  **Every one of them is pressable, so every one of them is a question**, and a card
+                  that invites a choice while withholding the only fact the choice turns on is
+                  asking her to guess. The queued card keeps the difference: two lines, in the
+                  reading ink, over its lifts. A card behind it says what it trains dimmer.
+
+                  ⚠️ TWO LINES ON A CLOSED CARD TOO, NOT ONE. It was `numberOfLines={1}` there, to
+                  keep a card behind the queued one cheap — and an ellipsis on THIS line breaks the
+                  founder's own A.15 rule for exactly the reason he gave it: *"an ellipsis hides the
+                  one word that distinguishes two lifts of the same family."* A muscle list is the
+                  only thing telling "Full Body A" from "Full Body B", and it is precisely the FULL
+                  BODY week — seven muscles to a session — that overruns one line and gets cut where
+                  the sessions are still identical. It costs height only where the copy is long, and
+                  a long muscle list means few workouts, which is the week with the room to spare.
+
+                  ⚠️ AND THE QUEUED CARD DROPS IT ONCE ITS LIFTS ARE THERE. "Chest · Shoulders ·
+                  Triceps" and "Bench Press 41 · Overhead Press 22.5 · Barbell Row 47.5" are the
+                  same sentence at two resolutions, and the second one is the better one — so the
+                  muscle line is what a card says WHILE SHE IS STILL CHOOSING, and the lifts are
+                  what it says once she has. It also buys back the height the lifts cost, which is
+                  what keeps a four-workout week on one fold.
                 */}
-                {row.open && w.muscles ? <Text style={styles.muscles}>{w.muscles}</Text> : null}
+                {w.muscles && !(row.open && props.children) ? (
+                  <Text
+                    style={[styles.muscles, !row.open && styles.musclesClosed]}
+                    numberOfLines={2}
+                  >
+                    {w.muscles}
+                  </Text>
+                ) : null}
+                {/*
+                  ⛔ AND THE OPEN CARD CARRIES WHAT HUSH DECIDED (2026-08-18) — `children`.
+
+                  The prop has been declared since the column landed, documented as *"the lifts, the
+                  reason, whatever Home puts there"*, and **never rendered**: `HomeView` passes this
+                  component two comment blocks and no element, so the slot was a promise the file
+                  made to itself. Home's loads now go through it (see `HomeView`).
+                */}
+                {row.open && props.children ? <View style={styles.open}>{props.children}</View> : null}
               </>
             )}
           </Pressable>
@@ -373,7 +430,10 @@ const styles = StyleSheet.create({
    * to lose off the bottom. The gaps stay equal either way — `space-between` would have paid for
    * the emptiness by making the rhythm depend on how many workouts she trains.
    */
-  week: { flex: 1, justifyContent: 'center', marginTop: space[2], gap: 7 },
+  /* ⚠️ `flexGrow`, NOT `flex` — see `HomeView.block`, which had the same fault for the same reason:
+     `flex: 1` pins this to the viewport's height, and a week taller than the fold was then cut off
+     rather than scrolled to. It still centres in whatever the header and the act leave it. */
+  week: { flexGrow: 1, justifyContent: 'center', marginTop: space[2], gap: 7 },
 
   /*
    * ════ A WORKOUT IS A CARD, AND ALL FOUR ARE THE SAME CARD ════
@@ -452,13 +512,20 @@ const styles = StyleSheet.create({
    * `t(…)` beside a mono style in the same JSX — here the string arrives through
    * `weekRows(…, weekdayLabel)`, one indirection away.
    */
-  letter: {
-    fontFamily: font.sansMedium,
-    fontSize: 17,
-    letterSpacing: trackingPx(13, tracking.legend),
-    color: stage.ink2,
-    textAlign: 'left',
-  },
+  /*
+   * ⛔ …AND IT WAS STILL TRACKING THE HEBREW IT HAD JUST BEEN TAUGHT TO DRAW (2026-08-27).
+   *
+   * The note above fixed the FACE by hard-setting sans and stopped there. Tracking is the other
+   * half of the same question — `Legend` answers both from one test — so `א` was drawn in the
+   * right face and then pushed 2.08pt away from nothing, off the centre of its own gutter.
+   *
+   * ⚠️ `trackingPx(13, …)` on a `fontSize: 17` line: the tracking was sized for the 13pt this
+   * text stopped being set in when the founder's type floor landed (2026-08-12).
+   *
+   * It is a `Legend` now, which is what it always was, and the hard-set face goes with it — the
+   * per-string test the note above asks for IS what `Legend` does.
+   */
+  letter: { color: stage.ink2, textAlign: 'left' },
   /*
    * ════ ⛔ THE ORDER WAS BACKWARDS, AND ONLY A SCREENSHOT SHOWED IT ════
    *
@@ -481,14 +548,7 @@ const styles = StyleSheet.create({
   letterWas: { color: stage.ink2, opacity: 0.7 },
   letterNow: { color: signal[0], opacity: 1 },
   /* A weekday a PROGRAMME SHE BROUGHT wrote down. Quiet: it is provenance, not position. */
-  dayTag: {
-    fontFamily: font.sansMedium,
-    fontSize: 17,
-    letterSpacing: trackingPx(13, tracking.legend),
-    color: stage.ink2,
-    opacity: 0.75,
-    textAlign: 'left',
-  },
+  dayTag: { color: stage.ink2, opacity: 0.75, textAlign: 'left' },
 
   /*
    * ⛔ THE NAME IS THE SERIF ON EVERY CARD, not only the open one (2026-08-12). A workout is a made
@@ -506,15 +566,38 @@ const styles = StyleSheet.create({
   /* What the queued session trains. Sans and muted: it is a caption on the name above it, and the
      figures on the sheet are where the amounts live. */
   muscles: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: stage.ink2, textAlign: 'left' },
-
-  shape: {
-    fontFamily: font.mono,
-    fontSize: 17,
-    letterSpacing: trackingPx(12.5, tracking.wide),
-    textTransform: 'uppercase',
-    color: stage.ink2,
-    textAlign: 'left',
+  /* ⚠️ THE SIZE DOES NOT DROP, THE LIGHT DOES. The founder's type floor is a floor on every card,
+     not only the lit one (*"you have a tendency to use small type that can barely be seen"*), so a
+     card behind the queued one recedes by sitting further from the light — one line instead of two,
+     `ink2` at 62% — which is the same law the whole stage is built on. */
+  musclesClosed: { opacity: 0.62 },
+  /* The open card's own contents, held off its muscle line by a rule — the card is a place now,
+     not a label, and the rule is what says the block below belongs to it. */
+  open: {
+    marginTop: space[2],
+    paddingTop: space[2],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.border,
   },
+
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE WORST OF THE SIX: THIS LINE WAS SET IN A FACE THAT CANNOT DRAW IT (found 2026-08-27)
+   *
+   * `shapeOf` returns `t('home.shape', { count })` — in Hebrew, `6 תרגילים · ~55 דק׳`. This style
+   * asked `font.mono` for it. **IBM Plex Mono has no Hebrew**, so every queued card on Today drew
+   * its one descriptive line in whatever the system silently substituted: an undesigned face, at an
+   * undesigned width, on the card she looks at more than any other surface in the app.
+   *
+   * It is the SAME fault `letter` documents four styles up — *"the wrong face, in the gutter of the
+   * first screen she opens"* — and it survived that fix because that fix was made in place instead
+   * of by reaching for the component whose entire job this is.
+   *
+   * `monoCarriesNoWords` did not catch it for the reason its neighbour gives: the `t()` call is an
+   * indirection away, inside `shapeOf`. The law reads source, and source only showed `{shape}`.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  shape: { color: stage.ink2, textAlign: 'left' },
 
   pill: {
     paddingHorizontal: 10,

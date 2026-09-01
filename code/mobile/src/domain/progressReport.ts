@@ -15,7 +15,6 @@
  * exercise with ANY loaded sets reports by load (the stronger signal); reps entries
  * list after load entries.
  */
-// @ts-nocheck
 
 // 
 
@@ -221,6 +220,7 @@ export function standingRecord(sessions: Session[]): StandingRecord {
     if (s.sets.length === 0) continue; // a session with nothing in it never happened
     if (s.trained !== false) workouts += 1;
     for (const log of s.sets) {
+      if (log.isApproach) continue; // a warm-up bridge is not the record — same line as the Log's tonnage
       sets += 1;
       kg += (log.actualWeight ?? 0) * log.actualReps;
     }

@@ -20,7 +20,6 @@
  * Data: getWeeklyPlan() joins the program structure with the engine's per-slot state and the
  * captured weekly change snapshot; the evidence comes from the logged history (domain/progressReport).
  */
-// @ts-nocheck
 
 // 
 
@@ -29,7 +28,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Legend } from '@/components/ds';
+import { Arrive, Legend } from '@/components/ds';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import { changedLiftCase } from '@/domain/changedLiftCase';
 import { currentLocale } from '@/i18n';
@@ -45,11 +44,19 @@ import type { CoachPlan } from '@/domain/coachPlan';
 import type { CoachDecision } from '@/domain/coachLog';
 import { track } from '@/platform/telemetry';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
+import { MiniBody } from '@/components/MiniBody';
+import { MilestoneEmblem } from '@/components/MilestoneEmblem';
+import { earnedMilestones } from '@/domain/milestones';
+import { milestoneCopy } from '@/domain/milestoneCopy';
+import { weekCardFromHistory, type ShareWeekCard as ShareWeekCardT } from '@/domain/shareCard';
+import { tg } from '@/i18n';
+import { muscleOf } from '@/data/exercises';
+import { getWeeklyPlan, markWeeklyUpdateSeen } from '@/domain/weeklyUpdate';
 import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { allTimePeakProgress, standingRecord, type QuarterlyProgressEntry, type StandingRecord } from '@/domain/progressReport';
 import { currentWeekOpen } from '@/domain/weekCadence';
-import { sessionKcal } from '@/domain/energy';
+import { completedWorkouts, sessionEnergyKcal, tonnesFromKg, totalTonnageKg } from '@/domain/sessionMetrics';
 import { exerciseDisplayName } from '@/data/exercises';
 import { bidi } from '@/i18n/bidi';
 import type { Session, Units } from '@/data/local/models';
@@ -65,18 +72,13 @@ const fmtLoad = (n: number | null, units: Units): string =>
 const rangeStr = (r: [number, number]): string => `${r[0]}-${r[1]}`;
 
 // The letter's fact band (v7 3.1): "4/4 WORKOUTS · 46.8 t MOVED · 3,120 KCAL". Computed as display
-// arithmetic on the logged week, never through the engine — the mirror reports what happened, and a
-// wall-clock duration (first set-start → last set persisted) is the honest input the kcal MET estimate
-// already runs on elsewhere.
+// arithmetic on the logged week, never through the engine — the mirror reports what happened.
+//
+// ⛔ THE BAND USED TO WORK ALL THREE FIGURES OUT ITSELF, and its duration read only `sets`, so an
+// interval week's calories came out at zero in a letter whose whole job is to say what the week was.
+// Workouts, tonnage and calories all come from `domain/sessionMetrics` now — the same three
+// functions Progress, the Log and the share card read.
 type WeekBand = { done: number; planned: number; tonnes: number; kcal: number | null };
-const sessionDurationMs = (s: Session): number => {
-  const start = new Date(s.startedAt).getTime();
-  let end = start;
-  for (const set of s.sets ?? []) {
-    if (set.persistedAt) end = Math.max(end, new Date(set.persistedAt).getTime());
-  }
-  return Math.max(0, end - start);
-};
 
 /** A `muscle.*` word at the head of a sentence. See the note at its call site. */
 const headlineCase = (s: string) => (s ? s[0].toLocaleUpperCase() + s.slice(1) : s);
@@ -166,9 +168,41 @@ export function WeeklyUpdate({ navigation, route }: Props) {
        * claim to have read what has not been read, and an instruction to tap rows that do not
        * exist. A letter whose read FAILS keeps that sentence for ever.
        */
-      const log = await db.loadCoachLog().catch(() => null);
+      /*
+       * ════ ⛔ THE LETTER FINALLY READS THE THING THAT MAKES THE DECISIONS (2026-08-19) ════
+       *
+       * `view` — the engine's week — was declared, typed, threaded into `allChanges`, into
+       * `openCase`, into the "Why?" rows, into `close()`'s telemetry … and set from exactly one
+       * place: the dev gallery's preview branch, twenty lines above. On a real phone it was null
+       * for ever.
+       *
+       * ⚠️ AND THIS FILE ALREADY WROTE THE CONSEQUENCE DOWN, at `changedCount`: *"a week with
+       * eleven moved lifts rendered as a steady week … the screen prints 'I changed nothing this
+       * week' over a `view` holding every change it just made."* The note was right about the
+       * mechanism and wrong about one word: the `view` was not holding the changes, because nobody
+       * ever fetched it. Every Saturday since the coach was taken out on 2026-08-12, every athlete
+       * has been told the engine changed nothing — while `getWeeklyPlanV5` stamped, narrated and
+       * unit-tested every load move, graduation, rotation and volume shift it made.
+       *
+       * The programme comes off disk rather than from `app.program`, which is null after any cold
+       * start; the letter is the one screen that must never render an empty week because a store
+       * had not caught up.
+       */
+      const [log, program] = await Promise.all([
+        db.loadCoachLog().catch(() => null),
+        db.loadProgram().catch(() => null),
+      ]);
       if (!active) return;
       setCoachLog(log ?? []);
+      const engineWeek = program ? await getWeeklyPlan(program).catch(() => null) : null;
+      if (!active) return;
+      if (engineWeek) setView(engineWeek);
+      /*
+       * ⚠️ `loaded` FLIPS ONCE, AFTER BOTH READS. It used to flip on the coach log alone while
+       * `changedCount` came from a different effect — so whichever read won the race decided
+       * whether she was shown the steady-week page. When the log won, the letter said *"I changed
+       * nothing"* over a week that had changed things, then swapped to the list underneath her.
+       */
       setLoaded(true);
       void track('weekly_update_viewed', { weekIndex: null, changes: coachBrief(log, app.weekOpenMs)?.count ?? 0 });
       /*
@@ -186,6 +220,12 @@ export function WeeklyUpdate({ navigation, route }: Props) {
 
   function close() {
     void track('weekly_update_dismissed', { changes: view?.changedCount ?? 0 });
+    /*
+     * ⛔ AND THE WEEK IS MARKED READ. `markWeeklyUpdateSeen` had no production caller either, so
+     * the engine's `seenWeekEnd` never moved and nothing downstream could tell a letter she had
+     * read from one she had not. Dismissing is the act that means "read"; it is stamped here.
+     */
+    void markWeeklyUpdateSeen().catch(() => {});
     navigation.goBack();
   }
 
@@ -440,6 +480,12 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    * computed from the logged history and the on-disk program, never from an engine type.
    */
   const [band, setBand] = useState<WeekBand | null>(null);
+  /** The muscles her week's sets touched — worn on the letter's body (2026-08-23). */
+  const [weekMuscles, setWeekMuscles] = useState<string[]>([]);
+  /** Marks CROSSED inside this closed week — the letter carries the seal (2026-08-23). */
+  const [weekMarks, setWeekMarks] = useState<{ value: string; caption?: string; title: string; glyph?: string }[]>([]);
+  /** The week's share card, when the week holds real work — the letter's quiet story door. */
+  const [weekCard, setWeekCard] = useState<ShareWeekCardT | null>(null);
   useEffect(() => {
     if (route?.params?.previewPlan) return; // the harness supplied the band with the week
     let active = true;
@@ -475,22 +521,49 @@ export function WeeklyUpdate({ navigation, route }: Props) {
           const at = new Date(s.startedAt).getTime();
           return at >= weekStart;
         });
-        // "N/M workouts" counts whole workouts trained (the workout-count rule: trained !== false).
-        const done = inWeek.filter((s) => s.trained !== false).length;
+        // "N/M workouts" counts whole workouts trained — the one workout-count rule, shared with
+        // Progress and the milestones. `trained !== false` alone also counted an empty session row.
+        const done = completedWorkouts(inWeek);
         // How many workouts the COACH set for the week — the denominator of "N/M workouts".
         const planned = weekPlan?.sessions.length ?? 0;
-        let kg = 0;
+        const kg = totalTonnageKg(inWeek);
         let kcal = 0;
         let kcalSeen = false;
         for (const s of inWeek) {
-          for (const set of s.sets ?? []) kg += (set.actualWeight ?? 0) * set.actualReps;
-          const k = sessionKcal(s, sessionDurationMs(s), app.profile?.weightKg);
+          const k = sessionEnergyKcal(s, app.profile?.weightKg);
           if (k != null) {
             kcal += k;
             kcalSeen = true;
           }
         }
-        setBand({ done, planned, tonnes: +(kg / 1000).toFixed(1), kcal: kcalSeen ? kcal : null });
+        setBand({ done, planned, tonnes: tonnesFromKg(kg), kcal: kcalSeen ? kcal : null });
+        /*
+         * ════ THE LETTER WEARS THE WEEK (founder 2026-08-23: the Saturday screen must make her
+         * genuinely want to look) ════
+         * Three additions, all already-owned vocabulary: the week's muscles on her body (Home's
+         * living half, at the week's close), any mark CROSSED this week as its engraved seal (the
+         * celebration's own emblem — a letter that omits the week's proudest fact is not a summary),
+         * and the week's story card behind a quiet door (the finish screen's own pattern).
+         */
+        const touched = new Set<string>();
+        for (const sess of inWeek) for (const set of sess.sets) {
+          const m = muscleOf(set.exerciseId);
+          if (m) touched.add(m);
+        }
+        setWeekMuscles([...touched]);
+        const crossed = earnedMilestones(history ?? [], app.profile).filter((mk) => {
+          const at = Date.parse(mk.earnedAt);
+          return Number.isFinite(at) && at >= weekStart;
+        });
+        setWeekMarks(
+          crossed.map((mk) => {
+            const c = milestoneCopy(mk, tg, app.profile?.units ?? 'kg');
+            return { value: c.value, caption: c.caption, title: c.title, glyph: c.glyph };
+          }),
+        );
+        setWeekCard(
+          weekCardFromHistory(history ?? [], weekStart, app.profile?.weightKg, app.profile?.units ?? 'kg', app.profile?.memberSince),
+        );
       } catch {
         if (active) setBand(null);
       }
@@ -510,7 +583,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    * and why. That is `coachLog`, filtered to this week, already written in her language.
    */
   const whenLabel = view
-    ? `${new Date(view.at).toLocaleDateString(undefined, { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
+    ? `${new Date(view.at).toLocaleDateString(currentLocale(), { weekday: 'long' })} · ${new Date(view.at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })}`
     : '';
 
   /**
@@ -542,7 +615,20 @@ export function WeeklyUpdate({ navigation, route }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.headBlock}>
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ✦ THE LETTER ARRIVES (2026-08-27).
+
+          `Arrive` was built for the founder's largest note — a screen should ARRIVE, not appear
+          (2026-08-12) — and reached six screens out of forty-seven. This one is a LETTER: the one
+          surface in the product whose whole form is "something written to you, read top to bottom".
+          It landed all at once, like a page pasted onto the glass.
+
+          Five beats in reading order: whose week and which, what it came to, the body that did it,
+          what it earned, and then the sentence that frames the changes.
+          ════════════════════════════════════════════════════════════════════════════════════════
+        */}
+        <Arrive order={0} style={styles.headBlock}>
           <Legend size={17} track={0.22}>
             {askBack ? t('weekly.askLegend') : steady ? t('weekly.evidenceLegend') : t('weekly.eyebrow')}
           </Legend>
@@ -551,15 +637,42 @@ export function WeeklyUpdate({ navigation, route }: Props) {
           <Text style={[styles.title, askBack && styles.titleAsking]} accessibilityRole="header">
             {view ? t('weekly.weekTitle', { n: view.weekIndex + 1 }) : t('weekly.title')}
           </Text>
-        </View>
+        </Arrive>
 
         {/* THE WEEK'S FACTS — workouts / tonnage / kcal, ruled above and below. */}
         {!askBack && band && (band.planned > 0 || band.done > 0) ? (
-          <View style={styles.statBand}>
-            <LetterFact value={`${band.done}/${band.planned}`} label={t('weekly.statWorkouts')} />
-            <LetterFact value={`${band.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
-            {band.kcal != null ? <LetterFact value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} /> : null}
-          </View>
+          <Arrive order={1}>
+            <View style={styles.statBand}>
+              <LetterFact value={`${band.done}/${band.planned}`} label={t('weekly.statWorkouts')} />
+              <LetterFact value={`${band.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
+              {band.kcal != null ? <LetterFact value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} /> : null}
+            </View>
+          </Arrive>
+        ) : null}
+
+        {/* The week, worn — her body with the week's muscles lit. A summary that SHOWS the
+            coverage before a single row is read (2026-08-23). */}
+        {!askBack && weekMuscles.length > 0 ? (
+          <Arrive order={2}>
+            <View style={styles.weekBody}>
+              <MiniBody face="front" sex={app.profile?.sex === 'male' ? 'male' : 'female'} lit={weekMuscles} height={150} />
+              <MiniBody face="back" sex={app.profile?.sex === 'male' ? 'male' : 'female'} lit={weekMuscles} height={150} />
+            </View>
+          </Arrive>
+        ) : null}
+
+        {/* A mark crossed THIS week carries its seal — the week's proudest fact, in the letter. */}
+        {!askBack && weekMarks.length > 0 ? (
+          <Arrive order={3}>
+            <View style={styles.weekMarks}>
+              {weekMarks.map((mk, i) => (
+                <View key={`${mk.title}-${i}`} style={styles.weekMark}>
+                  <MilestoneEmblem size={124} value={mk.value} caption={mk.caption} glyph={mk.glyph as never} />
+                  <Text style={styles.weekMarkTitle} numberOfLines={2}>{mk.title}</Text>
+                </View>
+              ))}
+            </View>
+          </Arrive>
         ) : null}
 
         {/* The one sentence that frames what follows. With a question up, it frames the QUESTION —
@@ -573,15 +686,17 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             genuinely steady week never reaches it: `steady` is a LOADED zero, and it has the
             evidence page. */}
         {askBack || loaded ? (
-          <Text style={[styles.intro, askBack && styles.introAsking]}>
-            {askBack
-              ? t('weekly.askIntro')
-              : steady
-                ? t('weekly.evidenceIntro')
-                : allChanges.length > LETTER_ROWS
-                  ? t('weekly.introTop', { count: allChanges.length, shown: LETTER_ROWS })
-                  : t('weekly.intro', { count: changedCount })}
-          </Text>
+          <Arrive order={4}>
+            <Text style={[styles.intro, askBack && styles.introAsking]}>
+              {askBack
+                ? t('weekly.askIntro')
+                : steady
+                  ? t('weekly.evidenceIntro')
+                  : allChanges.length > LETTER_ROWS
+                    ? t('weekly.introTop', { count: allChanges.length, shown: LETTER_ROWS })
+                    : t('weekly.intro', { count: changedCount })}
+            </Text>
+          </Arrive>
         ) : null}
 
         {/* ── S-56 · the one question the mirror may ask (asked once per muscle, ever) ── */}
@@ -742,6 +857,19 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             <Text style={styles.evidenceClose}>{t('weekly.evidenceEmpty')}</Text>
           )
         ) : null}
+
+        {/* The week's story, behind the finish screen's own quiet door (2026-08-23). Drawn only
+            when the week holds real work — a card with three zeroes is not a story. */}
+        {!askBack && weekCard ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('weekly.shareWeek')}
+            onPress={() => navigation.navigate('ShareCardModal', { card: weekCard })}
+            style={({ pressed }) => [styles.shareDoor, pressed && styles.pressedDim]}
+          >
+            <Text style={styles.shareDoorLabel}>{t('weekly.shareWeek')}</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       {/* THE CASE — the same sheet a changed lift opens from Today, reached from the letter's own
@@ -816,6 +944,26 @@ function LetterFact({ value, label }: { value: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  /* ════ the letter wears the week (2026-08-23) ════ */
+  weekBody: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 18 },
+  weekMarks: { flexDirection: 'row', justifyContent: 'center', gap: 22, marginTop: 20, flexWrap: 'wrap' },
+  weekMark: { alignItems: 'center', gap: 8, width: 140 },
+  weekMarkTitle: {
+    fontFamily: font.sans,
+    fontSize: textScale.sm,
+    lineHeight: 20,
+    color: color.textSecondary,
+    textAlign: 'center',
+  },
+  shareDoor: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, marginTop: 10 },
+  shareDoorLabel: {
+    fontFamily: font.sansMedium,
+    fontSize: textScale.base,
+    lineHeight: 22,
+    color: color.textSecondary,
+    textAlign: 'center',
+  },
+
   root: { flex: 1, backgroundColor: color.bg },
   // v7 3.1: the date centred between a spacer and a 36px close disc — the same chrome shape
   // the training stage uses, so a way out looks the same everywhere.
@@ -854,7 +1002,8 @@ const styles = StyleSheet.create({
   // directly beneath the headline before the letter's prose begins.
   statBand: {
     flexDirection: 'row',
-    gap: 26,
+    /* A floor between columns, not the thing that positions them — see `fact`. */
+    gap: 16,
     marginTop: 16,
     paddingVertical: 14,
     borderTopWidth: 1,
@@ -889,8 +1038,9 @@ const styles = StyleSheet.create({
   loadSwap: { fontFamily: font.monoSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'left' },
   kg: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left' },
 
-  swapBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 9, borderRadius: radius.full, backgroundColor: color.fillSubtle },
-  swapBadgeText: { fontFamily: font.sansSemibold, fontSize: textScale['2xs'], letterSpacing: trackingPx(textScale['2xs'], tracking.legend), color: color.accentText, textAlign: 'left' },
+  /* ⛔ `swapBadge` / `swapBadgeText` ARE DELETED (2026-08-26). Neither was rendered — a badge for a
+     swap the letter draws as a row now — and `swapBadgeText` was the last slot in the app tracking a
+     translated word open, which is how a dead style came to be found: `noTrackedHebrew` read it. */
 
   whyRow: { marginTop: 8 },
   whyLink: { fontFamily: font.sansSemibold, fontSize: textScale.sm, color: color.accentText, textAlign: 'left' },
@@ -908,7 +1058,7 @@ const styles = StyleSheet.create({
   },
   rowPressed: { backgroundColor: 'rgba(241,238,229,0.05)' },
   // A volume move's reason, unfolded in place — one sentence, in the coach's voice.
-  rowLine: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 19, lineHeight: 27, color: color.textSecondary, textAlign: 'left' },
+  rowLine: { fontFamily: font.serif, fontSize: 19, lineHeight: 27, color: color.textSecondary, textAlign: 'left' },
   rowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.14)' },
   rowName: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, color: color.textPrimary, textAlign: 'left' },
   rowRight: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -921,7 +1071,22 @@ const styles = StyleSheet.create({
   // WHY is a door, so it is drawn as one — a hairline pill, not an underlined word.
   whyPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)' },
   /* ── The week's facts. ── */
-  fact: { gap: 2 },
+  /*
+   * ⛔ A COLUMN THAT CLAIMS ITS SHARE OF THE BAND (2026-08-27, the elevation pass).
+   *
+   * The three facts were laid out `row` + `gap: 26` and nothing else, so they packed against the
+   * start edge and left the remainder as dead space — while the band's two rules, which are
+   * `alignSelf: stretch`, ran the FULL width above and below them. The rules drew a box a quarter
+   * wider than anything inside it, and the emptiest part of the letter was the part the founder
+   * pointed at: *"תן חיים למסך הזה, לא תיבת טקסט אלא תתפרש על המסך."*
+   *
+   * `flex: 1` rather than `justifyContent: 'space-between'`, deliberately. Space-between is right
+   * for a fixed set and wrong for this one — `kcal` is dropped when it is unknown, and two facts
+   * flung to opposite ends of 342 points is the *"5 ··· 250 points of black ··· min"* fault that
+   * `WellDone.Fact` already has a docblock about. Equal columns hold their spacing at two facts or
+   * at three.
+   */
+  fact: { flex: 1, gap: 2 },
   factValue: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 22, color: color.textPrimary, textAlign: 'left' },
   /* ── The rest of the changes, then the hand. ── */
   viewAll: {

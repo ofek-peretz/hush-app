@@ -12,12 +12,14 @@
  * a chip stuck on top of it. The selected label is full cream at 600; the rest sit
  * in shadow at 500.
  *
- * Three geometries, all from the source:
- *  - `pill`  — radius 100, padding 3, cells 6 × 14, 12px  (1.1's EN · עב switch)
- *  - `md`    — radius 16, padding 4, gap 4, 44px cells, 14px
- *  - `lg`    — radius 17, padding 4, gap 4, 52px cells, 15px  (1.2's SEX)
+ * Three geometries. They began 1:1 from the handoff and TWO of its numbers have since been overruled
+ * by laws the handoff predates — the type floor (17 everywhere) and the 44pt target — so the sizes
+ * below are what the component draws now, not what the source file said:
+ *  - `pill`  — radius 100, padding 3, 44pt cells, padX 14, 17px  (1.1's EN · עב switch, History's
+ *              Lifts / Log switch)
+ *  - `md`    — radius 16, padding 4, gap 4, 44pt cells, padX 16, 17px
+ *  - `lg`    — radius 17, padding 4, gap 4, 52pt cells, padX 16, 17px  (1.2's SEX)
  */
-// @ts-nocheck
 
 // 
 
@@ -47,11 +49,20 @@ interface Props {
  *
  * ⚠️ THE OTHER NUMBERS HERE ARE NOT TYPE — `track` and `cell` are radii, `padX` is padding — which
  * is exactly why a law cannot sweep this file generically and has to name the key.
+ *
+ * ⛔ AND `pill` WAS A 35pt DOOR. It ran `height: 0, padY: 6` — 17pt of type in 12pt of padding —
+ * with no `hitSlop` anywhere in the component to make up the difference. `md` and `lg` were already
+ * 44 and 52; only the small one was small, and the small one is the **History screen's Lifts / Log
+ * switch, the only navigation control on that screen.** A target under 44 is a control she has to
+ * aim at, which is not a thing to ask of someone holding a phone at arm's length between sets.
+ *
+ * `minW` exists for the same reason in the other axis: "EN" is two characters, and two characters
+ * plus 28pt of padding is a cell she can miss sideways.
  */
 const GEOM = {
-  pill: { track: 100, pad: 3, gap: 0, cell: 100, height: 0, padY: 6, padX: 14, font: 17 },
-  md: { track: 16, pad: 4, gap: 4, cell: 12, height: 44, padY: 0, padX: 16, font: 17 },
-  lg: { track: 17, pad: 4, gap: 4, cell: 13, height: 52, padY: 0, padX: 16, font: 17 },
+  pill: { track: 100, pad: 3, gap: 0, cell: 100, height: 44, padY: 0, padX: 14, font: 17, minW: 44 },
+  md: { track: 16, pad: 4, gap: 4, cell: 12, height: 44, padY: 0, padX: 16, font: 17, minW: 44 },
+  lg: { track: 17, pad: 4, gap: 4, cell: 13, height: 52, padY: 0, padX: 16, font: 17, minW: 52 },
 } as const;
 
 export function SegmentedControl({ options, value, onChange, block, stack, size = 'md', style }: Props) {
@@ -77,7 +88,7 @@ export function SegmentedControl({ options, value, onChange, block, stack, size 
             onPress={() => onChange(o.value)}
             style={[
               styles.item,
-              { borderRadius: g.cell, paddingHorizontal: g.padX, paddingVertical: g.padY },
+              { borderRadius: g.cell, paddingHorizontal: g.padX, paddingVertical: g.padY, minWidth: g.minW },
               g.height ? { height: g.height } : null,
               (block || stack) && styles.itemBlock,
               stack && styles.itemStack,

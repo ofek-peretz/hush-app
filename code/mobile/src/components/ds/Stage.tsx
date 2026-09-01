@@ -19,7 +19,6 @@
  * ⚠️ THE GRADIENT ITSELF IS NOT DEAD. `stage.gradient` still dresses the two share cards, which
  * are pictures of a stage rather than the stage — see the note on the token.
  */
-// @ts-nocheck
 
 // 
 

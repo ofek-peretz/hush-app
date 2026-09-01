@@ -1,6 +1,16 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * AFTER THE SESSION — the call the whole product is built around.
+ * AFTER THE SESSION — ⛔ DORMANT SINCE 2026-08-12. READ THIS LINE BEFORE THE REST.
+ *
+ * `sessionStore` stopped invoking `askAfterSession` on 2026-08-12 (`theAiHasOneJob` pins it:
+ * the v5 ENGINE decides every load now, and the model is reachable from the import alone). The
+ * only remaining caller is the dev gallery. Everything below is the design of the loop AS IT RAN,
+ * kept because turning the coach back on should be a wiring change, not a rewrite — but a reader
+ * who believes the next heading without this one will misread the product, which is exactly what
+ * happened to the audit that flagged it (2026-09-01).
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * AFTER THE SESSION — the call the whole product was built around (historical).
  *
  * The founder described it in one sentence and it has not changed since:
  *
@@ -24,7 +34,6 @@
  * quietly retries three times is three bills for one workout, and nobody is waiting on it.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -69,15 +78,10 @@ export interface CoachUpdate {
   trouble?: CoachFailure | UnreadableReason;
   /** What the coach said, when it said anything. Shown to her; never invented here. */
   say?: string;
-  /**
-   * ⛔ CHANGES TO THE WORKOUT SHE IS STANDING IN (founder 2026-08-02).
-   *
-   * Carried back rather than applied here, and that is deliberate: this module has no session — it
-   * runs after one has ENDED, and on a cold start it may run with no screen mounted at all. Only
-   * the live session can apply an edit to itself, and only it knows whether the lift is still
-   * ahead of her. See `SessionCoach`, which is the caller that has one.
-   */
-  today?: LiveEdit[];
+  /* ⛔ `today` IS DELETED (2026-08-26). It carried the coach's edits to the session she is standing
+     in, and **nothing ever applied one** — `reviseToday` is driven only by the local pain table. A
+     field the app carries and drops is a decision the coach believes it made. See the note above
+     `askAfterSession`. */
 }
 
 /*
@@ -135,50 +139,29 @@ export async function askCoachToRevise(why: string): Promise<CoachUpdate> {
   return runCoachCall({ kind: 'revise', why });
 }
 
-/**
- * ⛔ SHE SAID SOMETHING WHILE THE WORKOUT IS RUNNING (founder 2026-08-02).
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ `askCoachInSession` AND `askCoachAboutPain` ARE DELETED (2026-08-26)
  *
- * The only call that can come back with `today` — changes to the session she is standing in. Kept
- * apart from `askCoachToRevise` because that one requires a whole programme in reply, and answering
- * *"the rack is taken"* with a rewritten month is the failure `COACH_PLAN_SCHEMA` exists to prevent.
+ * Both needed a place for her to say something, and both had lost one:
+ *
+ *   `askCoachInSession`  the only call that could come back with `today`. The in-workout window it
+ *                        answered was deleted on the founder's ruling (*"צ'אט בתוך אימון חי —
+ *                        הורדנו"*), and with it the last caller. `today` is deleted with it — from
+ *                        the schema, the parse and `CoachUpdate` — because nothing has ever applied
+ *                        one and a coach that thinks it can change the running session will SAY so
+ *                        in its reply. A promise the app cannot keep is worse than a missing field.
+ *   `askCoachAboutPain`  `PainResponse` was its screen. `reportPain` is fully local now: the ease is
+ *                        saved, `liftsForbiddenNow` drops the lifts from today's session, and the
+ *                        assembler rebuilds the week — no network in front of an injury, which was
+ *                        the whole point of that change (*"Hush has no business needing a connection
+ *                        to stop training a joint she just said hurts"*).
+ *
+ * ⚠️ THE POST-SESSION LOOP IS NOT TOUCHED. `askAfterSession` and `askCoachToRevise` are dormant —
+ * nothing calls them either — but they are the loop itself rather than a door onto it, and turning
+ * the coach back on should be a wiring change, not a rewrite.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-export async function askCoachInSession(
-  why: string,
-  images?: { mime: string; data: string }[],
-): Promise<CoachUpdate> {
-  return runCoachCall({ kind: 'in_session', why, ...(images?.length ? { images } : {}) });
-}
-
-/**
- * ════ SHE IS AT THE RACK AND SOMETHING HURTS ════
- *
- * ⛔ FOUNDER, ON BUILD 39: *"On the injury screen you told me explicitly that marking an injury
- * routes to an AI screen where it talks, and what actually appears is the screen that was there
- * before."*
- *
- * `reportPain` already calls `askCoachToRevise` — the PROGRAMME is rebuilt around the rest window.
- * But that answer is for next time, and nothing put a word in front of her now, so `PainResponse`
- * filled the gap with a substitute lift it picked itself out of `swapPool`. That was the last live
- * engine call in any screen in this app.
- *
- * This is the same occasion, asked so that the SENTENCE comes back to the screen. It resolves to
- * the coach's own words, or an empty string if it could not be reached — and an empty string draws
- * nothing at all, because the one thing that must never happen here is the app inventing advice
- * about an injury and letting it read as the coach's.
- */
-export async function askCoachAboutPain(
-  muscle: string,
-  severity: string,
-  lift: string | null,
-): Promise<string> {
-  const update = await askCoachToRevise(
-    `She has just reported her ${muscle} hurting (${severity})` +
-      (lift ? `, mid-session, on ${lift}` : '') +
-      '. The muscle is already resting and her programme has been rebuilt around it. ' +
-      'Tell HER, in a sentence or two, what to do about the rest of today.',
-  );
-  return update.say ?? '';
-}
 
 export async function askAfterSession(justFinished: Session): Promise<CoachUpdate> {
   return runCoachCall({ kind: 'after_session', justFinished });
@@ -224,7 +207,7 @@ export async function retryWaitingUpdate(): Promise<CoachUpdate | null> {
 type Occasion =
   | { kind: 'after_session'; justFinished: Session }
   | { kind: 'revise'; why: string }
-  | { kind: 'in_session'; why: string; images?: { mime: string; data: string }[] };
+
 
 async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
   const justFinished = occasion.kind === 'after_session' ? occasion.justFinished : null;
@@ -293,41 +276,28 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
     const reply = await askCoach(
       coachRequest({
         facts,
-        ask:
-          occasion.kind === 'after_session'
-            ? { kind: 'after_session' }
-            : occasion.kind === 'in_session'
-              ? { kind: 'in_session', why: occasion.why }
-              : { kind: 'revise', why: occasion.why },
+        ask: occasion.kind === 'after_session' ? { kind: 'after_session' } : { kind: 'revise', why: occasion.why },
       }),
       /*
-       * The DECISION schema, not the plan schema: on these calls `sessions` is required, so omitting
-       * it is not something the model can do. Prose asked for it first and prose lost — see
+       * The DECISION schema: on both remaining calls `sessions` is required, so omitting it is not
+       * something the model can do. Prose asked for it first and prose lost — see
        * `COACH_DECISION_SCHEMA`.
        *
-       * ⚠️ EXCEPT MID-SESSION. She asked one question from inside a workout; requiring a whole
-       * programme back would answer "my shoulder is tight" with a rewritten month and bill for it.
+       * ⛔ THE MID-SESSION EXCEPTION IS GONE with the call it served: `in_session` used
+       * `COACH_PLAN_SCHEMA` so that "my shoulder is tight" was not answered with a rewritten month.
+       * There is no in-session call.
        */
-      (occasion.kind === 'in_session' ? COACH_PLAN_SCHEMA : COACH_DECISION_SCHEMA) as unknown as Record<string, unknown>,
+      COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
       /*
-       * ⛔ SHE IS STANDING AT THE RACK — measured 2026-08-04, move 3 of the founder's plan.
+       * ⛔ NO THINKING LEVEL — the `low` branch went with `in_session` (2026-08-26).
        *
-       * This call had NO thinking level, so it took Gemini's default and the Worker's slow path:
-       * **no hedge for 20 seconds and a 110s budget.** The chat has used `low` since the day it
-       * shipped — hedge at 1.8s, median about three seconds — and the in-session call is the SAME
-       * interaction: she typed something and is watching the screen for an answer. Except here she
-       * is also holding a barbell.
-       *
-       * ⚠️ ONLY `in_session`. Thinking level buys PROGRAMME quality — measured: `low` on a
-       * post-session call answered in 3.9s and wrote a one-exercise week. But `in_session` is not
-       * writing a programme: its schema is `COACH_PLAN_SCHEMA`, where `sessions` is optional, and
-       * what it actually produces is "drop this, ease that" against a session already running.
-       * A far smaller judgement, and the one place in the app where seconds are felt as seconds.
-       *
-       * `after_session` and `revise` keep the default deliberately: she has left the screen for one,
-       * and the other rebuilds her whole programme.
+       * It existed for the one interaction where seconds are felt as seconds: she typed something
+       * mid-set and was watching the screen. `after_session` and `revise` both keep the default
+       * deliberately, and always did — she has left the screen for one, and the other rebuilds her
+       * whole programme. Measured 2026-08-04: `low` on a post-session call answered in 3.9s and
+       * wrote a one-exercise week.
        */
-      occasion.kind === 'in_session' ? 'low' : undefined,
+      undefined,
     );
     if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: reply.reason });
 
@@ -358,7 +328,6 @@ async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
       outcome: parsed.answer.plan ? 'decided' : 'spoke',
       sessionId,
       say: parsed.answer.say,
-      ...(parsed.answer.today?.length ? { today: parsed.answer.today } : {}),
     });
   } catch {
     /*

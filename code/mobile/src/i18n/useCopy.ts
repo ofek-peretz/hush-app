@@ -14,7 +14,6 @@
  * neither is the technique-cue library, because a context suffix cannot address an element of a
  * JSON array; it selects the feminine array itself (see data/exercises.ts).
  */
-// @ts-nocheck
 
 // 
 

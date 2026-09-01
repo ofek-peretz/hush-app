@@ -7,7 +7,6 @@
  * global default so every unstyled <Text>/<TextInput> renders in Hanken Grotesk
  * rather than the system font.
  */
-// @ts-nocheck
 
 // 
 

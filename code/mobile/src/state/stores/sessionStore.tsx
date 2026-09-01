@@ -7,7 +7,6 @@
          * `swappedByHer`, and the coach decides what to do about it rather than being told after
          * the fact that the app already had.
          */
-// @ts-nocheck
 
 // 
 
@@ -27,6 +26,7 @@ import { swapChoices, isSwapMoment } from '@/domain/swapPool';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
+import { isTrainingGated } from '@/domain/entitlement';
 import { runSteps } from '@/domain/planRun';
 import { liveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
@@ -35,9 +35,12 @@ import { milestoneCopy, type Translate } from '@/domain/milestoneCopy';
 import { i18n } from '@/i18n';
 import { loadSetup } from '@/domain/loadPresentation';
 import { prescribedSets, sessionTrained } from '@/domain/completion';
+import { AppState } from 'react-native';
+import { notifier } from '@/platform/notifications';
 import { WatchSession } from '@/platform/watch/watchBridge';
 import { isCardioRecordPayload, type WatchLobby, type WatchLocalSession, type WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { applyWatchCardioRecord, applyWatchSessionRecord, watchSessionId } from '@/platform/watch/watchReconcile';
+import { armGapCatch } from '@/platform/gapCatch';
 import { adoptWatchSession, decideAdoption } from '@/platform/watch/watchAdopt';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
@@ -49,11 +52,16 @@ import {
 import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
-import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
-import { observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
-import { refreshLearnedRests, restTransitionSeconds, restInterSecondsFor, restIsLearnedFor, REST_UNSTATED_S } from '@/domain/restPrescription';
+import { carryWeightForward } from '@/engine/v5/liveSession';
+import { refreshLearnedRests, restTransitionSeconds, restInterSecondsFor, restIsLearnedFor, isRestSample, REST_UNSTATED_S } from '@/domain/restPrescription';
+import { warmupRamp, WARMUP_REST_S, type WarmupSet } from '@/domain/warmupRamp';
+import { nudgeAfterS, nudgeApplies, learnedExecSFor } from '@/domain/setDwell';
+import { factForLift, type KnownFact } from '@/domain/whatIKnow';
+import { setNudge } from '@/platform/setNudge';
+import { priorPeakKg, livePeakKg, recordBaselineKg, isRecordSet } from '@/domain/setRecord';
 import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
-import { sessionKcal } from '@/domain/energy';
+import { sessionDurationMs, sessionEnergyKcal } from '@/domain/sessionMetrics';
+import { healthWrite } from '@/platform/health/healthWrite';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
 
@@ -105,6 +113,27 @@ export interface Step {
   lastSetOfExercise: boolean;
   lastSetOfSession: boolean;
   edited?: boolean; // the athlete adjusted this set via Edit Result (logged as an override)
+  /**
+   * A warm-up bridge (domain/warmupRamp, founder 2026-08-24) — NOT a working set. Present only on
+   * ramp steps: `index`/`count` drive the "Warm-up · 1 of 2" label. A warm-up step's
+   * `exerciseSetIndex` is NEGATIVE (−ramp.length … −1) so the working sets keep their 0-based
+   * indices untouched, and its log carries `isApproach` + `isWarmup` so every engine reader
+   * excludes it by construction.
+   */
+  warmup?: { index: number; count: number };
+}
+
+/**
+ * WHICH STEP THIS IS, as an identity rather than as a position.
+ *
+ * ⛔ `globalIndex` IS A POSITION AND POSITIONS MOVE. Inserting a warm-up ahead of the cursor leaves
+ * the cursor's NUMBER unchanged while the step under it becomes a bridge — so anything that asks
+ * "am I still on the same set?" by comparing indices answers yes across a change of subject. What
+ * makes a step itself is the lift and where in the lift it sits; a bridge's set index is negative,
+ * which is exactly why that pair is enough.
+ */
+function stepKey(step: Step): string {
+  return `${step.exerciseId}#${step.exerciseSetIndex}`;
 }
 
 /** Contiguous same-exercise runs of a plan (each exercise's consecutive sets). */
@@ -145,7 +174,10 @@ export function deferCurrentExercise(plan: Step[], fromIndex: number): Step[] {
  * they are describing.
  */
 function currentBlockSetsOf(sets: SetLog[] | undefined, exerciseId: string): SetLog[] {
-  return currentBlockSets((sets ?? []).filter((x) => x.exerciseId === exerciseId));
+  // Working sets only (2026-08-24): during the ramp the trailing-run rule would return the warm-up
+  // logs themselves (no `setIndex === 0` exists yet), and "the set before" would be a bridge —
+  // drawing a planned 50%→75% climb as news on the hero.
+  return currentBlockSets((sets ?? []).filter((x) => x.exerciseId === exerciseId && !x.isApproach));
 }
 
 interface InternalState {
@@ -210,6 +242,10 @@ export function unfrozenRestAnchor(
   if (restStartedAtMs == null || pausedAtMs == null) return restStartedAtMs;
   return restStartedAtMs + Math.max(0, nowMs - pausedAtMs);
 }
+
+/** One frozen empty array, so `loggedSets` keeps a stable identity between sessions — a fresh `[]`
+ *  per render would re-fire every effect that depends on it, and the pair publishes on that effect. */
+const EMPTY_SETS: readonly SetLog[] = Object.freeze([]);
 
 /** Has this exact step already been logged? One set, one log — whichever surface asked (see completeSet). */
 export function hasLoggedStep(sets: readonly SetLog[], exerciseId: string, exerciseSetIndex: number): boolean {
@@ -289,6 +325,9 @@ export interface WatchLoggedSet {
   band?: [number, number];
   /** Which lift it belonged to — the last set of one closes it, and the beat says its name. */
   lift?: string;
+  /** This set struck her all-time record (domain/setRecord) — same rule, either device, so a PR
+   *  never depends on which wrist or thumb happened to log it (2026-08-24). */
+  record?: boolean;
 }
 
 export interface SessionView {
@@ -304,6 +343,9 @@ export interface SessionView {
   /** Distinct exercise ids across the whole session — lets an in-session swap avoid offering a
    *  lift the session already contains (no duplicate in one workout). */
   sessionExerciseIds: string[];
+  /** WORKING sets per exercise across the plan (warm-up bridges excluded) — the session map's
+   *  per-row figure (the rail's own sheet, 2026-08-26). */
+  sessionSetCounts: Record<string, number>;
   currentTarget: SetTarget | null;
   /**
    * What the coach wrote for the step she is on, when the plan came from a coach — the
@@ -323,7 +365,9 @@ export interface SessionView {
   straightInto: string | null;
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
-  setLabel: { n: number; m: number } | null; // set n of m within the exercise
+  /** Set n of m within the exercise. `warmup: true` = a ramp step — n/m then count the RAMP
+   *  ("Warm-up 1 of 2"), never the working sets, and the stage prints the warm-up wording. */
+  setLabel: { n: number; m: number; warmup?: boolean } | null;
   /*
    * ⛔ `emphases` IS DELETED (founder, 2026-08-12). It carried the coach's sentence per exercise and
    * had exactly two readers — the mid-workout sheet and the cardio sheet — and both are gone.
@@ -362,13 +406,35 @@ export interface SessionView {
    * same filter, same session as `setsSoFar`, so the two arrays are index-aligned by construction.
    */
   loadsSoFar: (number | null)[];
+  /**
+   * ════ ⛔ THE PAIR'S ONE READ OF THE LIVE SESSION — read-only, and deliberately RAW (2026-08-31) ═
+   *
+   * Two athletes on one bar (`state/stores/pairStore`, `domain/sharedSession`). The pair needs to
+   * know two things about this session and nothing else: the STEPS it is made of, and which of them
+   * have been LOGGED. Everything the shared stage draws — whose turn it is, which station the two
+   * are at, how far each of them is through it — is derived from those, on both phones, by one pure
+   * function.
+   *
+   * ⚠️ RAW RATHER THAN PROJECTED, ON PURPOSE. A second projection of the live session is the exact
+   * thing `platform/sessionMirror` exists to prevent (*"there is deliberately NO second projection
+   * system — duplicating this would let the surfaces drift from the phone's session machine"*). The
+   * mirror is the projection for surfaces that DISPLAY the workout; the pair is not one of those —
+   * it publishes a COUNT to another phone. Handing it the two arrays it counts, rather than a
+   * shaped view it would have to be kept in step with, is what keeps the count honest.
+   *
+   * ⛔ AND IT IS READ-ONLY IN THE STRONGEST SENSE: nothing the pair receives can reach back through
+   * here. The wire cannot log a set, move the cursor, or end a workout — those live on the actions
+   * below, and no partner has a path to any of them.
+   */
+  livePlan: readonly Step[];
+  loggedSets: readonly SetLog[];
   globalProgress: { index: number; total: number } | null;
   /** Exercise ordinal among the session's distinct exercises ("Exercise n / N"). */
   exerciseProgress: { index: number; total: number } | null;
   nextExercise: Exercise | null; // for Rest preview (upcoming set/exercise)
   nextTarget: SetTarget | null;
   /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
-  nextSetLabel: { n: number; m: number } | null;
+  nextSetLabel: { n: number; m: number; warmup?: boolean } | null;
   restSeconds: number;
   /** Seconds added to the CURRENT rest by "+15 sec", from EITHER surface. The phone's Rest
    *  countdown reads this and fills forward by the delta — which is how a watch +15 reaches the
@@ -379,7 +445,19 @@ export interface SessionView {
   /** Epoch ms the active session started (drives the session elapsed-time label on the mirror). */
   startedAtMs: number | null;
   // actions
-  start: (day: ProgramDay, targets: SetTarget[]) => Promise<void>;
+  /**
+   * `withPartners` stamps `Session.partners` at START — the people she trained WITH.
+   *
+   * ⛔ THE FIELD'S OWN HEADER CALLED THIS SHOT IN ADVANCE (`models.ts`, founder 2026-08-23): *"v1 is
+   * names she writes; the live shared-session (CloudKit circles) will fill this from the pairing
+   * when it lands, on the same field — the record's shape is the contract, not the mechanism."*
+   * This is the pairing filling it, and nothing downstream had to change: the finish poster and the
+   * story card have read this field since the day it was written.
+   *
+   * At START rather than at save, because a pair that dissolves at the fourth lift was still a
+   * workout they did together — and because a session killed mid-way must carry it into salvage.
+   */
+  start: (day: ProgramDay, targets: SetTarget[], withPartners?: readonly string[]) => Promise<void>;
   /**
    * Begin a session the COACH wrote.
    *
@@ -391,7 +469,7 @@ export interface SessionView {
    * `workoutId` is the coach workout's positional id (`coachWorkoutId`), stamped on the session so
    * History can say which workout this was long after the programme has changed shape.
    */
-  startCoach: (session: PlannedSession, workoutId: string) => Promise<void>;
+  startCoach: (session: PlannedSession, workoutId: string, withPartners?: readonly string[]) => Promise<void>;
   /** An interrupted (app-killed) workout that can still be picked up, or null. Home reads
    *  this on focus to offer "Continue {workout}" as the primary CTA (S3). */
   loadResumable: () => Promise<{ workoutName: string } | null>;
@@ -420,6 +498,65 @@ export interface SessionView {
   /** Edit Result: update the CURRENT set's weight/reps in place (re-renders Active
    *  Set). Does NOT log — Complete Set remains the sole confirmer (§4.13 / founder). */
   editCurrentSet: (v: { weight: number | null; reps: number }) => void;
+  /**
+   * The engine's first-set prescription for ANY exercise in the session's target table — what a
+   * swap WOULD put on the bar (design review 2026-09-01: the swap sheet offered three names with
+   * no loads, and the load is half of what decides a swap). Null for an exercise the table does
+   * not carry (resumed sessions run without a table; the sheet then simply shows no figure).
+   */
+  previewTargetFor: (exerciseId: string) => SetTarget | null;
+  /** Her heaviest EVER logged weight on the current lift (domain/setRecord), or null when the
+   *  lift has no past — the beat's record question is answered against this. */
+  priorPeakKg: number | null;
+  /**
+   * ════ THE WARM-UP DISC, AND WHETHER IT EXISTS RIGHT NOW (founder 2026-08-30) ════
+   *
+   * How many bridges the athlete would get if she pressed it — 0 means the disc is not offered,
+   * and it is the ONE question the stage bar asks. `warmupOffer` owns the whole rule; this is it,
+   * asked at the step she is actually about to perform:
+   *
+   *   · on a live SET, the step she is standing on;
+   *   · on a CROSSING, the step she is walking to — because "the start of the exercise" is a place
+   *     she reaches before the first set, and the crossing is where she is deciding what to rack.
+   *     (The cursor has not moved yet on a crossing; that is the same fact the film disc above it
+   *     gets wrong every time it is written from `current`.)
+   *   · never during a rest BETWEEN sets: the lift has begun, and a bridge behind her is nothing.
+   */
+  warmupOffered: number;
+  /**
+   * ════ THIS SET HAS RUN LONGER THAN HERS EVER DO (founder, 2026-08-30) ════
+   *
+   *   > *"כעבור זמן מסוים שכבר הייתי אמור לסיים את הסט צריך להשלח התראה של להזין את התוצאה."*
+   *
+   * True once the set on screen has passed twice her measured execution on this lift
+   * (`domain/setDwell` owns the number and the argument). It is the FOREGROUND half of the ask;
+   * the pocket gets a scheduled OS note instead, and the two are armed and cancelled together.
+   *
+   * ⚠️ IT IS A QUESTION, NOT A VERDICT. Nothing is inferred from it and nothing is written because
+   * of it — the founder rejected the version that credited the dwell against her rest, and he was
+   * right: the app does not know what she was doing, only that it has been a long time to be
+   * asking. So it asks, once, and the athlete decides.
+   */
+  setRunningLong: boolean;
+  /**
+   * ════ WHAT THE APP KNOWS ABOUT HER ON THE LIFT SHE IS WALKING TO (2026-08-31) ════
+   *
+   *   > *"אם המשתמש מרגיש שבאמת התוכנית אישית… יהיה לו דרייב לדבוק בה ולהשקיע ברישום כל סט."*
+   *
+   * One measured fact, or null (`domain/whatIKnow` owns which, and why one). Present only on a
+   * CROSSING — she is between stations, walking, with nothing to do but read, and the thing she is
+   * about to start is the thing she is thinking about. Between sets of a lift she is mid-effort and
+   * the stage holds one decision; on a live set the whole screen is the prescription.
+   *
+   * ⚠️ AND IT IS THE NEXT LIFT, not the current one — the crossing's standing trap
+   * (`filmSubject`, and the founder's own bug of 2026-08-30). Read from `next` for that reason.
+   */
+  nextLiftFact: KnownFact | null;
+  /**
+   * Insert the offered ramp and step onto its first bridge. A no-op when nothing is offered, so the
+   * disc and the action cannot disagree — they are one derivation (`warmupOffer`).
+   */
+  addWarmup: () => void;
   endRest: () => void;
   /** Extend the running rest by N seconds ("+15 sec"). Re-publishes the longer rest
    *  to the watch + Live Activity; the phone's own rest UI also reflects it. */
@@ -510,16 +647,17 @@ const Ctx = createContext<SessionView | null>(null);
 /** Raw context — WEB PREVIEW GALLERY only (see `AppContext` in appStore for the why). */
 export const SessionContext = Ctx;
 
-/** Wall-clock ms from a saved session's start to its last logged set — the same span every other
- *  surface prices its calories over. */
-function sessionDurationMs(s: Session): number {
-  const start = Date.parse(s.startedAt);
-  let end = start;
-  for (const l of s.sets) if (l.persistedAt) end = Math.max(end, Date.parse(l.persistedAt));
-  return Math.max(0, end - start);
-}
+/*
+ * ⛔ "THE SAME SPAN EVERY OTHER SURFACE PRICES ITS CALORIES OVER" — IT WAS NOT, TWICE OVER.
+ *
+ * This file held a duration that read only `sets` (so an interval session was zero seconds long and
+ * cost zero calories on the wrist), AND a second, different one below it: the summary handed to Well
+ * Done measured `Date.now() - startedAt` at the moment she pressed Finish. Sit for ten minutes after
+ * the last set and Well Done said 48 min while the Log row, a tap later, said 38. One span now,
+ * `domain/sessionMetrics.sessionDurationMs` — start to the last stamp in either record.
+ */
 
-function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
+export function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
   const find = (exerciseId: string, setIndex: number): SetTarget => {
     const t = targets.find((x) => x.exerciseId === exerciseId && x.setIndex === setIndex);
     // Data gap (§7.9): never render "—"; fall back to a neutral target if missing.
@@ -528,6 +666,24 @@ function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
   const steps: Step[] = [];
   let global = 0;
   const totalSlots = day.slots.length;
+  /*
+   * ⛔ THE RAMP IS NOT BUILT HERE ANY MORE — IT IS ASKED FOR (founder, 2026-08-30) ════
+   *
+   *   > *"אני חושב שרק בתרגילי הקומפאונד צריך להופיע האפשרות לפקד חימום ובשאר לא. לא לקבוע מראש
+   *   > לאף אחד חימום ומי שרוצה שילחץ על הפקד."*
+   *
+   * The 2026-08-24 contract stands in full — what a bridge IS, what it costs, that it never touches
+   * the working prescription, that its log is excluded from every engine decision. What changed is
+   * WHO decides there is one. It was written into the plan for every loaded compound; now the plan
+   * is built without bridges and the athlete inserts them, at the station, with the warm-up disc
+   * (`warmupOffer` / `insertWarmup` below — one rule, offered on compounds only).
+   *
+   * ⚠️ AND THE HOUR STOPPED PAYING FOR THEM, which is the half that was not cosmetic. `coachWeek`
+   * and `fixtureModel` charged 70 s per structural bridge, and a day pushed over the ceiling by
+   * that charge had `enforceTimeCap` cut a WORKING SET to fund it. Charging in advance for a
+   * warm-up nobody asked for, in the currency of real work, is the wrong way round. The charge is
+   * gone, and `leanWarmup` — which existed only to buy the mandatory ramp's cost back — with it.
+   */
   day.slots.forEach((slot, slotIdx) => {
     for (let s = 0; s < slot.setCount; s++) {
       steps.push({
@@ -564,11 +720,23 @@ function buildPlan(day: ProgramDay, targets: SetTarget[]): Step[] {
  */
 export function buildPlanFromCoach(session: PlannedSession): Step[] {
   const steps = runSteps(session);
-  return steps.map((st, i) => {
+  /*
+   * ⛔ AND NO RAMP IS BUILT HERE EITHER (founder 2026-08-30 — see `buildPlan` for the ruling).
+   *
+   * This builder carried bridges from 2026-08-25, when it turned out `buildPlan`'s ramp had no
+   * production caller at all. Both builders now produce the same thing: the session as written,
+   * with no bridge in it. The two restrictions that were enforced HERE, because only this shape
+   * knows about rounds, did not evaporate with the injection — they moved to `warmupOffer`, which
+   * derives both from the finished plan (a bridge is offered only at the first step of an
+   * exercise's own run, never inside a superset round, never on a lift the plan revisits).
+   */
+  const out: Step[] = [];
+  let global = 0;
+  steps.forEach((st, i) => {
     const lastOfExercise = i === steps.length - 1 || steps[i + 1].item.ex !== st.item.ex;
-    return {
+    out.push({
       exerciseId: st.item.ex,
-      globalIndex: i,
+      globalIndex: global,
       // Kept in the vocabulary the rest of the machine already speaks: for a straight block these
       // ARE the sets of the exercise; for a circuit they are its laps, which is the same count.
       exerciseSetIndex: st.round - 1,
@@ -590,8 +758,138 @@ export function buildPlanFromCoach(session: PlannedSession): Step[] {
       restAfterS: st.restAfterS,
       lastSetOfExercise: lastOfExercise,
       lastSetOfSession: st.last,
-    };
+    });
+    global += 1;
   });
+  return out;
+}
+
+/**
+ * ════ WHOSE FILM THE FORM DOOR PLAYS (founder bug, 2026-08-30) ════
+ *
+ *   > *"באג - בסט המעבר זה מציג את הוידאו של התרגיל הקודם."*
+ *
+ * ⛔ THE CAUSE IS ONE LINE OF THIS FILE'S OWN CONTRACT: **the cursor only moves on `REST_ELAPSED`**
+ * (see `restSeconds` in the view). So for the whole of a transition rest `currentExerciseId` is the
+ * lift that ENDED, and `nextExerciseId` is the one the screen is entirely about. Every other part of
+ * the crossing already knew — the name, the load, the plates-a-side line, the SWAP disc — and the
+ * form disc was the one control still written from `current`, so it played the dumbbell she had
+ * just put down over a card describing the machine she was walking to.
+ *
+ * ⚠️ AND THE GATE FAILED IN BOTH DIRECTIONS, from the same mistake. It asked whether the CURRENT
+ * step was a catalogue lift: crossing into a RUN that is true, so the door stood open onto the
+ * finished lift; crossing out of a run INTO a lift it is false, so the door was missing at the one
+ * moment a film is most wanted — a station she has not reached yet.
+ *
+ * `null` means there is no film and therefore no door. A run has none (`exerciseCues` for a
+ * movement id is empty, and there is no clip of five kilometres), and a door onto nothing is worse
+ * than no door.
+ *
+ * Pure, and exported, so the law can hold it without standing a session up.
+ */
+export function filmSubject(
+  displayPhase: DisplayPhase,
+  currentExerciseId: string | null,
+  nextExerciseId: string | null,
+): string | null {
+  const id = displayPhase === 'REST_TRANSITION' ? nextExerciseId : currentExerciseId;
+  return id && exerciseById(id) ? id : null;
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE WARM-UP IS OFFERED, NOT PRESCRIBED (founder, 2026-08-30)
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ *   > *"אני חושב שרק בתרגילי הקומפאונד צריך להופיע האפשרות לפקד חימום ובשאר לא. לא לקבוע מראש
+ *   > לאף אחד חימום ומי שרוצה שילחץ על הפקד."*
+ *
+ * Two rules, and this is the first of them: WHEN a bridge may be asked for. It is asked by the
+ * stage bar (does the disc exist?) and by the action that inserts one (is this legal?), and those
+ * two must never be able to disagree — a disc that leads to a refusal is worse than no disc.
+ *
+ * ── WHAT IS OFFERED, AND WHY EACH CONDITION IS THERE ───────────────────────────────────────────
+ *   · **A COMPOUND, AND NOTHING ELSE** — the founder's ruling, and also the surviving half of the
+ *     2026-08-24 contract (*"it exists only where it earns its place"*). A curl gets no disc at all,
+ *     rather than a disc that opens onto an empty ramp.
+ *   · **AT THE START OF THE EXERCISE** — the first step of its own contiguous run. A bridge after
+ *     her first working set is not a bridge, and the founder's word was *"בתחילת כל תרגיל"*.
+ *   · **NOT INSIDE A SUPERSET ROUND** — carried over verbatim from `buildPlanFromCoach`, which used
+ *     to enforce it while it still had the block shape in hand. A round is one breath; a bridge in
+ *     its middle breaks it. Derived here from `where`: a block with more than one position is not
+ *     straight.
+ *   · **NOT ON A LIFT THE PLAN REVISITS** — the second carried-over restriction. If she has already
+ *     worked this exercise today she is warm, whatever the sheet says.
+ *   · **AND A DISTINCT BRIDGE MUST EXIST BELOW THE WORKING LOAD** — `warmupRamp` answers that from
+ *     the load itself, and an empty ramp means no offer. An empty-bar squat has no road to it.
+ *
+ * ⚠️ THE RAMP'S SHAPE IS UNTOUCHED: the day's first compound is offered two bridges and a later one
+ * gets a single one (`warmupRamp`), because that is a fact about a cold body, not about who asked.
+ * `lean` is gone with `leanWarmup` — a ramp nobody is charged for has no cost to trim.
+ *
+ * Pure, and derived entirely from the plan, so the resumed-after-a-kill session answers the same.
+ */
+export function warmupOffer(plan: Step[], atIndex: number): { at: number; ramp: WarmupSet[] } | null {
+  const st = plan[atIndex];
+  if (!st) return null;
+  if (st.warmup) return null; // already standing on a bridge
+  if (st.item && st.item.kind !== 'reps') return null; // a hold or a run has no load to ramp to
+  const ex = exerciseById(st.exerciseId);
+  if (!ex || ex.tier !== 'compound') return null; // the founder's ruling: compounds only
+  // The start of this exercise's own run — and never a lift the plan has already worked.
+  const prev = plan[atIndex - 1];
+  if (prev && prev.exerciseId === st.exerciseId) return null;
+  if (plan.slice(0, atIndex).some((s) => s.exerciseId === st.exerciseId)) return null;
+  // A superset/circuit round is one breath (see above). A block carrying more than one position is
+  // not straight; a plan with no `where` at all is the engine's own, where every block is.
+  if (st.where && plan.some((s) => s.where?.block === st.where!.block && s.where.position !== st.where!.position)) return null;
+  /* The day's FIRST compound gets the two-bridge ramp; a later one is already half-warm and gets
+     one. Read from the plan, not from a counter, so the answer survives a swap and a resume. */
+  const firstCompound = !plan.slice(0, atIndex).some((s) => exerciseById(s.exerciseId)?.tier === 'compound');
+  const ramp = warmupRamp(ex, st.target?.recommendedWeight ?? null, firstCompound);
+  return ramp.length > 0 ? { at: atIndex, ramp } : null;
+}
+
+/**
+ * The second rule: what a bridge IS once she has asked for one. Inserted immediately BEFORE the
+ * working set at `at`, so the cursor — which addresses the plan by position — lands on the first
+ * bridge without being moved at all.
+ *
+ * ⛔ THE SHAPE IS THE 2026-08-24 CONTRACT, BYTE FOR BYTE, and it has to be: every downstream reader
+ * in this app already knows how to see a bridge and step over it. Negative ascending set indices so
+ * no positional read of working sets can collide, `warmup: {index, count}` for the label, the fixed
+ * `WARMUP_REST_S` breath, never `lastSetOf*`, and a log that carries `isApproach` + `isWarmup`.
+ *
+ * ⚠️ `globalIndex` AND `lastSetOfSession` ARE RE-DERIVED, and nothing else is. The machine's cursor
+ * IS a `globalIndex` (`plan.find((st) => st.globalIndex === machine.setIndex)`) and the view reads
+ * the same number as an array position — two readings that agree only while the two are equal, so a
+ * plan that gains steps and keeps the old numbers runs the session off the end of itself. This is
+ * `deferCurrentExercise`'s renumbering exactly, and deliberately NOT `liveRevision`'s `reindex`,
+ * which also rebuilds `exerciseSetIndex` per run and would flatten the bridges' negative indices
+ * into working set numbers — turning two warm-ups into sets 1 and 2 of the lift.
+ */
+export function insertWarmup(plan: Step[], at: number, ramp: WarmupSet[]): Step[] {
+  const anchor = plan[at];
+  if (!anchor || ramp.length === 0) return plan;
+  const bridges: Step[] = ramp.map((w, i) => ({
+    exerciseId: anchor.exerciseId,
+    globalIndex: 0, // re-derived below
+    exerciseSetIndex: i - ramp.length,
+    totalSetsInExercise: anchor.totalSetsInExercise,
+    target: {
+      exerciseId: anchor.exerciseId,
+      setIndex: i - ramp.length,
+      recommendedWeight: w.weightKg,
+      recommendedReps: w.reps,
+    },
+    ...(anchor.where ? { where: anchor.where } : {}),
+    warmup: { index: i, count: ramp.length },
+    restAfterS: WARMUP_REST_S, // a breath and a plate change — never her learned rest
+    lastSetOfExercise: false,
+    lastSetOfSession: false,
+  }));
+  const flat = [...plan.slice(0, at), ...bridges, ...plan.slice(at)];
+  return flat.map((st, i) => ({ ...st, globalIndex: i, lastSetOfSession: i === flat.length - 1 }));
 }
 
 /**
@@ -690,7 +988,12 @@ function itemResultOf(
         ...(done.seconds != null ? { seconds: done.seconds } : {}),
         ...(done.activityId ? { activityId: done.activityId } : {}),
       };
-    case 'open':
+    default:
+      /*
+       * ⚠️ THE LEGACY TOLERANCE — `open` left `PlannedItem` on 2026-08-12, but an ACTIVE session
+       * saved before that day can still hold one mid-resume, and `OpenResult` deliberately survives
+       * in `models.ts` so history can read its own record. Same seam as `coachWeek`'s default.
+       */
       return { ...base, kind: 'open' };
   }
 }
@@ -722,7 +1025,7 @@ function alreadyInPlan(plan: Step[], exerciseId: string): boolean {
  * Attaches the equipment-native load setup (kg) so the watch can show how to load the weight (item
  * 11), and the in-class swap alternatives at the start of each exercise.
  */
-export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
+export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/data/exercises').EquipmentFamily[]): MirrorStep[] {
   // THE session's lifts — every one of them, computed ONCE for the whole plan. The watch's swap
   // options are chosen against this list (founder 2026-07-12).
   //
@@ -751,7 +1054,7 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
      */
     const swapOptions =
       ex && isSwapMoment(st.exerciseSetIndex)
-        ? swapChoices(ex.id, { sessionExerciseIds }, 2)
+        ? swapChoices(ex.id, { sessionExerciseIds, equipment }, 2)
             .filter((c) => c.sameMovement)
             .map((c) => ({ id: c.exercise.id, name: c.exercise.name }))
         : [];
@@ -772,6 +1075,7 @@ export function buildMirrorSteps(plan: Step[]): MirrorStep[] {
       repBandHi: st.target.repBandHi,
       reasonType: st.target.reasonType,
       reasonDelta: st.target.reasonDelta,
+      ...(st.warmup ? { warmup: st.warmup } : {}),
       swapOptions,
       loadSetup: setup
         ? {
@@ -829,10 +1133,14 @@ function isToLoad(plan: Step[], setIndex: number, sets: SetLog[]): boolean {
  * engine wrote the plan — and it is why this now takes no `reasonType` at all.
  */
 export function progressedLiftCount(plan: Step[], sets: SetLog[]): number {
-  const trained = new Set(sets.map((s) => s.exerciseId));
+  // WORKING sets and steps only (2026-08-24): the warm-up ramp's first step is half the working
+  // weight BY DESIGN, so reading it as "where the lift started this session" would count every
+  // ramped lift as progressed, every workout. A lift she only warmed up on was not trained.
+  const trained = new Set(sets.filter((s) => !s.isApproach).map((s) => s.exerciseId));
   const first = new Map<string, number>();
   const last = new Map<string, number>();
   for (const st of plan) {
+    if (st.warmup) continue;
     const w = st.target?.recommendedWeight;
     if (w == null || !trained.has(st.exerciseId)) continue;
     if (!first.has(st.exerciseId)) first.set(st.exerciseId, w);
@@ -891,7 +1199,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (isCardioRecordPayload(raw)) {
         void applyWatchCardioRecord(raw, {
           loadCardio: () => db.loadCardio(),
-          appendCardioActivity: (a) => db.appendCardioActivity(a),
+          /* The wrist's run is training too, so the day-six catch re-arms off it — the same
+             re-derive the phone's own run does (`domain/gapCatch`). Fire-and-forget after the
+             write, never in front of it. */
+          appendCardioActivity: async (a) => {
+            await db.appendCardioActivity(a);
+            void armGapCatch();
+          },
           track: (type, data) => void track(type, data),
           ack: (id) => watchTransport.ackRecord(id),
         });
@@ -899,7 +1213,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
       void applyWatchSessionRecord(raw, {
         loadHistory: () => db.loadHistory(),
-        appendCompletedSession: (s) => db.appendCompletedSession(s),
+        appendCompletedSession: async (s) => {
+          await db.appendCompletedSession(s);
+          /*
+           * THE SAVE RECEIPT (2026-08-23): a standalone wrist workout just became part of her
+           * record — often with the phone in a bag. Say so, once, quietly. Foreground is exempt:
+           * the app is open and the record lands where she can see it. The note rides the same
+           * fact-not-reminder decree as the kilometre.
+           */
+          if (AppState.currentState !== 'active') void notifier.watchWorkoutSaved(s.programDayName ?? '');
+        },
         recordSessionCompleted: () => appRef.current.recordSessionCompleted(),
         markWorkoutCompleted: (id) => appRef.current.markWorkoutCompleted(id),
         programDay: (id) => appRef.current.program?.days.find((d) => d.id === id),
@@ -923,6 +1246,41 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const restStartedAtRef = useRef<number | null>(null);
   const pauseStartedAtRef = useRef<number | null>(null);
   /**
+   * ════ WHEN THIS SET WENT ON SCREEN (founder, 2026-08-30 → the nudge) ════
+   *
+   * The one instant the phone genuinely knows about the front half of a set. The app cannot see the
+   * last rep; it can see when it started asking and when she answered, and the gap between them is
+   * the only measurable this whole family of problems has (`domain/setDwell` owns what it means).
+   *
+   * It buys two things at once, which is why it is a ref on the session rather than a screen's
+   * state: the DWELL stamped on `set_completed` — the compliance signal the product had no way to
+   * see, and the reason the founder's finding took a live gym session to surface at all — and the
+   * moment the nudge becomes legal.
+   *
+   * Stamped when the cursor arrives at a step, NOT on every render: re-stamping would reset the
+   * clock each time the screen redrew and the nudge would never fire. Keyed on the step so the
+   * arrival is detected once (see the effect below).
+   */
+  const setPresentedAtRef = useRef<{ key: string; atMs: number } | null>(null);
+  /** True once the nudge has been raised for THIS set. A coach says it once (`domain/setDwell`). */
+  const nudgedRef = useRef(false);
+  /**
+   * The IN-APP half of the nudge — the quiet line on the stage, for the athlete who IS looking.
+   *
+   * ⚠️ TWO HALVES, ONE THOUGHT, AND THEY MUST NOT BOTH SPEAK. The OS notification is the pocket's
+   * copy and is suppressed while the app is foregrounded (`notifications.ts`); this is what the
+   * foreground gets instead. They are armed and cancelled together by one effect, so there is no
+   * state in which one of them is live and the other is not.
+   */
+  const [setRunningLong, setSetRunningLong] = useState(false);
+  const nudgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearNudgeTimer = useCallback(() => {
+    if (nudgeTimerRef.current != null) {
+      clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = null;
+    }
+  }, []);
+  /**
    * Engine v5 · Stage 0 (law L3): the rest that has JUST ENDED and is waiting to be stamped onto
    * the next set as `SetLog.restBeforeS`. Written at `endRest` — the single rest-exit path, which
    * the timer, SKIP, and the watch all pass through — and consumed by `completeSet`, the single
@@ -938,7 +1296,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
    * at 2 (S-13). Reset when a new exercise begins. Keyed by exerciseId so a swap/rotation restarts
    * the count cleanly.
    */
-  const loop1Ref = useRef<{ exerciseId: string; count: number }>({ exerciseId: '', count: 0 });
   /**
    * The athlete's completed-session history, loaded ONCE when a session starts — so a live Loop 1
    * correction can snap to her learned real grid (`observedLoads`), landing on a weight that physically
@@ -1017,6 +1374,75 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
+  /**
+   * ════ THE SET WENT ON SCREEN — stamp it once, and arm the pocket (founder 2026-08-30) ════
+   *
+   * ⚠️ THE STEP, NOT THE INDEX. A warm-up press inserts bridges ahead of the cursor, so the number
+   * `machine.setIndex` holds can stay put while the step underneath it becomes a different thing
+   * entirely — and an identity read from the number alone would carry the working set's stopwatch
+   * over onto the bridge that replaced it. The key is what the step IS.
+   *
+   * ⛔ AND THE NUDGE IS ARMED FROM HERE, not from the screen, for the reason the whole feature
+   * exists: the screen's timers stop when the phone is pocketed. `setNudge.arm` schedules with the
+   * OS, ahead of time, so the ask survives a locked phone — and every path that leaves the set
+   * (logged, paused, ended, unmounted) disarms it below. A pending question about a set she has
+   * already finished is the nagging this must never become.
+   */
+  useEffect(() => {
+    const { plan, machine } = state;
+    const step = machine.phase === 'SET_PRESENTED' ? plan[machine.setIndex] : null;
+    if (!step) {
+      // Off the set: the question is spent, whatever the reason (logged, resting, paused, done).
+      setPresentedAtRef.current = null;
+      nudgedRef.current = false;
+      setSetRunningLong(false);
+      clearNudgeTimer();
+      void setNudge.disarm();
+      return;
+    }
+    if (setPresentedAtRef.current?.key === stepKey(step)) return; // same set, a re-render
+    setPresentedAtRef.current = { key: stepKey(step), atMs: Date.now() };
+    nudgedRef.current = false;
+    setSetRunningLong(false);
+    if (!nudgeApplies(step)) {
+      clearNudgeTimer();
+      void setNudge.disarm();
+      return;
+    }
+    /* ⛔ THE PRESCRIPTION, NOT HER HISTORY (founder, 2026-08-31): *"לא צריך לחשב כמה זמן לוקח לכל
+       בן אדם לעשות סט… זה צריך להיות פשוט."* The band's FLOOR is the rep count used — the fewest
+       reps that still count as this set done — see `domain/setDwell`. */
+    const afterS = nudgeAfterS(step.exerciseId, step.target?.repBandLo ?? step.target?.recommendedReps ?? 8);
+    void setNudge.arm(afterS);
+    /*
+     * …and the same instant, in-app, for the athlete who IS looking at the screen.
+     *
+     * ⛔ THE TIMER IS A REF, NOT AN EFFECT CLEANUP, and that is the whole correctness of it. This
+     * effect runs on every `state` change — every logged set anywhere, every mirror republish —
+     * and a cleanup-based timer would be torn down by each of those and only re-armed by the ones
+     * that reach the bottom. Since a re-render of the SAME set returns early above, the timer
+     * would have been cancelled and never rebuilt: the nudge would fire only for a set that
+     * happened to see no state change at all, which in a live session is none of them.
+     *
+     * Cleared and rebuilt exactly when the SET changes, which is the only event it is about.
+     */
+    clearNudgeTimer();
+    nudgeTimerRef.current = setTimeout(() => {
+      nudgeTimerRef.current = null;
+      nudgedRef.current = true;
+      setSetRunningLong(true);
+    }, afterS * 1000);
+  }, [state, clearNudgeTimer]);
+
+  /** The workout screen going away must not leave a question pending in the OS queue. */
+  useEffect(
+    () => () => {
+      clearNudgeTimer();
+      void setNudge.disarm();
+    },
+    [clearNudgeTimer],
+  );
+
   // Mirror session state to BOTH the Live Activity / Dynamic Island / Lock Screen
   // AND the Apple Watch — from ONE canonical projection (§8.5; no duplicate state).
   // READ-ONLY, timer is the hero, no completion controls from outside the app.
@@ -1038,7 +1464,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
      * ⏸️ Drawing the item ITSELF on those two surfaces is watch work, and the watch is deferred by
      * the founder until his QA batch. This keeps them truthful in the meantime.
      */
-    const mirrorSteps = buildMirrorSteps(plan);
+    const mirrorSteps = buildMirrorSteps(plan, appRef.current?.profile?.equipment);
     const setsBeforeCursor = plan.slice(0, machine.setIndex).filter((s) => s.target).length;
     const mirror = projectSessionMirror({
       steps: mirrorSteps,
@@ -1173,7 +1599,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // ⚠️ IT ASKED ONLY ABOUT SETS. A session of intervals and holds — which the coach can now
       // write, and which is an entire training week for a runner — logs no `SetLog` at all, so a
       // finished workout would have been thrown away as never started.
-      if (session.sets.length === 0 && !session.items?.length) {
+      //
+      // ⚠️ AND A WARM-UP BRIDGE IS NOT A START (2026-08-24). Tapping through half a ramp and
+      // leaving is the same "entered and left" this gate has always named — a record whose only
+      // rows are bridges would sit in History as a workout of no work, which is the exact thing
+      // `sessionHasLoggedWork` refuses to list.
+      if (session.sets.every((s) => s.isApproach) && !session.items?.length) {
         await db.clearActiveSession();
         await db.clearSessionResume().catch(() => {});
         dispatch({ type: 'END' });
@@ -1207,6 +1638,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await db.appendCompletedSession(saved);
       await db.clearActiveSession();
       await db.clearSessionResume().catch(() => {});
+      /*
+       * ⛔ HER RINGS CLOSE (2026-08-23). The finished session goes to Apple Health — the write the
+       * plist has promised since it was authored, and the one thing every competitor does that this
+       * app did not. Strictly AFTER the local save and strictly un-awaited: a Health failure costs
+       * the ring, never the record, and nothing may stand between the save and Well Done (§8.4).
+       *
+       * ⚠️ ONLY A TRAINED SESSION IS A WORKOUT — the same completion bar the count keeps. A two-set
+       * false start written to Health would put a "workout" on her rings that this app itself
+       * refuses to count.
+       *
+       * ⚠️ THE SPAN IS THE WORKOUT'S OWN (`sessionDurationMs`), not screen time — the exact defect
+       * the summary above already documents. kcal is the declared estimate and rides only when her
+       * bodyweight priced one: no body, no number, in Health exactly as on the screen.
+       */
+      if (trained) {
+        const spanMs = sessionDurationMs(saved);
+        void healthWrite
+          .strength({
+            startedAt: saved.startedAt,
+            endedAt: new Date(Date.parse(saved.startedAt) + spanMs).toISOString(),
+            kcal: sessionEnergyKcal(saved, app.profile?.weightKg),
+          })
+          .then((ok) => { if (ok) void track('health_workout_written', { kind: 'strength' }); })
+          .catch(() => {});
+      }
       // Below the TRAINED bar the work is still real — it is in History and the engine folds every
       // set performed — but the workout STAYS on the week's list, so one exercise out of six never
       // costs the athlete the session.
@@ -1336,7 +1792,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // TRUTHFUL summary; END below empties the plan so the next projection is null, which the watch
       // bridge ignores once this complete frame has ended its session.
       const completeMirror = projectSessionMirror({
-        steps: buildMirrorSteps(plan),
+        steps: buildMirrorSteps(plan, appRef.current?.profile?.equipment),
         total: plan.length,
         machine: { ...machine, phase: 'SESSION_SAVED' },
         // The terminal frame draws no timer; the numbers are carried only so the shape is complete.
@@ -1351,7 +1807,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         progressedLifts: progressedLiftCount(plan, saved.sets),
         // ONE NUMBER PER WORKOUT — the phone is the authority here, so the phone's figure crosses
         // to the wrist and the wrist stops printing its own HealthKit reading beside it.
-        kcal: sessionKcal(saved, sessionDurationMs(saved), app.profile?.weightKg),
+        kcal: sessionEnergyKcal(saved, app.profile?.weightKg),
         milestone,
       });
       if (completeMirror) watchRef.current?.publish(completeMirror);
@@ -1391,9 +1847,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         workoutName: saved.programDayName ?? exerciseById(plan[0]?.exerciseId ?? '')?.name ?? '',
         // Every step she did, for the same reason `sessionTrained` counts them: a session of
         // intervals reading "0" would tell her she had done nothing on the screen that closes it.
-        sets: saved.items?.length ?? saved.sets.length,
+        // Working sets only — the warm-up ramp is not counted here, exactly as everywhere else.
+        sets: saved.items?.length ?? saved.sets.filter((s) => !s.isApproach).length,
         progressed,
-        durationMs: Math.max(0, Date.now() - Date.parse(saved.startedAt)),
+        // ⚠️ THE WORKOUT, NOT THE TIME SHE SPENT ON THIS SCREEN. This was `Date.now() - startedAt`:
+        // the stopwatch kept running while she racked the bar, changed, and got round to pressing
+        // Finish, so Well Done's minutes and calories overshot the record the Log would show her a
+        // tap later. Same span, everywhere, for one session.
+        durationMs: sessionDurationMs(saved),
         // The key every decision this occurrence earned is stamped with (changeLog[].at).
         startedAtMs: Date.parse(saved.startedAt),
         earlyFinish,
@@ -1413,6 +1874,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       currentExercise: current ? exerciseById(current.exerciseId) ?? null : null,
       currentExerciseId: current?.exerciseId ?? null,
       sessionExerciseIds: [...new Set(plan.map((s) => s.exerciseId))],
+      sessionSetCounts: plan.reduce<Record<string, number>>((acc, s) => {
+        if (!s.warmup) acc[s.exerciseId] = (acc[s.exerciseId] ?? 0) + 1;
+        return acc;
+      }, {}),
       currentTarget: current?.target ?? null,
       currentItem: current?.item ?? null,
       nextItem: resting ? next?.item ?? null : null,
@@ -1432,7 +1897,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         current && restAfterStep(current) === 0 && next && !current.lastSetOfSession
           ? exerciseById(next.exerciseId)?.name ?? exerciseDisplayName(next.exerciseId)
           : null,
-      setLabel: current ? { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise } : null,
+      setLabel: current
+        ? current.warmup
+          ? { n: current.warmup.index + 1, m: current.warmup.count, warmup: true }
+          : { n: current.exerciseSetIndex + 1, m: current.totalSetsInExercise }
+        : null,
       /*
        * ⚠️ THE LIVE SESSION IS EXCLUDED BY ID. History is written as she goes, so without this
        * "last time" would become "the set you just did" — useless and wrong.
@@ -1454,6 +1923,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        */
       setsSoFar: current ? currentBlockSetsOf(state.session?.sets, current.exerciseId).map((x) => x.actualReps) : [],
       loadsSoFar: current ? currentBlockSetsOf(state.session?.sets, current.exerciseId).map((x) => x.actualWeight ?? null) : [],
+      livePlan: plan,
+      loggedSets: state.session?.sets ?? EMPTY_SETS,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
       exerciseProgress: current
         ? (() => {
@@ -1469,18 +1940,72 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       nextExercise: resting && next ? exerciseById(next.exerciseId) ?? null : null,
       nextExerciseId: resting ? next?.exerciseId ?? null : null,
       nextTarget: resting ? next?.target ?? null : null,
-      nextSetLabel: resting && next ? { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise } : null,
+      nextSetLabel:
+        resting && next
+          ? next.warmup
+            ? { n: next.warmup.index + 1, m: next.warmup.count, warmup: true }
+            : { n: next.exerciseSetIndex + 1, m: next.totalSetsInExercise }
+          : null,
       restSeconds,
       restExtraSeconds: restExtraSecondsRef.current,
       watchLoggedSet,
       startedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
       // Equipment Occupied applies at the START of an exercise that has a later exercise to do.
+      // The start is the exercise's FIRST step — its first warm-up bridge when it has a ramp
+      // (that is the moment she discovers the station is busy), else working set 0.
       canMarkOccupied:
         displayPhase === 'SET_PRESENTED' &&
         !!current &&
-        current.exerciseSetIndex === 0 &&
+        (current.warmup ? current.warmup.index === 0 : current.exerciseSetIndex === 0) &&
         plan.some((s) => s.globalIndex > current.globalIndex && s.exerciseId !== current.exerciseId),
       toLoad: current ? isToLoad(plan, machine.setIndex, state.session?.sets ?? []) : false,
+      // The record question's baseline — everything logged BEFORE the current set: her history's
+      // peak AND the live session's own earlier sets (domain/setRecord `recordBaselineKg`).
+      // History alone made the record repeat on every set at the new weight (review, 2026-08-24).
+      priorPeakKg: current
+        ? recordBaselineKg(
+            priorPeakKg(historyRef.current, current.exerciseId, sessionRef.current?.id),
+            livePeakKg(state.session?.sets ?? [], current.exerciseId),
+          )
+        : null,
+      /* The offer, asked at the step she is about to PERFORM — see the field's note for why a
+         crossing asks about `idx + 1` and a rest between sets asks nothing. */
+      /* Never under a Pause: the workout is frozen (§7.2), so a set cannot be "running long" — she
+         stopped it on purpose, and the timer above was cleared when the phase left SET_PRESENTED. */
+      setRunningLong: setRunningLong && !paused,
+      nextLiftFact:
+        displayPhase === 'REST_TRANSITION' && next?.exerciseId
+          ? factForLift(historyRef.current, next.exerciseId, learnedExecSFor(historyRef.current, next.exerciseId))
+          : null,
+      warmupOffered: paused ? 0 : (warmupOffer(plan, displayPhase === 'REST_TRANSITION' ? idx + 1 : displayPhase === 'SET_PRESENTED' ? idx : -1)?.ramp.length ?? 0),
+      /**
+       * ⚠️ ONE DERIVATION, ASKED TWICE — the disc above and this action call the SAME `warmupOffer`
+       * against the same cursor, so a press can never land on a refusal. It re-asks rather than
+       * trusting the view's number because a press is a moment later than the render that offered
+       * it, and in between a rest can have expired under her thumb.
+       *
+       * The cursor is NOT moved. The bridges go in immediately before the working set she was
+       * heading for, so the position the machine already holds now addresses the first bridge —
+       * which is exactly what "take me to a warm-up set" means, with no state to keep in step.
+       */
+      addWarmup() {
+        if (machineRef.current.phase === 'PAUSED') return; // a frozen workout takes no edits (§7.2)
+        // `startsWith`, because a crossing has two names — an auto-swapped one is still a crossing,
+        // and reading `=== 'REST_TRANSITION'` would silently drop the offer on exactly the beat
+        // where the station turned out to be busy.
+        const crossing = machine.phase.startsWith('REST_TRANSITION');
+        if (!crossing && machine.phase !== 'SET_PRESENTED') return;
+        const at = crossing ? machine.setIndex + 1 : machine.setIndex;
+        const offer = warmupOffer(state.plan, at);
+        if (!offer) return;
+        void track('warmup_added', {
+          sessionId: sessionRef.current?.id,
+          ex: state.plan[at]?.exerciseId,
+          bridges: offer.ramp.length,
+          from: crossing ? 'crossing' : 'set',
+        });
+        dispatch({ type: 'SWAP_PLAN', plan: insertWarmup(state.plan, offer.at, offer.ramp) });
+      },
 
       publishWatchLobby(lobby, watchPlan) {
         /*
@@ -1509,7 +2034,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       clearEndResult: () => setEndResult(null),
       clearCorrection: () => setCorrection(null),
 
-      async start(day, targets) {
+      async start(day, targets, withPartners) {
+        /*
+         * ════ ⛔ THE GATE, GUARDED WHERE IT CANNOT BE ROUTED AROUND (founder, 2026-08-23) ════
+         *
+         * Every UI door checks `isTrainingGated` before starting — and the pre-workout card
+         * demonstrably did not, for weeks. Doors multiply (Home, the card, the wrist, whatever
+         * ships next quarter); the doorway does not. A start that reaches here gated is refused,
+         * whoever forgot to ask — the same depth-of-defense shape as the one-session guard above.
+         */
+        {
+          const a = appRef.current;
+          if (a && isTrainingGated(a.modeState.completedSessions, a.entitlement.active, a.profile?.memberSince)) return;
+        }
+
         /*
          * ⚠️ ONE SESSION AT A TIME, GUARDED WHERE IT CANNOT BE ROUTED AROUND.
          *
@@ -1530,7 +2068,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // has no rest before it, and that is the honest answer.
         restStartedAtRef.current = null;
         pendingRestSRef.current = null;
-        loop1Ref.current = { exerciseId: '', count: 0 }; // Loop 1 correction budget resets per session
         historyRef.current = await db.loadHistory().catch(() => []); // her learned grid for live Loop 1
         refreshLearnedRests(historyRef.current); // …and her learned REST timer (S-17)
         const plan2 = buildPlan(day, targets);
@@ -1544,6 +2081,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           state: 'ACTIVE',
           earlyFinish: false,
           sets: [],
+          // Trained together (see the parameter). Absent on every solo start — which is exactly
+          // what an absent `partners` has meant on this record since the field was added.
+          ...(withPartners && withPartners.length > 0 ? { partners: [...withPartners] } : {}),
         };
         await db.saveActiveSession(session);
         void track('session_started', { sessionId: session.id, programDayId: day.id, blockCount: day.slots.length });
@@ -1558,7 +2098,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
       },
 
-      async startCoach(planned, workoutId) {
+      async startCoach(planned, workoutId, withPartners) {
+        /*
+         * ════ ⛔ THE GATE, GUARDED WHERE IT CANNOT BE ROUTED AROUND (founder, 2026-08-23) ════
+         *
+         * Every UI door checks `isTrainingGated` before starting — and the pre-workout card
+         * demonstrably did not, for weeks. Doors multiply (Home, the card, the wrist, whatever
+         * ships next quarter); the doorway does not. A start that reaches here gated is refused,
+         * whoever forgot to ask — the same depth-of-defense shape as the one-session guard above.
+         */
+        {
+          const a = appRef.current;
+          if (a && isTrainingGated(a.modeState.completedSessions, a.entitlement.active, a.profile?.memberSince)) return;
+        }
+
         /*
          * ⚠️ ONE SESSION AT A TIME, GUARDED WHERE IT CANNOT BE ROUTED AROUND.
          *
@@ -1579,7 +2132,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setRestResumeRemainingS(null);
         restStartedAtRef.current = null;
         pendingRestSRef.current = null;
-        loop1Ref.current = { exerciseId: '', count: 0 };
         historyRef.current = await db.loadHistory().catch(() => []);
         refreshLearnedRests(historyRef.current);
 
@@ -1591,6 +2143,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           id: `sess_${Date.now()}`,
           programDayId: workoutId,
           programDayName: planned.name,
+          /*
+           * ⛔ TRAINED TOGETHER — ON BOTH RECORDS, NOT ONE (found by the founder's question,
+           * 2026-08-31: *"מה קורה אם אני שולח אימון זוגי…"*).
+           *
+           * The guest's session carried `partners` from the day the pair was built, because he
+           * starts through `start`. The HOST starts through this door, which did not take the
+           * argument — so the finish poster and the story card named a partner on his phone and
+           * nobody on hers, for the same hour of the same workout. One workout, two records, and
+           * only one of them remembered it happened.
+           */
+          ...(withPartners && withPartners.length > 0 ? { partners: [...withPartners] } : {}),
           /*
            * The only answer to "did she finish it?" for a coach session — there is no `ProgramDay`
            * to count slots on, and the fallback for an unknown prescription is "any logged work
@@ -1775,6 +2338,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
          * to know the other exists.
          */
         if (completingRef.current) return { ended: false, unlockedPortrait: false };
+        /* Read BEFORE anything moves: the stamp belongs to the set being answered, and the effect
+           that maintains it re-points the moment the cursor advances. `nudged` likewise — the ask
+           was about THIS set. Both are telemetry only; neither can affect what is logged. */
+        const presentedAtMs = setPresentedAtRef.current?.key === stepKey(current) ? setPresentedAtRef.current.atMs : null;
+        const nudged = nudgedRef.current;
         if (hasLoggedStep(session.sets, current.exerciseId, current.exerciseSetIndex)) {
           return { ended: false, unlockedPortrait: false };
         }
@@ -1799,8 +2367,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           actualWeight: override ? override.weight : current.target.recommendedWeight,
           actualReps: override ? override.reps : current.target.recommendedReps,
           edited: override != null || !!current.edited,
-          // No approach mark is ever written (Rev 8 removed the approach set entirely); the legacy
-          // `SetLog.isApproach` field survives only on already-logged Build-#33 sets.
+          // A warm-up bridge writes BOTH marks (domain/warmupRamp): `isApproach` is the standing
+          // wholesale exclusion every fold reader already filters; `isWarmup` is the honest label.
+          // A working set writes neither — Rev 8's "no approach set" ruling stands untouched.
+          ...(current.warmup ? { isApproach: true, isWarmup: true } : {}),
           persistedAt: new Date().toISOString(),
           // The rest that preceded THIS set (L3). Undefined on the session's first set — there
           // was none — and after a kill that landed mid-transition; undefined means unknown, and
@@ -1835,6 +2405,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           actualReps: setLog.actualReps,
           override: setLog.edited,
           decisionType: current.target.reasonType,
+          /*
+           * ⛔ THE COMPLIANCE SIGNAL THE PRODUCT COULD NOT SEE (2026-08-31, step 0 of the plan).
+           *
+           * How long the set sat on screen before it was answered. It took a live gym session for
+           * the founder to discover he was forgetting to log at all — because nothing in the app or
+           * the telemetry could have told us. `sets`/`prescribed` on `session_finished` say whether
+           * a workout was logged; only this says whether it was logged AS IT HAPPENED, which is the
+           * difference between a training app and a diary filled in afterwards.
+           *
+           * It is also the number the nudge is judged by: if the nudge works, this distribution's
+           * tail collapses. `nudged` says whether we asked, so the two can be read against each
+           * other rather than hoped about.
+           */
+          dwellS: presentedAtMs != null ? Math.round((Date.now() - presentedAtMs) / 1000) : null,
+          nudged,
         });
         if (setLog.edited) void trackFirst('first_override');
 
@@ -1854,47 +2439,45 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         //   2) LOOP 1 then corrects ON TOP from her reps: the band it reads is her IMMUTABLE Tlo
         //      (target.repBandLo), never the reps she edited into recommendedReps, or every set would sit
         //      "in band" and the load could never move. Bodyweight / last-set / spent-budget are no-ops.
-        // Every set is a working set (no approach set — founder ruling 2026-07-16), so this acts from set 1.
-        if (loop1Ref.current.exerciseId !== current.exerciseId) loop1Ref.current = { exerciseId: current.exerciseId, count: 0 };
-        // Her learned real grid for this lift = the loads she has performed on it, across her history AND
-        // this session so far (including the set just logged), so a correction snaps to a weight that
-        // exists at her gym rather than the equipment default increment.
-        const seen = [updated, ...historyRef.current];
-        const grid = observedLoads(current.exerciseId, seen);
-        // L11 — the rail, live: a mid-session RAISE may never go more than one rung past the heaviest
-        // load she has completed at Tlo (her settled history plus this session). S-11 says "always
-        // inside the rail" and S-14 calls it absolute; until now only Loop 2 honoured it, so one wild
-        // rep count could put a load on the bar she has never come near. Null on a lift with no such
-        // set — the rail is inactive there by definition (S-49), and her own eyes are the guard.
-        const rail = railCeilingFor(current.exerciseId, current.target.repBandLo ?? current.target.recommendedReps, seen);
+        // Every WORKING set acts from set 1 (no approach set — founder ruling 2026-07-16). A warm-up
+        // bridge is not one: it carries no band, its weight must not carry onto the working sets,
+        // and Loop 1 reading "5 reps at half weight" as a signal would be the measurement mechanism
+        // Rev 8 deleted. The ramp logs its fact and steps aside (domain/warmupRamp).
+        if (current.warmup) {
+          setCorrection(null);
+          if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {
+            restStartedAtRef.current = Date.now();
+            restExtraSecondsRef.current = 0;
+          }
+          if (m.phase === 'SESSION_SAVED') return finalize(false);
+          return { ended: false, unlockedPortrait: false };
+        }
+        /*
+         * ════ ⛔ LOOP 1 NO LONGER TOUCHES THE IRON MID-SESSION (founder, 2026-08-26) ════
+         *
+         * *"בזמן האימון המתאמן רק רושם ומתעד את הביצועים שלו… בלי שינויים במהלך האימון אלא רק
+         * הסתגלות — אם נתנו לו משקל X והוא עושה Y אנחנו קופצים למשקל שהוא עשה. כל המסכים הכחולים
+         * של הורדת משקל או הוספת משקל בזמן האימון צריך ללכת."*
+         *
+         * The register once called the in-set correction the signature moment; the founder's later
+         * ruling is the sharper read of the same athlete: mid-workout she is a LOGGER — tired,
+         * loaded, non-compliant — and an app that moves her plates between sets is friction, not
+         * coaching. The coach speaks AFTER the session (Loop 2 → `engineChanges` → the WellDone
+         * decisions door, each with its reason), which is the product's actual difference from
+         * Hevy and Strong: their logger, plus a coach who concludes.
+         *
+         * What SURVIVES in-session is the one adaptation that follows her own hand:
+         * `carryWeightForward` — she lifted Y where X was written, so the rest of the lift opens
+         * at Y. Her decision, propagated; never ours, invented. `applyLoop1` stays a pure, tested
+         * module (`engine/v5/loop1`) — Loop 2's between-session mathematics rests on the same
+         * band — but nothing in the live session calls it any more, `correction` is permanently
+         * null on this surface, and the eased/raised chrome is gone with it — and the 2-corrections-per-exercise cap (S-13)
+         * retired with the loop it capped.
+         */
+        setCorrection(null);
         const carried = carryWeightForward(plan, current.globalIndex, setLog.actualWeight);
-        const l1 = applyLoop1(carried, current.globalIndex, setLog.actualWeight, setLog.actualReps, loop1Ref.current.count, grid, rail);
-        // THE SIGNATURE MOMENT — set (or cleared) on EVERY logged set, so it always belongs to the
-        // set just finished. Until 2026-07-17 the only thing that happened here was the `track`
-        // call below: the correction went to analytics and the plan changed underneath her. The set
-        // she just did moved the next one — the most distinctive thing this product does — and she
-        // had no way to know it had happened, or why.
-        //
-        // The `else` is not tidiness: without it, a correction on set 2 would still be on screen
-        // during the rest after set 3, claiming news about a set that decided nothing.
-        let liveCorrection: LiveCorrection | null = null;
-        if (l1.corrected && setLog.actualWeight != null && l1.nextLoad != null && (l1.direction === 'up' || l1.direction === 'down')) {
-          liveCorrection = {
-            exerciseId: current.exerciseId,
-            direction: l1.direction,
-            from: setLog.actualWeight,
-            to: l1.nextLoad,
-            reps: setLog.actualReps,
-            band: [current.target.repBandLo ?? 8, current.target.repBandHi ?? 10],
-          };
-        }
-        setCorrection(liveCorrection);
-        if (l1.corrected) {
-          loop1Ref.current = { exerciseId: current.exerciseId, count: loop1Ref.current.count + 1 };
-          void track('loop1_correction', { sessionId: session.id, exerciseId: current.exerciseId, direction: l1.direction, from: setLog.actualWeight, to: l1.nextLoad });
-        }
-        // Dispatch once for either effect (carry and/or correction). Identical-to-prescription set → no-op.
-        if (l1.plan !== plan) dispatch({ type: 'SWAP_PLAN', plan: l1.plan as Step[] });
+        // Identical-to-prescription set → a true no-op.
+        if (carried !== plan) dispatch({ type: 'SWAP_PLAN', plan: carried as Step[] });
 
         // Mark when rest begins so the ACTUAL rest taken is measurable on endRest.
         if (m.phase === 'REST_INTER' || m.phase.startsWith('REST_TRANSITION')) {
@@ -1905,7 +2488,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (m.phase === 'SESSION_SAVED') {
           return finalize(false);
         }
-        return { ended: false, unlockedPortrait: false, correction: liveCorrection };
+        return { ended: false, unlockedPortrait: false, correction: null };
         } finally {
           completingRef.current = false;
         }
@@ -1984,7 +2567,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           const restMs = Date.now() - restStartedAtRef.current;
           const variant = machine.phase === 'REST_INTER' ? 'inter' : 'transition';
           void track('rest_completed', { sessionId: sessionRef.current?.id, restMs, plannedS: restSeconds, variant, early: restMs < restSeconds * 1000 });
-          pendingRestSRef.current = Math.max(0, Math.round(restMs / 1000));
+          /**
+           * ⛔ A REST SHE PRESSED STRAIGHT THROUGH IS NOT A THREE-SECOND REST (founder 2026-08-30).
+           *
+           * The clock above starts when the SET WAS LOGGED, not when it ended — so an athlete who
+           * forgets to log, stands for four minutes and then presses on is recording his thumb, not
+           * his pace. `isRestSample` owns the whole argument and the number; here it decides only
+           * what is BANKED for the next set, which is what every engine reader downstream sees.
+           *
+           * ⚠️ ABSENT, NOT ZERO, and that distinction is L3 itself: nothing reads this as a small
+           * rest, everything reads it as a rest that is not known. The telemetry line above is
+           * deliberately UNGATED — the product still wants to know he skipped, and how often.
+           */
+          const tookS = Math.max(0, Math.round(restMs / 1000));
+          pendingRestSRef.current = isRestSample(tookS) ? tookS : null;
           restStartedAtRef.current = null;
         }
         restExtraSecondsRef.current = 0;
@@ -2039,6 +2635,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'MACHINE', machine: m });
         return finalize(true);
       },
+      previewTargetFor(exerciseId: string) {
+        return (
+          state.targets.find((tg) => tg.exerciseId === exerciseId && tg.setIndex === 0) ??
+          state.targets.find((tg) => tg.exerciseId === exerciseId) ??
+          null
+        );
+      },
       editCurrentSet({ weight, reps }) {
         const idx = machine.setIndex;
         const cur = plan[idx];
@@ -2050,7 +2653,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (!cur.target) return;
         const newPlan = plan.map((st, i) =>
           i === idx && st.target
-            ? { ...st, edited: true, target: { ...st.target, recommendedWeight: weight, recommendedReps: reps } }
+            ? {
+                ...st,
+                edited: true,
+                target: { ...st.target, recommendedWeight: weight, recommendedReps: reps },
+              }
             : st,
         );
         dispatch({ type: 'SWAP_PLAN', plan: newPlan });
@@ -2115,7 +2722,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     // restNonce: `restExtraSeconds` is read from a ref, so a "+15 sec" (from either surface)
     // must re-memo the view or the phone's Rest screen would never see the rest grow.
-  }, [state, app, endResult, correction, restResumeRemainingS, restNonce, watchLoggedSet]);
+  }, [state, app, endResult, correction, restResumeRemainingS, restNonce, watchLoggedSet, setRunningLong]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.
@@ -2145,6 +2752,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // Same capture, same instant, same reason as `weight` and `reps` above — see `WatchLoggedSet`.
         ...(bandOf(tgt) ? { band: bandOf(tgt)! } : {}),
         ...(tgt?.exerciseId ? { lift: tgt.exerciseId } : {}),
+        // The record answers identically on either device (never on a warm-up bridge).
+        ...(!view.setLabel.warmup && isRecordSet(weight, reps, view.priorPeakKg) ? { record: true } : {}),
       });
     }
     if (actualReps == null && actualWeight === undefined) {

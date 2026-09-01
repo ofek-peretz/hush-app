@@ -64,13 +64,26 @@ describe('a build has to be given what the app reads', () => {
      * build reached TestFlight looking like a working one.
      */
     const mayBeAbsent = [
-      // The decommissioned Fly.io backend. Absent => the local fixture, which is the intent.
-      'EXPO_PUBLIC_API_BASE_URL',
-      // Both belong to that same backend and are absent by design in a shipped build: one is a
-      // convenience token for an internal build, the other the self-enrol key. Neither is on the
-      // path of anything an athlete does now — the coach is.
-      'EXPO_PUBLIC_DEV_AUTH_TOKEN',
-      'EXPO_PUBLIC_ENROLL_KEY',
+      // ⛔ THREE GHOSTS EXORCISED (2026-08-25): `EXPO_PUBLIC_API_BASE_URL`,
+      // `EXPO_PUBLIC_DEV_AUTH_TOKEN` and `EXPO_PUBLIC_ENROLL_KEY` sat here for the decommissioned
+      // v4 backend. The code that read them (`data/api/config`, `enroll`, `selectModel`,
+      // `httpClient`, `authEvents`) is deleted — founder: "איזה V4? אנחנו ב-v8" — so an allow-list
+      // entry for them would be permission for a dead name to come back unnoticed.
+      // Crash reporting (platform/crash, 2026-08-24). Absent => Sentry never initializes — dev,
+      // CI and the web harness stay silent BY CONSTRUCTION, which is the intended off-switch.
+      // A production build gets it from EAS env (`eas env:create`), like the coach pair above.
+      'EXPO_PUBLIC_SENTRY_DSN',
+      // The circle's identity worker (platform/circleClient, 2026-08-24). Absent => the circle
+      // does not exist in this build: Together draws its pre-circle self, every call answers
+      // null, nothing throws. Set from EAS env once `server/hush-identity/src/index.ts` is deployed.
+      'EXPO_PUBLIC_CIRCLE_URL',
+      // The research sink (platform/telemetry, 2026-09-01, audit 01). An EXPLICIT override only:
+      // absent, the sink derives from EXPO_PUBLIC_CIRCLE_URL (`<circle>/events`), and with neither
+      // set the wire half is inert and the journal is the whole record — the pre-sink app, exactly.
+      'EXPO_PUBLIC_TELEMETRY_URL',
+      // Remote config (platform/remoteConfig, 2026-09-01, audit 03). Same shape: explicit override,
+      // else derived `<circle>/config`, else inert — every compiled default stands.
+      'EXPO_PUBLIC_CONFIG_URL',
     ];
     const unaccounted = [...used].filter((v) => !REQUIRED_AT_BUILD.includes(v) && !mayBeAbsent.includes(v));
     expect(unaccounted).toEqual([]);

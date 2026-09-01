@@ -12,7 +12,7 @@
  */
 
 import type { Equipment } from '@/engine/catalog';
-import { STARTING_INCREMENT, BAR_KG } from './constants';
+import { STARTING_INCREMENT, BAR_KG, FIXED_BAR_KG } from './constants';
 
 const EPS = 1e-9;
 
@@ -69,6 +69,7 @@ function inRange(load: number, observedLoads?: number[]): boolean {
  */
 export function loadFloor(equipment: Equipment, observedLoads?: number[]): number {
   if (equipment === 'barbell') return BAR_KG; // a fact of the room, not a statistic
+  if (equipment === 'fixed_barbell') return FIXED_BAR_KG; // the lightest fixed bar in the rack (F-19)
   const inc = STARTING_INCREMENT[equipment] || 0;
   const rungs = rungsOf(observedLoads);
   if (rungs.length === 0) return inc;
@@ -107,9 +108,13 @@ export function nextRung(load: number, equipment: Equipment, observedLoads?: num
   }
   const inc = STARTING_INCREMENT[equipment];
   if (inc <= 0) return load;
-  // Above her observed max (or no grid): step by the increment from the current load. A load stored
-  // below the floor (legacy state) climbs straight back onto it rather than crawling under it.
-  return Math.max(Math.round((load + inc) / inc) * inc, floor);
+  // Above her observed max (or no grid): the next multiple of the increment STRICTLY above. A load
+  // stored below the floor (legacy state) climbs straight back onto it rather than crawling under it.
+  // ⚠️ Aligned to the LADDER, not stepped from the load (engine audit 2026-08-23): `round(load+inc)`
+  // walked an OFF-GRID load past a rung — 41.5 on a 2.5 ladder went to 45, skipping 42.5. Off-grid
+  // loads exist only in legacy state (the pre-2026-08-21 half-kilo wheel), but a rung function that
+  // skips rungs makes S-28 read a bigger jump than the room offers. Identical for aligned loads.
+  return Math.max(Math.floor(load / inc + EPS) * inc + inc, floor);
 }
 
 /** The previous real rung strictly BELOW `load` (one honest step down), never under the floor (S-55). */
@@ -123,7 +128,10 @@ export function prevRung(load: number, equipment: Equipment, observedLoads?: num
   if (below != null) return Math.max(below, floor);
   const inc = STARTING_INCREMENT[equipment];
   if (inc <= 0) return load;
-  return Math.max(load - inc, floor); // never below the smallest loadable weight (S-55)
+  // The previous multiple of the increment STRICTLY below — same ladder alignment as `nextRung`
+  // (audit 2026-08-23): `load - inc` kept an off-grid load off-grid for ever (41.5 → 39 → 36.5…),
+  // walking a legacy misaligned state down between every real rung. Identical for aligned loads.
+  return Math.max(Math.ceil(load / inc - EPS) * inc - inc, floor); // never below what exists (S-55)
 }
 
 /** How many kg the next real rung above `load` costs — the step she actually faces (F-2). */

@@ -29,15 +29,45 @@ describe('⛔ the menu is capped at three and never stretched to three', () => {
     }
   });
 
-  it('⛔ never pads with a different MOVEMENT when her own movement has options', () => {
-    const padded: string[] = [];
+  it('⛔ never pads with a different MOVEMENT — except the ONE both-rooms fill, same stem only', () => {
+    /*
+     * Amended 2026-08-25 (founder gym finding #7): a dumbbell-row menu of three FREE-iron rows
+     * could not answer "I don't want free weights today" — the machine row he actually performed
+     * never appeared. The both-rooms rule now lets AT MOST ONE different-`pattern` row into a menu
+     * that would otherwise sit entirely in one room (free iron vs stations) — and only when it
+     * shares the movement STEM (`row` ↔ `row_supported`, `squat` ↔ `squat_supported`): a fly still
+     * never yields its seat to a press. Everything else about the old law holds, and this test now
+     * asserts the amended law rather than merely tolerating it.
+     */
+    const stem = (p: string) => p.replace(/_(supported|shortened|lengthened)$/, '');
+    const isStation = (e: { equipment: string }) => e.equipment === 'machine' || e.equipment === 'cable';
+    const violations: string[] = [];
     for (const ex of generatable) {
       const choices = swapChoices(ex.id, { sessionExerciseIds: [] });
       const synonyms = swapCandidates(ex.id, { sessionExerciseIds: [] }).filter((c) => c.pattern === ex.pattern);
       if (synonyms.length === 0) continue; // the six that have none — covered below
-      if (choices.some((c) => !c.sameMovement)) padded.push(`${ex.id} → ${choices.filter((c) => !c.sameMovement).map((c) => c.exercise.id).join(',')}`);
+      const crossPattern = choices.filter((c) => !c.sameMovement);
+      for (const c of crossPattern) {
+        const sameStem = stem(c.exercise.pattern) === stem(ex.pattern);
+        // "the other room" is judged against the REST OF THE MENU, not the current lift: a Smith
+        // row is itself a station, but its synonym menu is all free iron — the fill is the menu's
+        // missing room, which is exactly what the rule promises.
+        const others = choices.filter((x) => x.exercise.id !== c.exercise.id);
+        const otherRoom = others.length > 0 && others.every((x) => isStation(x.exercise) !== isStation(c.exercise));
+        if (!(sameStem && otherRoom)) violations.push(`${ex.id} → ${c.exercise.id}`);
+      }
+      if (crossPattern.length > 1) violations.push(`${ex.id}: ${crossPattern.length} cross-pattern rows`);
     }
-    expect(padded).toEqual([]);
+    expect(violations).toEqual([]);
+  });
+
+  it('the both-rooms fill exists: a free-iron row offers its machine, and a sled offers its bar', () => {
+    // The finding itself: the dumbbell row's menu now spans both rooms…
+    const dbRow = swapChoices('db_row', { sessionExerciseIds: [] });
+    expect(dbRow.some((c) => c.exercise.equipment === 'machine' || c.exercise.equipment === 'cable')).toBe(true);
+    // …and symmetrically, an all-station menu earns one free-iron stem-mate.
+    const legPress = swapChoices('leg_press', { sessionExerciseIds: [] });
+    expect(legPress.some((c) => c.exercise.equipment !== 'machine' && c.exercise.equipment !== 'cable')).toBe(true);
   });
 
   it('⚠️ a lift with NO synonym still gets one honest answer, marked as a different movement', () => {

@@ -19,11 +19,10 @@
  * the hook verbatim, deliberately: the gates are the product of a founder-reported defect (a chair,
  * indoors, recording 0.07 km) and they are not the place to be clever while moving code.
  */
-// @ts-nocheck
 
 // 
 
-import type { CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
+import type { CardioPoint, CardioSplit } from '@/data/local/models';
 import {
   MAX_ACCURACY_M,
   MIN_SPEED_MS,
@@ -35,7 +34,77 @@ import {
   segmentCounts,
 } from './cardioMath';
 import { notifier } from '@/platform/notifications';
+import { cardioLiveActivity } from '@/platform/liveActivity';
 import { averageHeartRate } from '@/domain/heartRate';
+import { db } from '@/data/local/db';
+
+/**
+ * ⛔ NOBODY COVERS A KILOMETRE FASTER THAN THIS. 120 s/km is 30 km/h — quicker than the world
+ * record for 100 m, held for a kilometre. A figure under it is never the athlete; it is the SOURCE
+ * talking (a flush whose window we misread, a fix pair with a broken timestamp), and "0:02 /km" on
+ * the stage is the same lie as a pace on a table. It is clamped rather than drawn.
+ */
+const FASTEST_PACE_S = 120;
+
+/**
+ * How long an interrupted run stays resumable — see `restoreRun`. Deliberately far shorter than the
+ * gym session's three hours (`state/sessionRecovery`): a workout is a visit and a run is a run, and
+ * the failure this window guards against is not losing kilometres but INVENTING them.
+ */
+export const CARDIO_RESUME_WINDOW_MS = 20 * 60 * 1000;
+
+/** At most one write per this many ms — see `persist`. A closed kilometre always writes. */
+const PERSIST_EVERY_MS = 10_000;
+
+/**
+ * ════ ⛔ THE LIVE ACTIVITY IS FED FROM THE EVENT PATH (founder, device QA 2026-08-23:
+ * "בדקת גם שזה מתעדכן ב-Dynamic Island ו-Live Activity? הכל?") ════
+ *
+ * It was not, and his question found it. The island's update lived ONLY in the screen's effect,
+ * keyed off a one-second `setInterval` — and React Native timers are driven by the display link,
+ * which stops the moment the screen locks. So even with the background task fixed and every metre
+ * being credited, the LOCK SCREEN — the one surface she can actually see mid-run — froze its
+ * distance at whatever it read last. (The clock kept ticking: `Text(timerInterval:)` is native and
+ * drift-proof by design. That contrast — a moving clock over frozen metres — is exactly what a
+ * athlete reads as "it paused".)
+ *
+ * GPS deliveries are EVENTS, not timers: the task wakes JS for every fix, in the pocket too — it
+ * is the same path the per-kilometre notification already rides. So the activity is published from
+ * here, where the metre is credited: throttled, and FORCED on a closed kilometre (the beat the
+ * lock screen exists to show). The screen's own once-a-second update continues in the foreground
+ * and simply outruns this one there; the native side ignores an update with no live activity, so
+ * publishing before the screen has started one costs nothing.
+ */
+const LA_PUBLISH_EVERY_MS = 15_000;
+let laPublishedAtMs = 0;
+
+function publishLiveActivity(force: boolean): void {
+  if (!s.active) return;
+  const now = Date.now();
+  if (!force && now - laPublishedAtMs < LA_PUBLISH_EVERY_MS) return;
+  laPublishedAtMs = now;
+  const elapsed = elapsedSec();
+  const last = s.splits[s.splits.length - 1];
+  const fastest = s.splits.length ? Math.min(...s.splits.map((x) => x.paceSec)) : Infinity;
+  void cardioLiveActivity
+    .update({
+      kind: 'cardio',
+      // The lobby has no gait picker (v7): the screen publishes the same constant. Cosmetic only —
+      // the widget spends it on a legend word.
+      gait: 'run',
+      paused: s.paused,
+      // The same re-anchor the screen makes: the native clock ticks from `now − elapsed`, so a
+      // background stretch never accumulates drift.
+      startedAtMs: now - elapsed * 1000,
+      elapsedSec: elapsed,
+      distanceKm: Math.round((s.distM / 1000) * 100) / 100,
+      paceSec: Math.round(s.paceSec),
+      hr: s.hr != null ? Math.round(s.hr) : 0,
+      calories: Math.round(s.cal),
+      lastSplit: last ? { km: last.km, paceSec: Math.round(last.paceSec), fastest: last.paceSec <= fastest } : null,
+    })
+    .catch(() => {});
+}
 
 export type GpsState = 'idle' | 'acquiring' | 'ready' | 'denied' | 'unavailable';
 
@@ -90,7 +159,9 @@ interface Prev {
 const EMPTY = () => ({
   active: false,
   paused: true,
-  gait: 'run' as CardioGait,
+  /** Which run this is. Only ever compared — a snapshot read that lands after the run it was asked
+   *  for has ended must not pour an old run into a new one (see `restoreRun`). */
+  runId: 0,
   weightKg: null as number | null | undefined,
   activeMs: 0, // accumulated while running
   resumedAtMs: 0, // wall-clock instant of the last resume (0 = not running)
@@ -127,9 +198,22 @@ const EMPTY = () => ({
   /** The last cumulative kilometres read. The DELTA is what gets credited — see `ingestStride`. */
   strideKm: 0,
   strideTsMs: 0,
+  /**
+   * ⛔ THE INSTANT THE LAST STRIDE DISTANCE WAS CREDITED — which is NOT the last poll.
+   *
+   * Health flushes `DistanceWalkingRunning` in batches minutes apart against a five-second poll, so
+   * the interval a flushed segment was covered in is the time since the last one that carried
+   * anything, never the gap between two reads. See `ingestStride`.
+   */
+  strideCreditTsMs: 0,
+  /** Wall-clock of the last resume write — the throttle in `persist`. */
+  persistedAtMs: 0,
 });
 
 let s = EMPTY();
+/** Monotonic across runs; stamped onto `s.runId` so an in-flight storage read can tell whether the
+ *  run it was reading for is still the run that is happening. */
+let runSeq = 0;
 
 export const ZERO: CardioSample = {
   elapsedSec: 0,
@@ -149,11 +233,19 @@ export function elapsedSec(): number {
   return Math.round((s.activeMs + runMs) / 1000);
 }
 
-/** A fresh activity. Everything the previous one accumulated is gone. */
-export function beginRun(gait: CardioGait, weightKg?: number | null, indoor = false): void {
+/**
+ * A fresh activity. Everything the previous one accumulated is gone — except what an INTERRUPTED
+ * one wrote down, which `restoreRun` folds back in behind this call.
+ *
+ * ⚠️ THE GAIT ARGUMENT IS GONE (2026-08-18). It was set here, stored, and read by nothing: the
+ * picker was deleted in v7 and the energy has been billed per segment at the pace it was covered at
+ * ever since (see the note at `ingestFix`). A parameter nobody reads is a question the product is
+ * still pretending to ask.
+ */
+export function beginRun(weightKg?: number | null, indoor = false): void {
   s = EMPTY();
   s.active = true;
-  s.gait = gait;
+  s.runId = ++runSeq;
   s.weightKg = weightKg;
   s.indoor = indoor;
   /*
@@ -162,6 +254,7 @@ export function beginRun(gait: CardioGait, weightKg?: number | null, indoor = fa
    * forever. `ready` is the truth: the source is the phone's own motion, and it is available now.
    */
   s.gps = indoor ? 'ready' : 'acquiring';
+  void restoreRun(s.runId, indoor);
 }
 
 export function isIndoor(): boolean {
@@ -170,6 +263,11 @@ export function isIndoor(): boolean {
 
 export function endRun(): void {
   s = EMPTY();
+  /*
+   * The run is over, so there is nothing left to resume — and a snapshot that outlives its run is
+   * exactly how a finished run comes back to haunt the next one.
+   */
+  void db.clearCardioResume().catch(() => {});
 }
 
 export function isRunning(): boolean {
@@ -192,10 +290,13 @@ export function heartRateReadings(): readonly number[] {
   return s.hrReadings;
 }
 
-/** The athlete toggled run/walk mid-activity; calories and split attribution follow it. */
-export function setGait(gait: CardioGait): void {
-  s.gait = gait;
-}
+/*
+ * ⛔ `setGait` IS DELETED (2026-08-18), with the field it wrote to. The run/walk picker went in v7
+ * and nothing has read the declared gait since: `kcalForSegment` prices every credited stretch at
+ * the pace it was actually covered at, and `gaitFromPace` labels each finished kilometre from its
+ * own split. A setter for a fact nobody reads is worse than no setter — it reads, to the next
+ * person, as though the declaration still decides something.
+ */
 
 export function setWeight(weightKg?: number | null): void {
   s.weightKg = weightKg;
@@ -309,10 +410,11 @@ export function ingestFix(fix: Fix): void {
   if (!credit.counts) return;
 
   /*
-   * ⛔ THE GAIT IS MEASURED, NOT DECLARED (founder 2026-08-04). `s.gait` is a fixed 'run' — the
-   * picker was deleted in v7 and the constant it used to set was left frozen, so a walk was billed
-   * at the running rate: nearly double. The pace is right here and already smoothed; it is the
-   * answer to the question nobody is being asked.
+   * ⛔ THE GAIT IS MEASURED, NOT DECLARED (founder 2026-08-04). The declared gait was a frozen
+   * 'run' — the picker was deleted in v7 and the constant it used to set stayed behind, so a walk
+   * was billed at the running rate: nearly double. The pace is right here and already smoothed; it
+   * is the answer to the question nobody is being asked. (The field itself is gone as of
+   * 2026-08-18; see the note where `setGait` used to stand.)
    */
   const rate = s.paceSec;
   // The trace records only fixes that COUNTED — the same gate as the distance, so the drawn route
@@ -324,7 +426,111 @@ export function ingestFix(fix: Fix): void {
   // new reference each second would only churn.
   if (s.route.length === 0) s.route.push({ lat: prev.lat, lon: prev.lon });
   s.route.push({ lat: latitude, lon: longitude });
-  creditDistance(segM, rate);
+  // The segment's OWN span — the fix gap, which outdoors is about a second. It is what a kilometre
+  // closing inside this segment is timed against (see `creditDistance`).
+  creditDistance(segM, rate, dtS);
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ A RUN THAT LIVES ONLY IN MEMORY IS A RUN iOS CAN TAKE (2026-08-18)
+ *
+ * Everything above this line lived in one module singleton and reached storage NOWHERE until
+ * `CardioComplete` mounted. So an eviction mid-run — the precise case the background task exists
+ * for — took the distance, the splits, the route and the calories with it, and the athlete came
+ * back to nothing at all. The strength side has had `saveActiveSession`, a resume snapshot and a
+ * salvage since S3; the cardio side had none of the three.
+ *
+ * The earned totals are written down AS THEY ARE EARNED. This is what `snapshot()` publishes plus
+ * what the accumulator needs to carry on: the clock it had already run, the split cursor, and the
+ * readings the average is built from.
+ *
+ * ⚠️ WHAT IS DELIBERATELY NOT HERE IS THE SOURCE CURSOR (`strideKm`). The indoor poll asks Health
+ * for the distance since THIS mount, so a resumed run opens a new window; restoring an old
+ * cumulative cursor would credit the gap between them twice.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export interface CardioResume {
+  schema: 1;
+  /** Epoch ms of this write — the resume window is measured from it. */
+  savedAt: number;
+  indoor: boolean;
+  activeMs: number;
+  distM: number;
+  cal: number;
+  lastKm: number;
+  splitStartSec: number;
+  splits: CardioSplit[];
+  hrReadings: number[];
+  route: CardioPoint[];
+}
+
+/**
+ * Write the run down. Called from the one place the totals can change, and THROTTLED — except at a
+ * closed kilometre, which always lands.
+ *
+ * ⚠️ A GPS run credits about once a second and carries its whole trace with it; serialising 3,600
+ * points every second would spend the run's battery on storage. Ten seconds is the most an eviction
+ * can cost her, and the kilometre — the thing she would notice missing — is never delayed at all.
+ */
+function persist(atKilometre: boolean): void {
+  const now = Date.now();
+  if (!atKilometre && now - s.persistedAtMs < PERSIST_EVERY_MS) return;
+  s.persistedAtMs = now;
+  const runMs = s.resumedAtMs > 0 ? now - s.resumedAtMs : 0;
+  const snap: CardioResume = {
+    schema: 1,
+    savedAt: now,
+    indoor: s.indoor,
+    activeMs: s.activeMs + runMs,
+    distM: s.distM,
+    cal: s.cal,
+    lastKm: s.lastKm,
+    splitStartSec: s.splitStartSec,
+    splits: s.splits,
+    hrReadings: s.hrReadings,
+    route: s.route,
+  };
+  void db.saveCardioResume(snap).catch(() => {});
+}
+
+/**
+ * ⛔ AND IT IS READ BACK ONCE, INTO A RUN THAT HAS EARNED NOTHING YET.
+ *
+ * Folded into the next `beginRun` of the same KIND, inside the resume window, and only while the
+ * new run is still empty — a storage read is a round trip and a fix can land first.
+ *
+ * ⚠️ THE WINDOW IS SHORT ON PURPOSE (`CARDIO_RESUME_WINDOW_MS`). A run that ends normally clears
+ * the snapshot as it ends, so the only one that can survive is a run the app never got to finish.
+ * Twenty minutes is an interruption she came back from; two hours is a different run, and pouring
+ * this morning's five kilometres into this evening's would be the one thing worse than losing them.
+ */
+async function restoreRun(id: number, indoor: boolean): Promise<void> {
+  try {
+    const snap = await db.loadCardioResume();
+    if (!snap || snap.schema !== 1) return;
+    if (!s.active || s.runId !== id) return; // the run ended, or another began, while we read
+    if (!!snap.indoor !== !!indoor) {
+      // A belt's metres are not a street's, and neither is the trace. Nothing to fold in.
+      void db.clearCardioResume().catch(() => {});
+      return;
+    }
+    if (Date.now() - snap.savedAt > CARDIO_RESUME_WINDOW_MS) {
+      void db.clearCardioResume().catch(() => {});
+      return;
+    }
+    if (s.distM > 0 || s.splits.length > 0) return; // this run has already earned something of its own
+    s.activeMs += Math.max(0, snap.activeMs || 0);
+    s.distM = snap.distM || 0;
+    s.cal = snap.cal || 0;
+    s.lastKm = snap.lastKm || 0;
+    s.splitStartSec = snap.splitStartSec || 0;
+    s.splits = snap.splits ?? [];
+    s.hrReadings = [...(snap.hrReadings ?? [])];
+    s.route = [...(snap.route ?? [])];
+  } catch {
+    /* a storage hiccup costs the resume, never the run — it carries on from zero, as it always did */
+  }
 }
 
 /**
@@ -343,24 +549,53 @@ export function ingestFix(fix: Fix): void {
  * caller that has them.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-function creditDistance(segM: number, paceSecPerKm: number): void {
+function creditDistance(segM: number, paceSecPerKm: number, segSec: number): void {
+  const fromM = s.distM;
   s.distM += segM;
   s.cal += kcalForSegment(segM / 1000, paceSecPerKm, s.weightKg);
   const kmDone = Math.floor(s.distM / 1000);
-  if (kmDone > s.lastKm) {
-    s.lastKm = kmDone;
-    const nowSec = elapsedSec();
-    const sec = nowSec - s.splitStartSec;
-    s.splitStartSec = nowSec;
-    s.splits = [...s.splits, { km: kmDone, durationSec: sec, paceSec: sec, gait: gaitFromPace(sec) }];
+  if (kmDone <= s.lastKm) {
+    persist(false);
+    publishLiveActivity(false); // the lock screen breathes with the metres — see the publisher
+    return;
+  }
+  /*
+   * ⛔ ONE SEGMENT CAN CLOSE MORE THAN ONE KILOMETRE (2026-08-18)
+   *
+   * This used to cut AT MOST ONE split per credited stretch — true of the satellite, which arrives
+   * a second at a time, and false of the treadmill, which arrives in a batch Health flushed minutes
+   * later. A batch that crossed three boundaries wrote one row, and the athlete's list of
+   * kilometres OPENED AT "km 3": the first two never existed, and the one row that did claimed the
+   * whole batch's time for itself.
+   *
+   * ⚠️ THE TIME IS APPORTIONED BY DISTANCE, because distance is the only thing we know about the
+   * inside of the segment. It is an estimate and it is a bounded one — the alternatives are a
+   * kilometre with no time at all, or one kilometre wearing the time of three.
+   */
+  const endSec = elapsedSec();
+  const startSec = Math.max(s.splitStartSec, endSec - Math.max(0, Math.round(segSec)));
+  for (let km = s.lastKm + 1; km <= kmDone; km++) {
+    const at = segM > 0 ? startSec + ((km * 1000 - fromM) / segM) * (endSec - startSec) : endSec;
+    const closedSec = Math.min(endSec, Math.max(s.splitStartSec, Math.round(at)));
+    const sec = closedSec - s.splitStartSec;
+    s.splitStartSec = closedSec;
+    const kmKcal = kcalForSegment(1, sec, s.weightKg);
+    s.splits = [...s.splits, { km, durationSec: sec, paceSec: sec, gait: gaitFromPace(sec), ...(kmKcal > 0 ? { kcal: Math.round(kmKcal) } : {}) }];
     /**
      * …and it is ANNOUNCED (founder 2026-07-29: "in cardio, a notification for every kilometre").
      * Delivered now, not scheduled: the split has already happened. The on-screen moment (3.4b)
      * and the haptic still carry it when she is looking; this is the path for a phone in a pocket,
      * which is where a phone is during a run — and it is the reason the background task exists.
+     *
+     * ⚠️ EVERY kilometre the batch closed is announced, not just the last. Each one is a real
+     * kilometre she really ran, and one of them arriving is exactly how she learns the other two
+     * were dropped.
      */
-    void notifier.kilometre(kmDone, fmtPace(sec));
+    void notifier.kilometre(km, fmtPace(sec));
   }
+  s.lastKm = kmDone;
+  persist(true);
+  publishLiveActivity(true); // a closed kilometre is the beat the lock screen exists to show
 }
 
 /**
@@ -390,19 +625,47 @@ export function ingestStride(cumulativeKm: number, tsMs: number = Date.now()): v
   if (tsMs <= s.strideTsMs) return;
   const prevKm = s.strideKm;
   const prevTs = s.strideTsMs;
+  const sinceCreditMs = s.strideCreditTsMs;
   s.strideKm = cumulativeKm;
   s.strideTsMs = tsMs;
-  if (prevTs === 0) return; // the first reading only sets the cursor — there is no interval yet
-  if (s.paused) return;
+  if (prevTs === 0) {
+    s.strideCreditTsMs = tsMs; // the first reading only sets the cursor — there is no interval yet
+    return;
+  }
+  if (s.paused) {
+    // The cursor advances through a pause and so does the interval's start: the distance she covered
+    // walking to the fountain is not credited, and the seconds it took are not charged to the
+    // segment that follows it either.
+    s.strideCreditTsMs = tsMs;
+    return;
+  }
   const segKm = cumulativeKm - prevKm;
-  const dtS = (tsMs - prevTs) / 1000;
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE INTERVAL IS THE TIME THE DISTANCE TOOK, NOT THE GAP BETWEEN TWO POLLS (2026-08-18)
+   *
+   * This read `(tsMs - prevTs) / 1000` — the fixed five-second `STRIDE_POLL_MS`. But Health flushes
+   * `DistanceWalkingRunning` in BATCHES minutes apart, so poll after poll returns the same
+   * cumulative figure and then one poll returns half a kilometre. Divided by five seconds that is
+   * **0:10 /km on a treadmill**, and it was worse than a wrong figure on a stage: `kcalForSegment`
+   * bills at the pace it is handed, so the whole batch was priced at the RUN constant (1.03) even
+   * when she walked every metre of it — an 87% over-count, the exact defect the founder ruled out
+   * on 2026-08-04 when he had the gait picker removed.
+   *
+   * A cumulative source cannot tell us when inside the drought she covered it, but it CAN tell us
+   * the window: everything since the last reading that carried distance. That is the interval.
+   * ════════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  const dtS = (tsMs - sinceCreditMs) / 1000;
   if (segKm <= 0 || dtS <= 0) {
     // Standing still on a moving belt is still standing still. No distance, and the pace blanks
     // rather than holding the last number it liked.
     s.paceSec = 0;
     return;
   }
-  const inst = Math.round(dtS / segKm); // sec/km over this segment
+  s.strideCreditTsMs = tsMs;
+  // …and a figure faster than any human is the source, not the athlete — see `FASTEST_PACE_S`.
+  const inst = Math.max(FASTEST_PACE_S, Math.round(dtS / segKm)); // sec/km over this segment
   s.paceSec = s.paceSec > 0 ? Math.round(s.paceSec * 0.7 + inst * 0.3) : inst;
-  creditDistance(segKm * 1000, s.paceSec);
+  creditDistance(segKm * 1000, s.paceSec, dtS);
 }

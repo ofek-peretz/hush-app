@@ -15,7 +15,6 @@
  *    new sample adopts nothing).
  *  - It NEVER throws — observability over failure (telemetry), never a crash.
  */
-// @ts-nocheck
 
 // 
 

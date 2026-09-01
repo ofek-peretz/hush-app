@@ -14,7 +14,6 @@
  *     between the set write and the snapshot write leaves the machine one step behind).
  *   • Anything stale or unusable falls back to the existing salvage — no data is ever lost.
  */
-// @ts-nocheck
 
 // 
 

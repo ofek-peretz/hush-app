@@ -21,7 +21,6 @@
  * Authored on a 48×48 grid, centred, with generous margins so the motif reads at the
  * 24px the gallery renders it at.
  */
-// @ts-nocheck
 
 // 
 
@@ -48,7 +47,9 @@ export type MilestoneGlyphName =
   | 'rdl'
   // engine
   | 'raise'
-  | 'doubled';
+  | 'doubled'
+  // weeks — showing up, week after week
+  | 'weeks';
 
 interface Props {
   name: MilestoneGlyphName;
@@ -56,17 +57,50 @@ interface Props {
   color: string;
 }
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE GLYPH GOT THINNER THE SMALLER IT WAS DRAWN (found 2026-08-27, on the seal itself)
+ *
+ * `strokeWidth` was a flat 1.6 — and it is in VIEWBOX units, so the renderer multiplies it by
+ * `size / 48`. The pictogram therefore lost weight in exact proportion to how small it was asked
+ * to be, which is the opposite of what a small mark needs:
+ *
+ *     size 48  →  1.60 pt of ink      the size it was drawn for
+ *     size 33  →  1.10 pt             the milestone seal (2.6)
+ *     size 14  →  0.47 pt             the badges on Progress (3.2)  ⛔ sub-pixel
+ *
+ * At 0.47 pt there is no stroke, there is a smudge. On `3.2` the two seals sat side by side and one
+ * of them read as a smear while its neighbour read as a barbell — same component, same weight, and
+ * the only difference was that the smaller one had been scaled further down.
+ *
+ * ⚠️ THIS IS OPTICAL SIZING, INVERTED. Type wants tighter tracking as it grows (`tracking.figure`);
+ * a pictogram wants a HEAVIER relative stroke as it shrinks, because ink that survives at 48 points
+ * disappears at 14. So the stroke is stated as the ink the glyph will actually put on the glass, and
+ * the viewBox number is derived from the size rather than fixed against it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+/** The thinnest line this mark may ever draw, in points. Below this it stops being a stroke. */
+const MIN_INK = 1.4;
+
 export function MilestoneGlyph({ name, size, color }: Props) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
-      {body(name, strokeShape(color), color)}
+      {body(name, strokeShape(color, size), color)}
     </Svg>
   );
 }
 
 type Stroke = ReturnType<typeof strokeShape>;
-function strokeShape(color: string) {
-  return { stroke: color, strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const };
+function strokeShape(color: string, size: number) {
+  return {
+    stroke: color,
+    /* 1.6 stays the drawn weight at the size it was drawn for; below that the number grows so the
+       INK does not shrink past `MIN_INK`. See the note above. */
+    strokeWidth: Math.max(1.6, (MIN_INK * 48) / size),
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    fill: 'none' as const,
+  };
 }
 
 function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNode {
@@ -172,7 +206,7 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
       // A body under a loaded bar across the back, knees bent.
       return (
         <G {...s}>
-          {plateBar(color, 12)}
+          {plateBar(s, 12)}
           <Circle cx="24" cy="20" r="2.6" />
           <Path d="M24 22.6v6" />
           <Path d="M24 28.6l-4 5.5V41" />
@@ -189,7 +223,7 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Path d="M24.5 21.1l-3 8" />
           <Path d="M22.5 22.5l1 12" />
           <Line x1="19.5" y1="21" x2="19.5" y2="33" />
-          {plateBar(color, 36)}
+          {plateBar(s, 36)}
         </G>
       );
     case 'bench':
@@ -203,14 +237,14 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Path d="M18 29.5h12" />
           <Path d="M30 29.5l4 8" />
           <Path d="M24 29.5v-6" />
-          {plateBar(color, 19)}
+          {plateBar(s, 19)}
         </G>
       );
     case 'overhead':
       // The bar LOCKED OUT overhead — arms extended, body stacked beneath it.
       return (
         <G {...s}>
-          {plateBar(color, 10)}
+          {plateBar(s, 10)}
           <Path d="M19 12v6" />
           <Path d="M29 12v6" />
           <Circle cx="24" cy="21" r="2.6" />
@@ -228,7 +262,7 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Path d="M15.6 18.5L30 22" />
           <Path d="M30 22l1 12" />
           <Path d="M22 20.4v6" />
-          {plateBar(color, 28)}
+          {plateBar(s, 28)}
         </G>
       );
 
@@ -243,7 +277,7 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Path d="M14 26.5L26 22.5" />
           <Path d="M26 22.5l7 6.5" />
           <Path d="M33 29v12" />
-          {plateBar(color, 20)}
+          {plateBar(s, 20)}
           <Line x1="6" y1="41" x2="42" y2="41" />
         </G>
       );
@@ -256,7 +290,7 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Path d="M18.6 15.5L28 19" />
           <Path d="M28 19v20" />
           <Line x1="21.5" y1="17" x2="21.5" y2="26" />
-          {plateBar(color, 27)}
+          {plateBar(s, 27)}
           <Line x1="10" y1="41" x2="38" y2="41" />
         </G>
       );
@@ -267,7 +301,7 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
       // the barbell, which is exactly what the mark records — Hush moved the weight up.
       return (
         <G {...s}>
-          {plateBar(color, 36)}
+          {plateBar(s, 36)}
           <Path d="M24 28V10" />
           <Path d="M17.5 16.5L24 10l6.5 6.5" />
         </G>
@@ -289,12 +323,25 @@ function body(name: MilestoneGlyphName, s: Stroke, color: string): React.ReactNo
           <Rect x="31.6" y="26" width="2.8" height="14" rx="1" />
         </G>
       );
+
+    case 'weeks':
+      // Seven marks in a ring — a week, closed. The mark is showing up, again and again, so the
+      // badge is the circle those weeks draw.
+      return (
+        <G {...s}>
+          {Array.from({ length: 7 }).map((_, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / 7;
+            return <Circle key={i} cx={24 + 11 * Math.cos(a)} cy={24 + 11 * Math.sin(a)} r={2.4} />;
+          })}
+        </G>
+      );
   }
 }
 
-/** A loaded barbell at height `y` — the shared vocabulary of every lifting glyph. */
-function plateBar(color: string, y: number): React.ReactNode {
-  const s = strokeShape(color);
+/** A loaded barbell at height `y` — the shared vocabulary of every lifting glyph.
+ *  Takes the CALLER's stroke rather than rebuilding one: the weight now depends on the glyph's
+ *  size (see the note at `MilestoneGlyph`), and a bar that mixed its own would ignore it. */
+function plateBar(s: Stroke, y: number): React.ReactNode {
   return (
     <G {...s}>
       <Line x1="7" y1={y} x2="41" y2={y} />

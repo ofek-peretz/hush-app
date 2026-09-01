@@ -26,22 +26,21 @@
  *     engine reads absence as normal, and a merge could not express a muscle coming back.
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
-import { Button, useToast } from '@/components/ds';
+import { Button, SegmentedControl, useToast } from '@/components/ds';
 import { BodyMapFigure, viewOf, type Face } from '@/components/BodyMapFigure';
 import { color, font } from '@/design/tokens';
 import { tg } from '@/i18n';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { CANONICAL_MUSCLE_ORDER, EMPHASIS_BUDGET } from '@/engine/v5/constants';
-import { emphasisRefusal, type MarkRefusal } from '@/engine/v5/bodyMap';
+import { emphasisBudgetFor, emphasisRefusal, type MarkRefusal } from '@/engine/v5/bodyMap';
 import { muscleOf } from '@/data/exercises';
-import { awaitingAnswer, easeOn, daysLeft, type EaseAnswer } from '@/domain/painReport';
+import { activeEases, awaitingAnswer, easeOn, daysLeft, type EaseAnswer } from '@/domain/painReport';
 import type { MuscleStance, RepBandChoice, Session } from '@/data/local/models';
 
 const STANCES: { key: MuscleStance; word: string }[] = [
@@ -71,6 +70,10 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<{ reason: MarkRefusal; marks: string[] } | null>(null);
+  /** Alive through an await — a toast or a `setBusy` after she has left is a state update on a screen
+   *  that is gone. Same guard `ExerciseLibrary` keeps for the same reason. */
+  const aliveRef = React.useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
   /**
    * ⚠️ READ, NEVER SHOWN AS A WARNING. S-56 is why: the fact that a muscle has been trained changes
    * NOTHING this screen does or says. It is loaded because the register scopes the Saturday question
@@ -169,12 +172,49 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
     if (!touched || busy) return;
     setBusy(true);
     try {
-      await app.updateProfileInfo({ bodyMap: map, repBandByMuscle: bands });
-      toast.show(tg('profileEdit.savedDays'));
+      const rebuilt = await app.updateProfileInfo({ bodyMap: map, repBandByMuscle: bands });
+      if (!aliveRef.current) return;
+      /*
+       * ⚠️ THE TOAST SAYS WHAT ACTUALLY HAPPENED. It said *"Your week was rebuilt to match"* on every
+       * save — and `updateProfileInfo` returns without rebuilding anything when the week is one she
+       * brought, because a week she brought is not ours to rewrite. She turned a muscle off, was told
+       * her week had been rebuilt around it, and opened Today to the same week. `ExerciseLibrary`
+       * has drawn this distinction since `saveLibrary` started answering; the sentence for a week
+       * that stays as it is is already written, and one fact keeps one sentence.
+       */
+      toast.show(rebuilt ? tg('profileEdit.savedDays') : tg('library.savedNoRebuild'));
       setTouched(false);
+    } catch {
+      if (!aliveRef.current) return;
+      /*
+       * ⛔ A THROW WAS AN UNHANDLED REJECTION: no toast, no error, `touched` left true and the map
+       * she drew lost the moment she walked away. `db.saveProfile` can fail; being silent about it
+       * cannot. Same shape as `ExerciseLibrary`, which fixed exactly this.
+       */
+      toast.show(tg('library.saveFailed'));
     } finally {
-      setBusy(false);
+      if (aliveRef.current) setBusy(false);
     }
+  };
+
+  /**
+   * ⛔ THE BACK ARROW THREW THE MAP AWAY (found 2026-08-18).
+   *
+   * Every other profile surface is instant-apply; this one is not — a stance and a rep band are held
+   * in local state until Save. So `goBack` discarded, in silence, every edit she had made: the
+   * muscle she just switched off, the band she just moved, gone with no sentence and no chance to
+   * say no.
+   *
+   * It SAVES rather than asking. This product does not open dialogs to argue with a decision she has
+   * already made (S-56 / L8), and "are you sure?" over a body map is exactly that argument.
+   *
+   * ⚠️ EXCEPT WHEN THERE IS NOTHING LEFT ON, which is not a programme (S-3) and is the one map the
+   * button itself refuses to write. That state leaves unsaved — a dead end guarding a refusal is
+   * worse than an edit not kept.
+   */
+  const leave = async () => {
+    if (touched && !nothingOn) await save();
+    navigation?.goBack?.();
   };
 
   const openStance: MuscleStance = open ? stanceOf(open) : 'normal';
@@ -182,9 +222,14 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
 
   return (
     <OnboardingScaffold
-      onBack={() => navigation?.goBack?.()}
+      onBack={() => void leave()}
       title={tg('ob.mapTitle')}
-      sub={tg('ob.mapSub')}
+      /* ⛔ THE SAME BUDGET ONBOARDING PROMISES (found 2026-08-18). This screen hardcoded the
+         two-lead copy while `onboarding/BodyMap` asks `emphasisBudgetFor(days)` — so on a three-day
+         week the editor promised her two leads and `emphasisRefusal` then refused the second. The
+         header of this file says the two screens can never disagree; they could, and here is where.
+         One question, one home — the subtitle and the line at the foot both ask it. */
+      sub={emphasisBudgetFor(app.profile?.daysPerWeek) === 1 ? tg('ob.mapSubOne') : tg('ob.mapSub')}
       headGap={18}
       bodyTop={18}
       footer={
@@ -203,26 +248,53 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
       {/* The refusal is stated, not just enforced — a dead button with no sentence is the silent
           failure this screen exists to remove. Same words onboarding uses. */}
       {nothingOn ? <Text style={styles.refusal}>{tg('ob.mapNothingOn')}</Text> : null}
-      <View style={styles.tabs} accessibilityRole="tablist">
-        {(['front', 'back'] as Face[]).map((f) => (
-          <Pressable
-            key={f}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: face === f }}
-            onPress={() => setFace(f)}
-            style={[styles.tab, face === f && styles.tabOn]}
-          >
-            <Text style={[styles.tabText, face === f && styles.tabTextOn]}>
-              {tg(f === 'front' ? 'ob.mapFront' : 'ob.mapBack')}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {/*
+        ⛔ ONE FRONT/BACK TOGGLE, ONE SHAPE (2026-08-27).
+
+        This control existed in FOUR places and was drawn in THREE ways:
+
+          Progress  Lifts / Log     two outlined pills          (now the DS control)
+          PainWhere front / back    outlined, cream border
+          BodyMap   front / back    a FILLED CREAM pill
+          BodyMapEdit               the same filled cream pill
+
+        The filled one is the worst of the three, and not because of taste: cream-on-dark is this
+        product's PRIMARY ACTION material — it is what `התחל` is made of. So on the body map the
+        selected face tab wore the costume of the button that starts a workout.
+
+        `SegmentedControl` is the app's control for switching a VIEW; its own docblock says so and
+        so does `ProfileSheet`. Front and back are two views of one body. It draws all four now.
+      */}
+      <SegmentedControl
+        size="pill"
+        style={styles.tabs}
+        options={[
+          { value: 'front', label: tg('ob.mapFront') },
+          { value: 'back', label: tg('ob.mapBack') },
+        ]}
+        value={face}
+        onChange={(v: string) => setFace(v as Face)}
+      />
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/*
+          ⛔ A RESTING MUSCLE IS DRAWN ON THE BODY, NOT ONLY WRITTEN IN ITS SHEET (2026-08-22).
+
+          The window has been stated here since this screen existed — and only inside the sheet a
+          TAP opens. So the fact that the whole feature exists to make visible was visible to
+          nobody who did not already know which limb to press. This screen's own header names the
+          defect it was built for: *"she reports a painful shoulder, the engine rests it and rebuilds
+          her week — and no surface anywhere says so."* Half of that was still true here.
+
+          The clay is `tokens.alert`, which is reserved for exactly this and for destruction, and it
+          is the same mark the pain receipt draws — so the screen she is sent to and the screen she
+          checks agree limb for limb.
+        */}
         <BodyMapFigure
           face={face}
+          sex={app.profile?.sex}
           map={map}
+          tender={activeEases(eases, Date.now()).map((e) => e.muscle)}
           selected={open}
           onSelect={(m) => {
             setRefused(null);
@@ -314,7 +386,13 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
           </View>
         ))}
 
-        <Text style={styles.note}>{tg('ob.mapEmphasis', { n: marks.length })}</Text>
+        {/* ⛔ THE LINE SAYS WHAT HER WEEK CAN HONOUR — the same words, from the same question, as
+            onboarding's. See the subtitle above. */}
+        <Text style={styles.note}>
+          {emphasisBudgetFor(app.profile?.daysPerWeek) === 1
+            ? tg('ob.mapEmphasisOne', { n: marks.length })
+            : tg('ob.mapEmphasis', { n: marks.length })}
+        </Text>
         {refused ? (
           <Text style={styles.refusal}>
             {refused.reason === 'budget'
@@ -332,23 +410,26 @@ export function BodyMapEdit({ navigation }: { navigation: any; route?: any }) {
 export default BodyMapEdit;
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', gap: 8, alignSelf: 'center' },
-  tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 100, borderWidth: 1, borderColor: color.borderControl },
-  tabOn: { backgroundColor: color.paper, borderColor: color.paper },
-  tabText: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, letterSpacing: 1 },
-  tabTextOn: { color: color.onPaper },
+  /* The control draws itself; this only says where it sits. */
+  tabs: { alignSelf: 'center' },
+  // ⚠️ EVERY TEXT STYLE HERE STATES ITS ALIGNMENT. Without one, React Native falls back to the
+  // PHYSICAL left, so in Hebrew the tabs, the muscle name, the stance rungs and the band chips all
+  // froze against the wrong edge inside containers that centre everything else. `lint-rtl` names it.
+  /* ⛔ SANS, NOT MONO: it carries a WORD. `monoCarriesNoWords` scanned only for `t(` and these
+     rows are fed by `tg(`, so four Hebrew labels sat in a face with no Hebrew glyphs, with
+     tracking applied on top. The law knows both translators now (2026-08-19). */
   body: { paddingTop: 16, paddingBottom: 24, alignItems: 'center' },
   sheet: { width: '100%', marginTop: 18, alignItems: 'center' },
-  sheetName: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, letterSpacing: 1.4, marginBottom: 8 },
+  sheetName: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, marginBottom: 8, textAlign: 'center' },
   resting: { fontFamily: font.sans, fontSize: 17, color: color.accent, marginBottom: 10, textAlign: 'center' },
   rungs: { flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' },
   rung: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 12, borderWidth: 1, borderColor: color.borderControl },
   rungOn: { backgroundColor: color.accent, borderColor: color.accent },
-  rungText: { fontFamily: font.sans, fontSize: 17, color: color.textPrimary },
+  rungText: { fontFamily: font.sans, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
   rungTextOn: { color: color.onPaper },
   band: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: color.borderControl },
   bandOn: { backgroundColor: color.accent, borderColor: color.accent },
-  bandText: { fontFamily: font.mono, fontSize: 17, color: color.textPrimary },
+  bandText: { fontFamily: font.mono, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
   ask: { width: '100%', marginTop: 22, alignItems: 'center' },
   askTitle: { fontFamily: font.serif, fontSize: 18, color: color.textPrimary, textAlign: 'center' },
   note: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, marginTop: 16, textAlign: 'center' },

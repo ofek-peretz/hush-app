@@ -20,10 +20,11 @@ import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import { stanceOf } from './bodyMap';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
-import { exerciseById, exercisesForMuscle, isSwapOnly, muscleOf, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
 // S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
 // this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
+import { inRoom } from '@/domain/room';
 import { forbiddenFor } from '@/domain/painReport';
 
 /**
@@ -293,9 +294,21 @@ export function pickExercises(
    * Handing it back would be the app overruling her report to keep the shape tidy.
    */
   const banned = forbiddenFor(muscle, profile?.painEases, nowMs);
-  const all = exercisesForMuscle(muscle as MuscleGroup)
-    .filter((e) => !isSwapOnly(e.id))
+  const universe = exercisesForMuscle(muscle as MuscleGroup)
+    // One question for every pool: regressions AND the choice-only shelf stay hers to ask for.
+    .filter((e) => engineMayAssign(e.id))
     .filter((e) => !banned.has(e.pattern));
+  /*
+   * ⛔ THE ROOM (2026-09-01, audit 06). Lifts her room cannot hold are out — a home lifter with two
+   * dumbbells was getting cable flys. ⚠️ WITH the keep-the-pool fallback, unlike the pain ban one
+   * comment up, and the difference is the argument: a ban is HER word that a movement must not
+   * happen, so an emptied pool honestly rests the muscle. The room is a fact about furniture —
+   * if the catalogue has nothing for a muscle in her room, resting a muscle she asked to train
+   * over it would be the app overruling her map; the catalogue lead with the swap menu one tap
+   * away is the smaller wrong. Absent `profile.equipment` = full gym = this filter never fires.
+   */
+  const roomed = universe.filter((e) => inRoom(e, profile?.equipment));
+  const all = roomed.length > 0 ? roomed : universe;
   if (all.length === 0) return [];
   // Lifts whose floor she can actually load lead; the rest stay available behind them, so a muscle
   // is never emptied by the check — a pool of only-too-heavy lifts still yields its catalogue lead.
@@ -393,9 +406,22 @@ export function pickExercises(
     remaining.splice(remaining.indexOf(best), 1);
   }
 
+  /*
+   * ⛔ THE CHAIN RAN AFTER THE BAN, SO IT COULD WALK STRAIGHT PAST IT (2026-08-19).
+   *
+   * `banned` filters the POOL above — but a standing substitute is applied here, to a lift that
+   * already passed. Every hop is same-muscle by design, and a muscle's forbidden patterns are a
+   * property of the muscle, so the walk could carry a permitted anchor onto a forbidden movement:
+   * a chest twinge bans `fly`, and an adopted `bench → cable_fly` is same-muscle and passed.
+   *
+   * The report is the newer fact and it wins. A learned swap is a preference; an ease is a thing her
+   * body did. The walk stops at the last lift she is allowed to be given — which is also why it
+   * stops rather than refusing outright: the anchor is still hers, and the chain resumes the day the
+   * window lapses.
+   */
   const out: string[] = [];
   for (const e of chosen) {
-    const finalId = resolveChain(e.id, substitutes);
+    const finalId = resolveChain(e.id, substitutes, banned);
     if (!out.includes(finalId)) out.push(finalId);
   }
   return out;
@@ -407,14 +433,20 @@ export function pickExercises(
  * the wrong day), with a cycle guard. A single substitute is just a chain of length one. Chains arise
  * when a learned swap later graduates or rotates — e.g. a swapped-in `knee_push_up` graduating to
  * `push_up` (S-52) leaves `bench → knee_push_up → push_up`.
+ *
+ * ⚠️ AND IT STOPS AT A BANNED PATTERN. Same-muscle is the very reason it had to: the forbidden
+ * patterns belong to the muscle, so without this the walk was the one path into the pool that the
+ * ban did not cover. See the note at the call site.
  */
-function resolveChain(id: string, substitutes: Record<string, string>): string {
+function resolveChain(id: string, substitutes: Record<string, string>, banned?: ReadonlySet<string>): string {
   const muscle = muscleOf(id);
   const seen = new Set<string>([id]);
   let cur = id;
   while (substitutes[cur]) {
     const next = substitutes[cur];
     if (seen.has(next) || muscleOf(next) !== muscle) break; // cycle, or cross-muscle → stop the walk
+    // A movement she has reported is not somewhere a preference may carry her.
+    if (banned?.has(exerciseById(next)?.pattern ?? '')) break;
     seen.add(next);
     cur = next;
   }

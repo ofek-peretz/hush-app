@@ -123,6 +123,49 @@ describe('THE PROMISE · no weight and no body data ever leaves', () => {
   });
 });
 
+/**
+ * ⛔ THE BANDS ARE WRITTEN STRAIGHT ONTO HER PROFILE.
+ *
+ * `PlanReceivedScreen` adopts a plan by calling `updateProfileInfo({ repBandByMuscle })` with what
+ * the link carried. Spread unvalidated, a hand-crafted token put arbitrary keys into her stored
+ * profile — and a value that was not a string made `planBandSummary`'s `.replace(…)` throw while the
+ * receiving screen was still rendering, which is a white screen off a link somebody sent her.
+ */
+describe('the rep bands a link carries are checked before they can be written', () => {
+  const withBands = (bands: unknown) =>
+    decodePlan(globalThis.btoa(JSON.stringify({ v: 1, days: [{ name: 'X', exerciseIds: ['bb_row'] }], repBandByMuscle: bands })));
+
+  it('keeps a real muscle at a real band', () => {
+    expect(withBands({ Chest: '8-10', Quads: '12-15' })!.repBandByMuscle).toEqual({ Chest: '8-10', Quads: '12-15' });
+  });
+
+  it('drops a key that is not a muscle this engine knows', () => {
+    // Written as raw JSON so `__proto__` really is a key in the payload — an object literal would
+    // swallow it before it ever got encoded, which is not the thing under test.
+    const token = globalThis.btoa(
+      '{"v":1,"days":[{"name":"X","exerciseIds":["bb_row"]}],' +
+        '"repBandByMuscle":{"Chest":"8-10","__proto__":"8-10","Neck":"8-10","isAdmin":"8-10"}}',
+    );
+    expect(decodePlan(token)!.repBandByMuscle).toEqual({ Chest: '8-10' });
+  });
+
+  it('drops a band nobody can choose, and a value that is not a band at all', () => {
+    expect(withBands({ Chest: '8-10', Back: '1-100', Quads: 'DROP TABLE' })!.repBandByMuscle).toEqual({ Chest: '8-10' });
+  });
+
+  it('⛔ a band that is not a string never reaches the screen that renders it', () => {
+    // This is the one that crashed: `planBandSummary` calls `.replace('-', '–')` on every value.
+    const back = withBands({ Chest: 12, Back: null, Quads: ['8-10'] });
+    expect(back!.repBandByMuscle).toBeUndefined();
+    expect(() => planBandSummary(back!)).not.toThrow();
+    expect(planBandSummary(back!)).toBeNull();
+  });
+
+  it('reads nothing out of a payload whose bands are not an object', () => {
+    for (const junk of ['8-10', 42, ['8-10'], null]) expect(withBands(junk)!.repBandByMuscle).toBeUndefined();
+  });
+});
+
 describe('the link', () => {
   it('survives the round trip, non-ASCII names included', () => {
     const p = sharedPlan(
@@ -139,6 +182,30 @@ describe('the link', () => {
     expect(decodePlan(globalThis.btoa('{"v":999,"days":[{"name":"x","exerciseIds":["a"]}]}'))).toBeNull();
     expect(decodePlan(globalThis.btoa('{"v":1,"days":[]}'))).toBeNull();
     expect(decodePlan(globalThis.btoa('{"v":1}'))).toBeNull();
+  });
+
+  it('carries a run through the round trip — a shared week may be a marathon plan', () => {
+    // `run_outdoor` is a MOVEMENT and by design not in `EXERCISES`. Filtering to the catalogue would
+    // share a marathon plan as its three strength sessions with the running quietly missing.
+    const back = decodePlan(encodePlan(sharedPlan(program)));
+    expect(back!.days[1].exerciseIds).toContain('run_outdoor');
+  });
+
+  it('drops an id that names neither a lift nor a movement', () => {
+    /*
+     * `toProgram` used to assert on every id it was handed (`exerciseById(id)!`). Reached from an
+     * async `onPress`, the throw became a swallowed rejection and the adopt button simply stopped
+     * responding — she pressed it as many times as she liked and nothing at all happened.
+     */
+    const hostile = globalThis.btoa(
+      JSON.stringify({ v: 1, days: [{ name: 'X', exerciseIds: ['bb_row', 'not_a_real_lift', ''] }] }),
+    );
+    expect(decodePlan(hostile)!.days[0].exerciseIds).toEqual(['bb_row']);
+  });
+
+  it('refuses a day whose every id is unknown, and a payload of nothing else', () => {
+    const junk = globalThis.btoa(JSON.stringify({ v: 1, days: [{ name: 'X', exerciseIds: ['drop table'] }] }));
+    expect(decodePlan(junk)).toBeNull();
   });
 
   it('re-reads a hand-crafted payload through the allow-list', () => {

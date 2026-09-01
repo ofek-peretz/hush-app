@@ -39,7 +39,6 @@
  *  the VALUES invert. Where a screen relied on a light ground it will read cream on
  *  dark automatically, then gets refined per-screen.
  */
-// @ts-nocheck
 
 // 
 
@@ -260,14 +259,10 @@ export const color = {
   surface: 'rgba(241,238,229,0.05)', // raised on stage (a card floating on the dark)
   surface2: 'rgba(241,238,229,0.10)', // segmented track / higher raise
   surface3: 'rgba(241,238,229,0.14)', // sunken well inside a raised surface
-  lift: stage.lift,
 
   // Opaque PAPER — cards & pills only. Dark ink lives on these.
   paper: paper[0],
-  paperRaised: paper[1],
   onPaper: ink[0],
-  onPaperSecondary: ink[1],
-  onPaperMuted: ink[2],
 
   // Text — cream at descending strength on the stage.
   textPrimary: cream[0],
@@ -281,7 +276,13 @@ export const color = {
   border: line[0],
   borderStrong: line[1],
   borderControl: line[2],
-  tabInactive: cream[2],
+  /**
+   * ⛔ AN INSTRUMENT'S HAIRLINE IS NOT A BORDER (design review 2026-09-01). The week meter and the
+   * next-milestone track drew their unfilled portion in `border` (12% cream) — 1.4:1 against the
+   * black ground, an instrument below the threshold of sight. A hairline that CARRIES MEANING
+   * (how much is left) gets its own, visible rung: ~3.5:1 on the stage ground.
+   */
+  meterLine: 'rgba(241,238,229,0.40)',
 
   // Subtle fills (tracks, wells, pills)
   fillSubtle: 'rgba(241,238,229,0.05)',
@@ -289,8 +290,6 @@ export const color = {
 
   // ---- the accent: MOSS ----
   accent: signal[0], // lit moss on the stage
-  accentDeep: signal[1], // deep moss on paper
-  accentHover: signal[1],
   accentText: signal[0],
   accentWash: signal.wash,
   /** The primary button's label — INK on cream now. */
@@ -299,35 +298,37 @@ export const color = {
   accentFill: signal.fill,
   accentFillPressed: signal.fillPressed,
 
-  // Semantic load states
+  /*
+   * Semantic load states.
+   *
+   * ⛔ `color.hold` IS GONE, AND IT WAS THE BUG `ds/LoadDelta` ALREADY HAS WRITTEN DOWN AS FIXED.
+   * It read `cream[2]` — grey. That file's own note says it plainly: *"A hold used to be
+   * `textMuted` — grey, i.e. a fourth answer to a three-answer question."* The correct value,
+   * `hold.stage = '#f1eee5'`, is declared one lookup away at the top of this file and is what
+   * `directionTone` returns. The wrong answer sat here with zero callers, waiting for someone to
+   * reach for the obvious name. Ask `directionTone(direction)`; never pick a hue.
+   */
   up: up.stage,
   upWash: up.wash,
   down: down.stage,
-  downWash: down.wash,
-  hold: cream[2],
 
   // PAIN + DESTRUCTION — clay, never the direction blue (see `alert`).
   alert: alert.stage,
-  alertWash: alert.wash,
 
-  // ---- legacy aliases ----
-  accentBlue: cream[0], // links are weight, not hue
-  accentGreen: signal[0], // live timer / rest ring / progress → moss
-  danger: alert.stage, // destructive — a confirm she cannot undo is not a load coming down
-
-  // DONE chip
-  doneText: cream[2],
-  doneBorder: line[1],
-
-  // Brand mark — moss dot
-  logoGradStart: signal[0],
-  logoGradEnd: signal[1],
-
-  // ---- backward-compat aliases ----
+  /*
+   * ⚠️ THE LEGACY-ALIAS BLOCK IS GONE (2026-08-18). Nineteen names survived the light-era → v7
+   * inversion on the argument that "every screen keeps compiling", and the sweep that removed them
+   * found **not one caller** between `src/` and `targets/` for any of them: `accentBlue`,
+   * `accentDeep`, `accentGreen`, `accentHover`, `alertWash`, `bgSurface`, `borderSubtle`, `danger`,
+   * `doneBorder`, `doneText`, `downWash`, `lift`, `logoGradStart`, `logoGradEnd`, `onPaperMuted`,
+   * `onPaperSecondary`, `onSurface`, `paperRaised`, `tabInactive`.
+   *
+   * Two of them read as invitations to break a live law — `danger` is not a direction (`alert` is
+   * the clay, and only pain and destruction may draw in it) and `hold` was grey — so keeping dead
+   * aliases around was not free. `bgBase` stays: it is the same idea, but something may yet reach
+   * for the ground by that name, and it resolves to the one true ground.
+   */
   bgBase: stage[0],
-  bgSurface: 'rgba(241,238,229,0.05)',
-  borderSubtle: line[0],
-  onSurface: cream[0],
 } as const;
 
 /* ============================================================================
@@ -409,6 +410,71 @@ export const textScale = {
   data: 84,
 } as const;
 
+
+/* ============================================================================
+ * ⛔ THE RAMP — SIX SIZES FOR WORDS, AND A SEPARATE LADDER FOR FIGURES.
+ *
+ * FOUNDER, 2026-08-26: *"תעבור על כל מסך ותהפוך אותו למסך ברמה בינלאומית … טיפוגרפיה."*
+ *
+ * ── WHAT WAS MEASURED FIRST ─────────────────────────────────────────────────────────────────────
+ * `src` declared **thirty-one distinct literal font sizes**. Laid out, the middle of that range is
+ * the finding:
+ *
+ *     17 ×199 · 18 ×7 · 19 ×20 · 20 ×23 · 21 ×3 · 22 ×15 · 24 ×9 · 25 ×1 · 26 ×4 · 27 ×4 · 28 ×3
+ *     30 ×14 · 31 ×2 · 32 ×2 · 34 ×11 · 36 ×6 · 38 ×2 · 39 ×2 · 40 ×13 · 44 ×3 · 46 ×4 …
+ *
+ * Eighteen sizes between 17 and 46, several of them ONE POINT apart. A one-point step is invisible
+ * as hierarchy and visible as inconsistency: it is exactly the texture that makes an app read as
+ * assembled rather than designed. Nobody chose 31 sizes; each was chosen alone, on its own screen,
+ * against its own neighbour.
+ *
+ * ── WHY SIX ─────────────────────────────────────────────────────────────────────────────────────
+ * Every product this one is measured against runs six to eight steps, each a jump the eye can name.
+ * Six is what this app's content actually needs, and each rung has a JOB rather than a number:
+ *
+ *     body     17   the floor (`typeHasAFloor`) — every sentence, every legend, every caption.
+ *     lead     20   the emphasised line: a lift's name in a row, a card's subject.
+ *     subhead  24   a group's title inside a screen.
+ *     head     30   a section headline — the coach's serif at its working size.
+ *     title    40   the screen's own headline, once per screen.
+ *     hero     56   a statement that IS the screen. Rare by construction.
+ *
+ * ⚠️ THE FLOOR AND THE RAMP ARE ONE THING. `textScale`'s bottom four names all resolve to 17 for
+ * the founder's own reason (below 17 there is no room for steps on a phone), so the ramp starts
+ * where the floor is and the first STEP is +3 — enough to be read as a step at arm's length.
+ *
+ * ── FIGURES ARE NOT WORDS, AND DO NOT USE THIS ──────────────────────────────────────────────────
+ * A load, a clock, a rep count is a measured OBJECT drawn in mono, sized to the room it owns rather
+ * than to a paragraph it sits in — the stage's 78-point dial, the 84-point hero, the rest ring's
+ * clock. Those keep their own numbers and always did; forcing a figure onto a text ramp is how a
+ * screen ends up with a load the same size as its heading.
+ *
+ * ── HOW IT IS ADOPTED ───────────────────────────────────────────────────────────────────────────
+ * ⚠️ NOT BY A SWEEP. Many of the off-ramp numbers are the founder's own rulings, made screen by
+ * screen with the screen in front of him ("26 → 34", "17 → 22", "22 → 26"). A blind snap would undo
+ * his decisions to satisfy a table. So the ramp is adopted the way it was written: screen by screen,
+ * with eyes on the screen, during the elevation pass.
+ * ==========================================================================*/
+export const ramp = {
+  body: 17,
+  lead: 20,
+  subhead: 24,
+  head: 30,
+  title: 40,
+  hero: 56,
+} as const;
+
+/** Line height per rung — 1.35 for reading sizes, tightening as the type grows. A headline set at
+ *  its own size reads as a block; a paragraph at 1.35 reads as lines. */
+export const rampLine = {
+  body: 24,
+  lead: 27,
+  subhead: 31,
+  head: 38,
+  title: 46,
+  hero: 62,
+} as const;
+
 export const weight = {
   regular: '400' as const,
   medium: '500' as const,
@@ -418,29 +484,53 @@ export const weight = {
 
 export const tracking = {
   display: -0.01, // em — serif headline (Frank Ruhl Libre, tight)
+  /*
+   * ✦ A FIGURE SET AS A HEADLINE (2026-08-27). Optical sizing: the larger the type, the tighter it
+   * wants to be set, and a MONOSPACE figure at display size wants it most — every glyph is holding a
+   * full em cell, so a decimal point arrives with half an em of air on each side. The finish
+   * poster's 92-point total read `4 . 2`: three marks, not one number.
+   *
+   * ⚠️ THE SCREEN WAS ALREADY DISAGREEING WITH ITSELF. `WellDone.earnedFigure` sits at 40pt on
+   * `-1` — that is -0.025em — while the 92pt hero above it ran `display` at -0.01. The BIGGEST
+   * number in the app was the loosest thing on its own screen.
+   *
+   * This is for figures at ~40pt and up. It is not for the mono the app measures in at reading
+   * sizes, where the even cell IS the point and tightening it would undo the instrument.
+   */
+  figure: -0.03,
+  /*
+   * ✦ THE SAME RULE ONE RUNG FURTHER (2026-08-27). Optical sizing does not stop at 40 points, and
+   * the app had already worked this out by hand without writing it down. Measured across every mono
+   * figure it draws:
+   *
+   *     70 – 84 pt    -0.040        `WhyChangedSheet.to`, `Cardio.clock`
+   *     104 – 140 pt  -0.043 … -0.050  `ProgramCreated.bigNum`, `Cardio.countNum`
+   *     92 pt         -0.030        `WellDone.heroNum`  ⛔ the outlier
+   *
+   * The finish poster's total — the largest figure in the product — was set LOOSER than every other
+   * figure in its size class, which is why `4.2` still read as three marks after `figure` landed.
+   * This rung is for roughly 70 points and up; it names what the hand-set values were already doing.
+   */
+  figureLarge: -0.042,
   tight: -0.012,
   normal: 0,
   wide: 0.04,
   legend: 0.16, // uppercase mono legends/eyebrows
 };
 
-/**
- * Type tiers — preserve the prior export shape. `mono` measures (loads, reps,
- * timers, eyebrows); `serif` is the coach's headline voice; the rest are Assistant.
+/*
+ * ⛔ `type.*` IS DELETED (2026-08-26) — eleven tiers, ZERO readers in `src`, `targets` or the tests.
+ *
+ * It described a ramp the app never used: every screen sets its own sizes in its own StyleSheet,
+ * which is the measurement that produced `ramp` above. And it had rotted where it stood — the floor
+ * rising to 17 collapsed `bodyM` (16), `caption` (15), `micro` (14) and `legend` (13) onto ONE
+ * number while their comments went on naming four, and `legend` was left declaring `lineHeight: 17`
+ * over `fontSize: 17`, which is the shear `noGlyphIsClipped` exists to forbid.
+ *
+ * A scale nothing reads is not a scale, it is a second opinion — and this one disagreed with the
+ * floor, with `textScale`, and with every screen. `ramp` is the one above, and it says what each
+ * rung is FOR rather than what it measures.
  */
-export const type = {
-  hero: { size: textScale.data, lineHeight: textScale.data, weight: weight.regular, mono: true }, // live load
-  display: { size: 76, lineHeight: 76, weight: weight.regular, mono: true }, // big timers / load
-  titleXL: { size: textScale['4xl'], lineHeight: 46, weight: weight.regular, serif: true }, // 44 — coach headline
-  titleL: { size: textScale['2xl'], lineHeight: 36, weight: weight.regular, serif: true }, // 30 — section headline
-  titleM: { size: textScale.xl, lineHeight: 30, weight: weight.medium, serif: true }, // 24 — screen headline
-  bodyL: { size: textScale.md, lineHeight: 27, weight: weight.regular }, // 18 — emphasized body
-  bodyM: { size: textScale.base, lineHeight: 24, weight: weight.regular }, // 16 — body / default UI
-  caption: { size: textScale.sm, lineHeight: 21, weight: weight.regular }, // 15 — secondary UI
-  micro: { size: textScale.xs, lineHeight: 19, weight: weight.regular }, // 14 — legend / caption
-  legend: { size: textScale['2xs'], lineHeight: 17, weight: weight.medium, mono: true }, // 13 — mono eyebrow
-  unit: { size: textScale.base, lineHeight: 17, weight: weight.medium, mono: true }, // unit beside a value
-} as const;
 
 /* ============================================================================
  * SPACING — strict 4px grid.
@@ -572,7 +662,18 @@ export const motion = {
   easeStandard: [0.22, 1, 0.36, 1] as const,
   easeOut: [0.22, 1, 0.36, 1] as const,
   easeIn: [0.4, 0, 1, 1] as const,
-  dur: { instant: 80, 1: 120, 2: 180, 3: 240, 4: 360, 5: 600, land: 900, breath: 4500 },
+  /*
+   * ⚠️ `bloom` IS A REAL RUNG, NOT SCALE INFLATION (motion audit, 2026-08-25). The sweep found six
+   * literals off this scale; four snapped onto it and one — the sign-in halo — genuinely sat in the
+   * gap between `land` (a thing arriving) and `breath` (a thing alive). A slow one-shot reveal is a
+   * distinct intent with no rung, and the choice was to move the pixels or name the number. Naming
+   * it keeps the first screen exactly as designed and puts its timing where every other timing is.
+   *
+   * ⛔ NOT ON THIS SCALE, AND MUST NEVER BE: `ds/RestRing`'s 1000 ms. That is one SECOND — the ring
+   * tracking a per-second countdown — so it is dictated by the clock, not by taste. Tokenising it
+   * would let a design decision desync the instrument from the time it is showing.
+   */
+  dur: { instant: 80, 1: 120, 2: 180, 3: 240, 4: 360, 5: 600, land: 900, bloom: 1400, breath: 4500 },
 } as const;
 
 /* ============================================================================

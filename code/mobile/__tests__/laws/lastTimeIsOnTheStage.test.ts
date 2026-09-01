@@ -45,7 +45,8 @@ describe('the last time she did this lift', () => {
       session('b', '06', [set('bb_bench_press', 32.5, 9), set('bb_bench_press', 32.5, 9), set('bb_bench_press', 32.5, 8)]),
       session('c', '08', [set('db_row', 22, 12)]),
     ];
-    expect(lastTimeOn('bb_bench_press', h, { nowMs: NOW })).toEqual({ ago: 4, loadKg: 32.5, reps: [9, 9, 8] });
+    expect(lastTimeOn('bb_bench_press', h, { nowMs: NOW }))
+      .toEqual({ ago: 4, loadKg: 32.5, reps: [9, 9, 8], loads: [32.5, 32.5, 32.5] });
   });
 
   it('⛔ EXCLUDES the session she is in — or "last time" is the set she just did', () => {
@@ -57,7 +58,7 @@ describe('the last time she did this lift', () => {
     const live = session('live', '10', [set('bb_bench_press', 35, 7)]);
     const h = [live, session('b', '06', [set('bb_bench_press', 32.5, 9)])];
     expect(lastTimeOn('bb_bench_press', h, { nowMs: NOW, excludeSessionId: 'live' }))
-      .toEqual({ ago: 4, loadKg: 32.5, reps: [9] });
+      .toEqual({ ago: 4, loadKg: 32.5, reps: [9], loads: [32.5] });
   });
 
   it('takes the load she FINISHED on, not the one she started', () => {
@@ -65,6 +66,10 @@ describe('the last time she did this lift', () => {
     // rule `coachFacts` uses, so the screen and the coach can never disagree about "last time".
     const h = [session('b', '06', [set('x', 40, 11), set('x', 42.5, 9), set('x', 42.5, 8)])];
     expect(lastTimeOn('x', h, { nowMs: NOW })).toMatchObject({ loadKg: 42.5, reps: [11, 9, 8] });
+    /* ⛔ AND THE ROW THAT DRAWS EACH SET GETS EACH SET'S OWN LOAD (founder, 2026-08-26). One
+       finishing figure printed over three sets she did at two weights is a statement about a
+       workout that did not happen — see `LastTime.loads`. */
+    expect(lastTimeOn('x', h, { nowMs: NOW })).toMatchObject({ loads: [40, 42.5, 42.5] });
   });
 
   it('is null on a lift she has never done — a real state, not a hole', () => {
@@ -76,7 +81,7 @@ describe('the last time she did this lift', () => {
   it('carries a bodyweight lift as null rather than zero', () => {
     // Zero kilograms is a weight. Bodyweight is the absence of one, and the screen says so in words.
     expect(lastTimeOn('pull_up', [session('b', '06', [set('pull_up', null, 6)])], { nowMs: NOW }))
-      .toMatchObject({ loadKg: null, reps: [6] });
+      .toMatchObject({ loadKg: null, reps: [6], loads: [null] });
   });
 });
 
@@ -107,6 +112,55 @@ describe('and it reaches the stage', () => {
     expect(flow()).toContain('const lastTime = session.lastTime;');
   });
 
+  /*
+   * ⛔ AND HE ASKED FOR THE FIGURES BACK (founder, 2026-08-26): *"אני עדיין לא מבין איך אתה הולך
+   * להציג את החזרות והמשקלים מהאימון הקודם במידה וצריך את זה. כי אם כן כרגע אני לא רואה את זה."*
+   *
+   * The two clauses above record the row being DELETED and the law surviving on the delta alone.
+   * Both were right at the time and the reason the row went is gone: `Complete set` used to write
+   * `recommendedReps` — the floor of the band — so the row printed her eight when she did ten. The
+   * dials fixed the cause on the same day this was asked; the record is hers now, so it can be
+   * shown. See `LastTimeStrip`.
+   *
+   * ⚠️ THE INFERENCES ARE NOT THE ANSWER, WHICH IS WHY THIS IS A LAW AND NOT A COMMIT. A delta and
+   * a 6-point dot on a dial are both TRUE statements about last time and neither of them is the
+   * number she asked for. The delta is arithmetic run backwards; the dot is not a figure at all.
+   */
+  it('⛔ her actual figures are on the stage — not only the delta and the dial mark', () => {
+    /*
+     * ⛔ REWRITTEN 2026-08-31 (founder, free hand on the layout). The figures moved OUT of a row of
+     * their own and INTO the two fields they are about — `prevLoad` under the load, `prevReps`
+     * under the count. `LastTimeStrip` is deleted.
+     *
+     * The clause this law has always been about is untouched and is asserted harder: **her actual
+     * figures, for THIS set, on the glass.** What is new is the third line, and it is the reason
+     * the move was worth making — the previous is now in the SAME UNITS as the figure it sits
+     * under, so the comparison needs no arithmetic. It used to say `32.5` above a field saying `7`.
+     */
+    const f = flow();
+    expect(f).toContain('const prevReps =');
+    expect(f).toContain('const prevLoad =');
+    /* Per SET, by position — not the lift's average and not the load it finished on. */
+    expect(f).toContain('lastTime.reps[prevSetIdx]');
+    expect(f).toContain('lastTime.loads?.[prevSetIdx]');
+    /* ⛔ AND IN THE FIELD'S OWN UNITS — `displayWeight` into hers, `equipmentValue` into what she
+       hangs on one end. Dropping either one puts a second scale back on the screen. */
+    expect(f).toMatch(/equipmentValue\(session\.currentExerciseId, displayWeight\(/);
+  });
+
+  it('⛔ …and it says nothing at all on a warm-up bridge', () => {
+    /*
+     * A bridge is half the working load BY DESIGN (`theWarmupIsABridgeNotAMeasurement`), so a
+     * comparison against last time there is the "looks broken" frame Rev 8 deleted the approach set
+     * over. Both figures are suppressed by the SAME flag that suppresses the dial markers, so they
+     * can never disagree about whether last time is being shown.
+     */
+    const f = flow();
+    expect(f).toContain('const prevReps = !isWarmupSet && lastTime');
+    expect(f).toMatch(/const prevLoad =[\s\S]{0,8}!isWarmupSet && lastTime/);
+  });
+
+
   it('the session computes it, excluding the live session by id', () => {
     const store = read('src/state/stores/sessionStore.tsx');
     expect(store).toContain('lastTime: lastTimeOn(current?.exerciseId ?? null, historyRef.current, {');
@@ -114,9 +168,16 @@ describe('and it reaches the stage', () => {
   });
 
   it('⚠️ the delta is absent when nothing moved, rather than a zero', () => {
-    // It sits on the largest figure on the screen; a "↑0" there is a claim about her training at the
-    // size of a fist. `loadNews` returns null and the view draws nothing at all.
-    expect(flow()).toContain('{news ? (');
+    /*
+     * It sits beside the largest figure on the screen; a "↑0" there is a claim about her training at
+     * the size of a fist. `loadNews` returns null and the view draws nothing at all.
+     *
+     * ⚠️ MATCHED ON THE GUARD, NOT ON ONE SPELLING OF IT (2026-08-31). This pinned the literal
+     * `{news ? (` and broke the day a second condition joined it — the delta is also suppressed
+     * while the weight's own number pad is open, because a figure being typed has no "against last
+     * week" yet. The clause that matters is that `news` gates it.
+     */
+    expect(flow()).toMatch(/\{news[^}]*\?\s*\(/);
   });
 
   it('⚠️ the unit is written the same way here as on the hero — nothing uppercases it', () => {
@@ -153,7 +214,7 @@ describe('and it reaches the stage', () => {
      * What must still hold on a lift with no history is that nothing is claimed: `loadNews` returns
      * null without a comparison, so the delta beside the load is simply absent.
      */
-    expect(flow()).toContain('{news ? (');
+    expect(flow()).toMatch(/\{news[^}]*\?\s*\(/);
   });
 
   it('is written in both languages', () => {
@@ -165,6 +226,11 @@ describe('and it reaches the stage', () => {
        * year later because someone finds the key and assumes it belongs somewhere.
        */
       expect(copy.workout.lastTime).toBeUndefined();
+      /* ⚠️ AND THE ROW'S OWN WORD IS A DIFFERENT KEY ON PURPOSE. `workout.lastTime` carried the
+         deleted ten-point sentence ("LAST TIME · 4 DAYS AGO · 57.5 KG · 8·8·7·6") and this file
+         asserts it never returns; the row above it is a row of FIGURES with one word introducing
+         them, so it gets its own name rather than reviving a string this law forbids. */
+      expect(copy.workout.lastSession).toBeTruthy();
       expect(copy.workout.lastLoad).toBeUndefined(); // deleted with the line, not left unused
       /* The delta's screen-reader sentence — the glyph is "↑1.5" and VoiceOver gets words. */
       expect(copy.workout.loadUpBy).toMatch(/\{\{delta\}\}[\s\S]*\{\{unit\}\}/);

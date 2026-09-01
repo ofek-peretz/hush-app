@@ -18,7 +18,6 @@
  *
  * Pure and I/O-free.
  */
-// @ts-nocheck
 
 // 
 

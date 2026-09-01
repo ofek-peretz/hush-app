@@ -22,7 +22,6 @@
  * Pure + I/O-free: the same rule gates the live finalize AND the boot/regeneration heal, so a
  * partial session can never be silently promoted to "done" by a later reconciliation.
  */
-// @ts-nocheck
 
 // 
 
@@ -71,7 +70,12 @@ export function sessionTrained(session: Session, day: ProgramDay | undefined | n
    * is the count whenever it exists. `sets` remains the answer for every session written before it
    * did, and for an engine-built plan, which is reps by construction.
    */
-  const done = session.items?.length ?? session.sets.length;
+  /*
+   * ⚠️ WORKING SETS ONLY (2026-08-24). `prescribed` counts working sets — the warm-up ramp is not
+   * in it — so the performed side must draw the same line: four logged warm-up bridges must never
+   * carry a six-set session over a ten-set threshold. `isApproach` is that line everywhere.
+   */
+  const done = session.items?.length ?? session.sets.filter((x) => !x.isApproach).length;
   if (session.prescribed != null && session.prescribed > 0) {
     return done >= Math.ceil(session.prescribed * WORKOUT_TRAINED_FRACTION);
   }

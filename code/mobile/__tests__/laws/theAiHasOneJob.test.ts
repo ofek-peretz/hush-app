@@ -65,9 +65,47 @@ describe('⛔ the model is called from ONE place', () => {
      * `coachClient` DECLARES `askCoach`; `afterSession` and `useCoach` wrap it. What SPENDS a call
      * on an athlete's behalf is the import alone — asserted below by consumer, not by holder.
      */
+    /*
+     * ════ THE SECOND SANCTIONED SURFACE (founder, 2026-08-25) ════
+     * *"אפשר להוסיף אפשרות לחוות דעת מהבינה מלאכותית על התוכנית"* — approved with the plan
+     * builder. `platform/coach/planReview` is the wire for the AI's OPINION on a week SHE built:
+     * fired by her tap in the builder, READ-only by schema (`PLAN_REVIEW_SCHEMA` has no
+     * `sessions`), applied one suggestion at a time through `planBuilder`'s own algebra, and it
+     * writes no `CoachPlan` (the writer sweep below still holds). This is exactly the header's
+     * predicted path — "one reasonable feature at a time" — taken deliberately, with the founder's
+     * instruction on record, rather than slipped past this list.
+     */
+    /*
+     * ════ THE THIRD SANCTIONED SURFACE (founder, 2026-08-29) ════
+     *
+     * *"עכשיו אני דווקא כן חושב שצריך להחזיר את הבינה המלאכותית בעת בניית תוכנית האימון … הבעיה
+     * שהייתה בפעם הקודמת היא שזה לקח המון המון זמן."*
+     *
+     * ⛔ THIS IS THE ONE THE HEADER PREDICTED, AND IT IS THE HARDEST TO WAVE THROUGH — it is the
+     * programme, which is what this file is named after. So the reasoning is on the record rather
+     * than assumed:
+     *
+     *   · The 2026-08-10 removal was a LATENCY ruling, in its own words: the two-call split
+     *     *"existed to make a ninety-second wait survivable"*. `domain/buildPrompt` removes every
+     *     measured cause of that wait (35k of preamble, a four-deep schema printed twice, the coach
+     *     catalogue with columns a build cannot use) — see its header, which cites the worker's
+     *     numbers.
+     *   · It cannot PRESCRIBE. `BUILD_WEEK_SCHEMA` has no load, no reps, no rest — the engine's
+     *     three jobs are out of its reach structurally, not by instruction.
+     *   · It writes no `CoachPlan` and touches no disk. The reply becomes a builder DRAFT
+     *     (`domain/coachDraft`, replayed through the builder's own verbs), and the only thing that
+     *     reaches storage is a week SHE sealed. The writer sweep below is untouched and still holds.
+     *   · It never strands her: every failure falls through to the local assembler, which is what
+     *     that door did on its own between 2026-08-10 and today.
+     *
+     * ⚠️ AND IT IS HER TAP, once, on one door of the intake — never after a session, never on a
+     * schedule. That is the distinction the whole file turns on.
+     */
     expect(holders).toEqual([
       'platform/coach/afterSession.ts',
       'platform/coach/coachClient.ts',
+      'platform/coach/planBuild.ts',
+      'platform/coach/planReview.ts',
       'screens/import/ImportPlan.tsx',
     ]);
   });

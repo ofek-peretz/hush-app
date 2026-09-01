@@ -10,7 +10,6 @@
  * first-person indicative) runs against the `en` resource — see
  * scripts/lint-copy.ts — so the laws are guaranteed at the copy source.
  */
-// @ts-nocheck
 
 // 
 

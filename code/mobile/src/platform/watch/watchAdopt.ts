@@ -27,7 +27,6 @@
  * would the phone's session be*, purely, so every branch of it can be tested without a device.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 //
 

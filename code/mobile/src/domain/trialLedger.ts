@@ -38,7 +38,6 @@
  * Pure and I/O-free — the caller supplies both numbers and persists what comes back.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -52,10 +51,21 @@ export const TRIAL_LEDGER_KEY = 'hush_trial_used';
  * `ledger` is the Keychain's number and `local` is the ordinary count. Either may be missing; the
  * higher of the two is the answer, and the header says why that direction.
  */
-export function trialUsed(ledger: number | null | undefined, local: number | null | undefined): number {
+export function trialUsed(
+  ledger: number | null | undefined,
+  local: number | null | undefined,
+  /**
+   * ⛔ THE CLOUD HALF (2026-08-23) — NSUbiquitousKeyValueStore, per Apple ID. The Keychain turns
+   * the delete-and-reinstall loop into a device wipe; this turns a NEW DEVICE into a new Apple ID,
+   * which is where the on-device defence honestly ends. Same direction as the other two: the
+   * higher always wins, an unreadable cloud never gifts a restart.
+   */
+  cloudLedger?: number | null,
+): number {
   const a = Number.isFinite(ledger) ? Math.max(0, ledger as number) : 0;
   const b = Number.isFinite(local) ? Math.max(0, local as number) : 0;
-  return Math.max(a, b);
+  const c = Number.isFinite(cloudLedger) ? Math.max(0, cloudLedger as number) : 0;
+  return Math.max(a, b, c);
 }
 
 /**

@@ -38,7 +38,7 @@ export type Region = 'upper' | 'lower';
 
 /** Exercise-scoped meta the pure core needs. */
 export interface ExerciseMeta {
-  equipment: 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
+  equipment: 'barbell' | 'fixed_barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
   bodyweight: boolean;
   /** The loads she has actually performed on THIS lift — the learned grid (F-2). */
   observedLoads?: number[];

@@ -19,13 +19,13 @@
  * Canon (MOTION_FORM_STANDARD_V1 §2/§4.2): stand tall (hip+knee ~extended) → hip crease below the
  * knee · bar vertical over mid-foot · heels planted · no hyperextension at the top.
  */
-// @ts-nocheck
 
 // 
 
 import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
+import { leads } from '../curves';
 import { barPathTicks, floorScene, plateGhost } from '../kit';
 
 const DEG = Math.PI / 180;
@@ -46,6 +46,20 @@ const NECK = ATHLETE.neck;
 const HEAD_R = ATHLETE.headR;
 const BAR_ABOVE_SHOULDER = 3.5; // the bar rides the traps, just above the shoulder joint
 
+/**
+ * How far BEHIND the shoulder joint the bar sits, in `squatCore`'s `carryDX` sign convention
+ * (positive = in front of the shoulder, so a back squat is negative).
+ *
+ * It was 0, which put the bar dot exactly over the shoulder joint — and since the head is drawn
+ * directly above the shoulder too, the bar read as passing THROUGH the neck. A high-bar squat is
+ * carried on the trapezius SHELF, behind the neck: about 5cm behind the glenohumeral joint, which
+ * is 4.5u here. Moving it there is not decoration. The lean is solved so that the CARRY sits over
+ * the mid-foot, so the bar going behind the shoulder pushes the shoulder itself forward of the
+ * balance line — and the extra ~7° of forward lean that produces is the lean a high-bar squat
+ * actually has. The old number was drawing a squat balanced on a bar it was not holding.
+ */
+const BAR_BEHIND_SHOULDER = -4.5;
+
 // leg drive: shank angle from vertical, thigh angle from horizontal (hip up-&-back of knee)
 const SHANK_TOP = 6; // nearly vertical standing
 const SHANK_BOT = 32; // knee travels forward over the foot
@@ -55,22 +69,53 @@ const HEAD_FOLLOW = 0.7; // the neck follows the torso lean, biased upright (neu
 
 // the grip, authored in the torso frame: elbow down-and-back of the shoulder, forearm to the bar
 const ELBOW_DOWN = 18;
+
+/** The shin finishes its forward travel with a fifth of the descent left; the hip keeps going. */
+const SHIN_LEADS = leads(0.2);
 const ELBOW_BACK = 9;
 
-function poseAt(rom: number): Pose {
-  const shank = lerp(SHANK_TOP, SHANK_BOT, rom) * DEG;
+/**
+ * The squat SKELETON, exported for the variant family (front · goblet · smith, 2026-08-25).
+ *
+ * `carryDX` is where the load sits horizontally RELATIVE TO THE SHOULDER JOINT, and it is the one
+ * number that separates the squats: 0 = on the traps (back squat, smith), positive = in front of
+ * the shoulder (front rack ≈ 5, goblet ≈ 8). The torso lean is still SOLVED — the carry point,
+ * not the shoulder, stays over the mid-foot — so a front carry yields the visibly more upright
+ * torso a front squat actually has, from the same equation rather than from a tuned lean. The leg
+ * drive, the planted foot and the balance line are shared verbatim: one squat, four bars.
+ */
+export function squatCore(rom: number, carryDX = 0) {
+  /*
+   * THE KNEE TRAVELS FIRST, AND THEN THE HIP DROPS BETWEEN THE KNEES.
+   *
+   * Both angles used to be plain `lerp(..., rom)`, so the shin and the thigh swept in lockstep for
+   * the whole descent. That is not how a squat is broken down and it is not how one looks: the
+   * knees carry most of their forward travel in the first half, and from about there the shin is
+   * essentially parked while the hips keep dropping. Sequencing them apart is what separates a
+   * squat from a slow fold, and — with the torso lean SOLVED off the hip rather than authored — it
+   * costs nothing at either endpoint: the shin arrives at exactly `SHANK_BOT` and the thigh at
+   * exactly `THIGH_BOT`, which is what depth, the bar line and the FormSpec are all measured on.
+   */
+  const shank = lerp(SHANK_TOP, SHANK_BOT, SHIN_LEADS(rom)) * DEG;
   const thigh = lerp(THIGH_TOP, THIGH_BOT, rom) * DEG;
 
   const knee: Vec2 = { x: ANKLE.x + L_SHANK * Math.sin(shank), y: ANKLE.y - L_SHANK * Math.cos(shank) };
   const hip: Vec2 = { x: knee.x - L_THIGH * Math.cos(thigh), y: knee.y - L_THIGH * Math.sin(thigh) };
 
-  // solve the torso lean so the bar (above the shoulder) sits over the mid-foot: shoulder.x = BAR_X
-  const sinLean = Math.max(-0.6, Math.min(0.6, (BAR_X - hip.x) / L_TORSO));
+  // solve the torso lean so the CARRY (shoulder + carryDX) sits over the mid-foot line
+  const sinLean = Math.max(-0.6, Math.min(0.6, (BAR_X - carryDX - hip.x) / L_TORSO));
   const cosLean = Math.sqrt(1 - sinLean * sinLean);
   const shoulder: Vec2 = { x: hip.x + L_TORSO * sinLean, y: hip.y - L_TORSO * cosLean };
   const sinHead = sinLean * HEAD_FOLLOW;
   const cosHead = Math.sqrt(1 - sinHead * sinHead);
   const head: Vec2 = { x: shoulder.x + NECK * sinHead, y: shoulder.y - NECK * cosHead };
+  return { knee, hip, shoulder, head, sinLean, cosLean };
+}
+
+export { ANKLE as SQUAT_ANKLE, HEEL as SQUAT_HEEL, TOE as SQUAT_TOE, BAR_X as SQUAT_BAR_X };
+
+function poseAt(rom: number): Pose {
+  const { knee, hip, shoulder, head, sinLean, cosLean } = squatCore(rom, BAR_BEHIND_SHOULDER);
 
   // grip: the arm folds in the torso's frame so it rides the lean
   const hand: Vec2 = { x: BAR_X, y: shoulder.y - BAR_ABOVE_SHOULDER };

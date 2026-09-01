@@ -140,7 +140,7 @@ describe('the finish control speaks to the woman pressing it', () => {
   it('the PAUSE screen offers סיימי ושמרי, not סיים ושמור', () => {
     setGender('female');
     const said = texts(mount(<CardioLiveView
-  paceSec={342} {...liveProps} paused />)).join(' ');
+   {...liveProps} paused />)).join(' ');
     expect(said).toContain('סיימי ושמרי');
     expect(said).not.toContain('סיים ושמור');
   });
@@ -149,7 +149,7 @@ describe('the finish control speaks to the woman pressing it', () => {
   it('and so does the CONFIRMATION behind it', () => {
     setGender('female');
     const said = texts(mount(<CardioLiveView
-  paceSec={342} {...liveProps} paused confirmEnd />)).join(' ');
+   {...liveProps} paused confirmEnd />)).join(' ');
     expect(said).toContain('סיימי ושמרי');
     expect(said).not.toContain('סיים ושמור');
   });
@@ -157,7 +157,7 @@ describe('the finish control speaks to the woman pressing it', () => {
   it('a man is still told סיים ושמור, in both places', () => {
     setGender('male');
     const said = texts(mount(<CardioLiveView
-  paceSec={342} {...liveProps} paused confirmEnd />)).join(' ');
+   {...liveProps} paused confirmEnd />)).join(' ');
     expect(said).toContain('סיים ושמור');
     expect(said).not.toContain('סיימי ושמרי');
   });
@@ -186,15 +186,15 @@ describe('nothing on the run is set too small to read', () => {
    */
   const STATES: Array<[string, React.ReactElement]> = [
     ['running', <CardioLiveView
-   paceSec={342} key="a" {...liveProps} />],
+   key="a" {...liveProps} />],
     ['a kilometre just logged (the split pill)', <CardioLiveView
-   paceSec={342} key="b" {...liveProps} splits={SPLITS} />],
+   key="b" {...liveProps} splits={SPLITS} />],
     ['paused', <CardioLiveView
-   paceSec={342} key="c" {...liveProps} splits={SPLITS} paused />],
+   key="c" {...liveProps} splits={SPLITS} paused />],
     ['the end sheet', <CardioLiveView
-   paceSec={342} key="d" {...liveProps} splits={SPLITS} paused confirmEnd />],
+   key="d" {...liveProps} splits={SPLITS} paused confirmEnd />],
     ['the kilometre moment', <CardioLiveView
-   paceSec={342} key="e" {...liveProps} splits={SPLITS} kmMoment={SPLITS[1]} />],
+   key="e" {...liveProps} splits={SPLITS} kmMoment={SPLITS[1]} />],
   ];
 
   it.each(STATES)('every word clears the floor — %s', (_name, el) => {
@@ -206,7 +206,7 @@ describe('nothing on the run is set too small to read', () => {
   it('the three he named by hand — קרדיו, the band, the kilometre label', () => {
     setGender('female');
     const sizes = typeSizes(mount(<CardioLiveView
-  paceSec={342} {...liveProps} />));
+   {...liveProps} />));
     const sizeOf = (text: string) => sizes.find((x) => x.text === text)?.size;
     expect(sizeOf('קרדיו')).toBeGreaterThanOrEqual(15); // the legend at the top
     /*
@@ -218,12 +218,11 @@ describe('nothing on the run is set too small to read', () => {
     expect(sizeOf('1,000 מ׳')).toBeUndefined();
     expect(sizes.find((x) => x.text.startsWith('ק״מ'))?.size ?? 15).toBeGreaterThanOrEqual(15);
     /*
-     * ⚠️ THE THIRD SEAT HOLDS PACE NOW (founder 2026-08-04). It was "4 ק״מ" — the same fact the band
-     * directly above draws, twice — so the one seat that could carry the number every runner reads
-     * first was spent repeating the instrument. The FLOOR is what he named; the label under it
-     * changed, and the floor did not.
+     * ⛔ THE SEAT HOLDS THE TOTAL DISTANCE NOW (founder 2026-08-23) — the live pace left the
+     * stage with his ruling ("רק לאחר קילומטר להראות כמה זמן זה ארך"). The FLOOR is what this
+     * test guards; the label under the figure changed, and the floor did not.
      */
-    expect(sizeOf('‏/ק״מ')).toBeGreaterThanOrEqual(13); // the pace label under its figure
+    expect(sizeOf('ק״מ')).toBeGreaterThanOrEqual(13); // the distance label under its figure
   });
 
   /**
@@ -234,8 +233,8 @@ describe('nothing on the run is set too small to read', () => {
   it('the saved stage’s readout labels agree with the live one’s', () => {
     setGender('female');
     const live = typeSizes(mount(<CardioLiveView
-  paceSec={342} {...liveProps} />)).find((x) => x.text === '‏/ק״מ')?.size;
-    // The pace slot on the live row and `זמן` on the done row are the same seat in one instrument.
+  {...liveProps} />)).find((x) => x.text === 'ק״מ')?.size;
+    // The distance slot on the live row and `זמן` on the done row are the same seat in one instrument.
     expect(live).toBeGreaterThanOrEqual(13);
   });
 });

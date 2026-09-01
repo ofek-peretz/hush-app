@@ -9,7 +9,6 @@
  * Full-layer slides and sheet slide-ups both collapse to opacity fades; the
  * product remains fully expressive through copy and layout without motion.
  */
-// @ts-nocheck
 
 // 
 

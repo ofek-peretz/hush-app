@@ -12,7 +12,7 @@
  */
 import type { Equipment } from './catalog';
 import { snapDown } from './v5/grid';
-import { STARTING_INCREMENT, BAR_KG } from './v5/constants';
+import { STARTING_INCREMENT, BAR_KG, FIXED_BAR_KG } from './v5/constants';
 
 /** Epley one-rep-max estimate from a working set. */
 export function epley(load: number, reps: number): number {
@@ -39,7 +39,18 @@ export const LOAD_INCREMENT = STARTING_INCREMENT;
 /** S-55 — the empty bar, re-exported from its single declaration in the v5 ledger
  *  (`engine/v5/constants`). `loadPresentation` does the athlete's plate maths against this exact
  *  number, so what decides a loadable weight and what builds it cannot drift apart. */
-export { BAR_KG };
+export { BAR_KG, FIXED_BAR_KG };
+
+/**
+ * The hard floor a family's iron imposes before any performance exists (S-55 / F-19): the Olympic
+ * bar for `barbell`, the lightest fixed bar for `fixed_barbell`, nothing for everything else (a
+ * dumbbell rack or a pin stack starts wherever the room starts — the engine's `loadFloor` handles
+ * that from her observed grid). Every editor floor, cold-start clamp, and coach fact reads THIS,
+ * so the wheel, the seed and the loops cannot disagree about the lightest honest number.
+ */
+export function emptyBarKg(equipment: Equipment): number {
+  return equipment === 'barbell' ? BAR_KG : equipment === 'fixed_barbell' ? FIXED_BAR_KG : 0;
+}
 
 /**
  * Snap an ideal load onto a real rung (F-2) — **one implementation, shared with the live loops.**

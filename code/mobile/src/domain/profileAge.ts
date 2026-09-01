@@ -10,7 +10,6 @@
  *
  * Pure + I/O-free; the app store applies the result at boot.
  */
-// @ts-nocheck
 
 // 
 

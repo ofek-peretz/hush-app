@@ -160,9 +160,27 @@ describe('what he was given back', () => {
     expect(WHO).toMatch(/take their hats off/);
   });
 
-  it('⚠️ is told to ask for whatever it needs, because nothing else will', () => {
-    expect(WHO).toMatch(/Ask her for anything you need/);
-    expect(WHO).toMatch(/if you\s+do not ask, nobody does/);
+  it('⛔ is told she CANNOT write back, because there is nowhere for her to', () => {
+    /*
+     * ════ THIS LAW WAS INVERTED ON 2026-08-26, AND THE INVERSION IS THE FIX ════
+     *
+     * It read: *"is told to ask for whatever it needs, because nothing else will"*, pinning
+     * `Ask her for anything you need … if you do not ask, nobody does`. Both halves were true when
+     * the coach was the intake and there was a chat to answer in.
+     *
+     * There is no chat. `CoachScreen`, `CoachChat`, `useCoach` and `CoachIntake` were deleted
+     * 2026-08-11/12 on the founder's standing instruction that the app is not a chat, and no screen
+     * in the product lets her type to the coach. So the instruction was telling a model to spend
+     * its one sentence — the only thing she reads from it — on a question that can never be
+     * answered. **The most expensive kind of wrong: everything looks fine and she is the only one
+     * who can tell.**
+     *
+     * The subject of this law is unchanged: the coach must know what it can and cannot get. It just
+     * has to be told the truth about which.
+     */
+    expect(WHO).toMatch(/SHE CANNOT WRITE BACK/);
+    expect(WHO).toMatch(/Ask nothing you need an answer to/);
+    expect(WHO).not.toMatch(/Ask her for anything you need/);
   });
 
   it('⚠️ is not told how to speak', () => {

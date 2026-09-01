@@ -33,7 +33,6 @@
  * every verb in `theCoachCanChangeTodayButNotYesterday`.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

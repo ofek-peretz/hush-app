@@ -4,7 +4,6 @@
  * sage, down reads clay, holding reads neutral. The glyph is a small triangle —
  * a precise gauge needle, not an emoji.
  */
-// @ts-nocheck
 
 // 
 

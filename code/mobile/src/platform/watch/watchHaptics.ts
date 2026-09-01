@@ -17,7 +17,6 @@
  *
  * See WATCH_EXPERIENCE_SPEC.md §3.
  */
-// @ts-nocheck
 
 // 
 

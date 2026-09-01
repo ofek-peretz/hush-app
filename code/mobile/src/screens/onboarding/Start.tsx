@@ -46,7 +46,6 @@
  * pre-selected option is a form; this is a question.
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -59,8 +58,10 @@ import { Arrive, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { RangeMark } from '@/components/RangeMark';
 import { useCopy } from '@/i18n/useCopy';
+import { track } from '@/platform/telemetry';
+import { FUNNEL_EVENTS } from '@/platform/events';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, font, motion, stage } from '@/design/tokens';
+import { color, font, motion, ramp, rampLine, stage } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'Start'>;
@@ -70,8 +71,13 @@ const EASE = Easing.bezier(...motion.easeStandard);
 
 export function Start({ navigation }: Props) {
   const { t } = useCopy();
+  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. Past sign-in, standing at the fork. */
+  React.useEffect(() => {
+    void track(FUNNEL_EVENTS.startReached);
+  }, []);
 
   const go = (where: 'build' | 'bring') => {
+    void track(FUNNEL_EVENTS.doorChosen, { door: where });
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (where === 'build') navigation.navigate('AboutYou');
     else navigation.navigate('ImportPlan', { fromOnboarding: true });
@@ -79,6 +85,12 @@ export function Start({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      {/* Step 1 of 4 — the journey's rail starts where the journey does (see `styles.rail`). */}
+      <View style={styles.rail}>
+        {[0, 1, 2, 3].map((i) => (
+          <View key={i} style={[styles.railSeg, i < 1 && styles.railSegOn]} />
+        ))}
+      </View>
       <View style={styles.body}>
         <Arrive order={0}>
           <Legend size={17} track={0.22}>{t('start.legend')}</Legend>
@@ -94,9 +106,15 @@ export function Start({ navigation }: Props) {
           actually is. `flex: 1` on both is what makes that a promise rather than a coincidence — a
           longer note can never buy one door more of the screen than the other.
         */}
+        {/*
+          ⛔ THE NOTE PROMISED A QUESTION THE INTAKE NEVER ASKS. It read "…shaped around what you can
+          train AND THE TIME YOU HAVE", and nothing in the flow asks how long a session is:
+          `BodyMap.relay()` does not carry `workoutMinutes` and `ProgramCreated` hard-defaults it to
+          60. The first sentence of the product was selling a control that does not exist, so the
+          clause is gone. Restoring the question is a product decision, not a repair.
+        */}
         <Arrive order={2} style={styles.panelFlex}>
           <Panel
-            ordinal="01"
             title={t('start.buildTitle')}
             note={t('start.buildNote')}
             mark={<MeasureMark delay={520} />}
@@ -106,7 +124,6 @@ export function Start({ navigation }: Props) {
 
         <Arrive order={3} style={styles.panelFlex}>
           <Panel
-            ordinal="02"
             title={t('start.bringTitle')}
             note={t('start.bringNote')}
             mark={<SheetMark delay={660} />}
@@ -128,48 +145,70 @@ export function Start({ navigation }: Props) {
   );
 }
 
-/** One of the two ways to begin. A whole-panel target — this is not a list, it is a fork. */
+/**
+ * One of the two ways to begin. A whole-panel target — this is not a list, it is a fork.
+ *
+ * ⚠️ AND THE `seal` SLOT IS GONE WITH THE SEAL. The prop, its branch and its rules outlived the
+ * founder's deletion below by six days: no call site ever passed one, so the panel carried an
+ * optional third element that could never appear and a11y read a label composed around it.
+ */
+/*
+ * ⛔ `ordinal` IS DELETED (2026-08-26, the elevation pass).
+ *
+ * `01` and `02` numbered two things that are NOT a sequence. She does one of these, not both and
+ * not in that order — and numbering alternatives is the one thing that makes a fork read as a
+ * checklist. Position already says which came first for anyone who cares, and nobody does.
+ *
+ * It also cost the panel its whole top row: with the ordinal gone the chevron stands alone at the
+ * end, which is the only mark the card needed — *this goes somewhere*.
+ */
 function Panel({
-  ordinal,
   title,
   note,
   mark,
-  seal,
   onPress,
 }: {
-  ordinal: string;
   title: string;
   note: string;
   mark: React.ReactNode;
-  seal?: string;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title}. ${note}${seal ? `. ${seal}` : ''}`}
+      accessibilityLabel={`${title}. ${note}`}
       onPress={onPress}
       style={({ pressed }) => [styles.panel, pressed && styles.panelPressed]}
     >
-      <View style={styles.panelTop}>
-        <Text style={styles.ordinal}>{ordinal}</Text>
-        {/* The direction of travel, quiet. It mirrors with the writing direction like any glyph. */}
-        <Icon name="chevronRight" size={18} color={stage.ink2} strokeWidth={1.5} />
-      </View>
-
+      {/*
+        ⛔ THE CORNER CHEVRON IS DELETED (2026-08-26, the elevation pass).
+        
+        Two reasons, and the second is the one that settles it:
+        
+          · IT WAS AN ORPHAN. With the ordinal gone it stood alone in a row of its own, a single
+            glyph against the ceiling with the drawing floating below it — chrome held up by nothing.
+            The panel is a bordered block with a title, a sentence and a press wash; nothing about it
+            reads as un-pressable.
+          · ⛔ IT COLLIDED WITH THE DRAWING. The BRING door already contains a chevron, and that one
+            means something specific: her page becoming ours. Two identical glyphs on one card, one
+            saying "this goes somewhere" and one saying "this becomes that", is the card arguing with
+            itself in a vocabulary of one shape.
+      */}
       <View style={styles.panelMark}>{mark}</View>
 
       <View style={styles.panelWords}>
-        <Text style={styles.panelTitle}>{title}</Text>
+        {/* ⛔ THE DOOR WEARS ITS MARK AGAIN (founder 2026-09-01, treating the deferred review
+            finding). The 08-26 deletion argued two chevrons collide — but the BRING drawing's
+            arrow is MOSS, central and part of a picture; this one is muted chrome at the title's
+            end, the same disclosure every pressable row in the product carries. Different colour,
+            different seat, different sentence. What the deletion got right stays: no orphan row —
+            the chevron rides the title's own line. */}
+        <View style={styles.panelTitleRow}>
+          <Text style={styles.panelTitle}>{title}</Text>
+          <Icon name="chevronRight" size={20} color={color.textMuted} strokeWidth={2} />
+        </View>
         <Text style={styles.panelNote}>{note}</Text>
       </View>
-
-      {seal ? (
-        <View style={styles.seal}>
-          <View style={styles.sealRule} />
-          <Legend size={17} track={0.16}>{seal}</Legend>
-        </View>
-      ) : null}
     </Pressable>
   );
 }
@@ -211,19 +250,46 @@ function MeasureMark({ delay }: { delay: number }) {
   }, [delay, grow, reduced]);
   const rule = useAnimatedStyle(() => ({ width: `${grow.value * 100}%` }));
 
-  /* A page we write: our mark at its head, and the week filling in under it. */
+  /*
+   * ⛔ IT IS A PAGE NOW, WITH AN EDGE (2026-08-26, the elevation pass).
+   *
+   * The founder asked for *"a plan with our name on it"* and what was drawn was a header and three
+   * horizontal grey bars of decreasing width — **the universal skeleton-loading idiom**. On glass
+   * the first screen after sign-in looked like an app that had not finished loading, which is the
+   * single worst thing a graphic can imitate.
+   *
+   * The tell was on the OTHER door: `markOurs` there has always had a bounded edge, and it is the
+   * only one of the four stacks that reads as an object. Lines without a boundary are not a page.
+   *
+   * So both doors draw the same KIND of thing now — a bounded page — and the difference between
+   * them is what is ON it. Ours carries the mark, in moss, because moss is where the decision lands.
+   */
   return (
     <View style={styles.markSheet}>
       <View style={styles.markHead}>
-        <RangeMark size={20} />
+        {/* ⛔ `size` was not a prop RangeMark has — it was silently dropped and the mark drew at
+            its default 26. `width` is the name; found when the checker was allowed to look. */}
+        <RangeMark width={20} />
         <Text style={styles.markWord}>hush</Text>
       </View>
       <View style={styles.markRule} />
       <View style={styles.measureTrack}>
         <Animated.View style={[styles.measureRule, rule]} />
       </View>
-      <View style={[styles.markLine, { width: '62%' }]} />
-      <View style={[styles.markLine, { width: '78%' }]} />
+      {/* ⛔ NOT BARE BARS (design review 2026-09-01). Two uniform grey bars inside a page are the
+          skeleton-loading idiom whatever frames them. A page of OURS holds a plan, so each line is
+          a plan ROW: the day's tick, the entry, and the little load block at its end — content,
+          not absence. */}
+      <View style={styles.markRow}>
+        <View style={styles.markDot} />
+        <View style={[styles.markLine, { flex: 1, maxWidth: '52%' }]} />
+        <View style={styles.markFig} />
+      </View>
+      <View style={styles.markRow}>
+        <View style={styles.markDot} />
+        <View style={[styles.markLine, { flex: 1, maxWidth: '68%' }]} />
+        <View style={styles.markFig} />
+      </View>
     </View>
   );
 }
@@ -233,14 +299,24 @@ function SheetMark({ delay }: { delay: number }) {
   /* Her page, an arrow, our page — the whole promise of this door in three shapes. */
   return (
     <View style={styles.markBring}>
+      {/* HER page — the same object as ours, without our name on it. That is the whole sentence the
+          arrow completes: this page becomes that one. Drawn as three bare lines it was a loader
+          beside a chip, and the two halves did not read as the same kind of thing at all. */}
       <View style={styles.markPaper}>
+        {/* HER plan's rows — the same row grammar as our page (tick · entry), so the arrow reads
+            "this page becomes that one" instead of "loader beside a chip". */}
         {[1, 0.72, 0.86].map((w, i) => (
-          <SheetLine key={i} width={w} delay={reduced ? 0 : delay + i * 90} reduced={reduced} />
+          <View key={i} style={styles.markRow}>
+            <View style={styles.markDot} />
+            <SheetLine width={w} delay={reduced ? 0 : delay + i * 90} reduced={reduced} />
+          </View>
         ))}
       </View>
       <Icon name="chevronRight" size={22} color={color.up} strokeWidth={2.5} />
       <View style={styles.markOurs}>
-        <RangeMark size={20} />
+        {/* ⛔ `size` was not a prop RangeMark has — it was silently dropped and the mark drew at
+            its default 26. `width` is the name; found when the checker was allowed to look. */}
+        <RangeMark width={20} />
         <Text style={styles.markWord}>hush</Text>
       </View>
     </View>
@@ -259,20 +335,37 @@ function SheetLine({ width, delay, reduced }: { width: number; delay: number; re
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
-  body: { flex: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 20, gap: 12 },
+  /* The intake's own rail (OnboardingScaffold.seg, verbatim geometry) — the fork is STEP ONE of
+     the journey, and until now the first two screens floated outside it (design review 2026-09-01:
+     the rail appeared mid-journey and counted something she couldn't see). */
+  rail: { flexDirection: 'row', gap: 6, paddingHorizontal: 26, paddingTop: 20 },
+  railSeg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.15)' },
+  railSegOn: { backgroundColor: color.textPrimary },
+  /* The question, then the two doors — with the air between them that says they are alternatives
+     rather than steps. `gap: 16` is the pair's own rhythm; the title carries its own margins. */
+  body: { flex: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 20, gap: 16 },
 
   // The question takes the serif and the size the front door's promise wears — it is the same voice
   // asking, one screen later.
-  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 45, color: stage.ink0, marginTop: 10, marginBottom: 8, textAlign: 'left' },
+  title: { fontFamily: font.serif, fontSize: ramp.title, lineHeight: rampLine.title, color: stage.ink0, marginTop: 10, marginBottom: 8, textAlign: 'left' },
 
-  /* ⚠️ THE FLEX LIVES ON THE `Arrive` WRAPPER, not on the panel. `Arrive` is an `Animated.View` in
-     the middle of the tree, and a `flex: 1` panel inside a shrink-wrapped wrapper cannot expand —
-     which is precisely how the first draft ended up with two small boxes and an empty middle. */
-  panelFlex: { flex: 1 },
+  /*
+   * ⛔ THE PANELS NO LONGER STRETCH (2026-08-26, the elevation pass).
+   *
+   * `flex: 1` on both wrappers split the leftover height evenly, which was the right cure for an
+   * earlier draft's "two small boxes and an empty middle" and became its own version of the same
+   * fault: each card grew to ~250 points around ~90 points of content, so `space-between` pushed a
+   * chevron to the ceiling, left the drawing floating in a void, and dropped the words to the
+   * floor. Card TWO was then clipped by the bottom of the screen — **the second of two options was
+   * half-visible at the moment the screen says there are two.**
+   *
+   * A card that fits its content is a card. The pair sits under the question with real air between
+   * them, both whole, both above the fold — which is the only thing this screen has to achieve.
+   */
+  panelFlex: {},
 
   panel: {
-    flex: 1,
-    justifyContent: 'space-between',
+    gap: 18,
     paddingVertical: 22,
     paddingHorizontal: 22,
     borderRadius: 20,
@@ -282,28 +375,48 @@ const styles = StyleSheet.create({
   /* A press is a WASH under the panel, never a fade of it (founder A.13). */
   panelPressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
 
-  panelTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  // 13, not 12: `typeHasAFloor` caught it on the first run and it is right to. An ordinal is small
-  // BY ROLE, and "small by role" is exactly the argument every unreadable line in an app is made with.
-  ordinal: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, letterSpacing: 1.7, color: stage.ink2, textAlign: 'left' },
 
   panelMark: { justifyContent: 'center', minHeight: 34 },
   panelWords: { gap: 7 },
-  panelTitle: { fontFamily: font.serif, fontSize: 27, lineHeight: 33, color: stage.ink0, textAlign: 'left' },
+  /* 27 → 24 (`ramp.subhead`). Twenty-seven was a size this screen invented for itself, three points
+     from a rung the app already had and one point from two others elsewhere in the product. */
+  panelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  panelTitle: { flex: 1, fontFamily: font.serif, fontSize: ramp.subhead, lineHeight: rampLine.subhead, color: stage.ink0, textAlign: 'left' },
   panelNote: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textSecondary, textAlign: 'left' },
-
-  seal: { gap: 9, marginTop: 16 },
-  sealRule: { height: 1, backgroundColor: 'rgba(241,238,229,0.12)' },
 
   /* ── the two marks ── */
   /* ── THE TWO DRAWINGS — see the note above `MeasureMark`. ── */
-  markSheet: { alignSelf: 'stretch', gap: 9 },
+  /* OUR page: a bounded sheet in the accent, our mark at its head, the week filling in under it. */
+  markSheet: {
+    alignSelf: 'stretch',
+    gap: 9,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(169,196,159,0.45)',
+    backgroundColor: 'rgba(169,196,159,0.10)',
+  },
   markHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   markWord: { fontFamily: font.serif, fontSize: 17, color: color.up, textAlign: 'left' },
   markRule: { height: 1, backgroundColor: 'rgba(169,196,159,0.35)' },
-  markLine: { height: 2, borderRadius: 1, backgroundColor: 'rgba(241,238,229,0.14)' },
-  markBring: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  markPaper: { flex: 1, gap: 6 },
+  /* A row of the drawn plan: day tick · entry line · load block. 0.14 → 0.30: the entry has to
+     read as INK on the page, not as the wash a skeleton bar is drawn in. */
+  markRow: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'stretch' },
+  markDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(169,196,159,0.8)' },
+  markFig: { width: 9, height: 5, borderRadius: 1.5, backgroundColor: 'rgba(241,238,229,0.45)', marginStart: 'auto' },
+  markLine: { height: 2, borderRadius: 1, backgroundColor: 'rgba(241,238,229,0.30)' },
+  markBring: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  /* HER page: the same sheet, in the neutral — no mark, because it is not ours yet. */
+  markPaper: {
+    flex: 1,
+    gap: 6,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.18)',
+  },
   markOurs: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -315,11 +428,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(169,196,159,0.45)',
     backgroundColor: 'rgba(169,196,159,0.10)',
   },
-  measure: { flexDirection: 'row', alignItems: 'center', height: 18 },
-  measureCap: { width: 2, height: 18, backgroundColor: stage.ink1 },
+  /* ⚠️ `measure` AND `measureCap` ARE GONE. They drew the abstract "rule growing out of a start cap"
+     the founder replaced with the two sheet drawings on 2026-08-12; only the track and the rule
+     inside `MeasureMark` survived that redraw. `sheet` went the same way — `markPaper` holds the
+     three lines now. Rules nothing renders are a description of a screen that is not there. */
   measureTrack: { flex: 1, height: 2, marginStart: -1 },
   measureRule: { height: 2, backgroundColor: stage.ink1 },
 
-  sheet: { gap: 5 },
-  sheetLine: { height: 2, borderRadius: 2, backgroundColor: stage.ink1 },
+  sheetLine: { height: 2, borderRadius: 2, backgroundColor: stage.ink1, flexShrink: 1 },
 });

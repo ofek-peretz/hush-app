@@ -29,7 +29,8 @@ export const PATTERNS: readonly Pattern[] = [
   'HIP_DOMINANT',
 ] as const;
 
-export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
+/** `fixed_barbell` (2026-08-25): pre-weighted fixed bars — own floor (10 kg), own steps. */
+export type Equipment = 'barbell' | 'fixed_barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
 export type BodyRegion = 'upper' | 'lower' | 'core';
 
 /** Per-exercise engine meta: region + tier + equipment + bodyweight. */

@@ -482,6 +482,26 @@ describe('⛔ the delivered week matches the week the engine decided on', () => 
     // A guard first: an EMPTY `past` proves nothing if the sweep looked at nothing.
     expect(marksSwept).toBeGreaterThan(300);
     expect(past).toEqual([]); // the ceiling half — closed, and it stays closed
+    /*
+     * ⛔ 0 → 40 ON 2026-08-30, AND THE ZERO WAS NEVER A FIX.
+     *
+     * It was set on 2026-08-25 with the note *"with the warm-up-priced hour the assembler no longer
+     * empties a donor anywhere in this sweep"* — and that is exactly what it was: the hour had just
+     * been made ~2 minutes more expensive per day by charging for compulsory warm-up bridges, less
+     * work fit, and a mark had less room to run away with. The defect was not repaired; it was
+     * priced out of reach.
+     *
+     * The founder's 2026-08-30 ruling made the ramp optional, so the charge went (a day must not
+     * trade a WORKING SET to fund a warm-up nobody asked for) — and the number came back to **40**,
+     * to the set, which is where it stood on 2026-08-16 before the charge existed. Not 41. The
+     * underlying behaviour never changed at all.
+     *
+     * ⚠️ SO IT IS RE-PINNED AT THE HONEST NUMBER, and the lesson is written down rather than the
+     * number quietly restored: **a ratchet tightened by a side effect is a ratchet measuring the
+     * side effect.** The 2026-08-25 entry read as progress on emphasis; it was progress on nothing.
+     * Not one of the forty leaves a donor under MEV, which is why this is still a bound and not a
+     * red build — and the real fix, when it comes, belongs in how a mark draws from a donor.
+     */
     const DONORS_EMPTIED = 40;
     expect({ sample: emptied.slice(0, 6), within: emptied.length <= DONORS_EMPTIED })
       .toEqual({ sample: emptied.slice(0, 6), within: true });

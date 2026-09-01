@@ -5,7 +5,6 @@
  * the v4 migration; it was removed on 2026-06-24 once v4 became the sole engine — the v4 engine
  * in `src/engine/v4` is now the single source of every prescription. Recoverable from git.)
  */
-// @ts-nocheck
 
 // 
 

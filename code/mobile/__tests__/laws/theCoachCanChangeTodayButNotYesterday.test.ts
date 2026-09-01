@@ -243,95 +243,75 @@ describe('⛔ and the door itself is gone', () => {
   });
 });
 
-describe('the wire carries what the coach writes', () => {
-  it('parses a live edit off a real answer', () => {
+describe('⛔ the wire no longer carries a change to today, because nothing applied one', () => {
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * THIS BLOCK TESTED A FIELD THE APP NEVER ACTED ON, AND IT IS DELETED WITH IT (2026-08-26).
+   *
+   * It held five tests over `today` — the parse, the drop-one-bad-edit rule, the Gemini type
+   * translation, the prompt naming every verb, and the mid-session schema choice. All five were
+   * correct about the wire and none of them could see the thing that mattered: **`CoachUpdate.today`
+   * had no reader.** `reviseToday` survives on the session store and its only driver is the LOCAL
+   * pain table in `PainWhere`; no coach edit has ever reached a running session.
+   *
+   * ⚠️ THE FIELD WAS NOT MERELY DEAD. The ask that carried it told the coach *"put it in 'today'
+   * and say what you changed"* — so a coach that believed it had dropped her last two sets wrote
+   * exactly that in `say`, which she reads, on a screen where nothing had changed. Carrying a
+   * decision and discarding it is worse than never asking for it.
+   *
+   * ⚠️ AND ONE OF THESE TESTS DESERVES A HEADSTONE. *"The numeric argument survives the trip to
+   * Google"* caught a real bug before it shipped — a `["string","number","null"]` union that
+   * `geminiSchema` would have collapsed to a bare STRING. That lesson is not lost: it is held by
+   * `geminiSchema`'s own tests, over the collapse rule rather than over this one field.
+   *
+   * WHAT SURVIVES, AND IS TESTED BELOW: `LiveEdit`, `applyLiveEdit`, `applyLiveEdits` and the
+   * plan-shrink guard. Those are the PAIN path's machinery, they have a live caller, and the guard
+   * is the one that stops a session being emptied out from under the cursor.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  it('the coach cannot ask for one — the field is off the schema entirely', () => {
+    expect(Object.keys(COACH_PLAN_SCHEMA.properties)).not.toContain('today');
+    expect(read('src/domain/coachPlan.ts')).not.toContain('function readToday(');
+    expect(read('src/platform/coach/afterSession.ts')).not.toContain('parsed.answer.today');
+  });
+
+  it('⚠️ …and the parse simply ignores one if a model volunteers it', () => {
     const r = parseCoachPlan(JSON.stringify({
       say: 'Taking the rows out and dropping the bench to 30.',
-      today: [{ do: 'drop', ex: 'db_row' }, { do: 'load', ex: 'bb_bench_press', n: 30 }],
+      today: [{ do: 'drop', ex: 'db_row' }],
     }));
     expect(r.ok).toBe(true);
-    expect(r.ok && r.answer.today).toEqual([
-      { do: 'drop', ex: 'db_row' },
-      { do: 'load', ex: 'bb_bench_press', n: 30 },
-    ]);
+    expect(r.ok && (r.answer as Record<string, unknown>).today).toBeUndefined();
   });
 
-  it('⚠️ drops ONE bad edit, not the whole list', () => {
-    // Three asked for and one malformed should be two applied, not none. A list rejected wholesale
-    // is invisible from her side, because `say` still describes all three.
-    const r = parseCoachPlan(JSON.stringify({
-      say: 'x',
-      today: [{ do: 'drop', ex: 'db_row' }, { do: 'sets', ex: 'plank' }, { do: 'end' }],
-    }));
-    expect(r.ok && r.answer.today).toEqual([{ do: 'drop', ex: 'db_row' }, { do: 'end' }]);
-  });
-
-  it('⚠️ the numeric argument survives the trip to Google', () => {
-    /*
-     * ⛔ THE BUG THIS CAUGHT BEFORE IT SHIPPED. `to` was first declared as one field holding either
-     * a word or a number — `["string","number","null"]`, which reads perfectly well in JSON Schema.
-     * `geminiSchema` collapses a union to its FIRST non-null member, so it would have reached
-     * Google as a bare STRING: the model answers `"3"`, the parse requires a number and drops it,
-     * and the coach says it took two sets off while nothing moves.
-     *
-     * Two fields, two types. This asserts the translated schema, which is the artefact Google
-     * actually enforces — our own JSON Schema would have passed the whole way through.
-     */
-    const t = geminiSchema(COACH_PLAN_SCHEMA) as { properties: Record<string, { items: { properties: Record<string, { type: string; nullable?: boolean }> } }> };
-    const props = t.properties.today.items.properties;
-    expect(props.n).toEqual({ type: 'NUMBER', nullable: true });
-    expect(props.to).toEqual({ type: 'STRING' });
-  });
-
-  it('the prompt names every verb the parse accepts', () => {
-    // A verb in the code and absent from the prompt is a capability the coach does not know it has.
-    const p = read('src/domain/coachPrompt.ts');
-    for (const verb of LIVE_EDIT_VERBS) {
-      expect({ verb, told: p.includes(`"do":"${verb}"`) }).toEqual({ verb, told: true });
-    }
-  });
-
-  it('⚠️ a mid-session turn is NOT asked for a whole programme', () => {
-    /*
-     * `askCoachToRevise` sends `COACH_DECISION_SCHEMA`, where `sessions` is REQUIRED — right for
-     * "she now trains four days", and badly wrong for a question asked from inside a workout: it
-     * would answer "the rack is taken" with a rewritten month, every time and at the price of one.
-     * This is the mistake `COACH_PLAN_SCHEMA` exists to prevent, and reusing `revise` would have
-     * reintroduced it precisely because the two asks look so alike.
-     */
-    const src = read('src/platform/coach/afterSession.ts');
-    expect(src).toContain("occasion.kind === 'in_session' ? COACH_PLAN_SCHEMA : COACH_DECISION_SCHEMA");
-    expect(COACH_PLAN_SCHEMA.required).toEqual(['say']);
+  it('⛔ the live-edit machinery the PAIN path uses is untouched', () => {
+    /* One live caller, and it is the one where being wrong is dangerous rather than slow. */
+    expect(read('src/screens/pain/PainWhere.tsx')).toContain("session.reviseToday(gone.map((ex) => ({ do: 'drop', ex }) as const))");
+    expect(read('src/domain/liveRevision.ts')).toContain('export function applyLiveEdits(');
+    expect(LIVE_EDIT_VERBS).toContain('drop');
   });
 
   it('the live session is the only thing that applies an edit', () => {
     /*
-     * `afterSession` carries `today` back rather than applying it: it runs when a session has ENDED
-     * and, on a cold start, with no screen mounted at all. Only the live session knows whether the
-     * lift is still ahead of her.
+     * `afterSession` never applied one and now cannot receive one. Only the live session knows
+     * whether the lift is still ahead of her.
      */
-    expect(read('src/platform/coach/afterSession.ts')).not.toContain('reviseToday');
+    /* Comments blanked: the deletion note there NAMES `reviseToday` to say what still drives it,
+       and a law a file cannot explain itself under is a law that gets worked around. */
+    const afterSession = read('src/platform/coach/afterSession.ts')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/^\s*\/\/.*$/gm, ' ');
+    expect(afterSession).not.toContain('reviseToday');
     /*
-     * ⛔ REWRITTEN 2026-08-12 — THE CONVERSATION THIS PINNED NO LONGER EXISTS.
-     *
-     * ⛔ FOUNDER: *"צ'אט בתוך אימון חי — הורדנו."* The in-workout window was a chat, and the model's
-     * answer was APPLIED to the running session. That is a model editing the workout she is standing
-     * in, which is exactly the authority the engine was given back.
-     *
-     * The three CHIPS were never the model's work — they are the old chrome controls, running the
-     * same local code — so they stayed, and the empty box went. What follows asserts the rule that
-     * replaced this one, because a law describing a deleted feature is a law that votes for it.
+     * ⛔ AND THE MODEL IS NOT CALLED FROM INSIDE A WORKOUT AT ALL — the load-bearing half. Nothing
+     * on the stage can hand the running workout to a model or to anything else.
      */
-    /*
-     * ⛔ AND THE MODEL IS NOT CALLED FROM INSIDE A WORKOUT AT ALL — the load-bearing half, and the
-     * only half left. `reviseToday` still exists in the store; what is gone is every surface that
-     * could reach it during a session, so nothing on the stage can hand the running workout to a
-     * model or to anything else.
-     */
-    const flow = read('src/screens/session/SessionFlow.tsx');
-    expect(flow).not.toContain('askCoachInSession');
-    expect(flow).not.toContain('askCoach');
-    expect(flow).not.toContain('reviseToday');
+    const flowSrc = read('src/screens/session/SessionFlow.tsx');
+    expect(flowSrc).not.toContain('askCoachInSession');
+    expect(flowSrc).not.toContain('askCoach');
+    expect(flowSrc).not.toContain('reviseToday');
+    /* …and the function that reached it is gone from the app, not merely unreferenced by the stage. */
+    expect(read('src/platform/coach/afterSession.ts')).not.toContain('export async function askCoachInSession');
   });
 });
 

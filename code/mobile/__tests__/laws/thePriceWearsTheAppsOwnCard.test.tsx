@@ -37,7 +37,7 @@ const METRICS: Metrics = { frame: { x: 0, y: 0, width: 393, height: 852 }, inset
 
 const PRODUCTS = [
   { id: 'hush.pro.annual', period: 'annual', priceLabel: '$59.99', introTrialLabel: null },
-  { id: 'hush.pro.monthly', period: 'monthly', priceLabel: '$9.99', introTrialLabel: null },
+  { id: 'hush.pro.month', period: 'monthly', priceLabel: '$9.99', introTrialLabel: null },
 ];
 
 jest.mock('@/platform/billing', () => {
@@ -47,7 +47,7 @@ jest.mock('@/platform/billing', () => {
     billing: {
       getProducts: async () => [
         { id: 'hush.pro.annual', period: 'annual', priceLabel: '$59.99', introTrialLabel: null },
-        { id: 'hush.pro.monthly', period: 'monthly', priceLabel: '$9.99', introTrialLabel: null },
+        { id: 'hush.pro.month', period: 'monthly', priceLabel: '$9.99', introTrialLabel: null },
       ],
     },
   };

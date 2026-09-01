@@ -26,7 +26,7 @@
 
 // 
 
-import { normalizeLoad, BAR_KG, LOAD_INCREMENT } from '@/engine/loadMath';
+import { normalizeLoad, BAR_KG, FIXED_BAR_KG, LOAD_INCREMENT } from '@/engine/loadMath';
 import { startingWeight } from '@/domain/startingLoad';
 import { loadSetup } from '@/domain/loadPresentation';
 import { EXERCISES, exerciseById } from '@/data/exercises';
@@ -47,15 +47,29 @@ describe('the bar is the floor', () => {
     expect({ lighterThanAnEmptyBar: impossible }).toEqual({ lighterThanAnEmptyBar: [] });
   });
 
-  it('the two lifts this was found on — a barbell curl is not a 16 kg lift', () => {
-    // The regression itself, named. Both are `tier: 'isolation'`, which is exactly why the old
-    // `&& ex.tier === 'compound'` floor never saw them.
-    for (const id of ['bb_curl', 'skullcrusher']) {
+  it('the two lifts this was found on now carry the FIXED bar and its own floor (F-19)', () => {
+    // The regression was found on `bb_curl` and `skullcrusher` when they wore `equipment:
+    // 'barbell'`. On 2026-08-25 (founder gym finding #11) they moved to the `fixed_barbell`
+    // family: a curl is done on a pre-weighted fixed bar whose set starts at 10 kg, so flooring
+    // it at an Olympic bar was the OPPOSITE over-correction — a beginner woman's curl was forced
+    // up to 20. The floor is still a fact of the iron; the iron is just different.
+    for (const id of ['bb_curl', 'skullcrusher', 'reverse_curl']) {
       const ex = exerciseById(id)!;
-      expect(ex.tier).toBe('isolation'); // if this ever changes, the test above still covers it
-      expect(startingWeight(ex, beginner('male'))).toBeGreaterThanOrEqual(BAR_KG);
-      expect(startingWeight(ex, beginner('female'))).toBeGreaterThanOrEqual(BAR_KG);
+      expect(ex.equipment).toBe('fixed_barbell');
+      const m = startingWeight(ex, beginner('male'));
+      const f = startingWeight(ex, beginner('female'));
+      expect(m).toBeGreaterThanOrEqual(FIXED_BAR_KG);
+      expect(f).toBeGreaterThanOrEqual(FIXED_BAR_KG);
+      // and the whole point: a beginner woman is no longer forced onto an Olympic bar
+      expect(f).toBeLessThan(BAR_KG);
     }
+  });
+
+  it('a correction cannot walk a fixed bar under the lightest bar in the rack', () => {
+    expect(LOAD_INCREMENT.fixed_barbell).toBe(2.5);
+    expect(normalizeLoad(7.5, 'fixed_barbell')).toBe(FIXED_BAR_KG);
+    expect(normalizeLoad(0, 'fixed_barbell')).toBe(FIXED_BAR_KG);
+    expect(normalizeLoad(12.5, 'fixed_barbell')).toBe(12.5); // 12.5 exists in a fixed set — untouched
   });
 
   it('a correction cannot walk a barbell under the bar on the way down', () => {

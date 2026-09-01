@@ -72,7 +72,10 @@ describe('the defects the old name-token pool shipped', () => {
 
   it('an incline press is NOT answered with a FLAT press (a different chest)', () => {
     const list = offers('incline_bb_press');
-    expect(list.slice(0, 2)).toEqual(['Incline Dumbbell Press', 'Incline Machine Press']);
+    /* The Smith incline (batch 2, 2026-08-26) sits second by the support ladder's own law: a
+       guided bar is one step from a free one where the seated machine is two — the same ranking
+       that puts the Hack Squat ahead of the Front Squat for a busy Leg Press. */
+    expect(list.slice(0, 2)).toEqual(['Incline Dumbbell Press', 'Smith Machine Incline Press']);
     expect(list.indexOf('Barbell Bench Press')).toBeGreaterThan(list.indexOf('Incline Machine Press'));
   });
 

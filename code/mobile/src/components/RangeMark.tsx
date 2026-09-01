@@ -8,7 +8,6 @@
  * Sized by its WIDTH; the ticks and the bar follow from it, so one mark reads the same at 16 and at
  * 44. Drawn from three plain Views rather than an SVG — three rectangles need no renderer.
  */
-// @ts-nocheck
 
 // 
 

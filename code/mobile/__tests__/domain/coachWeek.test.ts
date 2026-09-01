@@ -68,6 +68,42 @@ describe('the week, as chips', () => {
     expect(coachWeek(plan())[1].items).toBe(3 + 2);
   });
 
+  /*
+   * ⛔ AND "HOW MANY LIFTS" IS A DIFFERENT QUESTION FROM "HOW MUCH WORK" (2026-08-18).
+   *
+   * `items` above is right and stays. What was wrong is that it was the ONLY count, and every
+   * surface printed it under the word *lifts* — Today's card ("22 LIFTS · ~54 MIN" for a Full Body
+   * of seven exercises), the Hebrew ("22 תרגילים", which says exercises outright), and the wrist
+   * lobby. Twenty-two exercises inside fifty-four minutes is not a session anyone has trained, so
+   * the one line that answers *have I got time for this?* was arguing with itself.
+   */
+  it('counts LIFTS as distinct exercises — the word on the card is not a synonym for a round', () => {
+    const [intervals, lower] = coachWeek(plan());
+    // The interval block is one block of two movements done four times: eight pieces of work…
+    expect(intervals.items).toBe(8);
+    // …and TWO lifts, a run and a walk. That is what "2 lifts" means on a card.
+    expect(intervals.lifts).toBe(2);
+    expect(lower.items).toBe(5);
+    expect(lower.lifts).toBe(2); // a squat and a plank
+  });
+
+  it('a lift that appears in two blocks is ONE lift in the session', () => {
+    // A `Set`, not a sum: a warm-up block and a working block of the same movement is one exercise
+    // she does, however many times the programme comes back to it.
+    const twice = {
+      v: 1,
+      sessions: [{
+        name: 'Upper',
+        blocks: [
+          { rounds: 2, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [8, 10], load: 40 }] },
+          { rounds: 3, items: [{ kind: 'reps', ex: 'bb_bench_press', reps: [6, 8], load: 60 }] },
+        ],
+      }],
+    } as CoachPlan;
+    expect(coachWeek(twice)[0].items).toBe(5);
+    expect(coachWeek(twice)[0].lifts).toBe(1);
+  });
+
   it('carries the day only where the programme has one', () => {
     const [intervals, lower] = coachWeek(plan());
     expect(intervals.day).toBe('tue');

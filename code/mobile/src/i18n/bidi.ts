@@ -14,7 +14,6 @@
  * string to telemetry, comparisons, or anything non-visual — it carries invisible
  * control characters.
  */
-// @ts-nocheck
 
 // 
 
@@ -51,5 +50,23 @@ export function bidi(s: string): string {
 export const textStart: TextStyle['textAlign'] = 'left';
 export const textEnd: TextStyle['textAlign'] = 'right';
 
-/** True while the app is laid out right-to-left (Hebrew). Latched at module load. */
-export const rtl = I18nManager.isRTL;
+/**
+ * True while the app is laid out right-to-left (Hebrew).
+ *
+ * ⛔ THIS WAS A `const`, AND THE LATCH WAS THE BUG (founder, device QA 2026-08-23: *"הכתב בעברית,
+ * הכל כתוב בצד שמאל"*). The language switch flips `I18nManager` and remounts the tree — but a
+ * module-load `const` had already been read by every importer, so every layout decision computed
+ * from it stayed LTR until the process was killed by hand. In dev this never showed, because dev
+ * reloads re-evaluate modules; only a RELEASE build kept the stale latch, which is exactly where
+ * nobody was looking.
+ *
+ * A `let` with a re-latch keeps every call site byte-identical (babel's module interop reads the
+ * namespace member at each use, so importers see the new value live). `reloadApp` re-latches at
+ * the same instant it remounts — one seam, both halves.
+ */
+export let rtl = I18nManager.isRTL;
+
+/** Re-read the direction after `I18nManager.forceRTL` — called by `reloadApp`, nothing else. */
+export function relatchDirection(): void {
+  rtl = I18nManager.isRTL;
+}

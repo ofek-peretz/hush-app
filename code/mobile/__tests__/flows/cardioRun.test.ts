@@ -42,7 +42,7 @@ function run(from: number, to: number, feed: (f: ReturnType<typeof leg>) => void
 
 beforeEach(() => {
   endRun();
-  beginRun('run', 75);
+  beginRun(75);
   setPaused(false);
 });
 afterEach(() => endRun());
@@ -68,7 +68,7 @@ describe('the monotonic guard', () => {
       run(0, 30);
       const d = snapshot().distanceKm;
       endRun();
-      beginRun('run', 75);
+      beginRun(75);
       setPaused(false);
       return d;
     })();

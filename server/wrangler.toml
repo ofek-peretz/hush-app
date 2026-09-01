@@ -36,5 +36,20 @@ type = "ratelimit"
 namespace_id = "1"
 simple = { limit = 30, period = 60 }
 
+# ── REAL AUTHENTICATION + THE DAY'S BUDGET (2026-09-01, audit finding 1) ────────────────────────
+# The SAME namespace hush-identity writes its sessions into — the coach READS `session:<token>`
+# to tell an athlete from a script, and keeps its own `quota:*` counters beside them. One extra
+# binding, zero new infrastructure; see the Env comment in worker.ts for the whole design.
+[[kv_namespaces]]
+binding = "HUSH_KV"
+id = "14a55c2d60944fdfb81d9895cf6b7a66"
+
+[vars]
+# '0' until the first bearer-sending build IS the fleet, then the founder flips it to '1' and a
+# session becomes the price of a coach call. The flag is the migration, not a setting.
+REQUIRE_AUTH = "0"
+DAILY_ACCOUNT_CALLS = "40"
+DAILY_GLOBAL_CALLS = "2000"
+
 # ⚠️ `GEMINI_API_KEY` AND `HUSH_TOKEN` ARE NOT HERE, AND MUST NEVER BE. They live in the Worker's
 # secret store (`npx wrangler secret put …`), already set, and a deploy leaves them untouched.

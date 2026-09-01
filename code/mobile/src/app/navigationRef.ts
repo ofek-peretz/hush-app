@@ -4,7 +4,6 @@
  * a navigate() before the container is ready (or while Onboarding is mounted)
  * is a safe no-op.
  */
-// @ts-nocheck
 
 // 
 

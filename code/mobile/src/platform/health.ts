@@ -15,7 +15,6 @@
  * model is health/healthModel.ts. This file imports nothing native so it loads
  * everywhere (Expo Go / Windows / test).
  */
-// @ts-nocheck
 
 // 
 

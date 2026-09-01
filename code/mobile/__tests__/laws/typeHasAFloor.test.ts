@@ -214,6 +214,27 @@ describe('type has a floor, and it is measured', () => {
     expect(sizes.filter((px) => px < PHONE_FLOOR)).toEqual([]);
   });
 
+  it('⛔ …and the milestone seal, whose caption size is COMPUTED from the drawing', () => {
+    /*
+     * The third name on this list, and the first one that is not a table. `MilestoneEmblem` sizes
+     * its caption as a proportion of the seal — `Math.max(9, round(size * 0.06))` — and hands it to
+     * `fontSize: captionSize` further down. A computed local is invisible to both sweeps above:
+     * there is no literal after `fontSize:` and it is not a `<Legend>`.
+     *
+     * Every call site passes `size={216}`, so the clamp never bound and the unit under the
+     * celebration figure rendered at **13pt — 11pt for a longer caption**. The word that says what
+     * the number counts, on the screen the product exists to reach.
+     *
+     * ⚠️ THE CLAMP IS WHAT IS ASSERTED, not the product of the proportion, because the proportion
+     * is allowed to grow the caption at a bigger seal. The floor has to hold at the SMALLEST seal
+     * the component can be asked to draw, and that is what the clamp is for.
+     */
+    const src = stripComments(readFileSync(join(SRC, 'components', 'MilestoneEmblem.tsx'), 'utf8'));
+    const clamp = /const captionSize = Math\.max\(\s*([0-9]+(?:\.[0-9]+)?)\s*,/.exec(src);
+    expect(clamp).not.toBeNull();
+    expect(Number(clamp![1])).toBeGreaterThanOrEqual(PHONE_FLOOR);
+  });
+
   it('the wrist sets no type below the floor', () => {
     const violations: string[] = [];
     for (const file of files(WATCH, ['.swift'])) {

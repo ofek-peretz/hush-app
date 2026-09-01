@@ -225,9 +225,16 @@ describe('four weeks with the real coach', () => {
     line('WHAT SHE COST — every call, in tokens');
     rule();
     /*
-     * gemini-3.6-flash, per MTok: $1.50 in, $7.50 out. ⚠️ THINKING BILLS AT THE OUTPUT RATE and is
-     * usually the largest line — any estimate that counts only the visible reply is wrong by a
-     * factor, which is documented and was measured at 2.5× once already.
+     * `gemini-3.7-flash` (2026-08-30) — and the price did NOT move with the model: 3.6 and 3.7 are
+     * both $0.75 / $3.75 per MTok on the introductory rate that runs to 31 December 2026, and both
+     * $1.50 / $7.50 from 1 January 2027. The switch was made for speed, not for money.
+     *
+     * ⚠️ THE STANDARD RATE IS WHAT IS PRICED HERE, deliberately. A simulation of what an athlete
+     * costs over a year must not be flattered by a discount with an expiry date on it — the year
+     * this projects is mostly on the other side of it.
+     *
+     * ⚠️ AND THINKING BILLS AT THE OUTPUT RATE, usually as the largest line: any estimate counting
+     * only the visible reply is wrong by a factor, measured at 2.5× once already.
      */
     const IN = 1.5 / 1e6;
     const OUT = 7.5 / 1e6;

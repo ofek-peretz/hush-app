@@ -140,7 +140,11 @@ describe('onboarding asks for every one of them', () => {
     /* ⛔ `Start` JOINED THE PATH ON 2026-08-12 — the fork where she says whether she already has a
        programme. It collects nothing the coach needs, but a law that lists "the only path through"
        and omits a step on it is a law describing a flow that does not exist. */
-    const flow = ['Start', 'AboutYou', 'ConnectHealth', 'BodyMap']
+    /* ⛔ `BodyMap` LEFT THE PATH ON 2026-08-29 (founder) — the builder took its seat, and the
+       builder asks for nothing the coach needs: it is where she WRITES a week, not where she
+       answers a question. So the answering path is three screens, and every requirement is still
+       collected on it — which is the only claim this law has ever made. */
+    const flow = ['Start', 'AboutYou', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -213,9 +217,29 @@ describe('onboarding asks for every one of them', () => {
      * ⚠️ THE LAW'S CLAIM IS STILL THE SAME ONE: there is no route to the programme that drops one
      * of her numbers. What changed is how many steps collect them, which is his to arrange.
      */
+    /*
+     * ⛔ ONE WHEEL LEFT ON THIS SCREEN (founder 2026-08-29): *"להוריד את כמות האימונים בשבוע. כי זה
+     * שייך לבניית התוכנית."*
+     *
+     * ⚠️ AND THE LAW'S CLAIM SURVIVES THE DELETION INTACT, which is the only reason it is allowed:
+     * there is still no route to a programme that drops one of her numbers. Frequency did not stop
+     * being collected — it moved to the door that consumes it, and the two doors that do NOT
+     * consume it derive the number from the week she ends up holding (`onSave` re-stamps it). So
+     * the chain is asserted in three halves now: this screen carries what it asks, the builder
+     * asks the rest, and every exit from the builder stamps a frequency that is true of the week.
+     */
     const about = read('src/screens/onboarding/AboutYou.tsx');
-    expect(about.match(/<WheelPicker/g)).toHaveLength(2);
-    expect(about).toContain("navigation.navigate('ConnectHealth', { sex, weightKg: kg, daysPerWeek: days })");
+    expect(about.match(/<WheelPicker/g)).toHaveLength(1);
+    expect(about).toContain("navigation.navigate('ConnectHealth', { sex, weightKg: kg })");
+    const builderSrc = read('src/screens/plan/PlanBuilder.tsx');
+    // the door that cannot derive it asks for it, and hands on exactly what it was told
+    /* ⛔ A FULL STEP SINCE 2026-08-29, not the bottom sheet it was for a day — the founder chose it
+       over the sheet when the AI screen was designed. What this clause guards is unchanged: the one
+       door that cannot derive a frequency is the one that asks for it. */
+    expect(builderSrc).toContain('function AskTheCoach');
+    expect(builderSrc).toContain("inputs: { ...inputs, daysPerWeek },");
+    // the doors that CAN derive it do, from the sealed week rather than from an earlier answer
+    expect(builderSrc).toContain("daysPerWeek: sealed.days.filter((day) => !day.isRest).length");
     /*
      * ⛔ THE STEP AFTER THIS ONE IS THE BODY MAP NOW (founder 2026-08-08): *"פציעות כאבים ומה אסור
      * יהיה בBODYMAP לכן לא צריך טקסט חופשי."* `YourGoal` asked for two paragraphs, and measuring
@@ -226,7 +250,11 @@ describe('onboarding asks for every one of them', () => {
      * that actually carries them — which is why it is pinned rather than the screen name alone.
      */
     expect(read('src/app/Root.tsx')).toContain('name="AboutYou"');
-    expect(read('src/app/Root.tsx')).toContain('name="BodyMap"');
+    /* ⛔ AND THE STEP AFTER HEALTH IS THE BUILDER NOW (founder 2026-08-29). Registered on the
+       ONBOARDING stack, not merely on the main one — they are separate navigators, and a route that
+       exists only on the other one is a tap that finds nothing at runtime. */
+    expect(read('src/app/Root.tsx')).toContain('<OnboardingStack.Screen name="PlanBuilder"');
+    expect(read('src/app/Root.tsx')).not.toContain('name="BodyMap"');
     expect(read('src/app/Root.tsx')).not.toContain('YourTraining');
     /*
      * ⚠️ AND THE MAP RELAYS WHAT IT WAS GIVEN. This is the defect the wiring actually shipped: the
@@ -234,8 +262,8 @@ describe('onboarding asks for every one of them', () => {
      * weight and days died on the way IN and the map died on the way OUT. A test on the screen name
      * alone would have passed against exactly that.
      */
-    const map = read('src/screens/onboarding/BodyMap.tsx');
-    expect(map).toContain("navigation.navigate('BuildingProgramme', {");
+    const health = read('src/screens/onboarding/ConnectHealth.tsx');
+    expect(health).toContain("navigation.navigate('PlanBuilder', { inputs })");
     /* ⚠️ AND THE DELETED SCREEN IS GONE FROM THE NAVIGATOR, not merely unrouted — a screen left
        registered is a screen a deep link can still reach. */
     expect(read('src/app/Root.tsx')).not.toContain('NameEntry');
@@ -248,22 +276,30 @@ describe('onboarding asks for every one of them', () => {
 
   it('and the LAST step puts it into the inputs the profile is built from', () => {
     /*
-     * ⛔ THAT STEP IS THE BODY MAP NOW (founder 2026-08-10). `ConnectHealth` assembled
-     * `OnboardingInputs` while it was last; the order changed so the map — the only step that shapes
-     * the week — sits beside the payoff. The assembly moved WHOLE rather than splitting in two,
-     * because the principle it was written under is that exactly one place builds that object.
+     * ⛔ AND IT IS `ConnectHealth` AGAIN (founder 2026-08-29). The rule has always been that ONE
+     * place builds `OnboardingInputs`; what moves is WHICH place, and it follows the last step that
+     * collects an ANSWER. That was the body map from 2026-08-10; the map is deleted and the step
+     * that replaced it — the builder — has THREE ways out. A relay assembled in three exits is three
+     * places for her bodyweight to go missing, which is the precise bug this clause's own history
+     * records, so the object is sealed one step earlier and the builder only carries it.
      */
-    const src = read('src/screens/onboarding/BodyMap.tsx');
-    expect(src).toContain('...(p.weightKg != null ? { weightKg: p.weightKg } : {})');
+    const src = read('src/screens/onboarding/ConnectHealth.tsx');
+    expect(src).toContain('const inputs: OnboardingInputs = {');
+    expect(src).toContain('...(route.params?.weightKg != null ? { weightKg: route.params.weightKg } : {})');
+    // …and what only THIS step can know is written here rather than relayed to itself.
+    expect(src).toContain('healthConnected: withHealth,');
+    expect(src).toContain('units: unitsForDevice(');
     /*
-     * ⚠️ AND THE MAP ITSELF is spread UNCONDITIONALLY. `{}` is a complete answer — every muscle
-     * left normal — and `completeOnboarding` reads the PRESENCE of the key to put her on the v5
-     * engine, so a `length` guard would silently drop the athlete who changed nothing.
+     * ⚠️ AND NOTHING IN THE INTAKE PUTS A BODY MAP IN IT ANY MORE. The screen that produced one is
+     * deleted; asserting the ABSENCE is what stops the field being resurrected by half — a relay
+     * that carries a key no screen writes is a fact the profile will claim to have and never does.
+     *
+     * ⚠️ ASSERTED ON THE CODE, NOT ON THE FILE — the same trap `onboardingEndsInAProgramme` records:
+     * a law that forbids a WORD trips on the comment explaining why it is forbidden, and the note
+     * above this line names `bodyMap` twice.
      */
-    expect(src).toContain('bodyMap: map,');
-    // …and what only the health step can know rides forward rather than being re-derived here.
-    expect(src).toContain("healthConnected: p.healthConnected ?? false");
-    expect(read('src/screens/onboarding/ConnectHealth.tsx')).toContain('healthConnected: withHealth,');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toContain('bodyMap');
   });
 
   it('⚠️ the wheel opens on a plausible weight, not on the bottom of its range', () => {
@@ -279,9 +315,17 @@ describe('onboarding asks for every one of them', () => {
     expect(src).not.toContain('AGE_OPENS_ON');
     expect(src).not.toContain("t('ob.age')");
     expect(src).toMatch(/min=\{units === 'kg' \? 30 : 66\}/);
-    // ⚠️ And the same for the wheel that was a segmented control until 2026-08-05: three days a
-    // week is where most people land, and a ruler that opens at its floor is one she has to scroll.
-    expect(src).toMatch(/DAYS_OPENS_ON = \d+/);
+    /*
+     * ⚠️ THE DAYS WHEEL IS NO LONGER ON THIS SCREEN (founder 2026-08-29: *"להוריד את כמות
+     * האימונים בשבוע… כי זה שייך לבניית התוכנית"*). The RULE it was asserted for — no wheel opens
+     * on its own floor — travelled with the question, so it is asked of the screen that now holds
+     * it. Asserting it here as well would only pin an absence that the line below already pins.
+     */
+    expect(src).not.toMatch(/const DAYS_OPENS_ON/);
+    expect(src).not.toContain("label={t('ob.daysPerWeek')}");
+    const builder = read('src/screens/plan/PlanBuilder.tsx');
+    expect(builder).toMatch(/DAYS_OPENS_ON = \d+/);
+    expect(builder).toContain("t('ob.daysPerWeek')");
   });
 
   it('is written in both languages, and to HER in Hebrew', () => {

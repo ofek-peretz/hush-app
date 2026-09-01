@@ -9,9 +9,19 @@
  * can leak: an unlisted field is simply never read. A "strip the private bits" implementation would
  * have the opposite property, and the first new field would ship a bug nobody noticed.
  *
- * What travels: the day names, each day's muscle groups, the lift IDs, and the rep bands.
- * What NEVER travels: loads, one-rep maxes, history, bodyweight, sex, age, the body map, names,
- * anything from the engine at all. 11.5 says this in as many words on the receiving screen —
+ * What travels: the day names, each day's muscle groups, the lift IDs, the rep bands — and HER
+ * NAME, when her profile has one.
+ *
+ * ⚠️ THE NAME IS ON THIS LIST AND THE DOCBLOCK USED TO DENY IT. It said "NAMES" among the things
+ * that never travel while `sharedPlan` had carried `from` since the day it was written, and 11.5's
+ * receiving screen is BUILT around it — the avatar's initial, "Dana shared a plan", and an
+ * anonymous fallback for a plan that arrives unsigned. The feature is intended; the sentence was
+ * false, and a privacy note that is wrong about its own payload is worse than none. So it is
+ * stated: her name is the one identifying thing in a payload, it is optional, and the SEND screen
+ * renders it inside the card so she reads it on the preview before she sends anything.
+ *
+ * What NEVER travels: loads, one-rep maxes, history, bodyweight, sex, age, the body map, anything
+ * from the engine at all. 11.5 says this in as many words on the receiving screen —
  * "your starting weights come from your body, not Dana's" — and that promise is kept HERE.
  *
  * ════ THE RECEIVER ADOPTS A SHAPE, NOT A PRESCRIPTION ════
@@ -19,11 +29,13 @@
  * from their own body and corrects from their first working set, exactly as it does for a plan Hush
  * built. Nothing in a payload can set a load, because no payload carries one.
  */
-// @ts-nocheck
 
 // 
 
-import { muscleOf } from '@/data/exercises';
+import { exerciseById, muscleOf } from '@/data/exercises';
+import { movementById } from '@/data/movements';
+import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
+import { REP_BAND_CHOICES } from '@/engine/v5/repBand';
 
 /** The share-format version. A receiver that does not know a version refuses the payload. */
 export const PLAN_SHARE_VERSION = 1;
@@ -137,6 +149,46 @@ export function encodePlan(plan: SharedPlan): string {
 }
 
 /**
+ * An id we can actually resolve: a catalogue LIFT, or one of the 25 MOVEMENTS.
+ *
+ * ⚠️ BOTH, because a shared week may deliberately contain a run — see the note on `sharedPlan`, and
+ * `data/movements` for why a run is not in `EXERCISES`. Anything else is a string a sender typed
+ * into a hand-crafted link, and `toProgram` used to assert on it (`exerciseById(id)!`) inside an
+ * async `onPress`: the rejection was swallowed and the adopt button did nothing, however many times
+ * she pressed it. Nothing that cannot be named is worth carrying past this line.
+ */
+function isKnownId(id: string): boolean {
+  return !!exerciseById(id) || !!movementById(id);
+}
+
+const KNOWN_MUSCLES: ReadonlySet<string> = new Set(CANONICAL_MUSCLE_ORDER);
+const KNOWN_BANDS: ReadonlySet<string> = new Set(REP_BAND_CHOICES);
+
+/**
+ * The bands, checked key by key and value by value — or nothing.
+ *
+ * ⛔ THEY ARE WRITTEN STRAIGHT ONTO HER PROFILE (`PlanReceivedScreen` → `updateProfileInfo`), so
+ * this is the only place they can be checked. Spread from the link unvalidated, a hand-crafted
+ * payload put arbitrary keys into her stored profile, and a value that was not a string made
+ * `planBandSummary`'s `.replace(…)` throw while the receiving screen was rendering — a white screen
+ * off a link someone sent her.
+ *
+ * ⚠️ THE SOURCE OF TRUTH IS THE ENGINE'S OWN LISTS, not a copy of them. A muscle or a band added to
+ * v5 arrives here on the same day; a second list here would start refusing payloads the app itself
+ * can write.
+ */
+function readBands(raw: unknown): Record<string, string> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, string> = {};
+  for (const [muscle, band] of Object.entries(raw as Record<string, unknown>)) {
+    if (!KNOWN_MUSCLES.has(muscle)) continue;
+    if (typeof band !== 'string' || !KNOWN_BANDS.has(band)) continue;
+    out[muscle] = band;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
  * Decode a payload, or null.
  *
  * Null on anything unreadable, on an unknown version, and on a shape with no days — a received plan
@@ -153,7 +205,9 @@ export function decodePlan(token: string): SharedPlan | null {
     const days: SharedPlanDay[] = [];
     for (const d of parsed.days) {
       if (!d || typeof d.name !== 'string' || !Array.isArray(d.exerciseIds)) return null;
-      const exerciseIds = d.exerciseIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
+      const exerciseIds = d.exerciseIds.filter(
+        (id): id is string => typeof id === 'string' && id.length > 0 && isKnownId(id),
+      );
       if (exerciseIds.length === 0) continue;
       days.push({
         name: d.name,
@@ -162,12 +216,12 @@ export function decodePlan(token: string): SharedPlan | null {
       });
     }
     if (days.length === 0) return null;
-    const bands = parsed.repBandByMuscle;
+    const bands = readBands(parsed.repBandByMuscle);
     return {
       v: PLAN_SHARE_VERSION,
       ...(typeof parsed.from === 'string' && parsed.from ? { from: parsed.from } : {}),
       days,
-      ...(bands && typeof bands === 'object' ? { repBandByMuscle: { ...bands } } : {}),
+      ...(bands ? { repBandByMuscle: bands } : {}),
     };
   } catch {
     return null;

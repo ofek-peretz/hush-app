@@ -11,19 +11,41 @@
  * STARTED only when a run begins and STOPPED the moment it ends: Hush holds a location subscription
  * for exactly as long as there is a run to measure, and never one second longer. The blue location
  * bar stays up for that whole time, which is the honest statement of it.
+ *
+ * ⚠️ AND THE STOP DOES NOT DEPEND ON A SCREEN EXISTING (2026-08-18). It used to: the tracker hook's
+ * cleanup was the only caller, so an evicted app left the subscription running for a run that was
+ * over. The task now ends itself the first time it is woken with no live run — see the note in it.
  */
-// @ts-nocheck
 
 // 
 
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { ingestFix } from './cardioRun';
+import { ingestFix, isRunning } from './cardioRun';
 
 export const CARDIO_LOCATION_TASK = 'hush.cardio.location';
 
 TaskManager.defineTask(CARDIO_LOCATION_TASK, async ({ data, error }) => {
   if (error) return;
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ NOBODY IS LISTENING → THE SUBSCRIPTION ENDS ITSELF (2026-08-18)
+   *
+   * `stopCardioLocationTask` was reachable from exactly one place: the tracker hook's cleanup. So
+   * every way of leaving a run that does NOT tear that hook down — an app iOS evicted mid-run, a
+   * crash, a relaunch straight into this task with no React tree at all — left the location
+   * subscription running with nothing on the other end of it. Blue bar and battery, forever, for a
+   * run that ended hours ago.
+   *
+   * The consumer is the only thing that can know it has stopped consuming. A fix arriving with no
+   * live run is that fact, delivered: it is not a state to recover from, it is the end of the run
+   * announcing itself late.
+   * ════════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  if (!isRunning()) {
+    await stopCardioLocationTask();
+    return;
+  }
   const locations = (data as { locations?: Location.LocationObject[] } | undefined)?.locations;
   if (!locations?.length) return;
   // A background delivery can arrive BATCHED — several fixes at once after a stretch with the

@@ -24,7 +24,6 @@
  * are what the whole engine stores; defaulting to them keeps a phone we cannot read behaving
  * exactly as the app did before this existed.
  */
-// @ts-nocheck
 
 // 
 

@@ -28,7 +28,6 @@
  * this component: every figure is handed in, already measured (R7 — Hush never states a reason it
  * did not measure). The closing line is the engine's own sentence, in the coach's italic serif.
  */
-// @ts-nocheck
 
 // 
 
@@ -36,11 +35,12 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { Legend, Button } from '@/components/ds';
+import { Legend, Button, Arrive } from '@/components/ds';
+import { SHEET_SETTLE } from '@/components/BottomSheet';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
 import type { ChangedLiftCase } from '@/domain/changedLiftCase';
-import { color, font, stage, up, down, hold } from '@/design/tokens';
+import { color, font, stage, tracking, trackingPx, up, down, hold } from '@/design/tokens';
 
 /**
  * THE VERDICT'S TONE — the one place this sheet decides what colour the argument is.
@@ -88,6 +88,9 @@ export interface WhyChangedProps {
   sessions: WhySession[];
   /** The engine's closing sentence, in its own voice. */
   line: string;
+  /** The verb under the answer — same door, same reason as `WhyHereSheet.onSwap` (device QA
+   *  2026-08-23). Absent on report-only surfaces (the Mirror). */
+  onSwap?: () => void;
   onClose: () => void;
 }
 
@@ -122,16 +125,48 @@ export function WhyChangedSheet(props: WhyChangedProps) {
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <View style={styles.head}>
-            <View style={[styles.dot, { backgroundColor: tone.fg }]} />
-            <Legend track={0.2} tone="accent" style={{ color: tone.fg }}>
-              {t(held ? 'why.legendHeld' : props.verdict === 'up' ? 'why.legendChanged' : 'why.legendEased')}
-            </Legend>
-            <View style={styles.flex} />
-            <Legend track={0} weight="regular">{`${props.liftName} · ${props.dateLabel}`}</Legend>
-          </View>
+          {/*
+            ════════════════════════════════════════════════════════════════════════════════════
+            ⛔ THE HEADER IS STACKED, NOT SHARED (2026-08-27).
 
-          <Text style={styles.title} accessibilityRole="header">{props.title}</Text>
+            The kind of sheet and its subject sat on ONE line with a spacer between them, and on the
+            English locale the sum did not fit:
+
+                • למה זה        BARBELL ROW · 18
+                  השתנה          JUL
+
+            Both legends wrapped, and the DATE broke in half — `18` on one line, `JUL` on the next.
+            A date is one token; splitting it is not a wrap, it is damage.
+
+            ⚠️ IT FITS IN HEBREW AND THAT IS WHY IT SURVIVED. Measured against the 326 points this
+            body leaves: the Hebrew pair comes to ~299 and the English pair to ~333. A header whose
+            integrity depends on the SUM OF TWO TRANSLATED STRINGS is fragile by construction — it
+            was one longer lift name away from breaking in Hebrew too, and there is no rule that
+            could have caught it, because nothing was wrong with either half.
+
+            Stacked, each line has the whole width and neither can crowd the other in any language.
+            It also reads in the right order: what this sheet IS, then what it is ABOUT.
+            ════════════════════════════════════════════════════════════════════════════════════
+          */}
+          {/*
+            ✦ IT ARRIVES, AFTER THE SHEET DOES (2026-08-27). This is the product's differentiator —
+            the screen that says WHY a load moved — and it landed all at once. Three beats, held by
+            `SHEET_SETTLE` so the sequence does not race the container it rides in: what this is and
+            what it is about, the load's own move, then the evidence that earned it.
+          */}
+          <Arrive order={0} after={SHEET_SETTLE} style={styles.head}>
+            <View style={styles.headKind}>
+              <View style={[styles.dot, { backgroundColor: tone.fg }]} />
+              <Legend track={0.2} tone="accent" style={{ color: tone.fg }}>
+                {t(held ? 'why.legendHeld' : props.verdict === 'up' ? 'why.legendChanged' : 'why.legendEased')}
+              </Legend>
+            </View>
+            <Legend track={0} weight="regular">{`${props.liftName} · ${props.dateLabel}`}</Legend>
+          </Arrive>
+
+          <Arrive order={1} after={SHEET_SETTLE}>
+            <Text style={styles.title} accessibilityRole="header">{props.title}</Text>
+          </Arrive>
 
           {/* THE CHANGE, AS ONE MOTION — struck, then standing. */}
           <View style={styles.change}>
@@ -192,6 +227,10 @@ export function WhyChangedSheet(props: WhyChangedProps) {
           {/* The provenance, stated. Nothing on this screen came from anywhere else. */}
           <Legend size={17} track={0.14} align="center">{t('why.decidedFrom')}</Legend>
           <Button variant="primary" size="whySheet" block label={t('whyLoad.got')} onPress={props.onClose} />
+          {/* The verb under the answer — see `onSwap`. A ghost, so "understood" stays the act. */}
+          {props.onSwap ? (
+            <Button variant="ghost" size="whySheet" block label={t('swap.title')} onPress={props.onSwap} />
+          ) : null}
         </View>
       </SafeAreaView>
     </View>
@@ -242,10 +281,11 @@ export function whyProps(
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
-  flex: { flex: 1 },
   body: { flexGrow: 1, paddingHorizontal: 32, paddingTop: 24 },
 
-  head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  /* Two lines: the kind, then the subject — see the note at the markup. */
+  head: { gap: 4 },
+  headKind: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { width: 7, height: 7, borderRadius: 3.5 },
 
   // 39px, line-height 1.0 — the headline is two short lines, tight, like a struck statement.
@@ -256,7 +296,7 @@ const styles = StyleSheet.create({
   from: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: 32,
+    fontSize: 32, letterSpacing: trackingPx(32, tracking.figure), 
     lineHeight: 32,
     color: '#57534a',
     textDecorationLine: 'line-through',
@@ -340,7 +380,7 @@ const styles = StyleSheet.create({
   rowFigure: { flexShrink: 0, fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 18, lineHeight: 22, color: stage.ink0, textAlign: 'right' },
 
   // The engine's closing sentence, in its own voice, at the foot of the argument.
-  line: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 21, lineHeight: 30, color: stage.ink0, marginTop: 'auto', paddingTop: 26, paddingBottom: 4, textAlign: 'left' },
+  line: { fontFamily: font.serif, fontSize: 21, lineHeight: 30, color: stage.ink0, marginTop: 'auto', paddingTop: 26, paddingBottom: 4, textAlign: 'left' },
 
   footer: { paddingHorizontal: 26, paddingTop: 12, paddingBottom: 30, gap: 11 },
 });

@@ -133,8 +133,11 @@ describe('the health toggle does not blink the screen', () => {
 
   it('…and nothing is disabled while the permission flow is in flight', () => {
     const r = draw();
+    /* 2026-09-01: the card is a BUTTON now, not a switch — behind the press is an OS permission
+       sheet that may answer "no", and a switch that snaps back is a promise the interface cannot
+       keep (design review). The law this file holds — nothing disables mid-flight — is unchanged. */
     const card = r.root.findAll(
-      (n) => n.props?.accessibilityRole === 'switch' && typeof n.props.onPress === 'function',
+      (n) => n.props?.accessibilityRole === 'button' && n.props?.accessibilityState?.selected !== undefined && typeof n.props.onPress === 'function',
     )[0];
     expect(card).toBeTruthy();
     act(() => card.props.onPress());

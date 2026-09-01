@@ -62,10 +62,10 @@ describe('the phone — every route has a door', () => {
   it('⚠️ opens every registered route from somewhere', () => {
     /*
      * The entry points are reached by BEING the initial route, not by a call: the two stacks' roots
-     * and the four tabs. Everything else has to be navigated to by something, or it is a screen
+     * and the five tabs. Everything else has to be navigated to by something, or it is a screen
      * that can only be reached by editing the code.
      */
-    const entries = new Set(['HomeTabs', 'Authentication', 'Today', 'Cardio', 'Progress', 'You']);
+    const entries = new Set(['HomeTabs', 'Authentication', 'Today', 'Program', 'Cardio', 'Progress', 'You']);
     const called = everyNavCall();
     const orphans = [...new Set(routes)].filter((r) => !called.has(r) && !entries.has(r));
     expect(orphans).toEqual([]);

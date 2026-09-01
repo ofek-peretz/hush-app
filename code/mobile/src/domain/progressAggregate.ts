@@ -5,15 +5,26 @@
  * the area graph draws.
  *
  * Pure display arithmetic over the logged history and recorded cardio — it reads NO engine type and
- * makes NO engine decision (the mirror reports what happened). Wall-clock duration (first set-start →
- * last set persisted) feeds the same MET kcal estimate the Complete screen already uses.
+ * makes NO engine decision (the mirror reports what happened).
+ *
+ * ⚠️ EVERY PER-SESSION FACT COMES FROM `domain/sessionMetrics` — duration, tonnage, "was that a
+ * workout", the kcal that hangs off the duration, and the personal-best walk. This file used to
+ * derive all five itself, and its duration read only `sets`: the description "first set-start →
+ * last set persisted" was accurate and that was the bug. A session of intervals persists no set,
+ * so it contributed nothing to the lifetime hours or the lifetime burn. The span is now the start
+ * to the last stamp in EITHER record.
  */
-// @ts-nocheck
 
 // 
 
 import type { Session, CardioActivity } from '@/data/local/models';
-import { sessionKcal } from './energy';
+import {
+  sessionCountsAsWorkout,
+  sessionDurationMs,
+  sessionEnergyKcal,
+  sessionTonnageKg,
+  totalRaises,
+} from './sessionMetrics';
 import { currentWeekOpen, trainingWeekNumber } from './weekCadence';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -72,15 +83,12 @@ export interface ProgressAggregate {
   weeklyTonnes: number[];
 }
 
-const sessionTonnageKg = (s: Session): number =>
-  (s.sets ?? []).reduce((sum, x) => sum + (x.actualWeight ?? 0) * Math.max(0, x.actualReps), 0);
-
-const sessionDurationMs = (s: Session): number => {
-  const start = new Date(s.startedAt).getTime();
-  let end = start;
-  for (const x of s.sets ?? []) if (x.persistedAt) end = Math.max(end, new Date(x.persistedAt).getTime());
-  return Math.max(0, end - start);
-};
+/*
+ * ⛔ THE TONNAGE, THE DURATION AND THE WORKOUT COUNT USED TO BE DERIVED HERE. They are
+ * `domain/sessionMetrics` now — the same three facts were being worked out in five other places
+ * and disagreeing. This screen's copy of the duration read only `sets`, so every interval session
+ * added 0 minutes and 0 kcal to the lifetime figures the founder asked for by name.
+ */
 
 export function progressAggregate(
   sessions: Session[],
@@ -95,31 +103,18 @@ export function progressAggregate(
   let workouts = 0;
   let kcal = 0;
   let ms = 0;
-  let raises = 0;
-  const best = new Map<string, number>(); // exerciseId → best actual load seen so far
 
   for (const s of hist) {
     liftedKg += sessionTonnageKg(s);
-    if (s.trained !== false) workouts += 1;
-    const dur = sessionDurationMs(s);
-    ms += dur;
-    const k = sessionKcal(s, dur, weightKg);
+    if (sessionCountsAsWorkout(s)) workouts += 1;
+    ms += sessionDurationMs(s);
+    const k = sessionEnergyKcal(s, weightKg);
     if (k != null) kcal += k;
-
-    // Raises — a lift that, this session, exceeded its own all-time peak load. One per lift per session.
-    const peak = new Map<string, number>();
-    for (const x of s.sets ?? []) {
-      if (x.actualWeight != null && x.actualReps >= 1) {
-        const cur = peak.get(x.exerciseId);
-        if (cur == null || x.actualWeight > cur) peak.set(x.exerciseId, x.actualWeight);
-      }
-    }
-    for (const [exId, p] of peak) {
-      const b = best.get(exId);
-      if (b != null && p > b) raises += 1;
-      if (b == null || p > b) best.set(exId, p);
-    }
   }
+
+  // Raises — a lift that, this session, exceeded its own all-time peak load. One per lift per
+  // session, one walk, shared with the Log's "3 up" so the two lenses can never disagree again.
+  const raises = totalRaises(hist);
 
   let cardioKm = 0;
   for (const c of cardio ?? []) {

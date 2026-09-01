@@ -35,7 +35,6 @@
  * ask her to make a standing decision while someone waits for the rack.
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 //
 
@@ -43,18 +42,33 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { Legend, Button } from '@/components/ds';
+import { Legend, Button, Arrive } from '@/components/ds';
+import { SHEET_SETTLE } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
+import { exerciseDisplayName } from '@/data/exercises';
 import { bidi } from '@/i18n/bidi';
-import { color, font, stage } from '@/design/tokens';
+import { color, font, stage, radius } from '@/design/tokens';
 import type { SwapChoice } from '@/domain/swapPool';
+import { displayWeight, unitLabel } from '@/domain/schedule';
+import { MotionThumb } from '@/motion/render/MotionThumb';
+import type { FigureSex } from '@/motion/types';
 
 export interface SwapSheetProps {
   /** The lift whose station is taken — the head of the question. */
   currentName: string;
   /** What `swapChoices` returned: one to three, already ordered, never padded. */
   choices: readonly SwapChoice[];
+  /**
+   * ⛔ THE TWO FACTS A SWAP IS DECIDED ON (design review 2026-09-01): what it LOOKS like, and what
+   * it would WEIGH. Three names with "אותה תנועה" under each were three rows the athlete could not
+   * tell apart. `weightFor` reads the session's own target table (the exact load a pick would
+   * prescribe — never invented); null draws no figure, which is the honest state for a resumed
+   * session that runs without a table.
+   */
+  weightFor?: (exerciseId: string) => number | null;
+  units?: 'kg' | 'lb';
+  figure?: FigureSex;
   onPick: (exerciseId: string) => void;
   onClose: () => void;
 }
@@ -63,21 +77,33 @@ export function SwapSheet(props: SwapSheetProps) {
   const { t } = useCopy();
   return (
     <BottomSheet onClose={props.onClose}>
-      <Legend style={styles.legend}>{t('swap.title')}</Legend>
-      <Text style={styles.current} numberOfLines={1}>{bidi(props.currentName)}</Text>
-      <Text style={styles.body}>{t('swap.body')}</Text>
+      {/* ✦ IT ARRIVES, after the sheet does (2026-08-27). Two beats: what she is replacing, then
+          what she may replace it with. The choices land together — they are peers, and numbering
+          them would rank them. */}
+      <Arrive order={0} after={SHEET_SETTLE}>
+        <Legend style={styles.legend}>{t('swap.title')}</Legend>
+        <Text style={styles.current} numberOfLines={1}>{bidi(props.currentName)}</Text>
+        <Text style={styles.body}>{t('swap.body')}</Text>
+      </Arrive>
 
       <View style={styles.rows}>
         {props.choices.map((c) => (
           <Pressable
             key={c.exercise.id}
             accessibilityRole="button"
-            accessibilityLabel={c.exercise.name}
+            accessibilityLabel={exerciseDisplayName(c.exercise.id)}
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => props.onPick(c.exercise.id)}
           >
+            {/* The clip, at the 56-point floor a clip can be read at — the same still the plan
+                sheet draws, so "what does this one look like" is answered before a tap. */}
+            <View style={styles.rowThumb}>
+              <MotionThumb exerciseId={c.exercise.id} size={56} figure={props.figure} tone="stage" />
+            </View>
             <View style={styles.rowText}>
-              <Text style={styles.rowName} numberOfLines={1}>{bidi(c.exercise.name)}</Text>
+              {/* The DISPLAY name — the catalog's raw `.name` is English, and this sheet is the
+                  athlete choosing a replacement mid-workout (eye-pass 2026-08-26). */}
+              <Text style={styles.rowName} numberOfLines={1}>{bidi(exerciseDisplayName(c.exercise.id))}</Text>
               {/*
                 ⛔ THE HONEST LABEL. `sameMovement` is the whole reason this sheet can show a third
                 option at all — see the header. A row that is not a synonym says so in its own line
@@ -89,6 +115,16 @@ export function SwapSheet(props: SwapSheetProps) {
                   : t('swap.differentWay')}
               </Text>
             </View>
+            {(() => {
+              const w = props.weightFor?.(c.exercise.id) ?? null;
+              const shown = w != null ? displayWeight(w, props.units ?? 'kg') : null;
+              return shown != null ? (
+                <Text style={styles.rowWeight}>
+                  {shown}
+                  <Text style={styles.rowWeightUnit}> {unitLabel(props.units ?? 'kg')}</Text>
+                </Text>
+              ) : null;
+            })()}
             <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
           </Pressable>
         ))}
@@ -117,11 +153,14 @@ const styles = StyleSheet.create({
   // `aPressNeverDimsWhatYouPressed` caught an `opacity: 0.6` here on the first build of this sheet;
   // a word at 60% does not read as "pressed", it reads as disabled.
   rowPressed: { backgroundColor: color.fillSubtle },
-  rowText: { flex: 1 },
+  rowThumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: color.surface2, overflow: 'hidden' },
+  rowText: { flex: 1, minWidth: 0 },
+  rowWeight: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 19, color: stage.ink0, textAlign: 'left' },
+  rowWeightUnit: { fontFamily: font.mono, fontSize: 17, color: stage.ink2 }, // rtl-ok: nested span
   rowName: { fontFamily: font.sans, fontSize: 19, lineHeight: 23, color: stage.ink0, textAlign: 'left' },
   rowNote: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: stage.ink2, marginTop: 2, textAlign: 'left' },
   // A different movement is not a worse row — it is a different KIND of row, and reads as one.
-  rowNoteOther: { fontStyle: 'italic', color: color.textTertiary },
+  rowNoteOther: { color: color.textTertiary },
 
   close: { marginTop: 22 },
 });

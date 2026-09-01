@@ -51,7 +51,26 @@ describe('v4 explanation copy', () => {
   it('en/he parity — every explain key is translated', () => {
     const heLeaves: { path: string; v: string }[] = [];
     leaves(explainHe, '', heLeaves);
-    expect(heLeaves.map((l) => l.path).sort()).toEqual(enLeaves.map((l) => l.path).sort());
+    // `_female` is the Hebrew-only gender mechanism (a variant of a key that IS in parity), so it
+    // is exempt here exactly as it is in `lint-copy.cjs` — `explain.detrain` conjugates "שתסיים".
+    const translated = heLeaves.map((l) => l.path).filter((p) => !p.endsWith('_female'));
+    expect(translated.sort()).toEqual(enLeaves.map((l) => l.path).sort());
+  });
+
+  /**
+   * `detrain` is emitted by the v5 engine as `L('detrain.observation')` → `explain.detrain.*`
+   * (src/engine/v5/v5Engine.ts). It was authored at the TOP LEVEL of both locale files, so the
+   * layoff letter rendered the raw dotted key. It lives inside `explain` now, and this pins it:
+   * the block the engine names is the block the locale carries.
+   */
+  it('the engine’s `detrain` reason resolves inside `explain`, not at the top level', () => {
+    for (const [tag, tree] of [['en', en], ['he', he]] as const) {
+      expect({ tag, topLevel: (tree as Tree).detrain }).toEqual({ tag, topLevel: undefined });
+    }
+    for (const field of ['observation', 'conclusion', 'action', 'text']) {
+      expect((explainEn.detrain as Record<string, string>)[field]).toBeTruthy();
+      expect((explainHe.detrain as Record<string, string>)[field]).toBeTruthy();
+    }
   });
 });
 

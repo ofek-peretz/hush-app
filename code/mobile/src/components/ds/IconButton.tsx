@@ -5,7 +5,6 @@
  * accessibilityLabel. Settles to 0.98 scale on press; `bordered` adds a hairline
  * + surface; `onStage` inverts for the live workout.
  */
-// @ts-nocheck
 
 // 
 

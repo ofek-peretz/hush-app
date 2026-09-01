@@ -27,7 +27,6 @@
  * row at all; the sentence behind it is what the row opens.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -36,13 +35,18 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { Button, Legend, Stage } from '@/components/ds';
+import { Arrive, Button, Legend, Stage, FooterFade } from '@/components/ds';
 import { PlanLifts, type PlanLift } from '@/components/PlanLifts';
-import { muscleOf } from '@/data/exercises';
+import type { FigureSex } from '@/motion/types';
+// ⚠️ `muscleOf` went with the per-muscle allocation block (see the note below `Figure`) — an import
+// with no reader is the thing that gets "reused" a year later for something it was never about.
 import { bidi } from '@/i18n/bidi';
 import { useCopy } from '@/i18n/useCopy';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { color, font, motion, space, stage, signal } from '@/design/tokens';
+import { color, font, motion, space, stage, signal, tracking, trackingPx } from '@/design/tokens';
+
+/* The settle is published by the component that owns the spring. */
+import { SHEET_SETTLE } from '@/components/BottomSheet';
 
 export interface PreWorkoutProps {
   /** The workout's own name — the coach's, in her language. */
@@ -53,6 +57,8 @@ export interface PreWorkoutProps {
   shape?: string | null;
   lifts: PlanLift[];
   units: 'kg' | 'lb';
+  /** Whose body each lift's still is drawn on — see `PlanLiftsProps.figure` for why it is required. */
+  figure: FigureSex;
   /**
    * ⛔ HOW MANY OF *THESE* LIFTS MOVED — and it is a FACT, not a door (audit, 2026-08-05).
    *
@@ -82,6 +88,13 @@ export interface PreWorkoutProps {
   budgetNote?: string | null;
   onForm: (exerciseId: string) => void;
   onWhy?: (exerciseId: string) => void;
+  /**
+   * ⛔ S-77 — the swap, off the gym floor. Declared 2026-08-23, A DAY AFTER THE CONTAINER STARTED
+   * PASSING IT: the prop was handed in and silently dropped here, so the third door never reached a
+   * single row. `@ts-nocheck` would have hidden that for ever; the typechecker found it within the
+   * hour of being allowed to look. Absent on a finished day — the container already gates it.
+   */
+  onSwap?: (exerciseId: string) => void;
   onStart: () => void;
   onClose: () => void;
   /**
@@ -99,10 +112,16 @@ export interface PreWorkoutProps {
  * "reused" a year later for something it was never about.
  */
 
-/** One of the three figures across the top of the sheet — a mono number over its tracked label. */
+/**
+ * One of the three figures across the top of the sheet — a mono number over its tracked label.
+ *
+ * ⚠️ ONE NODE, ONE SENTENCE: "6 LIFTS", not "6", stop, "LIFTS". Two siblings are two stops under
+ * VoiceOver, and a bare figure with the noun in the next swipe is not a measurement. The pattern is
+ * `WellDone`'s `Fact`.
+ */
 function Figure({ value, label }: { value: string; label: string }) {
   return (
-    <View style={styles.figure}>
+    <View style={styles.figure} accessible accessibilityLabel={`${value} ${label}`}>
       <Text style={styles.figureValue}>{value}</Text>
       <Legend size={17} track={0.2}>{label}</Legend>
     </View>
@@ -111,12 +130,13 @@ function Figure({ value, label }: { value: string; label: string }) {
 
 export function PreWorkoutView(props: PreWorkoutProps) {
   const { t } = useCopy();
+  /* Past the fold the head carries the workout's name — see the sticky head note in the render. */
+  const [scrolled, setScrolled] = React.useState(false);
   const changed = props.changes != null && props.changes > 0;
   const totalSets = React.useMemo(() => props.lifts.reduce((n, l) => n + (l.sets || 0), 0), [props.lifts]);
-  /*
-   * The session's work, per muscle, heaviest first. `muscleOf` is the catalogue's own answer, and
-   * the set counts are the assembler's — so this block cannot disagree with the table below it.
-   */
+  // ⚠️ The note that stood here described the per-muscle allocation and its `muscleOf` lookup — both
+  // deleted above, and the sentence outlived them by a fortnight. `totalSets` is the last of that
+  // arithmetic still on the sheet, and it is one line that needs no paragraph.
 
   return (
     <View style={styles.root}>
@@ -187,11 +207,26 @@ export function PreWorkoutView(props: PreWorkoutProps) {
             table underneath cannot be checked against** — which is the only kind of summary this
             product is allowed to draw (R7).
           */}
-          <View style={styles.figures}>
+          {/*
+            ════════════════════════════════════════════════════════════════════════════════════
+            ✦ THE SHEET'S CONTENTS ARRIVE — AFTER THE SHEET DOES (2026-08-27).
+
+            `Arrive` was built for the founder's largest note (2026-08-12) and reached six screens.
+            This one is a SHEET, and that changes the timing rather than excusing it: `BottomSheet`
+            is already sliding up on a spring, so a stagger starting at mount would race the
+            container it is riding in — the contents would be landing while the sheet is still in
+            the air, and the whole thing would read as one soft blur.
+
+            `after` exists for exactly this: *"held before the sequence starts — for a screen that
+            must settle before anything moves."* The sheet lands, THEN its three beats walk down it:
+            what this session is as figures, what it is made of, and the table itself.
+            ════════════════════════════════════════════════════════════════════════════════════
+          */}
+          <Arrive order={0} after={SHEET_SETTLE} style={styles.figures}>
             <Figure value={String(props.lifts.length)} label={t('program.sheetLifts')} />
             <Figure value={String(totalSets)} label={t('program.sheetSets')} />
-            {props.minutes ? <Figure value={`~${props.minutes}`} label={t('program.sheetMin')} /> : null}
-          </View>
+            {props.minutes ? <Figure value={`${props.minutes}`} label={t('program.sheetMin')} /> : null}
+          </Arrive>
 
           {/*
             ════════════════════════════════════════════════════════════════════════════════════════
@@ -214,17 +249,21 @@ export function PreWorkoutView(props: PreWorkoutProps) {
 
           {props.budgetNote ? <Text style={styles.budgetNote}>{props.budgetNote}</Text> : null}
 
-          <Legend size={17} track={0.2} style={styles.liftsLegend}>{t('program.sheetTheLifts')}</Legend>
+          <Arrive order={1} after={SHEET_SETTLE}><Legend size={17} track={0.2} style={styles.liftsLegend}>{t('program.sheetTheLifts')}</Legend></Arrive>
 
           {/*
             ⛔ NO PARAGRAPH HERE (founder 2026-08-05). A block of the coach's prose stood above this
             list for one draft. *"Nobody reads that before a workout"* — and it was me explaining the
             table underneath, which is the thing his copy law is about.
           */}
-          <PlanLifts lifts={props.lifts} units={props.units} onForm={props.onForm} onWhy={props.onWhy} />
+          <Arrive order={2} after={SHEET_SETTLE}>
+            <PlanLifts lifts={props.lifts} units={props.units} figure={props.figure} onForm={props.onForm} onWhy={props.onWhy} onSwap={props.onSwap} />
+          </Arrive>
         </ScrollView>
 
         <View style={styles.footer}>
+          {/* The lift list scrolls on under this footer — the fade says so (design review 2026-09-01). */}
+          <FooterFade />
           {props.done ? (
             /* A record wears no offer's clothes — the same refusal the week column makes. */
             <View style={styles.doneNote}>
@@ -239,6 +278,8 @@ export function PreWorkoutView(props: PreWorkoutProps) {
               disabled={!!props.locked}
               label={t('home.begin', { name: props.name })}
               onPress={props.onStart}
+              /* The same play glyph Home's Begin carries — one act, one dress (design review 2026-09-01). */
+              leading={<Icon name="play" size={16} color={color.onAccent} />}
             />
           )}
         </View>
@@ -247,14 +288,59 @@ export function PreWorkoutView(props: PreWorkoutProps) {
   );
 }
 
+/**
+ * ⛔ THE ID IS NOT IN THE WEEK ANY MORE (audit, 2026-08-18).
+ *
+ * `PreWorkoutScreen` carries only a `workoutId` and reads the plan live — deliberately, so the card
+ * cannot go stale — and it answered a plan that no longer holds that id with `return null`. On a
+ * modal presentation that is a sheet risen over Today with NOTHING on it: no title, no lifts, and
+ * no ✕, because the ✕ lives inside the card that did not draw. The only way out was a drag she has
+ * no reason to know about, on a screen that had just told her nothing at all.
+ *
+ * ⚠️ IT SAYS SO RATHER THAN CLOSING ITSELF. `loadWeekPlan` failing reads exactly like an id that has
+ * moved, and a sheet that vanishes the instant she taps a workout is a bug she cannot report. One
+ * line and the same ✕ every other state carries.
+ */
+export function PreWorkoutMovedView({ onClose }: { onClose: () => void }) {
+  const { t } = useCopy();
+  return (
+    <View style={styles.root}>
+      <Stage />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <View style={styles.grabber} />
+        <View style={styles.head}>
+          <View />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            onPress={onClose}
+            hitSlop={10}
+            style={({ pressed }) => [styles.close, pressed && styles.dim]}
+          >
+            <Icon name="close" size={18} color={stage.ink0} strokeWidth={2} />
+          </Pressable>
+        </View>
+        <View style={styles.moved}>
+          <Text style={styles.title} accessibilityRole="header">{t('program.sheetMovedTitle')}</Text>
+          <Text style={styles.movedBody}>{t('program.sheetMovedBody')}</Text>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   /* ── the session, stated as figures ── */
-  figures: { flexDirection: 'row', gap: 34, marginTop: 22, marginBottom: 4 },
+  /* ⛔ ONE RHYTHM, THE FULL WIDTH (design review 2026-09-01). A fixed gap of 34 bunched the three
+     figures against the start edge and left 45% of the row black — and the gaps measured unequal
+     because the digits differ in width. `space-between` spreads the trio across the row the sheet
+     owns, three instruments on one rail. */
+  figures: { flexDirection: 'row', justifyContent: 'space-between', alignSelf: 'stretch', paddingEnd: 24, marginTop: 22, marginBottom: 4 },
   figure: { gap: 4 },
   figureValue: {
     fontFamily: font.monoMedium,
     fontVariant: ['tabular-nums'],
-    fontSize: 34,
+    fontSize: 34, letterSpacing: trackingPx(34, tracking.figure), 
     lineHeight: 38,
     color: stage.ink0,
     textAlign: 'left',
@@ -294,7 +380,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 24 },
+  /* paddingBottom 24 → 56: the last row must clear the footer fade before the scroll ends. */
+  scroll: { paddingHorizontal: space.gutter, paddingTop: 10, paddingBottom: 56 },
   // 31 — the largest thing on the screen, because it is what tells her what today IS.
   title: { fontFamily: font.serif, fontSize: 31, lineHeight: 35, color: stage.ink0, textAlign: 'left' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 9, marginBottom: 6 },
@@ -306,4 +393,8 @@ const styles = StyleSheet.create({
   doneText: { fontFamily: font.sansMedium, fontSize: 17, color: stage.ink1, textAlign: 'left' },
   /* A.13 — a wash under the control, never a fade of it. */
   dim: { backgroundColor: 'rgba(241,238,229,0.10)' },
+
+  /* The "it has moved" state — the sheet's own gutter, and nothing else on it. */
+  moved: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter, gap: 10, paddingBottom: 60 },
+  movedBody: { fontFamily: font.sans, fontSize: 17, lineHeight: 24, color: stage.ink1, textAlign: 'left' },
 });

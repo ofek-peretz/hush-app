@@ -46,7 +46,6 @@
  * not touch the network, and knows nothing about any model or provider.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -56,7 +55,8 @@ import { EXERCISES, type Exercise } from '@/data/exercises';
 import { MOVEMENTS } from '@/data/movements';
 import { recentDecisions, type CoachDecision } from './coachLog';
 import type { CoachPlan } from './coachPlan';
-import { STARTING_INCREMENT, BAR_KG } from '@/engine/v5/constants';
+import { STARTING_INCREMENT } from '@/engine/v5/constants';
+import { emptyBarKg } from '@/engine/loadMath';
 // The one filter that decides whether an ease is still standing — shared with every other consumer.
 import { activeEases } from './painReport';
 
@@ -214,8 +214,14 @@ export interface FactProgrammeDay {
   name: string;
   /** Present only where the programme fixes a day (a long run belongs on Sunday). */
   day?: string;
-  /** Each item as the coach wrote it, with how many rounds its block runs. */
-  items: { ex: string; kind: string; rounds: number; reps?: [number, number]; load?: number | null; seconds?: number; metres?: number }[];
+  /**
+   * Each item as the coach wrote it, with how many rounds its block runs.
+   *
+   * `block` is present ONLY on items sharing a block with another — the circuit/superset seam, which
+   * the flattening would otherwise destroy. Two items carrying the same `block` are alternated round
+   * after round, with no pause between them. Absent means the item is a block of its own.
+   */
+  items: { ex: string; kind: string; rounds: number; block?: number; reps?: [number, number]; load?: number | null; seconds?: number; metres?: number }[];
 }
 
 export interface CoachFacts {
@@ -408,9 +414,19 @@ export interface FactExternal {
  */
 const SAME_WORKOUT_MS = 5 * 60_000;
 
-function externalFrom(workouts: ExternalWorkout[] | undefined, mine: CardioActivity[] | undefined): FactExternal[] {
+function externalFrom(
+  workouts: ExternalWorkout[] | undefined,
+  mine: CardioActivity[] | undefined,
+  /** Her strength sessions' start instants — Hush writes those to Health too now (2026-08-23),
+   *  and a coach told she ALSO did "traditionalStrengthTraining" on Tuesday is being told about
+   *  the session already on the sheet. Same ±5-minute rule as the runs. */
+  mySessions?: readonly { startedAt: string }[],
+): FactExternal[] {
   if (!workouts?.length) return [];
-  const ours = (mine ?? []).map((c) => Date.parse(c.startedAt)).filter(Number.isFinite);
+  const ours = [
+    ...(mine ?? []).map((c) => Date.parse(c.startedAt)),
+    ...(mySessions ?? []).map((s) => Date.parse(s.startedAt)),
+  ].filter(Number.isFinite);
   return workouts
     .filter((w) => {
       const at = Date.parse(w.at);
@@ -723,7 +739,7 @@ export function coachMovements(): FactMovement[] {
 export function coachEquipment(): Record<string, FactEquipment> {
   const out: Record<string, FactEquipment> = {};
   for (const [equipment, step] of Object.entries(STARTING_INCREMENT)) {
-    out[equipment] = { step, floor: equipment === 'barbell' ? BAR_KG : 0 };
+    out[equipment] = { step, floor: emptyBarKg(equipment as Parameters<typeof emptyBarKg>[0]) };
   }
   return out;
 }
@@ -931,17 +947,33 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
     ...(preferences?.keep && Object.keys(preferences.keep).length ? { keepsByHer: preferences.keep } : {}),
     ...(cardio?.length ? { ranOwn: cardioFrom(cardio) } : {}),
     ...(() => {
-      const alsoDid = externalFrom(external, cardio);
+      const alsoDid = externalFrom(external, cardio, history);
       return alsoDid.length ? { alsoDid } : {};
     })(),
     programme: (plan?.sessions ?? []).map((sess) => ({
       name: sess.name,
       ...(sess.day ? { day: sess.day } : {}),
-      items: sess.blocks.flatMap((b) =>
+      /*
+       * ⛔ THE FLATTENING WAS EATING HER SUPERSETS (2026-08-31).
+       *
+       * A session is blocks and a block is items — that is the vocabulary the coach WRITES in, and
+       * §"A session is blocks" in the prompt teaches it that a block of two items is a circuit she
+       * alternates. This line then handed the same coach its own programme with the blocks flattened
+       * away, so a pair she wrote in the builder and a pair the model wrote itself both arrived as
+       * two ordinary consecutive lifts. Reviewing that week, it could only ever answer about a week
+       * she is not doing — and its own session length is out by one rest per round.
+       *
+       * `block` is the seam, and it is the SAME field name `performed` already uses for the same
+       * idea, so the sheet keeps one vocabulary. Emitted ONLY where it says something — a block of
+       * one is a lift, and a number repeated down every line of every engine week is bytes paid to
+       * say nothing.
+       */
+      items: sess.blocks.flatMap((b, bi) =>
         b.items.map((i) => ({
           ex: i.ex,
           kind: i.kind,
           rounds: b.rounds,
+          ...(b.items.length > 1 ? { block: bi } : {}),
           ...(i.kind === 'reps' ? { reps: i.reps, load: i.load } : {}),
           ...(i.kind === 'time' ? { seconds: i.seconds } : {}),
           ...(i.kind === 'distance' ? { metres: i.metres } : {}),

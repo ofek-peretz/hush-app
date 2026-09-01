@@ -113,22 +113,27 @@ describe('everything that varies is below the breakpoint', () => {
   });
 
   it('puts the ask last, after the record', () => {
-    // The record is stable across the messages of one chat sitting; the message is not. Message
-    // last means a second message in the same sitting reuses everything above it.
-    const { blocks } = forYossi();
-    expect(blocks.at(-1)!.text).toContain('Can I swap the squat');
-    expect(blocks[1].text.startsWith('HER RECORD:')).toBe(true);
-  });
-
-  it('tells the intake that there is no record yet, rather than sending an empty one silently', () => {
+    /*
+     * ⛔ THIS USED A `chat` ASK ("Can I swap the squat…") AND THERE IS NO CHAT (2026-08-26). The
+     * ordering it pins is not about conversation, though — it is about CACHING: everything stable
+     * above the breakpoint, the ask below it, so a second call reuses the prefix. Asserted on a
+     * `revise`, which is the ask that still carries a sentence.
+     */
     const r = coachRequest({
       facts: coachFacts({ profile: dana, plan: null, history: [] }),
-      ask: { kind: 'intake', turns: [{ from: 'her', text: 'I want to be able to run a half marathon.' }] },
+      ask: { kind: 'revise', why: 'She has dropped to three days a week.' },
     });
-    const last = r.blocks.at(-1)!.text;
-    expect(last).toContain('intake');
-    expect(last).toContain('half marathon');
+    expect(r.blocks.at(-1)!.text).toContain('She has dropped to three days a week.');
+    expect(r.blocks[1].text.startsWith('HER RECORD:')).toBe(true);
   });
+
+  /*
+   * ⛔ THE INTAKE ASK IS DELETED, AND SO IS THE TEST OVER IT (2026-08-26). `intake` sent a
+   * transcript and asked the coach to keep asking until it knew enough; the intake conversation
+   * left the front door on 2026-08-04 (*"take the chat out of the front door"*) and nothing has
+   * built the ask since. Its sibling `first_programme` — build now, from the sheet, no conversation
+   * — is the ask that replaced it, and it is exercised above.
+   */
 });
 
 describe('the stable half is worth caching at all', () => {

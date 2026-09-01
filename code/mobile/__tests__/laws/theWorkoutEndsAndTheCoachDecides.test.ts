@@ -183,7 +183,7 @@ describe('the programme is required after a session', () => {
      * a second copy that omitted a field would be exactly the drift this assertion exists to catch.
      * It is not in `required`, so the post-session call simply never fills it.
      */
-    expect(Object.keys(schema.properties)).toEqual(['say', 'next', 'hurts', 'today', 'title', 'why', 'sessions', 'notes', 'learned', 'brief']);
+    expect(Object.keys(schema.properties)).toEqual(['say', 'next', 'hurts', 'title', 'why', 'sessions', 'notes', 'learned', 'brief']);
   });
 
   it('still reports honestly if the model manages to answer without one', async () => {

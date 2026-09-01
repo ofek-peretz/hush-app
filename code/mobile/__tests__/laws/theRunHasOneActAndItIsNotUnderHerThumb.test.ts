@@ -57,21 +57,25 @@ describe('⛔ pause is a disc in the chrome, not a target at the bottom edge', (
 });
 
 describe('what the freed space carries', () => {
-  it('⛔ PACE is on the live stage, in the seat that was repeating the band', () => {
+  it('⛔ the seat holds the DISTANCE, and no live pace exists on the stage (founder 2026-08-23)', () => {
     /*
-     * The row read "kilometre · heart · burn", and the kilometre is the same fact the band above it
-     * draws twice — as a count and as the metres riding under its dot. Pace had been computed every
-     * second since the tracker was written and drawn only on the pause stage and in a pill: the two
-     * places she is not running.
+     * RE-LITIGATED. This test used to pin the pace INTO the seat (his 2026-08-04 ruling); on
+     * 2026-08-23 he reversed it by name — *"אני לא רוצה שיופיע בזמן אמת מה הקצב לקילומטר"* —
+     * so the pace waits for the kilometre and the seat carries the run's total distance, which the
+     * ring (current-km metres only) stopped showing when it replaced the band. The full ruling is
+     * pinned in `thePaceWaitsForTheKilometre`; this test keeps only the seat's occupant.
      */
-    expect(cardio()).toContain("<LiveStat value={fmtPace(props.paceSec)} label={t('cardio.perKm')} />");
-    expect(cardio()).not.toContain("<LiveStat value={kmDone} label={t('cardio.km')} />");
+    /* ⚠️ The exact expression is no longer pinned here — see the same note in
+       `thePaceWaitsForTheKilometre`, which owns the formatting half. This test keeps the seat. */
+    expect(cardio()).toMatch(/<LiveStat value=\{distanceKm[^}]*\} label=\{kmUnit\} \/>/);
+    expect(cardio()).not.toContain("fmtPace(props.paceSec)");
   });
 
-  it('the run’s SHAPE is drawn, and only once a kilometre exists', () => {
-    // A bar chart with no bars is the empty slot `cardioLive`'s rhythm law was written about.
-    expect(cardio()).toContain('{splits.length > 0 ? (');
-    expect(cardio()).toContain('styles.shapeBar');
+  it('⛔ the poster draws no chart at all — it says the run in figures', () => {
+    /* Founder, 2026-08-28. The full argument is in `theRunClosesOnAPosterToo`, which owns this
+       ruling; here it only has to stay true of the file that used to draw it. */
+    expect(cardio()).not.toContain('<EffortShape');
+    expect(cardio()).not.toContain('styles.shapeBar');
   });
 
   it('⚠️ and the bars stay FURNITURE — no numbers, no axis, no labels on them', () => {
@@ -93,17 +97,20 @@ describe('what the freed space carries', () => {
 });
 
 describe('a run the coach wrote has an end, and a free run does not', () => {
-  it('⚠️ the band spans the TARGET when there is one', () => {
+  /*
+   * ⛔ RE-LITIGATED 2026-08-24 (founder, build-58 QA): the RING left the live stage — the list
+   * is the instrument now (*"לכל קילומטר שורה משלו עם הקלוריות והזמן… לא חייב את הטבעת"*).
+   * What survives of the old pins: a prescribed run STATES its end (the quiet target line) and a
+   * free run never has one invented; and the live top row moves on the current kilometre alone.
+   */
+  it('⚠️ a prescribed run states its end — the quiet target line', () => {
     expect(cardio()).toContain('const target = props.targetMetres && props.targetMetres > 0 ? props.targetMetres : null;');
-    expect(cardio()).toContain('const spanM = target ?? 1000;');
+    expect(cardio()).toContain("t('cardio.targetEnd'");
   });
 
-  it('⛔ and it never invents an end for a run she started herself', () => {
-    /*
-     * A free run has no distance to draw toward, and deciding one would be the app deciding how far
-     * she is going. There the band stays on the current kilometre, exactly as it always has.
-     */
-    expect(cardio()).toContain("target ? Math.min(metresTotal, target) : metresTotal % 1000");
+  it('⛔ and a free run never invents one — the live row is the current kilometre alone', () => {
+    expect(cardio()).toContain('const metresIntoKm = metresTotal % 1000;');
+    expect(cardio()).toContain("t('cardio.kmOrdinal', { n: kmDone + 1 })");
   });
 
   it('the run carries its own name, and falls back rather than blanking', () => {
@@ -115,7 +122,17 @@ describe('a run the coach wrote has an end, and a free run does not', () => {
      * ⚠️ CAUGHT DURING THE BUILD: `runName` was declared, drawn and passed by nothing — the
      * "written, wired, drawn nowhere" failure inverted, and the one this codebase keeps producing.
      * A prop with no source is a prop that renders its fallback for ever while looking finished.
+     *
+     * ⛔ AND THIS LINE PINNED THE BYPASS (2026-08-27). It asserted the exact text
+     * `runName: movementById(target.ex)!.name` — a direct read of the catalogue's raw ENGLISH
+     * field, which is what titled the live run stage `Run` in a Hebrew app. The law was doing its
+     * real job (the prop is fed) through a string that also froze *how*, so the defect could not be
+     * fixed without failing the test that was meant to protect the feature.
+     *
+     * It pins the two things it actually means now: the name is fed FROM the target, and it is fed
+     * THROUGH the display path. `everyLiftHasAHebrewName` owns the second half as well.
      */
-    expect(cardio()).toContain('runName: movementById(target.ex)!.name');
+    expect(cardio()).toContain('runName: exerciseDisplayName(target.ex)');
+    expect(cardio()).toContain('target?.ex && movementById(target.ex)');
   });
 });

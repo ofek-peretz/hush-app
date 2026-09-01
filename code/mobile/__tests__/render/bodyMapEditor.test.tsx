@@ -57,23 +57,57 @@ function session(exerciseId: string): Session {
 }
 
 const saved: Array<Record<string, unknown>> = [];
+/**
+ * What the store answers, and what she is told about it.
+ *
+ * `updateProfileInfo` resolves TRUE only when the week was actually rebuilt — a week she brought is
+ * not ours to rewrite, so the save can land while the programme stays exactly as it was. The screen
+ * has to be able to tell those apart, and a storage throw from a third thing again.
+ */
+let mockRebuilt: boolean | 'throw' = true;
+let mockDays = 4;
+const mockToasts: string[] = [];
 
 jest.mock('@/state/stores/appStore', () => ({
   useApp: () => ({
-    profile: { bodyMap: {}, repBandByMuscle: {} },
-    updateProfileInfo: async (f: Record<string, unknown>) => void saved.push(f),
+    profile: { bodyMap: {}, repBandByMuscle: {}, daysPerWeek: mockDays },
+    updateProfileInfo: async (f: Record<string, unknown>) => {
+      saved.push(f);
+      if (mockRebuilt === 'throw') throw new Error('the disk said no');
+      return mockRebuilt;
+    },
   }),
 }));
 jest.mock('@/components/ds', () => {
   const actual = jest.requireActual('@/components/ds');
-  return { ...actual, useToast: () => ({ show: () => {} }) };
+  return { ...actual, useToast: () => ({ show: (m: string) => mockToasts.push(m) }) };
 });
 
+/*
+ * ⛔ WHAT IS MOUNTED HERE IS UNMOUNTED (2026-08-27).
+ *
+ * This suite created renderers and never tore them down. It costs nothing while the screen is
+ * static — and turns into a worker-killing crash the moment that screen gains an ARRIVAL:
+ * `Arrive` schedules a native-driver animation on a delay, jest tears the environment down while
+ * one is still pending, and it wakes into a renderer that no longer exists —
+ *
+ *     TypeError: Cannot read properties of undefined (reading 'findNodeHandle')
+ *
+ * printed AFTER "Ran all test suites", belonging to no test. Caught for real on
+ * `weeklyUpdateScreen` the day the letter learnt to arrive; closed here BEFORE this screen does.
+ */
+const mounted: ReactTestRenderer[] = [];
+afterEach(() => {
+  act(() => {
+    while (mounted.length) mounted.pop()!.unmount();
+  });
+});
 function mount(el: React.ReactElement): ReactTestRenderer {
   let r!: ReactTestRenderer;
   act(() => {
     r = renderer.create(<SafeAreaProvider initialMetrics={METRICS}>{el}</SafeAreaProvider>);
   });
+  mounted.push(r);
   return r;
 }
 
@@ -155,6 +189,9 @@ async function open(history: Session[]) {
 
 beforeEach(() => {
   saved.length = 0;
+  mockToasts.length = 0;
+  mockRebuilt = true;
+  mockDays = 4;
   jest.restoreAllMocks();
 });
 
@@ -216,5 +253,104 @@ describe('the map that is saved is the map she drew', () => {
     expect(byLabel(r, `${tg('muscle.Shoulders')} — 12-15`)).toBeNull();
     // …while the stance rungs are still there, because turning it back on must stay one tap away.
     expect(byLabel(r, `${tg('muscle.Shoulders')} — ${tg('ob.stanceNormal')}`)).not.toBeNull();
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ WHAT THE SCREEN TELLS HER WHEN SHE PRESSES SAVE (found 2026-08-18).
+ *
+ * Three faults, all of them in the four lines of `save()`, and none of them visible to a typecheck:
+ *
+ *   · a `db.saveProfile` that threw was an unhandled rejection — no toast, no error, `touched` left
+ *     true, and the map she drew lost the moment she walked away;
+ *   · the toast promised *"your week was rebuilt to match"* unconditionally, including for the
+ *     athlete whose week is her coach's and is deliberately left alone;
+ *   · and the back arrow discarded every unsaved stance in silence, on the one profile surface that
+ *     is not instant-apply.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ pressing save says what actually happened', () => {
+  it('a rebuilt week is announced as one', async () => {
+    const r = await open([]);
+    tap(r, 'Back', 'Emphasis');
+    await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
+    expect(mockToasts).toEqual([tg('profileEdit.savedDays')]);
+  });
+
+  it('⛔ …and a week she BROUGHT is not claimed to have been rebuilt', async () => {
+    // `updateProfileInfo` returns without rebuilding when the week is authored — so the sentence
+    // about her programme changing is a claim the store had just decided not to make.
+    mockRebuilt = false;
+    const r = await open([]);
+    tap(r, 'Back', 'Emphasis');
+    await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
+    expect(mockToasts).toEqual([tg('library.savedNoRebuild')]);
+    expect(mockToasts.join(' ')).not.toContain(tg('profileEdit.savedDays'));
+  });
+
+  it('⛔ a save that FAILS is said out loud, and she is not left thinking it landed', async () => {
+    mockRebuilt = 'throw';
+    const r = await open([]);
+    tap(r, 'Back', 'Emphasis');
+    await act(async () => byLabel(r, tg('profileEdit.save'))!.props.onPress());
+    expect(mockToasts).toEqual([tg('library.saveFailed')]);
+    // …and the button is live again, because there is still something unsaved to try with.
+    expect(byLabel(r, tg('profileEdit.save'))!.props.accessibilityState?.disabled).toBe(false);
+  });
+});
+
+describe('⛔ the back arrow does not throw her map away', () => {
+  /** Mount with a spy on `goBack`, so leaving can be watched as well as counted. */
+  async function openWithBack(): Promise<{ r: ReactTestRenderer; backs: number[] }> {
+    jest.spyOn(db, 'loadHistory').mockResolvedValue([]);
+    const backs: number[] = [];
+    const nav = { goBack: () => backs.push(1), navigate: () => {} };
+    let r!: ReactTestRenderer;
+    await act(async () => {
+      r = mount(<BodyMapEdit navigation={nav as never} route={{ params: undefined } as never} />);
+    });
+    return { r, backs };
+  }
+  const back = (r: ReactTestRenderer) => byLabel(r, tg('common.back'))!;
+
+  it('an unsaved stance is SAVED on the way out, not discarded in silence', async () => {
+    const { r, backs } = await openWithBack();
+    tap(r, 'Back', 'Emphasis'); // …and she never presses Save
+    await act(async () => back(r).props.onPress());
+    expect(saved).toHaveLength(1);
+    expect(saved[0].bodyMap).toEqual({ Back: 'emphasis' });
+    expect(backs).toHaveLength(1); // …and she still leaves
+  });
+
+  it('nothing touched writes nothing — leaving is not an edit', async () => {
+    const { r, backs } = await openWithBack();
+    await act(async () => back(r).props.onPress());
+    expect(saved).toHaveLength(0);
+    expect(backs).toHaveLength(1);
+  });
+});
+
+describe('⛔ the editor promises exactly what her week can honour', () => {
+  /*
+   * ⛔ FOUNDER, 2026-08-12 — the same defect onboarding was fixed for: the line read "pick up to two"
+   * on a week that can hold one, so his second mark being refused looked like a fault rather than
+   * the rule. This screen hardcoded the two-lead copy while `onboarding/BodyMap` asked
+   * `emphasisBudgetFor(days)`, and this file's own header says the two can never disagree.
+   */
+  it('a three-day week is promised ONE lead, not two', async () => {
+    mockDays = 3;
+    const r = await open([]);
+    const out = texts(r).join('\n');
+    expect(out).toContain(tg('ob.mapSubOne'));
+    expect(out).toContain(tg('ob.mapEmphasisOne', { n: 0 }));
+    expect(out).not.toContain(tg('ob.mapSub'));
+  });
+
+  it('…and a four-day week is still promised two', async () => {
+    const r = await open([]);
+    const out = texts(r).join('\n');
+    expect(out).toContain(tg('ob.mapSub'));
+    expect(out).toContain(tg('ob.mapEmphasis', { n: 0 }));
   });
 });

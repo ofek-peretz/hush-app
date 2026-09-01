@@ -3,7 +3,6 @@
  * so callers can act correctly (retry vs drop) and so failures are OBSERVABLE
  * and distinguishable in telemetry — not collapsed into "offline".
  */
-// @ts-nocheck
 
 // 
 

@@ -12,7 +12,8 @@ id = "14a55c2d60944fdfb81d9895cf6b7a66"
 # Two new endpoints ride this worker; both work with ZERO new bindings, and each arms with one
 # operator step from the founder's machine:
 #   /events  → forwards telemetry batches to the analytics store. Until the secrets exist it
-#              answers 204 and drops (by design — the app is never broken by an unarmed sink):
+#              answers 503 and the app KEEPS its outbox (reversed 2026-09-01 — a 204 here made the
+#              client delete every event in production while the pipeline looked green):
 #                npx wrangler secret put EVENTS_URL    (e.g. https://eu.i.posthog.com/batch)
 #                npx wrangler secret put EVENTS_KEY    (the PostHog project api_key)
 #   /config  → serves ONE KV entry as the app's remote tunables (trial length, time cap):

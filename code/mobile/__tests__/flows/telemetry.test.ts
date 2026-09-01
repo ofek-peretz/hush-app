@@ -5,18 +5,16 @@
 
 // 
 
-jest.mock('@/data/api/config', () => ({
-  getBaseUrl: () => 'http://test',
-  getToken: async () => 'tok',
-}));
+// (The v4 `@/data/api/config` mock lived here. The module is deleted; nothing to mock.)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { track, trackFirst, flush, __resetForTest } from '@/platform/telemetry';
+import { track, trackFirst, flush, shipToSink, __resetForTest, __setSinkUrlForTest } from '@/platform/telemetry';
 import { db } from '@/data/local/db';
 
 beforeEach(async () => {
   await AsyncStorage.clear();
   __resetForTest();
+  __setSinkUrlForTest(''); // each suite opts into a sink explicitly
 });
 
 describe('telemetry buffering', () => {
@@ -44,37 +42,94 @@ describe('telemetry buffering', () => {
   });
 });
 
-describe('telemetry flush', () => {
-  it('ships the buffer to /telemetry and clears it on success', async () => {
-    let posted: unknown = null;
-    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async (url: string, init: { body: string }) => {
-      if (url.endsWith('/telemetry')) posted = JSON.parse(init.body);
-      return { ok: true, status: 200, json: async () => ({ accepted: 1 }) };
-    });
+describe('telemetry flush — the journal contract (v4 sink deleted, 2026-08-25)', () => {
+  /*
+   * `flush()` used to POST to the v4 backend's /telemetry and clear what shipped. That sink is
+   * gone (founder: "איזה V4? אנחנו ב-v8"), and in every real build it was unreachable anyway —
+   * no base URL was ever set, so the journal was already the whole record in the field. The
+   * contract its ~10 "ship before the wipe" call sites rely on is now: nothing recorded is lost,
+   * nothing leaves the device, and the journal stays bounded.
+   */
+  it('keeps the record on the device — with no sink configured, flush persists and never fetches', async () => {
+    const fetchSpy = jest.fn();
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchSpy;
     await track('enrolled', {});
     await flush();
-    expect(posted).toHaveProperty('events');
-    expect(await db.loadTelemetry()).toHaveLength(0);
+    expect(await db.loadTelemetry()).toHaveLength(1); // delivered = durably journaled
+    expect(fetchSpy).not.toHaveBeenCalled(); // no URL, no wire — a build without a sink says so
+    expect(await db.loadTelemetryOutbox()).toHaveLength(0); // and no outbox accumulates for nobody
   });
 
-  it('keeps the buffer when the sink is unreachable', async () => {
-    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => {
-      throw new Error('offline');
-    });
+  it('a crash event survives a flush — the case the wipe call sites exist for', async () => {
     await track('crash', { message: 'x' });
     await flush();
-    expect(await db.loadTelemetry()).toHaveLength(1); // not lost
+    expect(await db.loadTelemetry()).toHaveLength(1);
   });
 });
 
-describe('secure token storage', () => {
-  it('round-trips the token via SecureStore (not AsyncStorage)', async () => {
-    const { setToken, getToken, clearToken } = jest.requireActual('@/data/api/config');
-    await setToken('secret-token');
-    expect(await getToken()).toBe('secret-token');
-    // never written to AsyncStorage
-    expect(await AsyncStorage.getItem('hush_auth_token')).toBeNull();
-    await clearToken();
-    expect(await getToken()).toBeNull();
+/*
+ * The 'secure token storage' suite ended here. It round-tripped `config.setToken` through
+ * SecureStore — the vault for the v4 backend's bearer token. The module is deleted; the only
+ * token Hush holds today is the circle session's, vaulted by `platform/circleClient` and covered
+ * by its own tests.
+ */
+
+describe('the sink — the wire the journal never had (2026-09-01)', () => {
+  /*
+   * With a URL configured, `track` grows an OUTBOX beside the journal and `flush` ships it.
+   * The journal's own contract above is untouched: it never shrinks on delivery, and a failed
+   * ship costs nothing but a retry at the next flush.
+   */
+  const okResponse = { ok: true, status: 204 };
+
+  it('ships the outbox on flush and empties it on success — the journal stays whole', async () => {
+    __setSinkUrlForTest('https://sink.example/events');
+    const fetchSpy = jest.fn(async () => okResponse);
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchSpy;
+    await track('enrolled');
+    await track('paywall_viewed', { source: 'gate' });
+    expect(await db.loadTelemetryOutbox()).toHaveLength(2);
+    await flush();
+    expect(fetchSpy).toHaveBeenCalledTimes(1); // one batch, one POST
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    expect(body.v).toBe(1);
+    expect(body.events.map((e) => e.type)).toEqual(['enrolled', 'paywall_viewed']);
+    expect(await db.loadTelemetryOutbox()).toHaveLength(0); // delivered
+    expect(await db.loadTelemetry()).toHaveLength(2); // the journal never shrinks on delivery
+  });
+
+  it('⚠️ a funnel event ships THE MOMENT it happens — the abandoner never reaches a flush (audit 2)', async () => {
+    __setSinkUrlForTest('https://sink.example/events');
+    const fetchSpy = jest.fn(async () => okResponse);
+    (global as unknown as { fetch: jest.Mock }).fetch = fetchSpy;
+    await track('funnel_start_reached');
+    // No flush was called. The event is already on the wire: the funnel's whole audience is the
+    // athlete who abandons, and she, by definition, never reaches the screens that flush.
+    await new Promise((r) => setTimeout(r, 0)); // the ship is fire-and-forget; let it land
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(await db.loadTelemetryOutbox()).toHaveLength(0);
+    expect(await db.loadTelemetry()).toHaveLength(1); // the journal, as ever, keeps its copy
+  });
+
+  it('a sink failure keeps the outbox — the next flush retries', async () => {
+    __setSinkUrlForTest('https://sink.example/events');
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => ({ ok: false, status: 502 }));
+    await track('enrolled');
+    await flush();
+    expect(await db.loadTelemetryOutbox()).toHaveLength(1); // nothing was lost to a bad sink
+  });
+
+  it('offline (fetch throws) is silent and lossless — telemetry may never crash the app', async () => {
+    __setSinkUrlForTest('https://sink.example/events');
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => {
+      throw new Error('offline');
+    });
+    await track('enrolled');
+    await expect(flush()).resolves.toBeUndefined(); // no throw reaches a caller
+    expect(await db.loadTelemetryOutbox()).toHaveLength(1);
+    // ...and the moment the network returns, the same events deliver.
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn(async () => okResponse);
+    expect(await shipToSink()).toBe(true);
+    expect(await db.loadTelemetryOutbox()).toHaveLength(0);
   });
 });

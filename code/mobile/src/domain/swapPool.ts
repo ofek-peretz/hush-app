@@ -31,7 +31,6 @@
  * ledger constants (Part 6) and must never be read as engine law. They order a menu; the athlete
  * chooses, and whatever she performs is the fact the loops read (F-2/S-14).
  */
-// @ts-nocheck
 
 // 
 
@@ -43,6 +42,7 @@ import {
   SUPPORT_RANK,
   type Exercise,
 } from '@/data/exercises';
+import { inRoom } from '@/domain/room';
 
 /**
  * ════ WHEN THE SWAP VERB IS OFFERED ON THE STAGE ════
@@ -85,6 +85,60 @@ export function isSwapMoment(setIndexInExercise: number, exerciseIndexInSession 
   return setIndexInExercise === 0 && exerciseIndexInSession === 0;
 }
 
+/**
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE SUBSTITUTIONS THE ASSEMBLER ACTUALLY HONOURS — declared first, learned behind it.
+ *
+ * ⛔ FOUNDER, 2026-08-22: *"אי אפשר ממש להכנס לתוכנית האימון שלנו ולהחליף תרגיל לתרגיל שנמצא
+ * בספרייה."*
+ *
+ * Two maps hold the same shape and mean different things, and `db.OwnedPreferences` states the rule
+ * they live under: **a DECLARATION is not evidence and is never overridden by inference.**
+ *
+ *   · `declaredSubs` — she named both sides, once, with time to think.
+ *   · `substitutes`  — the K=2 fold's belief about what she keeps doing, and the engine's own
+ *     graduations and rotations. **The fold clears entries it stops believing.**
+ *
+ * So a collision resolves to the declaration, and the learned entry is left standing underneath it
+ * rather than deleted — because the day she takes her declaration back, what she has been *doing*
+ * is still the best thing to fall to.
+ *
+ * ⚠️ ONE MERGE, ONE PLACE. Two call sites in `fixtureModel` feed the assembler, and a screen that
+ * merged them itself would eventually disagree with the week it is drawing.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+export function effectiveSubstitutes(prefs: {
+  substitutes?: Record<string, string>;
+  declaredSubs?: Record<string, string>;
+}): Record<string, string> {
+  const learned = { ...(prefs.substitutes ?? {}) };
+  const declared = prefs.declaredSubs ?? {};
+  /*
+   * ⛔⛔ A DECLARATION IS TERMINAL — the walk STOPS at the lift she named (found in the verification
+   * pass, 2026-08-22, and it was a real hole).
+   *
+   * `programAssembly.resolveChain` follows substitutions transitively, which is right and is what
+   * makes a graduated swap resolve (`bench → knee_push_up → push_up`). But a plain merge let a
+   * LEARNED entry keyed on her declared TARGET carry the walk straight past her: she declares
+   * `bench → machine_press`, the K=2 fold has separately learned `machine_press → cable_fly`, and
+   * the week hands her the fly. **She asked for the machine press by name and got something else,
+   * by inference** — the exact thing `db.OwnedPreferences` forbids: *"a declaration is never
+   * overridden by inference."*
+   *
+   * So a learned entry whose KEY is a declared target is dropped from the map the assembler walks.
+   * It is not deleted from storage — nothing here writes — so it comes back the moment she takes
+   * the declaration off that lift.
+   *
+   * ⚠️ THE HONEST COST: an ENGINE enactment on her declared lift (a bodyweight graduation, a
+   * stall rotation) is stopped too, because both are written to the same learned map and this
+   * cannot tell them apart from here. That is the conservative direction — the engine keeps
+   * deciding her LOAD on that lift, and the one thing it may not do is quietly hand her a
+   * different exercise than the one she asked for by name.
+   */
+  for (const target of Object.values(declared)) delete learned[target];
+  return { ...learned, ...declared };
+}
+
 /** The athlete's standing preferences for a lift, if they have set any. */
 export interface SwapPrefs {
   /** "Whenever you give me X, give me Y instead." */
@@ -101,6 +155,13 @@ export interface SwapContext {
    */
   sessionExerciseIds: readonly string[];
   prefs?: SwapPrefs;
+  /**
+   * THE ROOM (2026-09-01, audit 06) — `Profile.equipment`, when the caller has a profile in hand.
+   * A swap menu offering a cable fly to a garage with no cable stack is furniture; candidates her
+   * room cannot hold are filtered out. Her PINNED lifts (S-69/S-70 standing choices) pass anyway —
+   * they are her own word, and her word outranks the furniture list. Absent = full gym, as ever.
+   */
+  equipment?: readonly import('@/data/exercises').EquipmentFamily[];
 }
 
 /* ── The score ────────────────────────────────────────────────────────────────────────────────
@@ -127,6 +188,13 @@ const PENALTY_REGRESSION = 60;
  *  family is very slightly worse — a tie-break, not a rule (two different machines are two
  *  different stations, so this must never outweigh fidelity). */
 const PENALTY_SAME_EQUIPMENT = 5;
+/** The same PHYSICAL station is not an alternative to itself. `station` is set only where two
+ *  catalogue lifts genuinely share one piece of equipment (the pulldown seat and its close-grip
+ *  handle — batch 2, 2026-08-26, when the close grip's near-perfect fidelity score put "swap the
+ *  attachment on the machine you cannot get on" at the top of the list). Heavier than every
+ *  availability term — the pull-up's 50 must beat it — but lighter than a different movement:
+ *  the swap menu also answers "I don't want this iron today", so the sibling stays offered. */
+const PENALTY_SAME_STATION = 55;
 
 /** Can this exercise carry external load? */
 const loadable = (e: Exercise): boolean => !e.bodyweight && e.equipment !== 'bodyweight';
@@ -144,6 +212,7 @@ export function swapScore(current: Exercise, candidate: Exercise): number {
   if (loadable(current) && !loadable(candidate)) score += PENALTY_UNLOADABLE;
   if (candidate.regression) score += PENALTY_REGRESSION;
   if (candidate.equipment === current.equipment) score += PENALTY_SAME_EQUIPMENT;
+  if (candidate.station && candidate.station === current.station) score += PENALTY_SAME_STATION;
   return score;
 }
 
@@ -192,7 +261,11 @@ export function swapCandidates(currentId: string, ctx: SwapContext): Exercise[] 
   if (!current) return [];
 
   const excluded = excludedSet(ctx.sessionExerciseIds);
-  const pool = exercisesForMuscle(current.muscle).filter((e) => admissible(current, e, excluded));
+  const pool = exercisesForMuscle(current.muscle)
+    .filter((e) => admissible(current, e, excluded))
+    // The room (see `SwapContext.equipment`): the scored pool respects it; the pinned lifts below
+    // are her own standing word and are deliberately NOT run through this filter.
+    .filter((e) => inRoom(e, ctx.equipment));
 
   const scored = pool
     .map((e, i) => ({ e, score: swapScore(current, e), i }))
@@ -293,6 +366,37 @@ export function swapChoices(currentId: string, ctx: SwapContext, limit: number =
     for (const e of others) {
       if (out.length >= 1) break;
       out.push({ exercise: e, sameMovement: false });
+    }
+  }
+
+  /*
+   * ⚠️ THE MENU SPANS BOTH ROOMS (founder gym finding #7, 2026-08-25). He was handed a dumbbell
+   * row, did not want free weights that day, opened the swap — and every row was another free-iron
+   * row (the same-pattern synonyms all live in the free room), so the machine row he actually did
+   * never appeared and got logged as a lift it wasn't. A swap menu answers two questions — "this
+   * station is taken" and "I don't want this iron today" — and a menu drawn from one room only
+   * answers the first. So: when every earned row sits in one room (free iron: barbell / fixed bar /
+   * dumbbell / bodyweight · stations: machine / cable) and the other room has an admissible
+   * candidate, the LAST score-chosen row yields its seat to the other room's best. Pins are never
+   * displaced (S-69/S-70 outrank variety), the menu never grows past its earned size (the
+   * round-up-to-three rule above stands), and the row is labelled honestly — a cross-room offer is
+   * usually a different `pattern`, and `sameMovement` says so.
+   */
+  const isStation = (e: Exercise) => e.equipment === 'machine' || e.equipment === 'cable';
+  /** The movement STEM: `row` and `row_supported` are one shape with the support axis baked into
+   *  the pattern name; a fill from the other room must share it, so a fly never yields to a press. */
+  const stem = (p: string) => p.replace(/_(supported|shortened|lengthened)$/, '');
+  const scoreChosen = out.length - Math.min(pinned.length, out.length);
+  if (out.length >= 2 && scoreChosen > 0) {
+    const missing = out.every((c) => !isStation(c.exercise)) ? 'station' : out.every((c) => isStation(c.exercise)) ? 'free' : null;
+    if (missing) {
+      const fill = rest.find(
+        (e) =>
+          (missing === 'station' ? isStation(e) : !isStation(e)) &&
+          stem(e.pattern) === stem(current.pattern) &&
+          !out.some((c) => c.exercise.id === e.id),
+      );
+      if (fill) out[out.length - 1] = { exercise: fill, sameMovement: fill.pattern === current.pattern };
     }
   }
   return out;

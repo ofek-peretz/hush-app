@@ -53,7 +53,6 @@
  * Pure — every phase is reachable from props, which is the only way anyone sees the middle two.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -95,10 +94,46 @@ export interface BuildingProgrammeViewProps {
    */
   /** The muscles considered, in order. Drawn as they arrive. */
   muscles: BuildMuscle[];
+  /**
+   * ⛔ WHOSE BODY IS BEING BUILT (founder, device QA 2026-08-23: *"אם אני בוחר את הגוף הגברי,
+   * באנימציה זה מציג את הגוף הנשי"*). `BodyMapFigure` defaults an ABSENT sex to the female figure —
+   * the right default for the app at large — and this screen never passed one, so a man watched his
+   * programme being assembled onto a woman's body, one step after telling the app he is a man. The
+   * intake carries the answer (`inputs.sex`); it just never arrived here.
+   */
+  sex?: 'female' | 'male';
   /** The programme's name, when the coach has given one — movement three. */
   programmeName?: string | null;
   /** "7 muscles · 22 lifts", under the name. */
   summary?: string | null;
+  /**
+   * ⛔ SOMETHING SHE HAS TO BE TOLD, ABOVE THE WEEK BEING BUILT.
+   *
+   * The one caller is a failed import. Her sheet could not be read, she is being given a generated
+   * week instead, and until now the screen said nothing at all about it — the container's own
+   * comment claimed *"the import screen told her why"*, and that screen had been dismissed the
+   * instant the read started. She finished the intake believing she was on her coach's programme.
+   */
+  note?: string | null;
+  /**
+   * ⛔ HER OWN SENTENCE, QUOTED BACK WHILE THE MODEL WRITES (founder 2026-08-29: *"להמחיש את זה
+   * שזה עם AI"*).
+   *
+   * This is the AI signature, and it is the only honest one available. A badge saying "AI", a
+   * sparkle, a row of typing dots — each is a CLAIM about what is happening, and this product does
+   * not decorate claims (the founder's own rulings: *"תוריד את המשבצות האלה"*, *"a texture must
+   * never imitate an absence"*). Her words on the screen are not a claim; they are evidence. She
+   * wrote *"דגש על ישבן, בלי מוט ישר"*, and the only thing that could put that sentence above a
+   * body filling with glute work is something that read it.
+   *
+   * ⚠️ IT LEAVES WHEN THE NAME ARRIVES. Movement three is the delivery, and the brief it was built
+   * from is *"a crescendo composed as a collapse"* — what the name must not do is share the top of
+   * the screen with the question it answered.
+   *
+   * ⚠️ ABSENT ON THE LOCAL PATH, and that is the point: the engine did not read a sentence, so
+   * quoting one would be the app taking credit for a conversation it never had.
+   */
+  askedFor?: string | null;
 }
 
 const NOOP = () => {};
@@ -183,6 +218,21 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
           ⛔ ABOVE the week, not instead of it. See the header note: this used to be the branch that
           replaced the list, and the delivery beat was the one where the screen emptied.
         */}
+        {props.note ? (
+          <Arrive order={0} style={styles.noteRow}>
+            <Text style={styles.noteText}>{props.note}</Text>
+          </Arrive>
+        ) : null}
+
+        {/* See `askedFor`. Quoted, because a quotation is the one punctuation that says "these are
+            not our words" without a line of prose explaining it. */}
+        {!named && props.askedFor ? (
+          <Arrive order={0} style={styles.askedRow}>
+            <Legend size={17} track={0.14} style={styles.askedLegend}>{t('ob.buildingAround')}</Legend>
+            <Text style={styles.askedText} numberOfLines={3}>{`“${bidi(props.askedFor)}”`}</Text>
+          </Arrive>
+        ) : null}
+
         {named ? (
           <Arrive order={0} style={styles.namedHead}>
             <View style={styles.namedRule} />
@@ -216,7 +266,7 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
         */}
         <View style={styles.body}>
           <View style={styles.figureStage}>
-            <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} />
+            <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} sex={props.sex} />
           </View>
 
           {/*
@@ -311,6 +361,14 @@ const styles = StyleSheet.create({
   feedLift: { fontFamily: font.sansMedium, fontSize: 19, lineHeight: 25, color: stage.ink0, textAlign: 'center' },
 
   /* ── the name — a HEAD over the finished week, not a screen that replaces it ── */
+  /* Quiet, above the week, and never in place of it — the same rule the name obeys. */
+  /* Her sentence, above the body. `ink2` on the legend and `ink1` on the words: the quotation is
+     the subject, the label over it is only saying whose it is. */
+  askedRow: { paddingHorizontal: 4, paddingBottom: 16, gap: 6 },
+  askedLegend: { color: stage.ink2 },
+  askedText: { fontFamily: font.serif, fontSize: 22, lineHeight: 30, color: stage.ink0, textAlign: 'left' },
+  noteRow: { paddingHorizontal: 4, paddingBottom: 14 },
+  noteText: { fontFamily: font.sans, fontSize: 17, lineHeight: 24, color: stage.ink1, textAlign: 'left' },
   namedHead: { paddingHorizontal: space.gutter, paddingTop: 14 },
   namedRule: { height: 1, backgroundColor: 'rgba(241,238,229,0.14)', marginBottom: 18 },
   // The largest type in onboarding. A playlist without a name is a list of songs.

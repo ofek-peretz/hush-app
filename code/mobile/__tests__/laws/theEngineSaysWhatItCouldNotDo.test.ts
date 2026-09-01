@@ -58,7 +58,11 @@ describe('⛔ the one sentence about her week', () => {
     expect(unavoidable(weekFindings(p, inputs)).length).toBeGreaterThan(0);
     const n = weekNotice(p, inputs, 60);
     expect(n).not.toBeNull();
-    expect(n.key.startsWith('weekNotice.thin')).toBe(true);
+    // Since the hour prices the warm-ups (2026-08-25), a two-day full-body week can ALSO carry a
+    // day that genuinely cannot fit — and the ranking's own law puts "does not fit today" above
+    // "cannot reach the dose". Either sentence is the engine saying the unfixable thing out loud;
+    // the thin FINDING itself is asserted unconditionally above.
+    expect(n.key.startsWith('weekNotice.thin') || n.key === 'weekNotice.over').toBe(true);
     // …and the sentence resolves to real copy in both languages, with the remedy in it.
     expect(tg(n.key, n.params).length).toBeGreaterThan(20);
     expect(tg(n.key, n.params)).not.toContain(n.key);

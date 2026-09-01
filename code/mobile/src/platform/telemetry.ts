@@ -82,6 +82,13 @@ export async function track(type: string, data?: Record<string, unknown>): Promi
     if (buffer.length > BUFFER_CAP) buffer = buffer.slice(-BUFFER_CAP);
     await db.saveTelemetry(buffer);
     await enqueueForSink(buffer[buffer.length - 1]);
+    /*
+     * A funnel event ships THE MOMENT IT HAPPENS, not at the next flush. The funnel's whole
+     * audience is the athlete who abandons — and she, by definition, never reaches the screens
+     * that flush. Funnel events are rare (a handful per install, ever), so this costs a handful
+     * of extra POSTs per lifetime against the one cohort the dataset exists to see.
+     */
+    if (type.startsWith('funnel_')) void shipToSink();
     breadcrumb(type, data);
   } catch {
     // swallow — observability must never crash the app
@@ -122,12 +129,44 @@ let sinkUrl =
 export function __setSinkUrlForTest(url: string): void {
   sinkUrl = url;
 }
-const OUTBOX_CAP = 500; // bounded like the journal; oldest undelivered drop first
+// Bounded EXACTLY like the journal — it was 500 against the journal's 1000, which meant a heavy
+// offline fortnight silently dropped the OLDEST undelivered events, and the oldest are the funnel
+// ones (audit finding 2). Two buffers, one capacity, one truth.
+const OUTBOX_CAP = 1000;
 const SHIP_BATCH = 100; // one POST per batch — a year of quiet use ships in a handful of calls
 let shipping = false; // one ship at a time; a second flush during a ship is a no-op for the wire
 
+/**
+ * ════ THE OPT-OUT (2026-09-01, audit finding 4) ════
+ *
+ * One switch in You → gates the WIRE and only the wire. The journal keeps writing — a device
+ * debugging itself is not analytics, and a crash report she consented to still deserves its
+ * breadcrumbs — but nothing leaves the phone while this is true. Cached in memory because it is
+ * read on every event; re-read from disk at boot via `refreshTelemetryOptOut`.
+ */
+let optedOut = false;
+export async function refreshTelemetryOptOut(): Promise<void> {
+  try {
+    optedOut = await db.loadTelemetryOptOut();
+  } catch {
+    /* default: the wire ships */
+  }
+}
+export async function setTelemetryOptOut(on: boolean): Promise<void> {
+  optedOut = on;
+  try {
+    await db.saveTelemetryOptOut(on);
+    if (on) await db.saveTelemetryOutbox([]); // she said stop — undelivered events stop existing
+  } catch {
+    /* the in-memory latch still holds for this run */
+  }
+}
+export function telemetryOptedOut(): boolean {
+  return optedOut;
+}
+
 async function enqueueForSink(ev: TelemetryEvent | undefined): Promise<void> {
-  if (!sinkUrl || !ev) return;
+  if (!sinkUrl || !ev || optedOut) return;
   const outbox = await db.loadTelemetryOutbox<TelemetryEvent>();
   outbox.push(ev);
   await db.saveTelemetryOutbox(outbox.length > OUTBOX_CAP ? outbox.slice(-OUTBOX_CAP) : outbox);
@@ -135,7 +174,7 @@ async function enqueueForSink(ev: TelemetryEvent | undefined): Promise<void> {
 
 /** Ship the outbox to the sink. Resolves whether anything was DELIVERED (tests read it). */
 export async function shipToSink(): Promise<boolean> {
-  if (!sinkUrl || shipping) return false;
+  if (!sinkUrl || shipping || optedOut) return false;
   shipping = true;
   try {
     let outbox = await db.loadTelemetryOutbox<TelemetryEvent>();

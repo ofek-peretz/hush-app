@@ -20,7 +20,6 @@
  *   · the two acts: resume (moss), and end (outlined — an end is never the loud one)
  *   · at the very bottom, the pain door (§13) — set apart so it is present without being offered
  */
-// @ts-nocheck
 
 // 
 
@@ -88,10 +87,17 @@ export function PausedStage({ subject, children, onResume, endLabel, onEnd, onPa
           {children}
 
           <View style={styles.acts}>
-            {/* MOSS, and the only lit thing on the page — resuming is what this screen is for. */}
-            <Button variant="signal" size="crossing" block label={t('pauseSheet.resume')} onPress={onResume} />
-            {/* Outlined, never clay: ending a session is a decision, not a danger. */}
-            <Button variant="secondary" size="crossing" block label={endLabel} onPress={onEnd} />
+            {/* ⛔ CREAM, NOT MOSS (design review 2026-09-01). `tokens.ts` rules that "the PRIMARY
+                BUTTON ground is CREAM now" — this was the one primary act in the product still
+                painted moss, and moss is reserved for "a decision made", not for a button's
+                ground. `onstage` is the same cream act every other stage screen uses. */}
+            <Button variant="onstage" size="crossing" block label={t('pauseSheet.resume')} onPress={onResume} />
+            {/* ⛔ A BARE ACT, NOT A TWIN (design review 2026-09-01). Outlined at the same height,
+                12 points under Resume, the two read as one shape — and this screen is used bent
+                over a phone on the floor. Ending is quieter than resuming BY FORM, not only by
+                fill: a ghost act cannot be mistaken for the cream one above it. Never clay:
+                ending a session is a decision, not a danger. */}
+            <Button variant="onstageGhost" size="crossing" block label={endLabel} onPress={onEnd} />
           </View>
         </View>
 
@@ -130,7 +136,7 @@ const styles = StyleSheet.create({
 
   title: { fontFamily: font.serif, fontSize: 30, lineHeight: 36, color: color.textPrimary, textAlign: 'center' },
 
-  acts: { alignSelf: 'stretch', gap: 12, marginTop: 6 },
+  acts: { alignSelf: 'stretch', gap: 20, marginTop: 6 },
 
   doorRow: { alignItems: 'center', paddingHorizontal: 40, paddingBottom: 40 },
   door: {

@@ -13,7 +13,6 @@
  *  - Exercise Busy being applied from the watch.
  * Lifecycle + intent acceptance/rejection are already captured by WatchSession.
  */
-// @ts-nocheck
 
 // 
 

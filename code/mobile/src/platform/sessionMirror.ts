@@ -19,7 +19,6 @@
  *
  * This module is PURE (no native imports) so it is unit-testable on any host.
  */
-// @ts-nocheck
 
 // 
 
@@ -79,6 +78,9 @@ export interface MirrorStep {
   reasonType?: ReasonType;
   /** Magnitude (kg) of the change, used by the LoadDelta value. */
   reasonDelta?: number;
+  /** A warm-up bridge (domain/warmupRamp) — the wrist labels it "Warm-up n of m" and its numbers
+   *  count the RAMP, never the working sets. Absent on every working step. */
+  warmup?: { index: number; count: number };
   /** In-class alternatives the athlete may swap to (Swap overlay); empty = none. */
   swapOptions?: { id: string; name: string }[];
   /** Equipment-native setup (kg) for this step's load — the watch reads it so the
@@ -185,6 +187,11 @@ export interface SessionMirror {
   /** Numeric set position within the current exercise (1-based) + total, for set dots. */
   setNumber: number;
   setsInExercise: number;
+  /** The current step is a warm-up bridge — `setNumber`/`setsInExercise` then count the RAMP, and
+   *  the wrist prints the warm-up word. Optional both ways: an older watch ignores it. */
+  isWarmup?: boolean;
+  /** …and the same fact about the UPCOMING step, for rest frames. */
+  nextIsWarmup?: boolean;
   /** The set the athlete is about to do — the ONLY set worth naming during a rest. Null when
    *  there is no next step (an active set, or the last set of the session). */
   nextSetLabel: string | null;
@@ -396,6 +403,7 @@ export function summaryLifts(
   // Prescribed vs logged, per lift — only for the deprecated `done` shim (see MirrorSummaryLift).
   const tally = new Map<string, { total: number; done: number }>();
   steps.forEach((s, i) => {
+    if (s.warmup) return; // a bridge is neither prescribed work nor a best set — same line as tonnage
     const t = tally.get(s.exerciseName) ?? { total: 0, done: 0 };
     t.total += 1;
     if (i < completedSets) t.done += 1;
@@ -455,6 +463,7 @@ function soFarOnLift(steps: MirrorStep[], logged: MirrorLoggedSet[] | undefined,
   const picked: { reps: number; weight: number | null; at: number }[] = [];
   (logged ?? []).forEach((set, i) => {
     if (steps[i]?.exerciseName !== exerciseName) return;
+    if (steps[i]?.warmup) return; // a bridge is not "her work so far" — same line as tonnage
     picked.push({ reps: set.reps, weight: set.weight, at: steps[i]?.setIndexInExercise ?? 0 });
   });
   let start = 0;
@@ -464,13 +473,15 @@ function soFarOnLift(steps: MirrorStep[], logged: MirrorLoggedSet[] | undefined,
 }
 
 /** The four fields the wrist's set row needs, assembled once for every phase. */
-function soFarFields(steps: MirrorStep[], inp: MirrorInputs, exerciseName: string) {
+function soFarFields(steps: MirrorStep[], inp: MirrorInputs, exerciseName: string, onWarmup = false) {
   const { reps, loads } = soFarOnLift(steps, inp.loggedSets, exerciseName);
   return {
     setsSoFar: reps,
     loadsSoFar: loads,
-    lastReps: inp.lastTime?.reps ?? [],
-    lastLoadKg: inp.lastTime?.loadKg ?? null,
+    // On a warm-up step the figures row counts the RAMP — last time's WORKING reps drawn under
+    // ramp columns would be ghosts of a different thing entirely, so the row stays clean.
+    lastReps: onWarmup ? [] : inp.lastTime?.reps ?? [],
+    lastLoadKg: onWarmup ? null : inp.lastTime?.loadKg ?? null,
   };
 }
 
@@ -482,14 +493,21 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const idx = machine.setIndex;
   // Clamp: at SESSION_SAVED/WELL_DONE the index may sit past the last step.
   const cur = steps[idx] ?? steps[steps.length - 1];
-  const setLabel = `Set ${cur.setIndexInExercise + 1} of ${cur.totalSetsInExercise}`;
+  // A warm-up bridge counts the RAMP, never the working sets — and says so. (The wrist composes
+  // its own localized line from the numbers + `isWarmup`; this English label is the fallback.)
+  const setLabel = cur.warmup
+    ? `Warm-up ${cur.warmup.index + 1} of ${cur.warmup.count}`
+    : `Set ${cur.setIndexInExercise + 1} of ${cur.totalSetsInExercise}`;
   const lift = liftPosition(steps, Math.min(idx, steps.length - 1));
 
   // Terminal — a read-only "complete" frame. No rest, no next.
   // WT13c · GLANCE — her own work so far, computed ONCE for every frame (the glance is reachable
   // from any live phase, so it cannot hang off the terminal branch below).
-  const liveSets = inp.completedSets ?? 0;
-  const liveVolumeKg = (inp.loggedSets ?? []).reduce((sum, x) => sum + (x.weight ?? 0) * x.reps, 0);
+  // Working sets only, both figures — the wrist's glance and the phone's Well Done must read the
+  // same numbers, and the phone's (sessionMetrics) draw the warm-up line already.
+  const isWork = (i: number) => !steps[i]?.warmup;
+  const liveSets = Math.min(inp.completedSets ?? 0, steps.length) - steps.slice(0, inp.completedSets ?? 0).filter((s) => s.warmup).length;
+  const liveVolumeKg = (inp.loggedSets ?? []).reduce((sum, x, i) => (isWork(i) ? sum + (x.weight ?? 0) * x.reps : sum), 0);
 
   if (machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE') {
     /*
@@ -504,15 +522,20 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
      */
     const up = 0;
     const startedMs = inp.sessionStartedAtMs ?? null;
+    // The frontier for the terminal frame — a caller with no live count means "all of it".
+    const frontier = inp.completedSets ?? total;
+    const doneWorkSets = Math.min(frontier, steps.length) - steps.slice(0, frontier).filter((s) => s.warmup).length;
+    const doneVolumeKg = (inp.loggedSets ?? []).reduce((sum, x, i) => (isWork(i) ? sum + (x.weight ?? 0) * x.reps : sum), 0);
     const summary: MirrorSummary = {
       timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',
-      // Truthful: the sets the athlete ACTUALLY logged (not the planned total) — an
-      // early finish must never report every planned set as done.
-      sets: inp.completedSets ?? total,
+      // Truthful: the WORKING sets the athlete actually logged (not the planned total, and never
+      // the warm-up bridges) — an early finish must never report every planned set as done, and
+      // the wrist must count what Well Done counts.
+      sets: doneWorkSets,
       up: inp.progressedLifts ?? up,
-      // External tonnage actually moved — from the ACTUALS, in step order. Bodyweight sets
-      // (weight null) contribute 0, exactly as the read-back's volume comparator treats them.
-      volumeKg: (inp.loggedSets ?? []).reduce((sum, s) => sum + (s.weight ?? 0) * s.reps, 0),
+      // External tonnage actually moved — from the ACTUALS, in step order, working sets only
+      // (sessionMetrics draws the same warm-up line). Bodyweight sets (weight null) contribute 0.
+      volumeKg: doneVolumeKg,
       kcal: inp.kcal ?? null,
       lifts: summaryLifts(steps, inp.completedSets ?? total, inp.loggedSets),
       milestone: inp.milestone ?? null,
@@ -602,27 +625,35 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const next = resting ? steps[idx + 1] ?? null : null;
   const isTransition = phase === 'rest_transition';
 
-  // Exercise Busy is offered at the start of an exercise (set 1) that still has a
-  // later, different exercise to defer to (mirrors the phone's canMarkOccupied).
+  // Exercise Busy is offered at the start of an exercise — its first warm-up bridge when it has a
+  // ramp, else set 1 — that still has a later, different exercise to defer to (mirrors the phone's
+  // canMarkOccupied).
   const canMarkBusy =
     phase === 'active_set' &&
-    cur.setIndexInExercise === 0 &&
+    (cur.warmup ? cur.warmup.index === 0 : cur.setIndexInExercise === 0) &&
     steps.slice(idx + 1).some((s) => s.exerciseName !== cur.exerciseName);
 
   return {
     schema: MIRROR_SCHEMA_VERSION,
     phase,
-    ...soFarFields(steps, inp, cur.exerciseName),
+    ...soFarFields(steps, inp, cur.exerciseName, !!cur.warmup),
     exerciseName: cur.exerciseName,
     exerciseGroup: cur.exerciseGroup ?? '',
     setLabel,
-    setNumber: cur.setIndexInExercise + 1,
-    setsInExercise: cur.totalSetsInExercise,
+    setNumber: cur.warmup ? cur.warmup.index + 1 : cur.setIndexInExercise + 1,
+    setsInExercise: cur.warmup ? cur.warmup.count : cur.totalSetsInExercise,
+    // Unconditional, so the wire-parity contract can see the key on every frame.
+    isWarmup: !!cur.warmup,
     // The set that is COMING — see the field docs. On a rest frame this is the only honest
     // answer to "which set am I on"; `setLabel` above is the one that is already behind them.
-    nextSetLabel: next ? `Set ${next.setIndexInExercise + 1} of ${next.totalSetsInExercise}` : null,
-    nextSetNumber: next ? next.setIndexInExercise + 1 : 0,
-    nextSetsInExercise: next ? next.totalSetsInExercise : 0,
+    nextSetLabel: next
+      ? next.warmup
+        ? `Warm-up ${next.warmup.index + 1} of ${next.warmup.count}`
+        : `Set ${next.setIndexInExercise + 1} of ${next.totalSetsInExercise}`
+      : null,
+    nextSetNumber: next ? (next.warmup ? next.warmup.index + 1 : next.setIndexInExercise + 1) : 0,
+    nextSetsInExercise: next ? (next.warmup ? next.warmup.count : next.totalSetsInExercise) : 0,
+    nextIsWarmup: !!next?.warmup,
     globalIndex: cur.globalIndex,
     totalSets: total,
     targetWeight: cur.targetWeight,

@@ -13,7 +13,7 @@
  */
 // @ts-nocheck
 
-import { startImport, settledImport, peekImport, clearImport, watchImport } from '@/domain/pendingImport';
+import { startImport, settledImport, peekImport, clearImport, watchImport, importFailure } from '@/domain/pendingImport';
 
 /** A model whose answer the test releases by hand, so the "still running" window is real. */
 function heldModel() {
@@ -140,7 +140,9 @@ describe('⛔ an import running under the intake', () => {
     expect(mid.phase).toBe('running');
     expect(mid.step).toBe('matching');
     expect(mid.partial).not.toBeNull();
-    expect(mid.partial.liftCount).toBe(1); // the Zercher squat is not ours, and is reported
+    // Both lifts were READ — the count says so, and the Zercher squat is reported as unplaceable.
+    expect(mid.partial.liftCount).toBe(2);
+    expect(mid.partial.program.days[0].slots).toHaveLength(1);
     gates.shift()();
     await settledImport();
   });
@@ -159,6 +161,59 @@ describe('⛔ an import running under the intake', () => {
     const after = seen.length;
     clearImport();
     expect(seen).toHaveLength(after); // nothing after unsubscribe
+  });
+
+  it('⛔ a FAILED read can be tried again — one blurry photograph did not use up her importer', async () => {
+    /*
+     * The guard was `if (inFlight) return`, and `inFlight` was only ever cleared when she KEPT a
+     * programme. So one failure locked the importer shut: she photographed the sheet again,
+     * `startImport` no-opped, and the build step re-read the same old failure and told her the same
+     * thing. There was no way back short of reinstalling the app.
+     */
+    const dead = async () => ({ ok: false, reason: 'upstream' });
+    startImport(dead, { images: PHOTO });
+    expect((await settledImport()).ok).toBe(false);
+
+    const second = heldModel();
+    startImport(second.ask, { images: PHOTO });
+    expect(peekImport().phase).toBe('running'); // it really started, rather than answering the old one
+    second.release();
+    const out = await settledImport();
+    expect(out.ok).toBe(true);
+    expect(second.calls()).toBe(1);
+  });
+
+  it('a programme already waiting is NOT read a second time', async () => {
+    // The other half of the same guard: a success is a programme she has, not a call to repeat.
+    const first = heldModel();
+    startImport(first.ask, { images: PHOTO });
+    first.release();
+    await settledImport();
+    const second = heldModel();
+    startImport(second.ask, { images: PHOTO });
+    expect(second.calls()).toBe(0);
+    expect(peekImport().phase).toBe('done');
+  });
+
+  it('names the failure for a screen that has to explain it', async () => {
+    /*
+     * From the intake, `ImportPlan` starts the read and goes back in the same breath — so nothing is
+     * left on screen to say why it failed. The build step reads this and says it.
+     */
+    expect(importFailure()).toBeNull(); // nothing started
+    const boom = async () => {
+      throw new Error('network exploded');
+    };
+    startImport(boom, { images: PHOTO });
+    await settledImport();
+    expect(importFailure()).toBe('unreachable');
+
+    clearImport();
+    const good = heldModel();
+    startImport(good.ask, { images: PHOTO });
+    good.release();
+    await settledImport();
+    expect(importFailure()).toBeNull(); // a week that read fine has no failure to report
   });
 
   it('⛔ clearing lets a NEW import start — she can replace the sheet she photographed', async () => {

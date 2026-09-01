@@ -72,15 +72,18 @@ describe('nothing in the prompt is a worked example', () => {
 
   it('and keeps the VOCABULARY, which is not an example', () => {
     // The other half of the law. Stripping the names too would leave a coach that cannot answer.
-    for (const word of ['reps', 'time', 'distance', 'open', 'say', 'notes', 'brief', 'today', 'sessions']) {
+    /* ⛔ `today` LEFT THE VOCABULARY WITH THE FIELD (2026-08-26) — the coach may no longer ask to
+       change the session she is standing in, because nothing ever carried out the request. */
+    for (const word of ['reps', 'time', 'distance', 'open', 'say', 'notes', 'brief', 'sessions']) {
       expect({ word, named: text().includes(word) }).toEqual({ word, named: true });
     }
     // …and both id catalogues, which ARE the allowed set rather than a demonstration of one.
     expect(text()).toContain('bb_bench_press');
     expect(text()).toContain('run_outdoor');
-    // …and every live-edit verb.
-    for (const verb of ['drop', 'defer', 'sets', 'load', 'swap', 'end']) {
-      expect({ verb, named: text().includes(`"do":"${verb}"`) }).toEqual({ verb, named: true });
-    }
+    /* ⛔ AND THE SIX LIVE-EDIT VERBS ARE NO LONGER IN THE PROMPT (2026-08-26). They were the whole
+       `today` block — `{"do":"drop","ex":"…"}` and five siblings — sixteen lines instructing the
+       coach in a vocabulary the app could not act on. `LiveEdit` still exists and the pain path
+       still applies a `drop`; what went is the coach's ability to ASK for one. */
+    expect(text()).not.toContain('"do":"drop"');
   });
 });

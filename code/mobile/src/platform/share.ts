@@ -14,7 +14,6 @@
  * bundles and TESTS even when they are absent — capture cannot be verified off a
  * device, so every path degrades to a clean "unavailable" rather than throwing.
  */
-// @ts-nocheck
 
 // 
 

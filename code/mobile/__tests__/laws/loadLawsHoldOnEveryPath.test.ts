@@ -35,7 +35,7 @@
 
 import { EXERCISES, exerciseById, type Exercise } from '@/data/exercises';
 import { exerciseMeta, type Equipment } from '@/engine/catalog';
-import { BAR_KG, normalizeLoad } from '@/engine/loadMath';
+import { BAR_KG, FIXED_BAR_KG, normalizeLoad } from '@/engine/loadMath';
 import { startingWeight } from '@/domain/startingLoad';
 import { smartSeed } from '@/data/api/fixtureModel';
 import { snapDown, nextRung, prevRung, moveRungs, loadFloor } from '@/engine/v5/grid';
@@ -212,7 +212,14 @@ describe('LAW · S-55 — every path that computes a load respects the physical 
     expect(prevRung(BAR_KG + 2.5, 'barbell')).toBe(BAR_KG);
     expect(normalizeLoad(1, 'barbell')).toBe(BAR_KG);
     expect(loadFloor('barbell')).toBe(BAR_KG);
-    expect(startingWeight(exerciseById('bb_curl')!, { sex: 'female', weightKg: 45 })).toBeGreaterThanOrEqual(BAR_KG);
+    // Since F-19 (2026-08-25) `bb_curl` is a FIXED-BAR lift: its floor is the lightest fixed bar,
+    // and the whole point is that a 45 kg beginner's curl no longer gets forced up to an Olympic
+    // bar. Same law — one floor per family, everywhere — different iron.
+    expect(loadFloor('fixed_barbell')).toBe(FIXED_BAR_KG);
+    expect(normalizeLoad(1, 'fixed_barbell')).toBe(FIXED_BAR_KG);
+    const curlSeed = startingWeight(exerciseById('bb_curl')!, { sex: 'female', weightKg: 45 });
+    expect(curlSeed).toBeGreaterThanOrEqual(FIXED_BAR_KG);
+    expect(curlSeed).toBeLessThan(BAR_KG);
   });
 });
 

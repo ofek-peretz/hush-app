@@ -6,7 +6,6 @@
  * (moss NEXT / muted HOLDS) over its actual logged sets as "weight×reps" chips.
  * Immutable — no targets to edit, and Hush attaches no verdict to the work.
  */
-// @ts-nocheck
 
 // 
 
@@ -15,28 +14,33 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Legend } from '@/components/ds';
+import { Arrive, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { exerciseDisplayName } from '@/data/exercises';
 import { durationMinutes } from '@/domain/duration';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
-import { sessionKcal } from '@/domain/energy';
+import { sessionDurationSec, sessionEnergyKcal, sessionTonnageKg, tonnesFromKg } from '@/domain/sessionMetrics';
+import { correctionsByPosition } from '@/domain/liveCorrections';
 import type { ItemResult, Session, SetLog } from '@/data/local/models';
-import { color, space, font, textScale, tracking, trackingPx, press, signal } from '@/design/tokens';
+import { color, space, font, textScale, tracking, trackingPx, press, signal, directionTone } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+// The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
+import { currentLocale } from '@/i18n';
 
 type Props = NativeStackScreenProps<MainParamList, 'WorkoutDetail'>;
 
 type Forward = Record<string, { loadFrom: number | null; loadTo: number | null }>;
 
-/** Wall-clock seconds from the session's start to its last logged set. */
-function durationSec(s: Session): number {
-  if (s.sets.length === 0) return 0;
-  const last = Date.parse(s.sets[s.sets.length - 1].persistedAt);
-  return Math.max(0, Math.round((last - Date.parse(s.startedAt)) / 1000));
-}
+/*
+ * ⛔ THIS SCREEN USED TO MEASURE ITS OWN MINUTES, AND IT MEASURED THEM OFF `sets` ALONE.
+ *
+ * "38 min" on the Log row, "0 min" on the record one tap later — the same workout, two screens, and
+ * the record is the one that claims to BE what happened. Worse: the kcal figure hangs off that same
+ * span, so the record billed an interval session at nothing. The block below draws every item she
+ * did; the facts row now measures the same session the block draws. `domain/sessionMetrics`.
+ */
 
 export function WorkoutDetail({ navigation, route }: Props) {
   const app = useApp();
@@ -111,6 +115,14 @@ export function WorkoutDetailView({
   const order: string[] = [];
   const byEx: Record<string, SetLog[]> = {};
   for (const set of session?.sets ?? []) {
+    /*
+     * WORKING sets only (2026-08-24). A warm-up bridge (`isApproach`) is excluded for two reasons,
+     * one of them a real defect: the record counts the same sets every other surface counts (Well
+     * Done, the Log, the wrist), and — worse — the bridge→work weight jump would be read by
+     * `correctionsByPosition` as a Loop 1 move and drawn with an arrow, crediting the engine with
+     * a change it never made.
+     */
+    if (set.isApproach) continue;
     if (!byEx[set.exerciseId]) {
       byEx[set.exerciseId] = [];
       order.push(set.exerciseId);
@@ -128,18 +140,20 @@ export function WorkoutDetailView({
   // "SATURDAY 18 JULY" — weekday, day, month, composed to avoid the locale comma.
   const dateLabel = d
     ? [
-        d.toLocaleDateString(undefined, { weekday: 'long' }),
-        d.toLocaleDateString(undefined, { day: 'numeric' }),
-        d.toLocaleDateString(undefined, { month: 'long' }),
+        d.toLocaleDateString(currentLocale(), { weekday: 'long' }),
+        d.toLocaleDateString(currentLocale(), { day: 'numeric' }),
+        d.toLocaleDateString(currentLocale(), { month: 'long' }),
       ].join(' ')
     : '';
 
   // ── The facts row: MIN · KCAL · T MOVED · UP ── all read from the saved session.
-  const durSec = session ? durationSec(session) : 0;
-  const kcal = session ? sessionKcal(session, durSec * 1000, bodyweightKg) : null;
+  const durSec = sessionDurationSec(session);
+  const kcal = sessionEnergyKcal(session, bodyweightKg);
   const tonnes = (() => {
-    const kg = (session?.sets ?? []).reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
-    return kg > 0 ? (kg / 1000).toFixed(1) : null;
+    const kg = sessionTonnageKg(session);
+    // No tonnage is not "0.0 t" — a session of holds and repeats moved no bar, and the fact simply
+    // has no line. (The minutes and the calories above it still do.)
+    return kg > 0 ? tonnesFromKg(kg).toFixed(1) : null;
   })();
   // UP = lifts whose next load the engine set ABOVE what it held before (a progression).
   const upCount = Object.values(forward).filter((f) => f.loadFrom != null && f.loadTo != null && f.loadTo > f.loadFrom).length;
@@ -162,14 +176,20 @@ export function WorkoutDetailView({
 
       {loading || !session ? null : (
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title} accessibilityRole="header">{dayName}</Text>
+          {/* ✦ IT ARRIVES (2026-08-27) — see the note at `HomeView`. Two beats: which session this
+              was, then what it came to. The set rows below land with the facts, because a record is
+              read as one table and not dealt out row by row. */}
+          <Arrive order={0}>
+            <Text style={styles.title} accessibilityRole="header">{dayName}</Text>
+          </Arrive>
 
-          <View style={styles.facts}>
-            <Fact value={String(durationMinutes(durSec))} label={t('common.minShort')} />
-            {kcal != null ? <Fact value={String(kcal)} label={t('complete.kcal')} /> : null}
+          <Arrive order={1} style={styles.facts}>
+            {/* A free-form log spans no time — "0 min" is a measurement the record never took. */}
+            {durationMinutes(durSec) > 0 ? <Fact value={String(durationMinutes(durSec))} label={t('common.minShort')} /> : null}
+            {kcal != null && kcal > 0 ? <Fact value={String(kcal)} label={t('complete.kcal')} /> : null}
             {tonnes != null ? <Fact value={tonnes} label={`${t('complete.tonneUnit')} ${t('complete.moved')}`} /> : null}
             {upCount > 0 ? <Fact value={String(upCount)} label={t('history.upLabel')} accent /> : null}
-          </View>
+          </Arrive>
 
           <View style={styles.exercises}>
             {order.map((exId, idx) => {
@@ -177,6 +197,10 @@ export function WorkoutDetailView({
               const fwd = forward[exId];
               // The heaviest working weight logged for this lift — the load a HOLD holds at.
               const worked = sets.reduce<number | null>((mx, s) => (s.actualWeight != null && (mx == null || s.actualWeight > mx) ? s.actualWeight : mx), null);
+              /* Where Loop 1 moved the load INTO a set of this lift — see the note at the chips.
+                 Derived from the whole session's log so a lift trained twice in one workout is read
+                 as one sequence, which is what exercise-keying means everywhere else. */
+              const corrections = correctionsByPosition(session.sets ?? [], exId);
               const rose = fwd?.loadFrom != null && fwd?.loadTo != null && fwd.loadTo > fwd.loadFrom;
               const nextLoad = fwd?.loadTo != null ? displayWeight(fwd.loadTo, units) : null;
               const holdLoad = worked != null ? displayWeight(worked, units) : null;
@@ -196,11 +220,43 @@ export function WorkoutDetailView({
                       </Text>
                     ) : null}
                   </View>
+                  {/*
+                    ════════════════════════════════════════════════════════════════════════════════
+                    ⛔ THE MID-LIFT CORRECTION SURVIVES THE SESSION (2026-08-22)
+                    ════════════════════════════════════════════════════════════════════════════════
+
+                    Moving the iron between sets is the one thing this product does that nothing else
+                    does — and it existed for 2.2 seconds on the stage and then **nowhere**. The
+                    finish ledger reports Loop 2 (what the NEXT occurrence gets); the Saturday letter
+                    mirrors the week; and this record, which claims to BE what happened, printed her
+                    sets as flat chips. A reader could see the weight change between chip two and
+                    chip three and had no way to know whether she had moved it or the engine had.
+
+                    ⚠️ IT IS A READ, NOT A NEW FIELD. `domain/liveCorrections` derives it from what
+                    every set already stores, and subtracts her own carry-forward first — a record
+                    that credited the engine with a weight SHE reached for would be worse than one
+                    that said nothing.
+
+                    ⚠️ AND IT IS SAID IN TODAY'S GRAMMAR, not a new one: the glyph carries the
+                    direction and `directionTone` colours it, exactly as a changed load is drawn on
+                    the first screen she opens. Nothing here is a word.
+                  */}
                   <View style={styles.chips}>
                     {sets.map((set, i) => {
                       const w = displayWeight(set.actualWeight, units);
+                      const moved = corrections.get(i + 1);
                       return (
                         <View key={i} style={styles.chip}>
+                          {moved ? (
+                            <Text
+                              style={[styles.chipMark, { color: directionTone(moved.direction) }]}
+                              accessibilityLabel={t(
+                                moved.direction === 'up' ? 'history.movedUp' : 'history.movedDown',
+                              )}
+                            >
+                              {moved.direction === 'up' ? '↑' : '↓'}
+                            </Text>
+                          ) : null}
                           {w != null ? <Text style={styles.chipNum}>{`${w}×${set.actualReps}`}</Text> : <Text style={styles.chipNum}>{`×${set.actualReps}`}</Text>}
                         </View>
                       );
@@ -317,8 +373,27 @@ const styles = StyleSheet.create({
   badgeNumUp: { color: signal[0] },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 5, paddingHorizontal: 11, backgroundColor: CHIP_BG, borderRadius: 100 },
+  /*
+   * ⛔ THE CHIP WAS A COLUMN, AND EVERY MARKED SET SAT A LINE LOWER THAN THE REST (2026-08-27).
+   *
+   * No `flexDirection`, so React Native's default — `column` — stacked the direction glyph ABOVE the
+   * figure. Measured on `3.3b`: three chips on one row, `44×8` and `44×6` with their figures at
+   * y=399, and the eased set drawing `↓` at 399 with `41×8` **twenty-two points below it**. A row
+   * whose whole job is to be read as a sequence had one of its sets off the line, and every plain
+   * chip carried an empty second line to match its height.
+   *
+   * ⚠️ AND `chipMark` SAYS WHAT WAS MEANT: `marginEnd: 3`. An END margin is air toward a horizontal
+   * neighbour — it can only have been written for a glyph sitting BESIDE the figure, and in a column
+   * it did nothing at all. The style was right about the design and the container never agreed.
+   */
+  chip: { flexDirection: 'row', alignItems: 'baseline', paddingVertical: 5, paddingHorizontal: 11, backgroundColor: CHIP_BG, borderRadius: 100 },
   chipNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: color.textMuted, textAlign: 'left' },
+  /* Her word on the set, beside its figures — sans (it is a WORD; mono carries no words), quieter
+     than the number it annotates. */
+  /* The direction glyph on a chip Loop 1 moved into. Mono, because it sits on the figure's baseline
+     and the chip is a reading; the COLOUR comes from `directionTone` at the call site, so this row
+     can never hold an opinion about direction the rest of the app does not share. */
+  chipMark: { fontFamily: font.monoMedium, fontSize: 17, lineHeight: 22, marginEnd: 3, textAlign: 'left' },
 
-  footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontStyle: 'italic', fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

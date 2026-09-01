@@ -19,7 +19,6 @@
  * and everything above it deals in `{ mime, data }`.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -50,6 +49,33 @@ export const MAX_IMAGES_PER_TURN = 3;
  * `null` when she backed out, which is not an error and must not be reported as one.
  */
 export async function pickCoachImage(): Promise<CoachImage | null> {
+  const many = await pickCoachImages();
+  return many?.[0] ?? null;
+}
+
+/**
+ * Ask for up to `MAX_IMAGES_PER_TURN` from her library, resized and encoded, in the order she
+ * picked them.
+ *
+ * `null` when she backed out, which is not an error and must not be reported as one. An EMPTY
+ * array is impossible: the picker cannot return zero assets without also reporting `canceled`.
+ *
+ * ⛔ IT USED TO BE ONE, AND THE LIMIT WAS IN THE WRONG PLACE (founder 2026-08-29: *"שמתי לב שאפשר
+ * לשלוח רק תמונה אחת בשביל לייבא"*).
+ *
+ * The argument for `allowsMultipleSelection: false` was cost — *"a screen that lets her attach nine
+ * by accident spends nine times as much without ever saying so"* — and it is a real argument
+ * answered in the wrong layer. `MAX_IMAGES_PER_TURN` has been 3 in this same file since it was
+ * written, and `runImport` has always taken an ARRAY and sent it in one turn. So the cost was
+ * already bounded, and what `false` actually bought was this: **a programme that runs over two
+ * pages could not be imported at all.** A four-day week photographed from a coach's sheet, a
+ * screenshot of a chat that scrolled — she picked one, and the read returned half her week and
+ * reported it as the whole of it, which is worse than refusing.
+ *
+ * ⚠️ THE BOUND IS `selectionLimit`, WHICH THE SYSTEM PICKER ENFORCES ITSELF — she cannot pick a
+ * fourth. One turn, at most three pages, and the spend is stated where it is decided.
+ */
+export async function pickCoachImages(): Promise<CoachImage[] | null> {
   /*
    * ⚠️ NO PERMISSION PROMPT OF OUR OWN, and this is deliberate. On iOS the system picker runs out
    * of process and returns only what she chose, so asking for library access first would be a
@@ -58,12 +84,19 @@ export async function pickCoachImage(): Promise<CoachImage | null> {
   const picked = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     quality: 1,
-    // One at a time: each is a real cost, and a screen that lets her attach nine by accident is a
-    // screen that spends nine times as much without ever saying so.
-    allowsMultipleSelection: false,
+    allowsMultipleSelection: true,
+    selectionLimit: MAX_IMAGES_PER_TURN,
+    orderedSelection: true,
   });
-  if (picked.canceled || !picked.assets?.[0]) return null;
-  return shrink(picked.assets[0].uri);
+  if (picked.canceled || !picked.assets?.length) return null;
+  /*
+   * ⚠️ SEQUENTIALLY, NOT `Promise.all`. Each `shrink` decodes a full-resolution photograph into
+   * memory; three at once on an older phone is the kind of spike that gets the app killed rather
+   * than the kind that gets it a stack trace.
+   */
+  const out: CoachImage[] = [];
+  for (const asset of picked.assets.slice(0, MAX_IMAGES_PER_TURN)) out.push(await shrink(asset.uri));
+  return out;
 }
 
 /*

@@ -8,7 +8,6 @@
  * Calibration ends by COMPLETED SESSION COUNT, never by calendar (§7.1, R20):
  * missed days never advance it; a long gap never resets it.
  */
-// @ts-nocheck
 
 // 
 

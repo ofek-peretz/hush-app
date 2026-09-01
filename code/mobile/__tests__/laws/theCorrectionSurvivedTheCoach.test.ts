@@ -45,7 +45,10 @@ const fire = (reps: [number, number], did: number) => {
                     recommendedReps: s.item.reps[0], repBandLo: s.item.reps[0], repBandHi: s.item.reps[1] } }
       : {}),
   }));
-  return applyLoop1(steps as never, 0, 40, did, 0);
+  // F-20: a lone 1-rep miss waits for a second witness; this law is about the WINDOW deciding,
+  // so the witness is supplied (a previous set that missed the same way) and the window stays
+  // the only variable under test.
+  return applyLoop1(steps as never, 0, 40, did, 0, undefined, null, did);
 };
 
 describe('the window the coach writes decides whether the product speaks', () => {
@@ -94,18 +97,38 @@ describe('the prompt teaches the window, rather than demonstrating a wide one', 
     // Matched on the mechanism it describes, not on phrasing — and `[\s\S]` because the prompt is
     // hard-wrapped, so a rule can straddle a line break.
     expect(prompt()).toMatch(/two or three apart/);
-    expect(prompt()).toMatch(/clear the ceiling[\s\S]{0,20}and it puts weight on the bar/i);
+    /*
+     * ⛔ AND IT SAYS *WHEN* THE WINDOW IS READ, WHICH CHANGED UNDER IT (2026-08-26).
+     *
+     * This pinned *"clear the ceiling … and it puts weight on the bar"* — the LIVE correction. That
+     * was true until the founder's logger ruling took Loop 1 out of the session on the same day this
+     * file's own subject changed (*"בזמן האימון המתאמן רק רושם ומתעד"*): nothing moves the bar
+     * between her sets any more except `carryWeightForward`, which follows HER hand.
+     *
+     * ⚠️ THE LAW'S SUBJECT IS THE WINDOW DOING THE WORK, NOT WHEN. So it still pins the mechanism —
+     * ceiling adds, floor takes off, and the coach is told why it matters — and it now pins the
+     * timing too, because a coach that thinks the bar moves mid-workout will size its windows for a
+     * loop that is not running.
+     */
+    expect(prompt()).toMatch(/Nothing moves during the workout/);
+    expect(prompt()).toMatch(/clear the ceiling[\s\S]{0,30}it adds weight for next time/i);
+    expect(prompt()).toMatch(/fall under the floor and it takes weight off/i);
   });
 });
 
-describe('and the screen it drives is still wired', () => {
-  it('the stage turns the logged-set beat into the correction reveal', () => {
+describe('and the live session no longer wires it (founder, 2026-08-26)', () => {
+  /* The window mathematics above still matter — Loop 2 corrects on the same band between
+     sessions — but the LIVE surface retired: mid-workout she is a logger, and the reveal died
+     with the correction it revealed. */
+  it('the stage carries no correction reveal', () => {
     const flow = read('src/screens/session/SessionFlow.tsx');
-    expect(flow).toContain('setBeatCorrection(r.correction)');
-    expect(flow).toContain('<CorrectionBeat');
+    expect(flow).not.toContain('setBeatCorrection');
+    expect(flow).not.toContain('<CorrectionBeat');
   });
 
-  it('and the session store still builds one from Loop 1', () => {
-    expect(read('src/state/stores/sessionStore.tsx')).toContain('setCorrection(liveCorrection)');
+  it('and the session store logs the set and only the set — carry, never a correction', () => {
+    const store = read('src/state/stores/sessionStore.tsx');
+    expect(store).not.toContain('applyLoop1(');
+    expect(store).toContain('LOOP 1 NO LONGER TOUCHES THE IRON');
   });
 });

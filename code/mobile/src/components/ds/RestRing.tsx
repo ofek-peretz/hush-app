@@ -11,7 +11,6 @@
  * the same way (a quick, honest linear fill, not a teleport). A fresh period
  * (remaining ≥ total) snaps to full with no sweep.
  */
-// @ts-nocheck
 
 // 
 
@@ -40,6 +39,11 @@ interface Props {
    * = the ordinary rest, and the arc keeps the accent it has always had.
    */
   arc?: string;
+  /**
+   * Draw the READOUT ONLY — no circle, no track, no arc. The rest screen's own mode since
+   * 2026-08-31; see the note at the early return for what it costs and why it is still right.
+   */
+  bare?: boolean;
 }
 
 function fmt(sec: number): string {
@@ -49,7 +53,7 @@ function fmt(sec: number): string {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
-export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage, closing, arc }: Props) {
+export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, label = 'Rest', onStage, closing, arc, bare }: Props) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const target = total > 0 ? Math.max(0, Math.min(1, remaining / total)) : 0;
@@ -91,6 +95,45 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circ * (1 - frac.value),
   }));
+
+  /*
+   * ════ ⛔ `bare` — THE CLOCK WITHOUT ITS CIRCLE (founder, 2026-08-31) ════
+   *
+   *   > *"שים לב שהרמת את המעגל של השעון של המנוחה גבוה מאוד והוא נוגע בפס של הסטים. אני בעד
+   *   > להוריד את המעגל שסביב השעון כי זה יפתח לנו את כל המסך."*
+   *
+   * The 240-point ring was the rest screen's whole object, and it earned that while it was the only
+   * thing on the screen that was alive. It is not any more: the athlete sits under it and breathes,
+   * so the circle had become a frame around a picture — and a frame that, once the figure needed
+   * room, was pushed up hard against the lift rail.
+   *
+   * ⚠️ WHAT IS LOST IS THE ARC, AND IT IS WORTH NAMING RATHER THAN PRETENDING OTHERWISE: the ring
+   * showed how much of the rest was SPENT without reading a number. What replaces it is the number
+   * itself, which was always the thing in the middle of the ring, plus the fact that a rest between
+   * two sets is short enough to hold in the head. The `closing` lift still fires, so the last
+   * seconds still change the readout.
+   *
+   * ⚠️ AND THE COMPONENT KEEPS ONE HOME. `bare` returns before the Svg rather than existing as a
+   * second "rest clock" component — the readout, the mm:ss format, the type ramp and the closing
+   * state are all here, and a copy of them somewhere else is how two clocks come to disagree.
+   */
+  if (bare) {
+    return (
+      <View style={styles.bareWrap}>
+        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{fmt(remaining)}</Text>
+        {label ? (
+          <Legend
+            size={size >= 220 ? 17 : textScale['2xs']}
+            track={size >= 220 ? 0.34 : undefined}
+            tone={onStage ? 'onStage' : 'muted'}
+            style={size >= 220 ? styles.bigLabel : undefined}
+          >
+            {label}
+          </Legend>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
@@ -134,6 +177,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
+  bareWrap: { alignItems: 'center', justifyContent: 'center', gap: 6 },
   svg: { transform: [{ rotate: '-90deg' }] },
   readout: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 6 },
   // The wide-tracked label sits optically centred: `.34em` of trailing space has to be paid back.

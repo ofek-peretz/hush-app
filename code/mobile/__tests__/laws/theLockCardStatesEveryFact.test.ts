@@ -53,14 +53,27 @@ const card = structBody('CardioLockView');
 
 describe('the cardio lock card', () => {
   /**
-   * The three measured facts. DISTANCE and the clock are the glance; PACE, CALORIES and heart rate
-   * are what the run earned. A card that drops one because a kilometre happened to close is not a
-   * smaller card, it is a wrong one.
+   * The measured facts. DISTANCE and the clock are the glance; CALORIES and heart rate are what
+   * the run earned. A card that drops one because a kilometre happened to close is not a smaller
+   * card, it is a wrong one.
+   *
+   * ⛔ RE-LITIGATED 2026-08-23: `state.paceSec` was pinned INTO this card, and the founder's
+   * pace ruling (*"אני לא רוצה שיופיע בזמן אמת מה הקצב לקילומטר"*) reverses that half: the
+   * per-kilometre figure exists only once the kilometre does. The split tag — a FINISHED
+   * kilometre's time, in its own slot — is the card's only per-km figure now, and the live pace
+   * may not return to any cardio widget surface.
    */
-  it('states the distance, the pace and the calories', () => {
+  it('states the distance and the calories — and NO live pace', () => {
     expect(card).toContain('state.distanceKm');
-    expect(card).toContain('state.paceSec');
+    expect(card).not.toContain('state.paceSec');
     expect(card).toContain('state.calories');
+  });
+
+  it('⛔ …and no cardio widget surface draws the live pace at all (founder 2026-08-23)', () => {
+    // The whole widget file — Dynamic Island included. The ContentState FIELD stays (Codable
+    // parity with the app-side copy); what is banned is reading it into a view.
+    const draws = source.split('\n').filter((l) => l.includes('.paceSec') && !l.trim().startsWith('//') && !l.includes('var paceSec'));
+    expect(draws).toEqual([]);
   });
 
   /**

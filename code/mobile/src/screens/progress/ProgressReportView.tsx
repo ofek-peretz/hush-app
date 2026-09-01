@@ -7,15 +7,14 @@
  * 12 weeks (the every-12-weeks notification, `window: 'quarter'`). They differ only in `legend`,
  * `title`, which entries they pass, and whether the log's door is offered at the foot.
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
-import { Legend, Badge, LoadDelta, Sparkline } from '@/components/ds';
+import { Arrive, Legend, Badge, LoadDelta, Sparkline } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
@@ -23,8 +22,15 @@ import type { QuarterlyProgressEntry } from '@/domain/progressReport';
 import type { Units } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press } from '@/design/tokens';
 
-// The sparkline fills the row: the page's content width (screen minus the two gutters).
-const SPARK_W = Math.round(Dimensions.get('window').width - space.gutter * 2);
+/*
+ * The sparkline fills the row: the page's content width (screen minus the two gutters).
+ *
+ * ⛔ THIS WAS A `Dimensions.get('window')` SNAPSHOT TAKEN AT IMPORT — the exact bug `LiftDetail`
+ * records fixing, one screen over. A module-level read happens once, before the first render, and
+ * never again: rotate the phone or open a split view and every sparkline on the page is drawn to
+ * the width the app started at. `useWindowDimensions` follows.
+ */
+const sparkWidth = (w: number) => Math.round(w - space.gutter * 2);
 
 interface Props {
   title: string;
@@ -50,6 +56,8 @@ interface Props {
 
 export function ProgressReportView({ title, legend, entries, loaded, units, onBack, onHistory }: Props) {
   const { t } = useCopy();
+  // Live, not a snapshot taken at import — see the note at `sparkWidth`.
+  const sparkW = sparkWidth(useWindowDimensions().width);
   // The header total is a kg story — bodyweight (reps-mode) gains are real progress
   // but never counted as "kg added".
   const loadEntries = entries.filter((e) => e.mode !== 'reps');
@@ -77,10 +85,11 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
             <Icon name="chevronLeft" size={24} color={color.textPrimary} strokeWidth={2} />
           </Pressable>
         ) : null}
-        <View style={styles.headTitles}>
+        {/* ✦ IT ARRIVES (2026-08-27) — see the note at `HomeView`. */}
+        <Arrive order={0} style={styles.headTitles}>
           <Legend>{legend}</Legend>
           <Text style={styles.title} accessibilityRole="header">{title}</Text>
-        </View>
+        </Arrive>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -158,7 +167,7 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                         does better by showing the path between them. The numbers live in the foot
                         below, which is the sparkline's axis-in-words. */}
                     <View style={styles.spark}>
-                      <Sparkline data={e.series} width={SPARK_W} height={40} />
+                      <Sparkline data={e.series} width={sparkW} height={40} />
                     </View>
                     <View style={styles.liftFoot}>
                       <Text style={styles.footText}>{t('report.initialPeak', { value: initial, unit })}</Text>

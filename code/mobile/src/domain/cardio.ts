@@ -10,7 +10,6 @@
  * Pure + I/O-free so it is unit-testable and shared by the recorder (write gate)
  * and History (display gate for records persisted before this rule existed).
  */
-// @ts-nocheck
 
 // 
 

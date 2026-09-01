@@ -188,8 +188,20 @@ describe('⛔ and every muscle gets its moment', () => {
     const clock = read('src/screens/onboarding/BuildingProgramme.tsx');
     expect(clock).toContain('beatFor(');
     expect(clock).not.toMatch(/setShownMuscles\(\(n\) => n \+ 1\), \d/); // never a bare number
-    // The last muscle gets the same beat as the rest — it used to get a flat 320 ms.
-    expect(clock).toMatch(/setRevealed\(true\), beatFor\(/);
+    /*
+     * ⛔ THE REVEAL'S OWN HOLD IS ASKED FOR TOO — and it is now one level of indirection deep,
+     * because the fill stopped being a per-muscle walk on 2026-08-30 (founder: the animation
+     * existed to cover a thirty-second load, and the load is six to nine seconds now). The whole
+     * body fills at once, so the beat belongs to the BUSIEST muscle rather than the last one.
+     *
+     * ⚠️ WHAT THIS CLAUSE PROTECTS IS UNCHANGED, AND I TRIPPED IT WHILE MAKING THE CHANGE: my
+     * first draft held for a hand-picked `1_100`, under the 1400 ms a lift needs to rise, sit and
+     * travel. That is exactly the second opinion this law exists to forbid, and the law caught it.
+     */
+    expect(clock).toMatch(/setRevealed\(true\), fillHold\(/);
+    expect(clock).toMatch(/function fillHold\([\s\S]*?return beatFor\(/);
+    // …and the hold can never be shorter than the journey the rows are still making.
+    expect(beatFor(1)).toBeGreaterThan(LIFT_RISE_MS + LIFT_HOLD_MS + LIFT_TRAVEL_MS);
   });
 
   it('⚠️ the rulers are gone from BOTH sides — the component and the props that fed it', () => {

@@ -62,6 +62,17 @@ async function storedToken(): Promise<string | null> {
   }
 }
 
+/**
+ * The session token, read-only, for the ONE other caller that authenticates with it: the coach
+ * client. The coach worker reads the same `session:` keys this worker writes, which is what turns
+ * its shared-token speed bump into authentication — see finding 1 of the 2026-09-01 audit. Reading
+ * here keeps the Keychain key name private to this file; the 401-clears-it rule stays here too,
+ * because the coach's 401 means a stale COACH token or an unflipped flag, never a dead session.
+ */
+export async function identitySessionToken(): Promise<string | null> {
+  return storedToken();
+}
+
 async function call<T>(path: string, init: { method: 'GET' | 'POST'; body?: unknown }): Promise<T | null> {
   if (!circleAvailable()) return null;
   const token = await storedToken();
@@ -118,6 +129,23 @@ export async function circleSignedIn(): Promise<boolean> {
  *  call site). The circle membership itself lives server-side and survives her next sign-in. */
 export async function circleSignOut(): Promise<void> {
   await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+}
+
+/**
+ * ════ DELETE, SERVER FIRST (2026-09-01, audit finding 4) ════
+ *
+ * Asks the worker to erase everything it holds about this account — user record, week
+ * publications, circle membership, this session — and only then clears the local token. Called
+ * from `deleteAccount` BEFORE the device wipe, because the wipe erases the very token this call
+ * authenticates with; ordering is the whole design. Returns whether the server confirmed, so the
+ * caller can journal a failed erase (`account_erase_failed`) instead of silently stranding her
+ * data on Cloudflare — but it never blocks the local wipe: her right to clear the device she is
+ * holding does not depend on the network.
+ */
+export async function deleteIdentity(): Promise<boolean> {
+  const ok = (await call<{ ok: boolean }>('/account/delete', { method: 'POST' }))?.ok === true;
+  await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+  return ok;
 }
 
 export async function circleCreate(): Promise<string | null> {

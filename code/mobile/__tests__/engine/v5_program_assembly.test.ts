@@ -10,7 +10,8 @@
 // 
 
 import { assembleV5DayLists, exerciseCountFor, distributeMuscleSets, pickExercises, DAY_ONE_EX_DIVISOR } from '@/engine/v5/programAssembly';
-import { muscleOf, exercisesForMuscle, isSwapOnly } from '@/data/exercises';
+import { muscleOf, exercisesForMuscle, isSwapOnly, engineMayAssign } from '@/data/exercises';
+import { easeFor } from '@/domain/painReport';
 import { SETS_MIN, SETS_MAX } from '@/engine/v5/constants';
 import type { BodyMap } from '@/engine/v5/bodyMap';
 
@@ -140,7 +141,10 @@ describe('Rev 7 · pickExercises — deterministic, compound-led, no swap-only, 
     expect(picks.length).toBe(3);
   });
   it('a pin is included and leads', () => {
-    const pool = exercisesForMuscle('Chest').filter((e) => !isSwapOnly(e.id)).map((e) => e.id);
+    /* A pin comes from her PICKS, and the library only offers what the assembler may deal —
+       `engineMayAssign`, not merely not-swap-only (the choice-only shelf is picked in the builder,
+       never pinned here; batch 2 of the shelf is what caught this filter being too loose). */
+    const pool = exercisesForMuscle('Chest').filter((e) => engineMayAssign(e.id)).map((e) => e.id);
     const pinned = pool[pool.length - 1]; // some non-leading chest lift
     expect(pickExercises('Chest', 1, pinned)).toEqual([pinned]);
   });
@@ -287,5 +291,41 @@ describe('Rev 7 · C1 — a standing substitute reshapes the generated programme
     const subs = { bb_bench_press: 'db_bench_press', db_bench_press: 'bb_bench_press' };
     const chest = chestOf(assembleV5DayLists(undefined, 4, {}, subs));
     expect(chest).toContain('db_bench_press'); // bench → db_bench → (bench seen) stops
+  });
+});
+
+/**
+ * ⛔ A PREFERENCE MAY NOT CARRY HER ONTO A MOVEMENT SHE REPORTED (2026-08-19).
+ *
+ * `pickExercises` filters the pool by `forbiddenFor`, and then applies her standing substitutes to
+ * whatever survived. Every hop of that walk is same-muscle by design — and a muscle's forbidden
+ * patterns belong to the muscle — so the walk was the one path into her week that the ban did not
+ * cover. A chest twinge bans `fly`; an adopted `bench_press → cable_fly` is same-muscle, passes the
+ * cycle guard, and was handed straight back to her.
+ *
+ * The ease is the newer fact and the one her body produced, so it wins: the chain stops at the last
+ * lift she is allowed to be given, and resumes on its own when the window lapses.
+ */
+describe('⛔ a standing swap stops at a banned movement', () => {
+  const ANCHOR = 'bb_bench_press';   // a natural top chest pick, as the test above establishes
+  const BANNED_TARGET = 'cable_fly'; // pattern 'fly' — exactly what a Chest twinge takes away
+
+  const chestIds = (days: ReturnType<typeof assembleV5DayLists>) =>
+    days.flatMap((d) => d.exerciseIds).filter((id) => muscleOf(id) === 'Chest');
+
+  it('the chain is walked when nothing is banned', () => {
+    const ids = chestIds(assembleV5DayLists(undefined, 4, {}, { [ANCHOR]: BANNED_TARGET }));
+    // Nothing reported: the adoption stands. This is what makes the next assertion mean something.
+    expect(ids).toContain(BANNED_TARGET);
+    expect(ids).not.toContain(ANCHOR);
+  });
+
+  it('⛔ …and stopped when the target is the movement she reported', () => {
+    const hurt = { painEases: [easeFor('Chest', 'twinge', Date.now())] } as never;
+    const ids = chestIds(
+      assembleV5DayLists(undefined, 4, {}, { [ANCHOR]: BANNED_TARGET }, {}, hurt, Date.now()),
+    );
+    expect(ids).not.toContain(BANNED_TARGET); // the ease wins over the preference
+    expect(ids.length).toBeGreaterThan(0);    // …and she is still given chest work
   });
 });

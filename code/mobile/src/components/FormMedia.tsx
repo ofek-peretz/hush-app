@@ -6,20 +6,21 @@
  * the silhouette; the video path lights up exercise-by-exercise as content is
  * supplied (see platform/media/exerciseVideo). Muted loop, no controls.
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Rect, Circle, Path, Defs, Pattern } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { ExerciseVideoPlayer } from '@/components/ExerciseVideoPlayer';
 import { exerciseVideoSource } from '@/platform/media/exerciseVideo';
 import { exerciseMotion } from '@/motion/registry';
 import { MotionFigure } from '@/motion/render/MotionFigure';
 import { useCopy } from '@/i18n/useCopy';
+import { useApp } from '@/state/stores/appStore';
 import { color, paper, radius, up, font, tracking, trackingPx } from '@/design/tokens';
+import { legendVoice } from '@/design/monoVoice';
 
 interface Props {
   exerciseId?: string | null;
@@ -28,6 +29,9 @@ interface Props {
 
 export function FormMedia({ exerciseId, title }: Props) {
   const { t } = useCopy();
+  const app = useApp();
+  // she demonstrates for her — the same rule MiniBody already follows on Home
+  const figure = app.profile?.sex === 'female' ? ('female' as const) : ('male' as const);
   const motion = exerciseMotion(exerciseId);
   const video = exerciseVideoSource(exerciseId);
   const hasVideo = !!video;
@@ -35,24 +39,32 @@ export function FormMedia({ exerciseId, title }: Props) {
 
   return (
     <View style={styles.frame}>
-      {/* striped instructional field. absoluteFill goes on the WRAPPER and percentages inside it
-          (the `components/ds/Stage` pattern) — putting both on the <Svg> gives it two ways to be
-          sized, and they disagree on the first native frame before layout settles. See the
-          first-four card in SessionFlow, where that is exactly what the founder photographed. */}
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%">
-        <Defs>
-          <Pattern id="formStripes" width={22} height={22} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <Rect width={11} height={22} fill={paper[3]} />
-            <Rect x={11} width={11} height={22} fill={paper[2]} />
-          </Pattern>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#formStripes)" />
-      </Svg>
-      </View>
+      {/*
+        ════════════════════════════════════════════════════════════════════════════════════════
+        ⛔ THE DIAGONAL STRIPES ARE DELETED (2026-08-27).
+
+        This field carried a 45° hatch — `<Pattern patternTransform="rotate(45)">`, `paper[3]` over
+        `paper[2]` — behind the demonstration. It came 1:1 from the design handoff, and on glass it
+        does the one thing a texture must never do here:
+
+        **A diagonal hatch is the universal mark for "nothing here yet."** It is what every tool in
+        the world draws for a missing asset, a disabled region, an unfinished build. We were drawing
+        it as the GROUND of the screen that teaches her how to lift correctly — so the surface said
+        "unfinished" underneath a figure that was finished.
+
+        And it cost twice: the demo is a dark line figure with grey equipment, and a busy ground is
+        contrast taken away from the only thing on the panel anyone needs to read.
+
+        ⚠️ THE SAME RULING WAS ALREADY MADE ONCE, on the neighbouring screen — founder 2026-08-12,
+        of the bar's checked texture: *"תוריד את המשבצות האלה כי זה לא ברור בכלל."* This is that
+        texture's twin, one screen away, and it survived because nobody had photographed it.
+
+        The field is flat paper now (`frame` already sets `paper[2]`), which is what every other
+        paper surface in this product is.
+      */}
 
       {motion ? (
-        <MotionFigure rig={motion} style={StyleSheet.absoluteFill as object} />
+        <MotionFigure rig={motion} figure={figure} style={StyleSheet.absoluteFill as object} />
       ) : video ? (
         <ExerciseVideoPlayer source={video} accessibilityLabel={title ?? ''} style={StyleSheet.absoluteFill as object} />
       ) : (
@@ -75,7 +87,10 @@ export function FormMedia({ exerciseId, title }: Props) {
       {/* shared corner state chip — what makes presence + absence read as one component */}
       <View style={styles.chip}>
         <View style={[styles.chipDot, { backgroundColor: looping ? up[0] : color.textTertiary }]} />
-        <Text style={styles.chipText}>{(looping ? t('workout.looping') : t('workout.illustration')).toUpperCase()}</Text>
+        {(() => {
+          const l = (looping ? t('workout.looping') : t('workout.illustration')).toUpperCase();
+          return <Text style={[styles.chipText, { letterSpacing: legendVoice(l, 17, tracking.legend).letterSpacing }]}>{l}</Text>;
+        })()}
       </View>
     </View>
   );
@@ -106,5 +121,9 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  chipText: { fontFamily: font.sansMedium, fontSize: 17, letterSpacing: trackingPx(9.5, tracking.legend), color: color.textMuted, textTransform: 'uppercase', textAlign: 'left' },
+  /* The clip's own eyebrow.
+     ⚠️ THE TRACKING IS SUPPLIED AT THE CALL SITE, from `legendVoice`. It is an answer about the
+     STRING — Latin keeps the instrument's open track, Hebrew never gets it — and a StyleSheet
+     cannot see a string. `noTrackedHebrew` holds every slot in this class. */
+  chipText: { fontFamily: font.sansMedium, fontSize: 17, color: color.textMuted, textTransform: 'uppercase', textAlign: 'left' },
 });

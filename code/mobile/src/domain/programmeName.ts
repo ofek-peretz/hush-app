@@ -22,7 +22,6 @@
  * surface may not state what it cannot measure applies to a title as much as to a number.
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 import type { MuscleStance, ProgramDay } from '@/data/local/models';
 

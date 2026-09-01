@@ -143,10 +143,20 @@ describe('the source itself carries no v4 decision input', () => {
     expect(src('engine/v5/grid.ts')).not.toMatch(/from '@\/engine\/loadMath'/);
   });
 
-  it('S-46 · cardio and heart rate never reach the engine — a tripwire, like S-54/S-67', () => {
-    // "Recorded. Celebrated. Never an engine input." Nothing about Tuesday's 5k can factually say
-    // what to put on the bar on Wednesday — any such link is a fatigue theory, and it is banned
-    // (Part 1's banned inputs). The day someone wires cardio or HR into a decision, this fails.
+  it('S-46 · heart rate never reaches the engine; cardio reaches it through ONE named door only', () => {
+    /*
+     * "Recorded. Celebrated. Never an engine input." — the original tripwire, AMENDED 2026-08-24
+     * by founder ruling (the competitive review's §6 resolution, approved in full): the run stays
+     * NEVER COACHED, and the strength engine may now READ it as a fatigue fact, one direction
+     * only, through exactly one door — `engine/v5/runEase` ("you ran 8 km yesterday, so your legs
+     * start one rung easier today").
+     *
+     * Why this is not the banned fatigue theory: L2's own carve-out — a guess that is IMMEDIATELY
+     * TESTED is not theory. The ease is one rung, on the next session's FIRST sets, with Loop 1
+     * free to overturn it on the spot — the same license every B-1 cold start lives under. What
+     * stays banned, absolutely: heart rate as a decision input anywhere, and cardio anywhere in
+     * the pure loops. The day cardio appears OUTSIDE the runEase linkage, this still fails.
+     */
     const engineFiles = [
       // `programAssembly.ts` was here too, with `loop2.ts` and `loop3.ts`. The first composed a
       // week and the other two decided between sessions; all three are deleted.
@@ -159,7 +169,17 @@ describe('the source itself carries no v4 decision input', () => {
     ];
     for (const f of engineFiles) {
       const c = code(f);
-      expect({ file: f, clean: !/cardio|heartRate|healthKit|\bhr\b/i.test(c) }).toEqual({ file: f, clean: true });
+      expect({ file: f, hrClean: !/heartRate|healthKit|\bhr\b/i.test(c) }).toEqual({ file: f, hrClean: true });
+      if (f === 'engine/v5/v5Engine.ts') {
+        // The one door: every cardio mention sits on a line that IS the runEase linkage.
+        const cardioLines = c.split('\n').filter((l) => /cardio/i.test(l));
+        expect(cardioLines.length).toBeGreaterThan(0); // the door exists — deleting it silently also fails
+        for (const l of cardioLines) {
+          expect({ line: l.trim(), inTheDoor: /runEase|RunView|cardioRuns|loadCardio/.test(l) }).toEqual({ line: l.trim(), inTheDoor: true });
+        }
+      } else {
+        expect({ file: f, cardioClean: !/cardio/i.test(c) }).toEqual({ file: f, cardioClean: true });
+      }
     }
   });
 

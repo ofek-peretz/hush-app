@@ -102,11 +102,12 @@ describe('the constraints that must survive', () => {
      * of it. Answering "built" and then finding nothing left to write is the whole failure this
      * field exists to catch.
      */
-    expect(t.propertyOrdering).toEqual(['say', 'next', 'hurts', 'today', 'title', 'why', 'sessions', 'notes', 'learned', 'brief']);
+    expect(t.propertyOrdering).toEqual(['say', 'next', 'hurts', 'title', 'why', 'sessions', 'notes', 'learned', 'brief']);
     /*
-     * `today` sits between `hurts` and `sessions`, and the position is the argument: a pain report
-     * is the commonest reason to change the workout she is IN, and changing today comes before
-     * rewriting next week. The model fills these in order.
+     * ⛔ `today` SAT BETWEEN `hurts` AND `sessions` AND IS DELETED (2026-08-26). Its position was a
+     * real argument — a pain report is the commonest reason to change the workout she is IN, and
+     * changing today comes before rewriting next week — and it was an argument about a field
+     * nothing ever applied. See the deletion note in `coachPlan`.
      */
   });
 });

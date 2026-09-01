@@ -57,8 +57,10 @@ describe('contrast holds on the stage', () => {
     'color.textTertiary': color.textTertiary,
     'color.textDim': color.textDim,
     'color.accentText (lit moss label)': color.accentText,
-    'color.tabInactive': color.tabInactive,
-    'color.doneText': color.doneText,
+    // ⚠️ `color.tabInactive` AND `color.doneText` LEFT THIS LIST WITH THE TOKENS THEMSELVES
+    // (2026-08-18). They were two of nineteen light-era aliases with no caller anywhere in `src/`
+    // or `targets/`, and this law was the only thing in the repository still naming them. Both
+    // resolved to `cream[2]`, which is asserted three rows above — so nothing stopped being proven.
     // The DIRECTION tones carry text too — "+2.5", "31.5", "HOLDS" — and they were never in this
     // list, so the one palette decision most likely to be made by eye was the one nothing checked.
     // It mattered the moment `down` moved from clay to blue (founder 2026-07-28: an eased load is

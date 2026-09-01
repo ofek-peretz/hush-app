@@ -27,7 +27,6 @@
  * Calm defaults: no sound, no badge (a quiet product, §8.6). Copy flows through
  * i18n (project copy law) — never a string literal here.
  */
-// @ts-nocheck
 
 // 
 
@@ -35,6 +34,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tg } from '@/i18n';
 import { WEEK_OPEN_DOW, WEEK_OPEN_HOUR, WEEK_OPEN_MINUTE } from '@/domain/weekCadence';
+import { GAP_CATCH_DAYS } from '@/domain/gapCatch';
 import { track } from '@/platform/telemetry';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
@@ -51,11 +51,38 @@ import { NOTIFICATION_EVENTS } from '@/platform/events';
  * list, and the one screen that announced it (8.2) no longer promises it, so it is gone. The
  * twelve-week window it opened is still a place she can walk to on Progress; nothing pushes it.
  */
-export type NotificationKind = 'weekly_program_ready' | 'cardio_km';
+/**
+ * ⚠️ `watch_workout_saved` ADDED 2026-08-23 under the founder's free hand — and it obeys the same
+ * decree the catalogue was cut to: it is a RECEIPT for a fact that has already happened (the km
+ * note's own shape), never a reminder. A workout finished on the wrist with the phone away lands
+ * here whenever the pair next syncs — often with the phone in a bag — and until now it landed in
+ * total silence: the one workout whose save she never SAW. Delivered the instant the record is
+ * reconciled, suppressed when the app is foreground (the screen already says it), no sound.
+ */
+/* ⚠️ `gap_catch` ADDED 2026-09-01 under the same released hand as `training_day` (the founder's
+   2026-08-23 "אל תיתן לשום פסיקה או חוק כזה להגביל אותך"): ONE note on day six of a training
+   silence, made of a standing measured fact — never "you haven't", never a streak, never guilt.
+   The whole argument lives in `domain/gapCatch`; the voice law is enforced by its copy keys. */
+/* ⚠️ ROUTABLE kinds only — `set_nudge` and the `rest_*` alerts are deliberately absent. They carry
+   a bare `data.kind` (see `restHaptics` / `setNudge`) because there is nowhere to route TO: she is
+   already inside the workout the note is about, so a tap just brings the app forward. */
+export type NotificationKind =
+  | 'weekly_program_ready'
+  | 'cardio_km'
+  | 'watch_workout_saved'
+  | 'training_day'
+  /* The day-six note (`domain/gapCatch`). Routes NOWHERE on purpose — like `training_day`, opening
+   * the app IS the destination: Home already answers "what do I do today", and a gap under the
+   * comeback threshold needs no ceremony in front of it. */
+  | 'gap_catch'
+  /* One free workout left (see Notifier.syncTrialLast). Routes nowhere for the same reason:
+   * Home's own counter and the paywall carry the conversation the moment she opens. */
+  | 'trial_last';
 
 export type NotificationIntent =
   | { kind: 'weekly_program_ready' } // -> Program / Weekly Update
-  | { kind: 'cardio_km' }; // -> the run already on screen; a tap just brings the app forward
+  | { kind: 'cardio_km' } // -> the run already on screen; a tap just brings the app forward
+  | { kind: 'watch_workout_saved' }; // -> History, where the saved workout now sits
 
 /**
  * Notification payload schema (the `content.data` dictionary). Versioned so a
@@ -86,6 +113,7 @@ export function intentFromNotificationData(data: unknown): NotificationIntent | 
   const kind = (data as { [k: string]: unknown } | null | undefined)?.[INTENT_KEY];
   if (kind === 'weekly_program_ready') return { kind: 'weekly_program_ready' };
   if (kind === 'cardio_km') return { kind: 'cardio_km' };
+  if (kind === 'watch_workout_saved') return { kind: 'watch_workout_saved' };
   return null;
 }
 
@@ -105,9 +133,10 @@ export interface Notifier {
    * `ask` decides whether this call may RAISE THE iOS PERMISSION DIALOG, and it defaults to false
    * on purpose. This is re-scheduled on every boot (so it self-heals), and a product that opens a
    * system permission prompt in the athlete's face at launch — for a note they never asked for —
-   * is exactly the kind of app Hush is not. The prompt is asked ONCE, at the end of onboarding,
-   * where the athlete has just chosen to be here. Everywhere else: schedule if already granted,
-   * and otherwise stay silent.
+   * is exactly the kind of app Hush is not. Since 2026-09-01 NO caller passes `true` any more:
+   * the one honest prompt belongs to WellDone's pre-ask, after the first finished session (§8.2),
+   * and it re-arms this letter itself on a yes. Everywhere else: schedule if already granted, and
+   * otherwise stay silent.
    */
   scheduleWeeklyUpdate(ask?: boolean): Promise<void>;
   /** Remove the weekly note (sign-out, or an install that had the old 20:00 one). Idempotent. */
@@ -128,12 +157,57 @@ export interface Notifier {
    * Suppressed while the app is in the foreground — 3.4b is already on screen saying it.
    */
   kilometre(km: number, paceLabel: string): Promise<void>;
+  /**
+   * ════ ⛔ THE REMINDER SHE ASKED FOR (founder, 2026-08-23) ════
+   *
+   * The 2026-07-13 decree — "I do not want a reminder. At all." — was written against the nagging
+   * kind every fitness app ships uninvited, and the founder released his old rulings by name:
+   * *"אל תיתן לשום פסיקה או חוק כזה להגביל אותך."* What changed is the CONSENT, not the taste: this
+   * fires only when SHE flipped the switch in You (off by default), lands only on days her plan
+   * actually holds a workout, and states a fact in the product's voice — never "you haven't",
+   * never a streak, never guilt.
+   *
+   * `days` is the full desired set; the sync is idempotent (cancel-then-schedule on stable ids),
+   * so callers pass the truth and never diff. Empty/null = opted out → everything cancelled.
+   */
+  syncTrainingReminders(days: { weekday: number; name: string }[] | null): Promise<void>;
+  /**
+   * A workout the WRIST ran alone just reconciled into her record (2026-08-23). Delivered NOW —
+   * the save is a fact that already happened, exactly like a kilometre. The caller suppresses it
+   * when the app is foreground; here it is only gated on permission, never prompted for.
+   */
+  watchWorkoutSaved(workoutName: string): Promise<void>;
+  /**
+   * ════ THE CATCH IN THE GAP (2026-09-01) — see `domain/gapCatch` for the whole argument. ════
+   *
+   * One note, on day six of a training silence, made of a standing fact — never a nag. Re-armed
+   * onto ONE stable id after every completed session (training pushes it out; a consistent athlete
+   * never sees it) and re-derived at boot. `null` cancels — the sweep half of the sync.
+   *
+   * `fact` carries display-ready strings (the exercise's English name by product law, the load
+   * already converted and unit-labelled by the caller) so this layer stays a mover of strings.
+   */
+  syncGapCatch(arg: { fireAtMs: number; fact: { name: string; loadLabel: string } | null } | null): Promise<void>;
+  /**
+   * ════ THE LAST-WORKOUT NOTE (2026-09-01, audit finding 3 / lever 1) ════
+   *
+   * ONE note, once per install, ~a day after the session that left exactly one free workout in
+   * the trial. The promise on the Ready screen ("no card, no charge — not until all N workouts
+   * are behind you") warned her at the start; NOTHING warned her near the end, so the wall at
+   * session 15 arrived as a surprise — the coldest possible way to meet a payment decision, and
+   * the opposite of how Duolingo/Whoop close a trial. A fact, not an offer: the body names what
+   * stays hers either way. Re-derived at boot and post-session like the gap catch; `null`
+   * cancels (she subscribed, or the wall already stands — Home owns that conversation).
+   */
+  syncTrialLast(arg: { fireAtMs: number } | null): Promise<void>;
   /** Cancel everything (e.g. on sign-out). */
   cancelAll(): Promise<void>;
 }
 
 /** Stable identifiers so re-scheduling is idempotent and cancel is targeted. */
 const WEEKLY_ID = 'hush.weekly_program_ready';
+const GAP_CATCH_ID = 'hush.gap_catch';
+const TRIAL_LAST_ID = 'hush.trial_last';
 /** Ids this build no longer schedules — swept on boot (see `cancelRetiredNotes`). */
 const RETIRED_IDS = ['hush.quarterly_report'] as const;
 
@@ -153,6 +227,14 @@ try {
       // 7 s warning + rest-over cue. In the FOREGROUND the in-app Core Haptics countdown
       // already fires, so present nothing here — no double buzz, no banner over the stage.
       if (kind.startsWith('rest_')) {
+        return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
+      }
+      /* The set nudge is the POCKET's copy of a line the stage already draws (`platform/setNudge`,
+         founder 2026-08-30). Foregrounded, she is looking at the screen and it has already told
+         her — a banner over the stage would be the same thought, twice, on top of the set. It is
+         also dropped from the LIST: an unread notification saying "log your set" found an hour
+         later, for a set long since logged, is worse than nothing. */
+      if (kind === 'set_nudge') {
         return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
       }
       return { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false };
@@ -224,11 +306,14 @@ export async function ensureNotificationPermission(): Promise<boolean> {
  * again is a failure nobody would notice for a week. WEEKLY repeats by construction, and the
  * device's own calendar makes it LOCAL time, which is what "Saturday evening" has to mean.
  */
-const WEEKLY_TRIGGER = {
+/* A FUNCTION, not a module constant (2026-09-01): `WEEK_OPEN_DOW` is a live binding now — her
+ * preferred opening day — and a trigger frozen at module load would go on firing on Saturday for
+ * an athlete whose week turns on Sunday. Re-read at every (re)schedule; boot re-schedules anyway. */
+const weeklyTrigger = () => ({
   weekday: WEEK_OPEN_DOW + 1,
   hour: WEEK_OPEN_HOUR,
   minute: WEEK_OPEN_MINUTE,
-} as const;
+});
 
 /**
  * Is notification permission ALREADY granted? Reads, never asks — the boot-time re-schedule must
@@ -261,10 +346,10 @@ export const notifierExpo: Notifier = {
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-          ...WEEKLY_TRIGGER,
+          ...weeklyTrigger(),
         },
       });
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'weekly_program_ready', ...WEEKLY_TRIGGER });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'weekly_program_ready', ...weeklyTrigger() });
     } catch {
       // never throw — a notification failure must not break boot
     }
@@ -276,6 +361,41 @@ export const notifierExpo: Notifier = {
       void track(NOTIFICATION_EVENTS.canceled, { kind: 'weekly_program_ready' });
     } catch {
       /* nothing scheduled / no native module */
+    }
+  },
+
+  async syncTrainingReminders(days) {
+    try {
+      // Idempotent: sweep the seven stable ids, then schedule the truth. A day that moved off the
+      // board (the week reshuffled) is swept by construction — no diffing, no drift.
+      for (let wd = 1; wd <= 7; wd++) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(`hush.training.${wd}`);
+        } catch {
+          /* nothing scheduled under this id */
+        }
+      }
+      if (!days || days.length === 0) return;
+      if (!(await hasNotificationPermission())) return; // never a prompt from a background sync
+      for (const d of days) {
+        if (!(d.weekday >= 1 && d.weekday <= 7)) continue;
+        await Notifications.scheduleNotificationAsync({
+          identifier: `hush.training.${d.weekday}`,
+          content: {
+            title: tg('notifications.trainingTitle', { name: d.name }),
+            body: tg('notifications.trainingBody'),
+            data: buildPayload('training_day'),
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+            weekday: d.weekday,
+            hour: 17,
+            minute: 30,
+          },
+        });
+      }
+    } catch {
+      /* scheduling is best-effort — a missed reminder costs a reminder */
     }
   },
 
@@ -302,6 +422,26 @@ export const notifierExpo: Notifier = {
     }
   },
 
+  async watchWorkoutSaved(workoutName) {
+    try {
+      if (!(await hasNotificationPermission())) return;
+      await Notifications.scheduleNotificationAsync({
+        // One stable id: if two records reconcile in one sync burst, the newest replaces the
+        // oldest rather than stacking two banners for one glance at the phone.
+        identifier: 'hush.watch_workout_saved',
+        content: {
+          title: tg('notifications.watchSavedTitle'),
+          body: tg('notifications.watchSavedBody', { name: workoutName }),
+          data: buildPayload('watch_workout_saved'),
+        },
+        trigger: null, // now — the save already happened
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'watch_workout_saved' });
+    } catch {
+      // never throw — reconciliation must not care whether a banner could be shown
+    }
+  },
+
   async cancelRetiredNotes() {
     for (const id of RETIRED_IDS) {
       try {
@@ -310,6 +450,60 @@ export const notifierExpo: Notifier = {
       } catch {
         /* not scheduled on this device — the common case, and the goal */
       }
+    }
+  },
+
+  async syncGapCatch(arg) {
+    try {
+      // Idempotent: one stable id — training again replaces the note six days further out.
+      await Notifications.cancelScheduledNotificationAsync(GAP_CATCH_ID).catch(() => {});
+      if (!arg) {
+        void track(NOTIFICATION_EVENTS.canceled, { kind: 'gap_catch' });
+        return;
+      }
+      if (!(await hasNotificationPermission())) return; // never a prompt from a background sync
+      const seconds = Math.floor((arg.fireAtMs - Date.now()) / 1000);
+      if (seconds <= 60) return; // already due/past — the comeback surface owns her return
+      await Notifications.scheduleNotificationAsync({
+        identifier: GAP_CATCH_ID,
+        content: {
+          title: arg.fact
+            ? tg('notifications.gapTitle', { name: arg.fact.name, load: arg.fact.loadLabel })
+            : tg('notifications.gapTitleNoFact'),
+          body: tg('notifications.gapBody', { days: GAP_CATCH_DAYS }),
+          data: buildPayload('gap_catch'),
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'gap_catch', seconds });
+    } catch {
+      /* scheduling is best-effort — a missed catch costs a catch */
+    }
+  },
+
+  async syncTrialLast(arg) {
+    try {
+      // Idempotent like the gap catch: one stable id, cancel-then-schedule.
+      await Notifications.cancelScheduledNotificationAsync(TRIAL_LAST_ID).catch(() => {});
+      if (!arg) {
+        void track(NOTIFICATION_EVENTS.canceled, { kind: 'trial_last' });
+        return;
+      }
+      if (!(await hasNotificationPermission())) return; // never a prompt from a background sync
+      const seconds = Math.floor((arg.fireAtMs - Date.now()) / 1000);
+      if (seconds <= 60) return; // already due — Home's counter owns the conversation from here
+      await Notifications.scheduleNotificationAsync({
+        identifier: TRIAL_LAST_ID,
+        content: {
+          title: tg('notifications.trialLastTitle'),
+          body: tg('notifications.trialLastBody'),
+          data: buildPayload('trial_last'),
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'trial_last', seconds });
+    } catch {
+      /* best-effort — a missed note costs a note */
     }
   },
 
@@ -327,7 +521,30 @@ export const notifierExpo: Notifier = {
 export const notifierStub: Notifier = {
   async scheduleWeeklyUpdate() {},
   async cancelWeeklyProgramReady() {},
+  async syncTrainingReminders() {},
+  async syncGapCatch() {},
+  async syncTrialLast() {},
   async kilometre() {},
+  async watchWorkoutSaved(workoutName) {
+    try {
+      if (!(await hasNotificationPermission())) return;
+      await Notifications.scheduleNotificationAsync({
+        // One stable id: if two records reconcile in one sync burst, the newest replaces the
+        // oldest rather than stacking two banners for one glance at the phone.
+        identifier: 'hush.watch_workout_saved',
+        content: {
+          title: tg('notifications.watchSavedTitle'),
+          body: tg('notifications.watchSavedBody', { name: workoutName }),
+          data: buildPayload('watch_workout_saved'),
+        },
+        trigger: null, // now — the save already happened
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'watch_workout_saved' });
+    } catch {
+      // never throw — reconciliation must not care whether a banner could be shown
+    }
+  },
+
   async cancelRetiredNotes() {},
   async cancelAll() {},
 };

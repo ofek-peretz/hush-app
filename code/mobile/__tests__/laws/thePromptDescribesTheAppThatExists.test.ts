@@ -168,7 +168,17 @@ describe('⛔ the ASK goes stale separately from the preamble', () => {
     expect(src()).not.toMatch(/NOTHING ELSE in this app will ever ask her/);
   });
 
-  it('and the intake is told what her sheet already holds, so it does not re-ask', () => {
+  it('and the FIRST PROGRAMME is told what her sheet already holds, so it does not re-ask', () => {
+    /*
+     * ⛔ THIS SAID "the intake", AND THE INTAKE ASK IS DELETED (2026-08-26). It sent a transcript
+     * and asked the coach to keep asking until it knew enough — a conversation that has not existed
+     * since the founder took the chat out of the front door on 2026-08-04.
+     *
+     * ⚠️ THE SENTENCES MOVED RATHER THAN DIED, which is why this law is edited and not removed:
+     * they are the standing truth about what this app already knows, and they now live in
+     * `first_programme`, the ask that replaced the intake. The subject is unchanged — the coach
+     * must not re-ask what a form already took.
+     */
     expect(src()).toMatch(/HER SHEET ALREADY HAS/);
     expect(src()).toMatch(/never ask for one of them again/);
   });
@@ -180,13 +190,61 @@ describe('⛔ the ASK goes stale separately from the preamble', () => {
 });
 
 describe('the prompt tells the truth about where its words land', () => {
-  it('⚠️ describes the item `say` as living behind a control, not on the stage', () => {
+  it('⛔ describes the item `say` as living ON the stage, because that is where it lands again', () => {
     /*
-     * It moved on 2026-08-02, on the founder's own proposal — a KEY POINTS control instead of text
-     * printed onto the training screen. The prompt still said "on the screen for a hold, a run or a
-     * distance", which is where it used to be drawn.
+     * ════ THIS LAW HAS NOW BEEN RIGHT IN BOTH DIRECTIONS, AND THE SECOND TIME IT WAS WRONG ════
+     *
+     * 2026-08-02 — the sentence moved off the training screen and behind a KEY POINTS control, on
+     * the founder's own proposal, and this law was edited to say so. Correct.
+     *
+     * ⛔ 2026-08-12 — the control was DELETED with `EmphasesSheet` (two readers, both gone) and
+     * nothing replaced it, so the `say` on a lift had no surface at all and the `say` on a run was
+     * a prop the view dropped. **This assertion went on pinning the old sentence for a fortnight**,
+     * which is the failure mode this whole file exists to catch: a prompt describing a product that
+     * changed underneath it — held in place by its own law.
+     *
+     * 2026-08-26 — the stages were given the sentence back (`everythingTheCoachSaysHasAMouth`), so
+     * the prompt tells the truth again by describing where it actually draws.
      */
-    expect(text()).toContain('behind the KEY POINTS control');
+    expect(text()).not.toContain('KEY POINTS');
+    expect(text()).toMatch(/ON THE SCREEN SHE TRAINS FROM/);
+    expect(text()).toMatch(/under the lift's name on a\s+set, under the distance on a run/);
+  });
+
+  it('⛔ …and does not offer her a chat, because there is not one', () => {
+    /*
+     * The same defect, one field along: `"say" on the REPLY — the chat, which is where she reaches
+     * you` and `Ask her for anything you need … if you do not ask, nobody does`. `CoachScreen`,
+     * `CoachChat`, `useCoach` and `CoachIntake` were all deleted on 2026-08-11/12, and no screen in
+     * the product lets her type to the coach. A model told it can ask spends its one sentence — the
+     * only thing she reads from it — on a question that can never arrive.
+     */
+    expect(text()).toMatch(/SHE CANNOT WRITE BACK/);
+    expect(text()).not.toMatch(/the chat, which is where she reaches you/);
+    expect(text()).not.toMatch(/Ask her for anything you need/);
+  });
+
+  it('⛔ …and does not claim it can change the workout she is standing in', () => {
+    /*
+     * The `today` block — six verbs against the running session — was the largest false promise in
+     * the prompt: nothing has ever applied one. Deleted from the prose AND the schema on 2026-08-26,
+     * because a field the model can still fill is a decision it will describe in `say`.
+     */
+    expect(text()).not.toMatch(/SHE IS MID-WORKOUT AND THIS CHANGES THE SESSION/);
+    expect(text()).not.toContain('"do":"drop"');
+  });
+
+  it('⛔ …and says the window is read AFTER the session, which is when it is read', () => {
+    /*
+     * It promised *"the app reads it live — clear the ceiling and it puts weight on the bar for her
+     * NEXT SET and tells her why"*. Loop 1 left the live session on 2026-08-26 (founder: *"בזמן
+     * האימון המתאמן רק רושם ומתעד"*); only `carryWeightForward` survives, and that follows HER hand.
+     * A coach that believes the bar moves between her sets will size its windows for a loop that is
+     * not running.
+     */
+    expect(text()).not.toMatch(/The app reads it live/);
+    expect(text()).toMatch(/Nothing moves during the workout/);
+    expect(text()).toMatch(/reads the window AFTER the session/);
   });
 
   it('and says what an `open` item is, since there the sentence IS the screen', () => {

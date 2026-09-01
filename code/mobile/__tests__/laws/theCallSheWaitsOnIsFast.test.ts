@@ -37,8 +37,21 @@ const worker = () => fs.readFileSync(path.resolve(__dirname, '..', '..', '..', '
  */
 
 describe('the thinking level follows who is waiting', () => {
-  it('⛔ the in-session call runs on the fast path', () => {
-    expect(read('src/platform/coach/afterSession.ts')).toContain("occasion.kind === 'in_session' ? 'low' : undefined,");
+  it('⛔ …and the in-session call is gone, so nothing in `afterSession` is on the fast path', () => {
+    /*
+     * ⛔ REWRITTEN 2026-08-26. This pinned `occasion.kind === 'in_session' ? 'low' : undefined`, and
+     * the in-session call is deleted: it answered the in-workout window, and that window went on
+     * the founder's ruling (*"צ'אט בתוך אימון חי — הורדנו"*), leaving `askCoachInSession` with no
+     * caller for a fortnight.
+     *
+     * ⚠️ THE RULE IS UNCHANGED AND ITS SUBJECT MOVED, WHICH IS WHY THIS IS NOT A DELETION. Both
+     * calls left in this file — `after_session` and `revise` — are ones she is NOT waiting on: she
+     * has left the screen for the first and the second rebuilds a programme. So the default is
+     * correct for both, and the fast path belongs where somebody is watching: the IMPORT, below.
+     */
+    const src = read('src/platform/coach/afterSession.ts');
+    expect(src).not.toContain("occasion.kind === 'in_session'");
+    expect(src).toContain('⛔ NO THINKING LEVEL');
   });
 
   it('⛔ …and there is no chat left to run on it (2026-08-12)', () => {
@@ -75,10 +88,24 @@ describe('and the Worker treats that level as the fast path', () => {
   });
 
   it('and the fast branch hedges in seconds, not tens of seconds', () => {
-    const hedge = /const HEDGE_MS = [^?]+\?\s*([\d_]+)\s*:\s*([\d_]+);/.exec(worker())!;
-    const fast = Number(hedge[1].replace(/_/g, ''));
-    const slow = Number(hedge[2].replace(/_/g, ''));
-    expect(fast).toBeLessThan(3_000);
-    expect(slow).toBeGreaterThan(fast * 5); // the two paths are genuinely different, not cosmetic
+    /*
+     * ⚠️ THE FAST BRANCH SPLIT IN TWO ON 2026-08-30. The hedge stopped racing HEADERS and started
+     * racing a finished answer, and the two `low` call shapes finish on different clocks: a chat
+     * turn in ~1.8s, a plan build in ~8.4s (sixteen measured). One number just past both does not
+     * exist, so there are two, and both are still seconds rather than tens of seconds.
+     */
+    const n = (name: string) => {
+      const m = new RegExp('const ' + name + ' = ([0-9_]+);').exec(worker());
+      if (!m) throw new Error(`no ${name}`);
+      return Number(m[1].replace(/_/g, ''));
+    };
+    const build = n('BUILD_HEDGE_MS');
+    const chat = n('CHAT_HEDGE_MS');
+    const slow = Number(/const HEDGE_MS = [^?]+\? \([^)]+\) : ([\d_]+);/.exec(worker())![1].replace(/_/g, ''));
+    expect(chat).toBeLessThan(3_500);
+    // A build takes longer to FINISH, so its hedge is longer — and still nowhere near the slow path.
+    expect(build).toBeGreaterThan(chat);
+    expect(build).toBeLessThan(12_000);
+    expect(slow).toBeGreaterThan(chat * 5); // the two paths are genuinely different, not cosmetic
   });
 });

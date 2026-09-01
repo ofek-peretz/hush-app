@@ -5,7 +5,6 @@
  * `accent` marks the active item with moss; `stage` is a deeper dark card;
  * `raised` lifts with the deep warm shadow.
  */
-// @ts-nocheck
 
 // 
 

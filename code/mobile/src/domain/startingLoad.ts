@@ -13,7 +13,7 @@
  * is worth marking, and the other two are struck below.
  */
 import type { Profile, Experience, Capability } from '@/data/local/models';
-import { BAR_KG } from '@/engine/loadMath';
+import { BAR_KG, emptyBarKg } from '@/engine/loadMath';
 import { loadFloor } from '@/engine/v5/grid';
 import { STARTING_INCREMENT } from '@/engine/v5/constants';
 import type { Exercise } from '@/data/exercises';
@@ -51,7 +51,10 @@ import type { Exercise } from '@/data/exercises';
  * site — widening it changes no signature in `programAssembly`, the file with the most surviving
  * mutants in the engine, which is not a file to reshape for a feature.
  */
-export type LoadProfile = Pick<Profile, 'sex' | 'weightKg' | 'painEases'>;
+/* `equipment` joined the pick on 2026-09-01 (the room, audit 06): the assembly and the swap pool
+ * already thread a LoadProfile everywhere a candidate is judged, so the room rides the same rail —
+ * no new parameter on any signature, and absent means "full gym" exactly as before. */
+export type LoadProfile = Pick<Profile, 'sex' | 'weightKg' | 'painEases' | 'equipment'>;
 
 const UPPER: Capability[] = ['horizontal_push', 'horizontal_pull', 'vertical_push'];
 
@@ -155,7 +158,7 @@ export function canLoad(ex: Exercise, profile?: LoadProfile): boolean {
 export function snapToStock(kg: number, ex: Exercise): number {
   const inc = STARTING_INCREMENT[ex.equipment] ?? 0;
   if (inc <= 0) return kg; // bodyweight — no load axis to land on
-  const floor = ex.equipment === 'barbell' ? BAR_KG : 0;
+  const floor = emptyBarKg(ex.equipment); // the Olympic bar, or the lightest fixed bar (F-19)
   const rungs = Math.max(0, Math.round((kg - floor) / inc));
   return floor + rungs * inc;
 }
@@ -193,6 +196,11 @@ export function snapToStock(kg: number, ex: Exercise): number {
  * `null` until she has `MIN_SCALE_LIFTS` distinct lifts — an evidence gate of the F-12 family. Below
  * it the model stands alone, exactly as it does today.
  */
+/* ⚠️ 3 WAS RE-MEASURED AT 2 ON 2026-08-23 AND THE BOARD DID NOT MOVE — 58.3% in band, cold start
+ * 52.6%, set 1 40.4%, identical to the tenth of a point. The gate is not the binding constraint:
+ * by the time a cold start needs the scale, the athlete already holds three lifts of evidence, and
+ * the first-session seeds it exists for have NO history for any gate to admit. Recorded so the next
+ * accuracy pass does not spend the same experiment. */
 export const MIN_SCALE_LIFTS = 3;
 export const PERSONAL_SCALE_FLOOR = 0.5;
 
@@ -235,11 +243,12 @@ export function startingWeight(ex: Exercise, profile: LoadProfile): number | nul
   let kg = modelled;
   const step = 1;
   kg = snapToStock(Math.round(kg / step) * step, ex);
-  // NO BARBELL LIFT IS LIGHTER THAN THE BAR. This clause used to read `&& ex.tier === 'compound'`,
-  // which asked the wrong question: the bar weighs 20 kg whatever the lift is doing. The two
-  // barbell ISOLATION lifts in the catalogue — `bb_curl` and `skullcrusher`, both baseKg 20 — fell
-  // through it, so EVERY beginner was handed a 16 kg barbell curl (a beginner woman, 10 kg). The
-  // tier was never the point; the equipment is.
-  if (ex.equipment === 'barbell') kg = Math.max(kg, BAR_KG);
+  // NO LIFT IS LIGHTER THAN ITS BAR. This clause used to read `&& ex.tier === 'compound'`,
+  // which asked the wrong question: the bar weighs what it weighs whatever the lift is doing.
+  // Since 2026-08-25 the floor is per-family (F-19): an Olympic-bar lift floors at BAR_KG, and the
+  // fixed-bar lifts (`bb_curl`, `reverse_curl`, `skullcrusher`) floor at the lightest fixed bar —
+  // which is the whole reason the family exists: a beginner woman's curl now seeds at 10-15 kg
+  // instead of being forced up to an Olympic bar she would never curl.
+  kg = Math.max(kg, emptyBarKg(ex.equipment));
   return Math.max(kg, step);
 }

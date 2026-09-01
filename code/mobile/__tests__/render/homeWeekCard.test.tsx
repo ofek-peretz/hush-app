@@ -29,7 +29,7 @@ import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { HomeView, type HomeViewProps } from '@/screens/home/HomeView';
 import { initI18n, tg } from '@/i18n';
 import { bidi } from '@/i18n/bidi';
-import { color } from '@/design/tokens';
+import { color, directionTone } from '@/design/tokens';
 
 beforeAll(async () => {
   await initI18n();
@@ -112,14 +112,25 @@ function colors(node: ReactTestInstance): string[] {
 }
 
 /*
+ * ⛔ THE WEEK'S DOOR IS GONE FROM HOME (founder 2026-08-29): *"לגבי כפתור ה'אימון אחר' אפשר להוריד
+ * כי יותר נוח לבצע אימון אחר דרך מסך התוכנית שכבר אפשר לעשות כיום."*
+ *
+ * `openWeek`, `sheet`, `inSheet` and `sheetTexts` stood here — the harness for `WeekSheet`, which
+ * 2026-08-22 put the week behind and this ruling deleted outright. **Every law they carried was
+ * moved, not dropped**, into `programTab.test.tsx` (`the week the sheet used to hold`): all of it
+ * listed, a row reporting its own id rather than its name, done wearing its mark, the week's own
+ * order kept, and looking not being choosing. That file mounts the surface that answers the
+ * question now, which is the only place those laws can be true.
+ */
+/*
  * ⛔ `changes` IS PER WORKOUT (founder 2026-08-12). The pill used to draw `briefCount` — the WEEK's
  * total — on the queued card alone, so a load the engine moved in Legs A was invisible until she
  * opened it, and the number on the card she was looking at counted work that was not in it.
  */
 const WORKOUTS = [
-  { id: 'day_1', name: 'Push A', muscles: 'Chest · Shoulders', done: true },
-  { id: 'day_2', name: 'Pull A', muscles: 'Back · Biceps', changes: 3 },
-  { id: 'day_3', name: 'Legs A', muscles: 'Quads · Glutes' },
+  { id: 'day_1', name: 'Push A', done: true },
+  { id: 'day_2', name: 'Pull A', changes: 3 },
+  { id: 'day_3', name: 'Legs A' },
 ];
 
 function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
@@ -127,7 +138,6 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     resting: false,
     name: 'Ofek',
     dayName: 'Pull A',
-    muscles: 'Back · Biceps',
     trainedThisWeek: 1,
     startError: false,
     weekNumber: 3,
@@ -186,26 +196,40 @@ describe('the app says what it does', () => {
     expect(opened).toBe(1);
   });
 
-  it('⛔ exactly ONE pill, and it stays on its own workout when another is queued', () => {
+  it('⛔ the pill counts THIS session, and it does not follow the selection', () => {
     /*
-     * The half the old law could not state. Only `Pull A` was touched. Queue `Legs A` and the pill
-     * must NOT follow the selection — it belongs to the work it counts. Before this it was drawn
-     * from `briefCount` on whichever card happened to be open, so it described a different day.
+     * ⛔ REWRITTEN 2026-08-22, AND THE LAW IS THE SAME ONE. It read: *"exactly ONE pill, and it
+     * stays on its own workout when another is queued"* — asserted by walking up from the pill to
+     * find `Pull A`'s card, because every workout was a card on the page.
+     *
+     * Today draws ONE session now, so "which card is the pill on" is no longer a question the
+     * screen can be asked. The law it protected is untouched and is stated directly: **a count
+     * belongs to the thing it counts.** Only `Pull A` was touched; queue `Legs A`, which was not,
+     * and Today must carry no pill at all — not the week's total, which is the exact defect the
+     * founder named on 2026-08-12.
      */
-    const pills = (r: ReactTestRenderer) =>
-      r.root.findAll((n) => n.props?.accessibilityLabel === tg('home.briefChanges', { count: 3 }));
+    const onToday = (r: ReactTestRenderer) =>
+      r.root.findAll((n) => typeof n.props?.accessibilityLabel === 'string'
+        && n.props.accessibilityLabel === tg('home.briefChanges', { count: 3 }));
 
-    const queuedElsewhere = mount(<HomeView {...props({ dayId: 'day_3', dayName: 'Legs A' })} />);
-    // One pill on the screen, and the card carrying it is Pull A's — not the queued Legs A.
-    expect(pills(queuedElsewhere).length).toBeGreaterThan(0);
-    // Walk up to the card and confirm the name inside it is the workout the pill counts.
-    let card = pills(queuedElsewhere)[0].parent;
-    let found = false;
-    for (let i = 0; i < 8 && card && !found; i += 1) {
-      found = card.findAll((n) => typeof n.props?.children === 'string' && n.props.children.includes('Pull A')).length > 0;
-      if (!found) card = card.parent;
-    }
-    expect(found).toBe(true);
+    // Queued: Pull A — the session with the three changes. Its own count is on it.
+    expect(onToday(mount(<HomeView {...props()} />)).length).toBeGreaterThan(0);
+
+    // Queued: Legs A — untouched. Today says nothing, because nothing moved in the session it is about.
+    const elsewhere = mount(<HomeView {...props({ dayId: 'day_3', dayName: 'Legs A' })} />);
+    expect(onToday(elsewhere)).toHaveLength(0);
+
+    /*
+     * ⛔ AND HOME NO LONGER SAYS WHERE PULL A'S THREE WENT — the cost of 2026-08-29, stated rather
+     * than glossed. The week sheet printed a per-day count for the days that are NOT today, and it
+     * is deleted with its door (*"יותר נוח לבצע אימון אחר דרך מסך התוכנית"*).
+     *
+     * ⚠️ THE ACCOUNT ITSELF IS NOT LOST: the pill on today's own card is also the door to the
+     * weekly update, which holds the whole week's changes. What is gone is seeing at a glance that
+     * a day she is not training today moved — so the assertion is on the ABSENCE, deliberately, so
+     * that nobody re-adds a week total to a card that is about one session.
+     */
+    expect(texts(elsewhere).join(' ')).not.toContain(tg('home.briefChangesShort', { count: 3 }).toUpperCase());
   });
 
   it('⚠️ a steady week shows no pill at all, and never a zero', () => {
@@ -218,265 +242,56 @@ describe('the app says what it does', () => {
   });
 });
 
-describe('the week is on the page, and it is a door', () => {
-  it('every workout of the week is a chip', () => {
-    const said = texts(mount(<HomeView {...props()} />)).join(' ');
-    for (const w of WORKOUTS) expect(said).toContain(w.name);
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * TODAY IS ONE SESSION, WHOLE — AND THE WEEK IS SOMEWHERE ELSE.
+ *
+ * ⛔ FOUNDER, 2026-08-29: *"לגבי כפתור ה'אימון אחר' אפשר להוריד כי יותר נוח לבצע אימון אחר דרך מסך
+ * התוכנית שכבר אפשר לעשות כיום. ואז כך תוכל להציג את כל התוכנית שיש היום."*
+ *
+ * Two halves of one move. 2026-08-22 had put the week behind a control on this screen; the Program
+ * tab has since become the better answer to the same question — it draws every workout with ALL of
+ * its lifts and their live figures, and a row there opens the same `PreWorkout` card. So the door
+ * closes, and what Today buys with the space is the rest of its own day.
+ *
+ * ⚠️ THE 08-22 FINDING IS NOT REVERSED. *"A capability with no control at all is the app saying it
+ * does not exist"* — the control exists, on the tab whose whole subject is the week, and
+ * `programTab.test.tsx` holds the laws that say so.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('today is one session, whole', () => {
+  it('the week has no door on Home any more — neither the row nor the sheet behind it', () => {
+    const r = mount(<HomeView {...props()} />);
+    expect(byLabel(r, tg('home.trainSomethingElse'))).toBeNull();
+    // …and no other workout of the week is named on the page. Today is today.
+    const said = texts(r).join(' ');
+    expect(said).toContain('Pull A');
+    for (const other of ['Push A', 'Legs A']) expect(said).not.toContain(other);
   });
 
-  it('a chip QUEUES that workout — choosing never leaves Home (the sheet is gone)', () => {
-    const chosen: string[] = [];
-    const r = mount(
-      <HomeView {...props({ onChooseWorkout: (id: string) => void chosen.push(id) })} />,
-    );
-    act(() => {
-      byLabel(r, 'Legs A')!.props.onPress(); // not the queued one → it becomes the queued one
-    });
-    expect(chosen).toEqual(['day_3']);
-    /*
-     * "…and nothing was pushed on top of Home" used to be asserted here through an `onOpenWorkout`
-     * prop. That prop was deleted with the second act (S-73) and the assertion had been VACUOUS
-     * ever since — a handler nothing calls can never be called. It is a compile error to pass it
-     * now that the tests are typechecked, which is a stronger guarantee than the assertion ever
-     * was: the component has no door to push through, so there is nothing to catch at runtime.
-     */
-  });
-
-
-
-
-
-  /**
-   * A finished workout is a RECORD, not an offer (founder 2026-07-11) — and a record can be read.
-   * Its chip selects like any other and its lifts appear; the gate moved off the VIEW and onto the
-   * ACT, where it belongs. It used to be gated here, which meant a done chip fell through to the
-   * next workout and quietly showed the WRONG plan under the right name.
-   */
-  it('a finished workout is a record: its chip shows its plan, and the button will not start it', () => {
-    const chosen: string[] = [];
-    const r = mount(<HomeView {...props({ onChooseWorkout: (id) => void chosen.push(id) })} />);
-    act(() => {
-      byLabel(r, 'Push A')!.props.onPress(); // done: true
-    });
-    expect(chosen).toEqual(['day_1']); // it selects — the container decides what that shows
-
-    // …and when the container hands back a done day, the act is gone, not merely disabled.
-    const done = texts(mount(<HomeView {...props({ dayDone: true })} />)).join(' ');
-    expect(done).toContain(tg('program.doneThisWeek'));
-    expect(done).not.toContain(tg('home.begin', { name: bidi('Pull A') }));
-  });
-
-  /**
-   * DELETED, WITH ITS SUBJECT (2026-07-17). This asserted that Home printed "Tap to queue a workout
-   * · tap it again to open it" — a label teaching a gesture, which is the clearest instance of the
-   * founder's law: "the moment you start explaining everything, you are not letting the button
-   * explain itself." The hint is gone because the thing it was apologising for is gone.
-   *
-   * What replaces it is the assertion that the screen still teaches — through the CONTROL, not a
-   * caption: a chip that queues, and a line that says "6 exercises" and opens them (above).
-   */
   it('no line on Home explains what a tap does — the controls do that themselves', () => {
+    /* DELETED WITH ITS SUBJECT (2026-07-17): Home printed "Tap to queue a workout · tap it again to
+       open it" — a label teaching a gesture, the clearest instance of the founder's law that "the
+       moment you start explaining everything, you are not letting the button explain itself." */
     const all = texts(mount(<HomeView {...props()} />)).join(' ');
     expect(all).not.toMatch(/tap it again|לחיצה נוספת/i);
   });
 
-  it('a chip knows itself by ID, never by name — two workouts may be called the same thing', () => {
-    // Both are "Upper". Matching on the NAME would light both chips as "queued" and turn a tap
-    // meant to QUEUE the second one into a tap that opens the first one's plan.
-    const twins = [
-      { id: 'day_1', name: 'Upper', muscles: 'Chest' },
-      { id: 'day_2', name: 'Upper', muscles: 'Back' },
-    ];
-    const chosen: string[] = [];
-    const r = mount(
-      <HomeView
-        {...props({
-          workouts: twins,
-          dayName: 'Upper',
-          dayId: 'day_1',
-          onChooseWorkout: (id) => void chosen.push(id),
-        })}
-      />,
-    );
-    /*
-     * ⚠️ BOTH TWINS ARE CONTROLS NOW (2026-08-05). The open row became pressable when the
-     * pre-workout card landed — his rule is *"pressing a day with a workout opens the card"*, and it
-     * held for six days of the week and failed on the one she is standing in.
-     *
-     * The law is unchanged and is exactly the point: matched on the NAME the two are
-     * indistinguishable, so each must report its own ID. A row that queued the other one would be
-     * the bug this test was written for, and it is now reachable from two rows instead of one.
-     */
-    const chips = r.root.findAll((n) => n.props?.accessibilityLabel === 'Upper' && typeof n.props.onPress === 'function');
-    expect(chips).toHaveLength(2);
-    act(() => chips.forEach((c) => c.props.onPress()));
-    // The open row reports day_1 and the closed one day_2 — neither reports the other's.
-    expect([...chosen].sort()).toEqual(['day_1', 'day_2']);
-  });
-
-  /**
-   * Unchanged law, and it matters MORE now: a chip repaints the plan list under the button. While a
-   * session is waiting to be resumed the button says "Continue Pull A", so a chip that swapped the
-   * list beneath it would be showing Legs A's lifts under a button that starts Pull A. There is one
-   * act on the screen until she finishes or abandons it, and the chips say so rather than pretending
-   * otherwise — they stand down, and announce that to VoiceOver too.
-   */
-  it('an interrupted workout owns the CTA — the chips stand down behind it', () => {
-    const chosen: string[] = [];
-    const r = mount(
-      <HomeView {...props({ resumable: { workoutName: 'Pull A' }, onChooseWorkout: (id) => void chosen.push(id) })} />,
-    );
-    const legs = byLabel(r, 'Legs A')!;
-    expect(legs.props.accessibilityState?.disabled).toBe(true);
-    act(() => legs.props.onPress?.());
-    expect(chosen).toEqual([]);
-  });
-
-  it('⛔ a trained workout wears the MOSS check, and it wears it even when it is the open row', () => {
-    /*
-     * ════ DONE OUTRANKS QUEUED (founder A.16: *"a completed workout's chip stays white, reads like
-     * another workout still to do"*) ════
-     *
-     * The chips said this with a paper pill against a moss veil. The column has no pills: emphasis
-     * is DISTANCE FROM THE GROUND, so the queued row simply rises off the stage and everything else
-     * lies flat. That removes the collision the founder caught — a record cannot put on an offer's
-     * pill when there is no pill — and leaves one place it can still happen: **she taps a finished
-     * session to re-read it, and the row opens exactly as an offer does.**
-     *
-     * So the law is now about the MARK. A workout she has trained carries the moss check wherever it
-     * is drawn, open or closed, and one she has not carries none. The act is refused separately.
-     */
-    const r = mount(<HomeView {...props()} />);
-    const done = colors(byLabel(r, 'Push A')!);
-    expect(done).toContain(color.up); // the lit moss check — the single accent, and the verdict
-    const todo = colors(byLabel(r, 'Legs A')!);
-    expect(todo).not.toContain(color.up); // a check means DONE and nothing else
-
-    // …and the same workout as the OPEN row: still checked, still unmistakably a record.
-    const open = mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />);
-    // ⚠️ The open row IS a control now — it opens the pre-workout card like every other day
-    // (2026-08-05). What this test is about is the MARK, and the mark is what is asserted below.
-    expect(byLabel(open, 'Push A')).not.toBeNull();
-    const anyMoss = open.root
-      .findAll((n) => n.props?.color === color.up || n.props?.strokeWidth === 2.6)
-      .length;
-    expect(anyMoss).toBeGreaterThan(0);
+  it('an interrupted workout owns the CTA, and the block that holds today refuses its own press', () => {
+    /* Unchanged law: while a session waits to be resumed the button says "Continue Pull A", so
+       there is ONE act on the screen until she finishes or abandons it. */
+    const r = mount(<HomeView {...props({ resumable: { workoutName: 'Pull A' } })} />);
+    expect(byLabel(r, 'Pull A')?.props.accessibilityState?.disabled).toBe(true);
   });
 
   it('⚠️ and a done workout is never offered again: the act refuses it', () => {
-    // The other half of A.16, and the half that actually protects her history. Selecting a finished
-    // session shows its plan; it never puts a Begin under it.
+    // Half of founder A.16 — the half that protects her history. The other half (a done workout
+    // wears the moss check wherever it is DRAWN) is asked of the Program tab now.
     const said = texts(mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />)).join(' ');
     expect(said).not.toContain(tg('home.begin', { name: bidi('Push A') }));
-  });
-
-  it('⛔ opening a workout to READ it does not re-queue the week', () => {
-    /*
-     * ════ LOOKING IS NOT CHOOSING ════
-     *
-     * FOUNDER, 2026-08-12, asking how the interaction works: *"כי אחרת אז מה הערך של כפתור הBEGIN
-     * במסך הTODAY?"* The question found the defect. `onChooseWorkout` was `setChosenId(id)` and then
-     * navigate — so opening a workout to look at it MADE it the queued one. She peeks at Lower B,
-     * drags the sheet down, and Today reads "Begin Lower B": a workout she never chose, standing
-     * where the one she was about to do used to be.
-     *
-     * `chosenId` drives the lit card, the act, and the watch lobby. A glance rewrote all three, and
-     * the button he asked about was the thing it cost.
-     *
-     * ⚠️ ASSERTED ON THE SOURCE, because the state it guards lives in the CONTAINER and the render
-     * tests here drive the view. What the view does is press-and-navigate; what must never come back
-     * is the write beside it.
-     */
-    const home = fs.readFileSync(path.join(__dirname, '..', '..', 'src/screens/home/Home.tsx'), 'utf8');
-    expect(home).toContain("onChooseWorkout={(id) => navigation.navigate('PreWorkout', { workoutId: id })}");
-    // The queue moves when she TRAINS, from either door — never when she reads.
-    expect(home).toContain('daysAfterStarting(coachWorkouts, todayId,');
-  });
-
-  it('⚠️ a done row’s TYPE agrees with its mark — it recedes, it is not an offer in cream', () => {
-    /*
-     * The chips said this with a strike-through, and the founder's point was that *the mark and the
-     * type agree*: a check on a row set exactly like the ones still to do makes the check argue
-     * with everything around it.
-     *
-     * The column says it by weight instead — a trained session's name lies in the muted ink the
-     * stage keeps for things that are not the point, and a pending one stands in the tone above it.
-     * A strike-through through a whole day of the week would read as cancelled rather than done.
-     */
-    const r = mount(<HomeView {...props()} />);
-    /*
-     * ⚠️ THE PROBE READS THE NAME, NOT THE WHOLE ROW. It used to collect every coloured text in the
-     * card, which was harmless while a row WAS its name and became meaningless the moment the row
-     * grew an index and a shape line — both of which sit in the muted ink by design. It then
-     * reported "receded" for every row on the screen, done or not.
-     */
-    const tone = (label: string) =>
-      r.root
-        .findAll((n) => n.props?.accessibilityLabel === label)
-        .flatMap((n) =>
-          n.findAll((c) => typeof c.props?.children === 'string' && c.props.children.includes(label)),
-        )
-        .map((c) => {
-          const st = c.props.style;
-          const flat = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
-          return flat?.color as string | undefined;
-        })
-        .filter(Boolean);
-    /*
-     * ⚠️ ASSERTED AS A RELATION, NOT AS TWO TOKENS (2026-08-12). This pinned the pending name to
-     * `textSecondary`, which was its exact ink when every unqueued row was a one-line label. The
-     * redesign made all four rows CARDS and their names the serif at full ink — so the law failed on
-     * a screen where the rule it protects is more true than it was, not less.
-     *
-     * A colour constant is not the law. The law is that **done recedes and pending does not**, and
-     * that survives any repaint.
-     */
-    expect(tone('Push A')).toContain(color.textMuted); // done — receded into the stage's quiet ink
-    expect(tone('Legs A')).not.toContain(color.textMuted); // still to do — anything but receded
-    expect(tone('Legs A').length).toBeGreaterThan(0); // …and the probe really found the row
-  });
-
-  /**
-   * ⛔ THIS LAW DIED WITH THE STRIP, AND ITS REASON DIED WITH IT (2026-08-04).
-   *
-   * It said: *"a completed workout may not belong in the row of pending ones at all"* (founder
-   * A.16) — so finished workouts fell to the end and the strip led with what was left. That was
-   * right for a horizontal CHOOSER, whose only job was to offer what was next.
-   *
-   * The column is not a chooser. It is the week, in the order the week happens, and Sunday comes
-   * before Tuesday whether or not Sunday is finished. **Reordering it by done-ness would destroy
-   * the one thing it exists to say.** What is next is answered by the row that opens, which is a
-   * better answer than a sort order ever was.
-   *
-   * Kept, inverted, so nobody re-adds the sort: the order is the WEEK's, and a done workout holds
-   * its own day.
-   */
-  it('⛔ the column keeps the week’s order — a finished workout does NOT fall to the end', () => {
-    const r = mount(
-      <HomeView
-        {...props({
-          workouts: [
-            { id: 'day_1', name: 'Push A', muscles: '', done: true },
-            { id: 'day_2', name: 'Pull A', muscles: '' },
-            { id: 'day_3', name: 'Legs A', muscles: '', done: true },
-            { id: 'day_4', name: 'Push B', muscles: '' },
-          ],
-        })}
-      />,
-    );
-    const order = r.root
-      .findAll((n) => typeof n.props?.accessibilityLabel === 'string' && typeof n.props.onPress === 'function')
-      .map((n) => n.props.accessibilityLabel as string)
-      .filter((l) => ['Push A', 'Pull A', 'Legs A', 'Push B'].includes(l));
-    /*
-     * No pattern in this fixture → the column numbers the coach's own order and keeps it whole.
-     *
-     * ⚠️ PULL A IS BACK IN THIS LIST (2026-08-05). It is `dayName`, so it is the OPEN row — which
-     * used not to be a control, and now is: every day with a workout opens the pre-workout card,
-     * including the one she is standing in. The law is about ORDER, and the order is what a
-     * finished workout must not change: **the done ones are still in their own places.**
-     */
-    expect(order).toEqual(['Push A', 'Pull A', 'Legs A', 'Push B']);
+    // …and today's own block still wears the mark, which is where the check law survives on Home.
+    const open = mount(<HomeView {...props({ dayId: 'day_1', dayName: 'Push A', dayDone: true })} />);
+    expect(open.root.findAll((n) => n.props?.color === color.up).length).toBeGreaterThan(0);
   });
 });
 
@@ -538,23 +353,63 @@ describe('the screen does not stutter', () => {
     expect(named).toHaveLength(2);
   });
 
-  it('training Home carries NO numeric week meter — the chips are the only picture of the count', () => {
-    // v7 dissolved the week card, and with it the "1 / 3" meter. The chips (one per workout, the
-    // done one checked) ARE the count now; a numeric meter above them would be a second picture of
-    // the same fact. (The meter survives only in RECOVERY, where "3 / 3" is the closing verdict.)
-    const counted = texts(mount(<HomeView {...props()} />)).filter((s) => s.includes('/ 3'));
-    expect(counted).toHaveLength(0);
+  it('⛔ training Home DOES carry the week meter, and it is an instrument', () => {
     /*
-     * ⚠️ AND THIS LAW STOPPED A METER GOING BACK IN. The 2026-08-04 proposal put "1 of 4" beside
-     * Begin; the column already says it — one row per session, the trained ones checked — so the
-     * meter would have been a second picture of the same fact, which is the founder's own law about
-     * this screen. It was not built.
+     * ════ ⛔ THIS LAW WAS A BAN, AND THE FOUNDER REVERSED IT (2026-08-22) ════
      *
-     * Asked of the WEEK rather than of the controls: the queued session is the open row and is
-     * therefore not pressable, so "every workout is a control" is no longer the right question.
+     * It read *"training Home carries NO numeric week meter — the chips are the only picture of the
+     * count"*, and its reasoning was sound while it was true: *"the column already says it — one row
+     * per session, the trained ones checked — so the meter would have been a second picture of the
+     * same fact."*
+     *
+     * ⛔ *"ארצה לראות מה קורה במידה ואימון אחד בוצע — איך זה מסמן את ההתקדמות שבוצעו N מתוך M
+     * אימונים."*
+     *
+     * ⚠️ AND THE OLD REASONING DOES NOT SURVIVE THE ARRANGEMENT THAT REPLACED IT. There are no rows
+     * on Today any more — the week is behind a door — so nothing on the screen draws the count, and
+     * a meter is no longer a second picture of anything. It is the only one.
+     *
+     * The half of the law that DOES survive is how it is said: **drawn, not written** (founder
+     * 2026-08-22, *"העדפה להראות במקום לכתוב"*). So the assertion is on the instrument, not on a
+     * string — a sentence saying "2 of 4" with no rule under it would pass a text check and fail
+     * the ruling.
      */
-    const said = texts(mount(<HomeView {...props()} />)).join(' ');
-    for (const w of WORKOUTS) expect(said).toContain(w.name);
+    const r = mount(<HomeView {...props()} />);
+
+    // The count is stated, in the athlete's own words, where a screen reader can reach it.
+    const meter = r.root.find((n) => n.props?.accessibilityRole === 'progressbar');
+    expect(meter.props.accessibilityLabel).toBe(tg('home.weekMeter', { done: 1, total: 3 }));
+
+    /*
+     * …and it is DRAWN: one segment per session, and the states are the three a session can be in.
+     * Push A is done (moss, the ONLY filled state), Pull A is queued (a hairline carrying the
+     * cream position dot — a filled queued bar read as progress and contradicted the counter,
+     * design review 2026-09-01), Legs A is ahead (a hairline, never an empty box).
+     */
+    const segs = meter.findAll((n) => {
+      // HOST nodes only. `findAll` returns the composite AND the host it renders, so an unfiltered
+      // probe reports every segment twice and the count means nothing.
+      if (typeof n.type !== 'string') return false;
+      const st = n.props?.style;
+      const flat = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
+      return !!flat && flat.flex === 1 && typeof flat.borderRadius === 'number';
+    });
+    expect(segs).toHaveLength(3);
+    const fill = (n: ReactTestInstance) => {
+      const st = n.props.style;
+      const flat = Array.isArray(st) ? Object.assign({}, ...st.filter(Boolean)) : st;
+      return flat.backgroundColor as string;
+    };
+    expect(fill(segs[0])).toBe(color.up); // done — the only filled state
+    // Queued is a POSITION, not progress: its track is the ahead hairline, and the cream dot on it
+    // is the "you are here" marker. Nothing but DONE may fill, so the meter can never claim more
+    // than the counter beside it.
+    expect(fill(segs[1])).toBe(color.meterLine);
+    const dot = segs[1].findAll(
+      (n) => typeof n.type === 'string' && n.props?.style && Object.assign({}, ...[n.props.style].flat().filter(Boolean)).backgroundColor === color.textPrimary,
+    );
+    expect(dot.length).toBeGreaterThan(0);
+    expect(fill(segs[2])).not.toBe(color.up); // ahead — nothing has happened there
   });
 
   it('an INTERRUPTED session keeps its name — there it is a fact, not an echo', () => {
@@ -595,5 +450,106 @@ describe('⛔ the closed week states its evidence and explains nothing', () => {
     expect(said).toContain('3/3');
     expect(said).toContain(tg('home.restTitle'));
     expect(said).toContain(tg('home.restNext'));
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ WHAT A CARD OFFERS, AND WHAT THE QUEUED ONE DECIDES (2026-08-18, design review of Today).
+ *
+ * The founder's screenshot of week one: a wordmark, "WEEK 1", three cards reading "Full Body A",
+ * "Full Body B", "Full Body C" with a count and a duration on each, a button, and a trial line.
+ * Nothing else. Four deletions between 08-12 and 08-16 each carried the screen's own law — *"a
+ * screen should be biggest where it changes"* — and none of them put anything back, so the largest
+ * type on Today ended up on a label that never changes, which is the fault the law was written to
+ * fix.
+ *
+ * Two things answer it, and both are facts the app already had and was not printing.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+/*
+ * ⛔ "EVERY WORKOUT SAYS WHAT IT TRAINS" IS DELETED (founder 2026-08-29): *"במסך הhome יש כיתוב על
+ * סוגי שריר וכל מיני דברים מוזרים שלא מעניינים."*
+ *
+ * The two laws here asked the week's rows to carry a muscle line ("Back · Biceps") and a done row
+ * to carry none. Their subject was `WeekSheet`, which is deleted with its door; `Home.musclesOf`
+ * and `signatureOf`, which produced the string, went with it, and `HomeWorkoutOption.muscles` is
+ * gone from the type.
+ *
+ * ⚠️ THE PROBLEM THEY SOLVED IS SOLVED HARDER, NOT ABANDONED. The line existed because four rows
+ * reading "Full Body A / B / C · 7 lifts · ~55 min" differ by one letter and a chooser drawn from
+ * them cannot be used. The Program tab does not summarise a day at all — it prints every lift of
+ * every day with its figure, which is the resolution the muscle line was a compression of. That is
+ * asserted where the rows now live, in `programTab.test.tsx`.
+ */
+
+describe('⛔ the queued card carries the one number Hush decides', () => {
+  const PLAN = [
+    { exerciseId: 'bb_bench_press', name: 'Bench Press', load: 62.5, sets: 4, band: [8, 10], changed: 'up' },
+    { exerciseId: 'bb_back_squat', name: 'Back Squat', load: 90, sets: 3, band: [6, 8] },
+    { exerciseId: 'lat_pulldown', name: 'Lat Pulldown', load: 55, sets: 3, band: [10, 12] },
+    { exerciseId: 'db_curl', name: 'Dumbbell Curl', load: 14, sets: 3, band: [10, 12] },
+    { exerciseId: 'plank', name: 'Plank', load: null, sets: 3, band: [30, 45] },
+  ];
+
+  it('the loads are on the screen she opens, not one sheet behind it', () => {
+    const said = texts(mount(<HomeView {...props({ plan: PLAN })} />)).join(' ');
+    expect(said).toContain('62.5');
+    expect(said).toContain('90');
+    expect(said).toContain('55');
+  });
+
+  it('⚠️ …ALL of them, because the card draws the day (founder 2026-08-29)', () => {
+    /*
+     * ⛔ IT USED TO BE THREE AND A COUNT — *"5 lifts in, 3 printed, and the remaining 2 counted out
+     * loud"* — on the argument that three reads as a SAMPLE where five reads as a truncated table.
+     * That was true of a card competing for the fold with an "אימון אחר" row and a week sheet
+     * behind it, and the founder removed both: *"ואז כך תוכל להציג את כל התוכנית שיש היום במקום עוד
+     * 2 תרגילים כפי שכתוב עכשיו."*
+     *
+     * ⚠️ AND IT DOES NOT REOPEN THE 08-12 RULING (*"one workout's contents belong in ONE place"*):
+     * that ruling is about the PRESCRIPTION — sets, reps, the reason a load moved, the clip, the
+     * swap — and `PreWorkout` still owns every one of them. These rows carry a name and a figure.
+     */
+    const said = texts(mount(<HomeView {...props({ plan: PLAN })} />)).join(' ');
+    expect(said).toContain('14'); // the fourth lift's load — no longer behind a count
+    for (const n of ['Bench Press', 'Back Squat', 'Lat Pulldown', 'Dumbbell Curl', 'Plank']) {
+      expect(said).toContain(n);
+    }
+  });
+
+  it('⚠️ …and it still does not print the prescription — that belongs to PreWorkout', () => {
+    // The whole day, at the card's own resolution: which lifts, and how heavy. Not 4×8–10.
+    const said = texts(mount(<HomeView {...props({ plan: PLAN })} />)).join(' ');
+    expect(said).not.toMatch(/4\s*[×x]\s*8/);
+  });
+
+  it('a load the engine MOVED stands in the direction it moved', () => {
+    // Founder 2026-07-29, on every screen without exception: raise = moss, ease = blue, hold =
+    // cream. The bench went up, so its figure is not drawn in the reading ink.
+    const r = mount(<HomeView {...props({ plan: PLAN })} />);
+    const card = byLabel(r, 'Pull A. 3 changes this week') ?? r.root;
+    expect(colors(card)).toContain(directionTone('up'));
+  });
+
+  it('⚠️ …and TODAY states the LIFTS, never a muscle line', () => {
+    /*
+     * "Back · Biceps" and "Bench Press 62.5 · Back Squat 90 · Lat Pulldown 55" say the same thing at
+     * two resolutions, and only one of them is worth the fold. The muscle line was what a row said
+     * while she was still CHOOSING; there is no choosing on this screen any more, and the founder
+     * struck the muscle captions outright on 2026-08-29 (*"כיתוב על סוגי שריר … שלא מעניינים"*).
+     *
+     * ⛔ ASSERTED IN BOTH DIRECTIONS so the compression cannot creep back: the lifts are here, and
+     * nothing on this page names a muscle group instead of them.
+     */
+    const today = texts(mount(<HomeView {...props({ plan: PLAN })} />)).join(' ');
+    expect(today).not.toContain('Back · Biceps');
+    expect(today).not.toContain('Quads · Glutes');
+    expect(today).toContain('62.5');
+  });
+
+  it('⛔ a workout she has already trained shows no loads — there is nothing to offer', () => {
+    const said = texts(mount(<HomeView {...props({ plan: PLAN, dayDone: true })} />)).join(' ');
+    expect(said).not.toContain('62.5');
   });
 });

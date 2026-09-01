@@ -95,6 +95,9 @@ export function applyLoop1<T extends LiveStep>(
   /** L11 — the rail for this lift: one rung above her heaviest completed-at-Tlo load (settled history
    *  plus this session). Absent/null → inactive, exactly as L11 defines it for a never-completed lift. */
   railCeiling?: number | null,
+  /** F-20 — the previous WORKING set's performed reps on this lift, this session (warm-up bridges and
+   *  approach sets excluded), or null when this was the first. The second witness for a 1-rep miss. */
+  prevReps?: number | null,
 ): Loop1Applied<T> {
   const cur = plan.find((s) => s.globalIndex === completedGlobalIndex);
   const noop: Loop1Applied<T> = { plan, corrected: false, direction: 'none', nextLoad: performedLoad };
@@ -111,6 +114,9 @@ export function applyLoop1<T extends LiveStep>(
   // latter with her performed reps, which would make every set sit "in band" and freeze the load
   // (founder QA, Build #33). Fall back to recommendedReps only for legacy targets that carry no band.
   const band = bandFromTarget(cur.target.repBandLo ?? cur.target.recommendedReps, cur.target.repBandHi);
+  // F-20 — the previous set's verdict against the SAME band (the band is per-exercise and immutable
+  // within a session, so the witness is judged by the law it will be corroborating).
+  const prevMiss = prevReps == null ? null : prevReps > band.hi ? ('up' as const) : prevReps < band.lo ? ('down' as const) : null;
   const r = correctInSession({
     currentLoad: performedLoad,
     band,
@@ -121,11 +127,15 @@ export function applyLoop1<T extends LiveStep>(
     // Her fitted reps-per-rung (F-13), stamped on the target by the prescription; null → B-5 one rung.
     perRung: cur.target.perRung ?? null,
     railCeiling, // L11 — an in-session raise is bounded by her own record (S-11, "always inside the rail")
+    prevMiss,
   });
   if (!r.corrected || r.nextLoad == null) return noop;
 
+  // `s.target &&` — the same guard `carryWeightForward` keeps: a step with no rep prescription is
+  // STEPPED OVER (see LiveStep). Without it, the spread manufactured a target of `{ recommendedWeight }`
+  // alone onto a target-less step — a malformed prescription with no reps — instead of leaving it be.
   const newPlan = plan.map((s) =>
-    s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId
+    s.globalIndex > completedGlobalIndex && s.exerciseId === cur.exerciseId && s.target
       ? ({ ...s, target: { ...s.target, recommendedWeight: r.nextLoad } } as T)
       : s,
   );

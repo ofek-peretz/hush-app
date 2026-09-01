@@ -10,20 +10,22 @@
  * That is the founder's own rule and it is the SAME function the drag uses, so the two can never
  * disagree about what a move means.
  */
-// @ts-nocheck
 
 // 
 
 import React, { useEffect, useState } from 'react';
+import { plannedMinutes } from '@/domain/duration';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { PreWorkoutView } from '@/screens/plan/PreWorkout';
+import { PreWorkoutView, PreWorkoutMovedView } from '@/screens/plan/PreWorkout';
 import type { PlanLift } from '@/components/PlanLifts';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, coachChanges } from '@/domain/coachWeek';
+import { SwapSheet } from '@/components/SwapSheet';
+import { swapChoices } from '@/domain/swapPool';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import { WhyHereSheet, whyHereProps } from '@/components/WhyHereSheet';
 import { liftPlacement, type LiftPlacement } from '@/domain/whyLiftIsHere';
@@ -33,6 +35,9 @@ import type { ChangedLiftCase } from '@/domain/changedLiftCase';
 import { currentLocale } from '@/i18n';
 import { View, StyleSheet } from 'react-native';
 import { daysAfterStarting } from '@/domain/weekBoard';
+import { coachSession } from '@/domain/coachWeek';
+import { useSession } from '@/state/stores/sessionStore';
+import { isTrainingGated } from '@/domain/entitlement';
 import { WEEK_ORDER } from '@/domain/trainingDays';
 import type { CoachPlan, Weekday } from '@/domain/coachPlan';
 import type { LoadDirection } from '@/design/tokens';
@@ -43,8 +48,28 @@ type Props = NativeStackScreenProps<MainParamList, 'PreWorkout'>;
 export function PreWorkoutScreen({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  const session = useSession();
   const units = app.profile?.units ?? 'kg';
   const [plan, setPlan] = useState<CoachPlan | null>(null);
+  /**
+   * ⚠️ `plan === null` MEANS TWO DIFFERENT THINGS — "the read has not come back" and "the read came
+   * back with nothing" — and the difference is the whole of the empty state below. A separate flag
+   * rather than `undefined`, because every reader of `plan` below already treats null as "no week".
+   */
+  const [settled, setSettled] = useState(false);
+  /**
+   * ⛔ THE LIFT SHE WANTS REPLACED (founder 2026-08-22): *"אי אפשר ממש להכנס לתוכנית האימון שלנו
+   * ולהחליף תרגיל לתרגיל שנמצא בספרייה."*
+   *
+   * ⛔ **S-77** in the register — *"she names a replacement off the gym floor"*. The sheet is the
+   * SAME one the rack raises: `swapChoices`, same-muscle synonyms, one to three rows and never
+   * padded. What differs is the KIND of fact it writes: a swap at the rack declares
+   * nothing and is learned at K=2, and this one is a DECLARATION, because she named both sides with
+   * time to think (`db.OwnedPreferences.declaredSubs`).
+   */
+  const [swapFor, setSwapFor] = useState<string | null>(null);
+  /** Bumped after a declaration lands, so the week is re-read rather than patched in place. */
+  const [rev, setRev] = useState(0);
   const [directions, setDirections] = useState<Record<string, LoadDirection>>({});
   const [doneIds, setDoneIds] = useState<string[]>([]);
   /** The programme this week opened on — the other half of every change, as everywhere else. */
@@ -138,11 +163,15 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
           .map((h) => h.programDayId)
           .filter((id) => id.startsWith('coach_')),
       );
+      setSettled(true);
     })();
     return () => {
       alive = false;
     };
-  }, []);
+    /* ⚠️ `rev` — a declared swap changes the WEEK, so the card is re-read rather than patched. The
+       assembler is the only thing that knows what a substitution costs the rest of the day, and a
+       screen that edited its own row would be a second author of the same fact. */
+  }, [rev]);
 
   const workouts = React.useMemo(() => coachWeek(plan), [plan]);
   const workout = workouts.find((w) => w.id === route.params.workoutId) ?? null;
@@ -167,15 +196,33 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   }, [plan, weekPlan, lifts]);
 
   // Rounded to five, exactly as Today rounds it — "~50 min" on two screens must be the same 50.
-  const minutes = workout ? Math.max(5, Math.round(workout.minutes / 5) * 5) : 0;
+  const minutes = workout ? plannedMinutes(workout.minutes) : 0;
 
-  if (!workout) return null;
+  /*
+   * ⛔ A WORKOUT THE WEEK NO LONGER HOLDS WAS A BLANK SHEET (audit, 2026-08-18). This was
+   * `if (!workout) return null` with no second branch: a modal risen over Today with no title, no
+   * lifts and no ✕ — the close control lives inside the card that did not draw — and the only exit
+   * an edge drag nothing on the glass admitted to. She reaches it by opening a workout from a stale
+   * board, or from a notification for a session the coach has since rewritten.
+   *
+   * ⚠️ THE ORDER OF THE TWO CASES IS THE POINT. Before the read settles there is no claim to make,
+   * and saying "this has moved" for the half-second the load takes would be a lie on every open.
+   */
+  if (!workout) return settled ? <PreWorkoutMovedView onClose={() => navigation.goBack()} /> : null;
 
   return (
     <View style={StyleSheet.absoluteFill}>
       <PreWorkoutView
       name={workout.name}
-      dayLabel={workout.day ? t(`weekday.${workout.day}`) : null}
+      /*
+       * ⛔ THIS ASKED FOR THE GRID'S ABBREVIATION (2026-08-27). `weekday.*` is what the seven-column
+       * week board draws — `א'`, `ב'`, `ג'` — where a single letter per column is exactly right and a
+       * full name would not fit. Here it is a standalone EYEBROW over the workout's title, and
+       * `ד'` alone above `Lower Body A` reads as a stray mark or a footnote, not as a day.
+       *
+       * One string was serving a column head and a label. `weekdayLong.*` is the day's NAME.
+       */
+      dayLabel={workout.day ? t(`weekdayLong.${workout.day}`) : null}
       shape={
         lifts.length
           ? minutes
@@ -186,6 +233,9 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
       minutes={minutes}
       lifts={lifts}
       units={units}
+      /* Her own figure on every still — the 2026-08-23 finding, which was this exact defect one
+         screen over: a man watching his week assemble onto a woman's body. */
+      figure={app.profile?.sex === 'female' ? 'female' : 'male'}
       changes={changes}
       /*
        * ⚠️ IT USES THE MINUTES ALREADY ON SCREEN, not a second estimate. The card says "~50 min" one
@@ -200,6 +250,12 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
             : null
       }
       onForm={(exerciseId) => navigation.navigate('WorkoutDetail', { exerciseId } as never)}
+      /*
+       * ⛔ THE THIRD DOOR ON A ROW (founder 2026-08-22). Offered only on a day still AHEAD of her:
+       * a finished session is a record, and offering to change a lift she has already done would be
+       * the app proposing to rewrite history.
+       */
+      onSwap={doneIds.includes(workout.id) ? undefined : (exerciseId) => setSwapFor(exerciseId)}
       /*
        * ⛔ THE ROW ALWAYS ASKS; THIS DECIDES WHICH ANSWER EXISTS — in order of how much it knows.
        *
@@ -221,7 +277,27 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
       }
       done={doneIds.includes(workout.id)}
       onClose={() => navigation.goBack()}
-      onStart={() => {
+      onStart={async () => {
+        /*
+         * ════ ⛔ THE SIDE DOOR AROUND THE FOURTEEN (founder, 2026-08-23: *"תוודא ל-14 האימונים
+         * שאין לזה פרצה מסוימת. שאנשים לא יוכלו לחגוג עלינו"*) ════
+         *
+         * Home's Begin has gated since the paywall shipped; the wrist is refused a lobby when
+         * gated — and THIS button, reachable from the Program tab and Home's day list, walked
+         * straight past both. A spent trial could train for ever through the pre-workout card.
+         * Same gate, same paywall, same source tag as Home's.
+         *
+         * ⛔ AND THE BUTTON WAS ALSO BROKEN OUTRIGHT: it replaced to SessionFlow carrying a
+         * `workoutId` param that NOTHING consumes (`MainParamList.SessionFlow` has no such field
+         * — the `as never` cast was the tell), so the stage mounted over an empty session store.
+         * The audit that found the side door found the stage it opened onto was black. It now
+         * starts the session the way Home's own Begin does — `coachSession` → `startCoach` —
+         * one mechanism, every door.
+         */
+        if (isTrainingGated(app.modeState.completedSessions, app.entitlement.active, app.profile?.memberSince)) {
+          navigation.navigate('Paywall', { source: 'gate' } as never);
+          return;
+        }
         /*
          * ⛔ THE SECOND DOOR ONTO THE BOARD (founder 2026-08-05): *"if the athlete presses a
          * different workout and starts it, the AI swaps the position of the current workout with
@@ -234,12 +310,56 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
         const today = WEEK_ORDER[new Date().getDay()] as Weekday;
         const moved = daysAfterStarting(workouts, workout.id, today);
         if (moved) void db.saveCoachPlanDays(moved).catch(() => {});
-        navigation.replace('SessionFlow', { workoutId: workout.id } as never);
+        const planned = coachSession(plan, workout.id);
+        if (!planned) return; // the plan vanished under the card — nothing honest to start
+        await session.startCoach(planned, workout.id);
+        navigation.replace('SessionFlow');
       }}
       />
       {whyFor && whyByExercise[whyFor] ? (
         <View style={StyleSheet.absoluteFill}>
-          <WhyChangedSheet {...whyProps(whyByExercise[whyFor], t, currentLocale())} onClose={() => setWhyFor(null)} />
+          <WhyChangedSheet
+            {...whyProps(whyByExercise[whyFor], t, currentLocale())}
+            onClose={() => setWhyFor(null)}
+            /* The answer carries the verb (device QA 2026-08-23) — same gate as the row's own
+               swap door: a finished day is a report, and a report offers no replacement. */
+            {...(!doneIds.includes(workout.id)
+              ? { onSwap: () => { const id = whyFor; setWhyFor(null); setSwapFor(id); } }
+              : {})}
+          />
+        </View>
+      ) : null}
+      {/*
+        ⛔ THE SAME SHEET THE RACK RAISES — one pool, one set of rows, two moments. `swapChoices` is
+        given the day's other lifts so it can never offer one she is already doing, exactly as the
+        live session gives it `sessionExerciseIds`.
+      */}
+      {swapFor ? (
+        <View style={StyleSheet.absoluteFill}>
+          <SwapSheet
+            currentName={exerciseDisplayName(swapFor)}
+            choices={swapChoices(swapFor, { sessionExerciseIds: lifts.map((l) => l.exerciseId), equipment: app.profile?.equipment })}
+            onClose={() => setSwapFor(null)}
+            onPick={(toId) => {
+              const from = swapFor;
+              setSwapFor(null);
+              if (!from) return;
+              /*
+               * ⛔ A DECLARATION, NOT A COUNT. It is written to `declaredSubs` and never to the
+               * learned `substitutes` map — the K=2 fold owns that one and CLEARS entries it stops
+               * believing, so a declaration living there could be deleted by inference. See the
+               * doctrine over `OwnedPreferences`.
+               *
+               * ⚠️ AND NAMING THE ORIGINAL AGAIN TAKES IT BACK. A declaration is reversible the way
+               * she made it — by saying the other thing — rather than by a second control that
+               * exists only to undo the first.
+               */
+              void app
+                .declareSwap(from, toId)
+                .then(() => setRev((n) => n + 1))
+                .catch(() => {});
+            }}
+          />
         </View>
       ) : null}
       {hereFor && placements[hereFor] ? (
@@ -247,6 +367,9 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
           <WhyHereSheet
             {...whyHereProps(placements[hereFor], exerciseDisplayName(hereFor), t, WEEKLY_SETS_FLOOR)}
             onClose={() => setHereFor(null)}
+            {...(!doneIds.includes(workout.id)
+              ? { onSwap: () => { const id = hereFor; setHereFor(null); setSwapFor(id); } }
+              : {})}
           />
         </View>
       ) : null}

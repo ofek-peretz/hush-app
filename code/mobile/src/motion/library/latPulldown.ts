@@ -12,13 +12,12 @@
  * collarbone, never lower · bar vertical in front of the face · torso lean frozen ~15° (no swing) ·
  * hips on the seat, thighs under the pad. rom 0 = overhead stretch (rep start); rom 1 = collarbone.
  */
-// @ts-nocheck
 
 // 
 
 import type { Decor, FormSpec, Pose, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
-import { DEFAULT_TEMPO } from '../timeline';
+import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { barPathTicks, floorScene } from '../kit';
 import { latPulldownStation } from '../machines';
@@ -37,7 +36,21 @@ const TOE: Vec2 = { x: 217, y: FLOOR_Y };
 
 const UPPER = ATHLETE.upperArm;
 const FORE = ATHLETE.foreArm;
-const BAR_X = 151; // the bar travels vertically, in front of the face
+/**
+ * Where the cable drops, and therefore how far in front of the shoulder the hand finishes.
+ *
+ * It was 151 — 13.5u in front of the shoulder joint, and 8u in front of the face. Two things went
+ * wrong there. The bar shaved the nose; and at the collarbone the hand sat 13.6u from its own
+ * shoulder, so 48u of arm folded to a 33° elbow and the upper arm came to rest exactly ON the spine
+ * line, inside the trunk silhouette. The clip's whole subject — the elbow driving down and back —
+ * was drawn inside the torso where nobody can see it.
+ *
+ * 160 is where a real pulldown pulley hangs: the athlete leans back ~15° and the bar comes down a
+ * hand's length clear of the face (17u ≈ 19cm). The hand finishes 22.6u out, the elbow opens to
+ * 56°, and the upper arm clears the trunk. The overhead position opens from 16° to 29° off
+ * vertical, which is also the truer shape — arms reach up-and-FORWARD to a bar hung in front.
+ */
+const BAR_X = 160;
 const COLLAR_Y = 113; // the collarbone line — the working endpoint (never lower)
 
 // overhead stretch: hand reaches up to the bar with the elbow ~straight (arms long overhead)
@@ -105,7 +118,7 @@ function decorAt(rom: number): Decor {
 const scene = floorScene(FLOOR_Y, 178, 42);
 
 const formspec: FormSpec = {
-  tempo: DEFAULT_TEMPO,
+  tempo: CONCENTRIC_TEMPO,
   start: [
     { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 165, max: 179, label: 'full overhead stretch (elbow ~170°)' },
   ],
@@ -121,6 +134,36 @@ const formspec: FormSpec = {
     { kind: 'angleNever', joint: 'elbow', neighbors: ['shoulder', 'hand'], aboveDeg: 179, label: 'no elbow hyperextension' },
   ],
 };
+
+/*
+ * close_grip_pulldown (batch 2, 2026-08-26) — the same seat, the same anchored body, the same
+ * vertical cable: what changes at a close grip is the ATTACHMENT, and §3.5 Am. 5 says the handle
+ * silhouette is what names it. The wide bar's downswept tips are replaced by the narrow neutral
+ * V-handle — a compact triangle under the cable, both fists together on it — and the endpoint
+ * label says the chest line the cue asks for. The skeleton is untouched: at a neutral narrow grip
+ * the hands ride the same front-of-face line this camera already draws.
+ */
+function closeGripDecorAt(rom: number): Decor {
+  const bar: Vec2 = { x: BAR_X, y: lerp(STRETCH_Y, COLLAR_Y, rom) };
+  const lift = bar.y - STRETCH_Y;
+  return {
+    back: [...latPulldownStation(bar, lift), ...barPathTicks(BAR_X, STRETCH_Y, COLLAR_Y, 5)],
+    front: [
+      // the narrow neutral V-handle: two short cheeks meeting at the cable's eyelet
+      {
+        kind: 'polyline',
+        pts: [
+          { x: bar.x - 6, y: bar.y + 6 },
+          { x: bar.x, y: bar.y },
+          { x: bar.x + 6, y: bar.y + 6 },
+        ],
+        w: 3.5,
+        color: 'ink0',
+      },
+      { kind: 'circle', c: bar, r: 2.5, fill: 'ink0' },
+    ],
+  };
+}
 
 export const latPulldown: Rig = {
   id: 'lat_pulldown',
@@ -139,4 +182,14 @@ export const latPulldown: Rig = {
   poseAt,
   decorAt,
   scene,
+};
+
+export const closeGripPulldown: Rig = {
+  ...latPulldown,
+  id: 'close_grip_pulldown',
+  decorAt: closeGripDecorAt,
+  formspec: {
+    ...formspec,
+    end: [{ kind: 'contactY', a: 'bar', y: COLLAR_Y, tol: 2, label: 'handle to the upper chest (never lower)' }],
+  },
 };

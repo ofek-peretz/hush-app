@@ -80,9 +80,10 @@ describe('Part 3 #3 · the walk is shortened, the training order is not traded',
     const day = ['bb_bench_press', 'machine_chest_press', 'cable_fly', 'db_shoulder_press', 'skullcrusher', 'lat_pulldown'].map(ex);
     const ordered = orderForFlow(day);
     expect(compoundsLead(ordered)).toBe(true);
-    // Four families are present; a family-grouped order would show exactly 3 transitions (one per
-    // boundary). Requiring MORE than that is requiring the day not to be one block per family.
-    expect(new Set(ordered.map((e) => e.equipment)).size).toBe(4);
+    // Five families are present (skullcrusher carries `fixed_barbell` since F-19, 2026-08-25); a
+    // family-grouped order would show exactly 4 transitions (one per boundary). Requiring MORE
+    // than that is requiring the day not to be one block per family.
+    expect(new Set(ordered.map((e) => e.equipment)).size).toBe(5);
     expect(ordered).toHaveLength(day.length);
   });
 

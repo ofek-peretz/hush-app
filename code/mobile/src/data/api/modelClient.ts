@@ -2,11 +2,12 @@
  * Model interface (spec §8.7). The app CONSUMES this; it never implements the
  * model. Inputs are only actual weight + actual reps per set (no RIR/effort).
  *
- * In v1 this is fulfilled by a local fixture (fixtureModel) until the existing
- * backend in `implementation/api` is wired. The interface is the contract; the
- * client code above it does not care which implementation answers.
+ * Fulfilled by `fixtureModel` — the v8 engine's local data layer — and by nothing
+ * else: the v4 HTTP implementation and its swap point were deleted on 2026-08-25
+ * (founder: the engine decides on the device). The interface remains the contract
+ * so the store never cares which implementation answers; a future remote model is
+ * one implementation away, not an archaeology dig.
  */
-// @ts-nocheck
 
 // 
 

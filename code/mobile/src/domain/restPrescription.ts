@@ -22,7 +22,6 @@
  * Day-one bootstraps (B-4 family, §10.8): compound 150 s / isolation 75 s between sets, 120 s
  * between exercises — each replaced by her own median the moment one exists.
  */
-// @ts-nocheck
 
 // 
 
@@ -141,6 +140,30 @@ export function perSetSeconds(
 }
 
 /**
+ * ════ WHAT A SUPERSET SAVES, PER ROUND (founder mandate 2026-08-26) ════
+ *
+ * Two paired lifts rest ONCE per round, after both. Priced serially each partner carries its own
+ * rest inside `perSetSeconds`; paired, the round keeps the LONGER partner's rest and the shorter
+ * one's is the saving. Conservative on purpose — the clock never promises time the gym floor
+ * cannot deliver. Rest resolution mirrors `perSetSeconds` exactly: her measured rest when it
+ * exists, else the bootstrap's own rest share (the bundled set minute minus its work seconds), so
+ * the saving and the price can never be read off two different rulers.
+ */
+export function pairedRestSavedS(
+  aId: string,
+  bId: string,
+  restFor?: (id: string) => number | null,
+): number {
+  const restShare = (id: string): number => {
+    const measured = restFor?.(id) ?? null;
+    if (measured != null) return measured;
+    const compound = exerciseById(id)?.tier === 'compound';
+    return (compound ? COMPOUND_SET_MIN : ISOLATION_SET_MIN) * 60 - SET_EXEC_SECONDS[compound ? 'compound' : 'isolation'];
+  };
+  return Math.max(0, Math.min(restShare(aId), restShare(bId)));
+}
+
+/**
  * ════ WHAT THE CLOCK RUNS WHEN THE COACH DID NOT SAY ════
  *
  * A CONSTANT, and that is the whole point of it (founder, 2026-08-02).
@@ -189,11 +212,17 @@ function interRestSamples(history: Session[], exerciseId: string, extraSample?: 
       if (l.isApproach) continue; // a measurement is not work, and its rest is not her rest
       if (l.setIndex === 0) continue; // a first-set rest is the TRANSITION — pooled, never inter
       sawLift = true;
-      if (typeof l.restBeforeS === 'number' && l.restBeforeS >= 0) out.push(l.restBeforeS);
+      // A declined rest is not a short rest — see `isRestSample`. The lift still counts as SEEN, so
+      // the F-8 window walks the same sessions it always did; only the false number is refused.
+      if (isRestSample(l.restBeforeS)) out.push(l.restBeforeS);
     }
     if (sawLift && ++sessions >= RECENCY_WINDOW_SESSIONS) break; // F-8
   }
-  if (extraSample != null) out.push(extraSample);
+  /* The live sample passes the SAME floor as a recorded one, and it must, or the two halves of one
+     rule disagree in the worst possible place: `restWithSample` feeds the learned-rest beat, so a
+     rest pressed through in two seconds would have announced *"REST · LEARNED"* over a number the
+     store then refused to bank. One gate, both sides of the write. */
+  if (isRestSample(extraSample)) out.push(extraSample);
   return out;
 }
 
@@ -217,9 +246,29 @@ export function learnedInterRestS(history: Session[], exerciseId: string, extraS
  */
 export function learnedTransitionRestS(history: Session[]): number | null {
   const samples: number[] = [];
-  for (const s of history.slice(0, RECENCY_WINDOW_SESSIONS)) for (const l of s.sets) {
-    if (l.isApproach || l.setIndex !== 0) continue;
-    if (typeof l.restBeforeS === 'number' && l.restBeforeS >= 0) samples.push(l.restBeforeS);
+  for (const s of history.slice(0, RECENCY_WINDOW_SESSIONS)) {
+    /*
+     * ⚠️ THE WARM-UP RAMP MOVED WHERE THE WALK LIVES (2026-08-24). The transition is the rest
+     * before the FIRST THING she does at a station. Without a ramp that is working set 0, as it
+     * always was. With one, the walk precedes WARM-UP −n, and working set 0's `restBeforeS` is the
+     * fixed 45-second breath after the last bridge — sampling it would teach the walk to shrink
+     * toward a number she never walked. So: per exercise, the chronologically first log (minimum
+     * `setIndex`; warm-ups are negative) supplies the sample — a warm-up first-touch counts (its
+     * rest IS the walk), a working set 0 counts only when no ramp preceded it, and a LEGACY
+     * approach set (isApproach without isWarmup) still never counts.
+     */
+    const firstBySetIndex = new Map<string, (typeof s.sets)[number]>();
+    for (const l of s.sets) {
+      if (l.isApproach && !l.isWarmup) continue; // legacy Build-#33 measurement — never evidence
+      const cur = firstBySetIndex.get(l.exerciseId);
+      if (!cur || l.setIndex < cur.setIndex) firstBySetIndex.set(l.exerciseId, l);
+    }
+    for (const l of firstBySetIndex.values()) {
+      if (!l.isWarmup && l.setIndex !== 0) continue; // a mid-exercise resume gap is not a walk
+      // The walk between stations is subject to the same floor: a crossing pressed through in two
+      // seconds is a station she was already standing at, not a two-second walk (`isRestSample`).
+      if (isRestSample(l.restBeforeS)) samples.push(l.restBeforeS);
+    }
   }
   if (samples.length < MIN_REST_SAMPLES) return null; // F-17
   const m = learnedRestS(samples);
@@ -320,4 +369,53 @@ export function restTransitionSeconds(): number {
 export function restedSeconds(totalS: number, remainingS: number, extraS: number): number {
   // Never negative: a resume across a clock change can hand back more remaining than total.
   return Math.max(0, totalS + extraS - remainingS);
+}
+
+/**
+ * ════ A REST THAT WAS NOT A REST IS NOT EVIDENCE (founder 2026-08-30) ════
+ *
+ * *"אני צריך להזין את הסט שביצעתי ואז לדלג ישר על המנוחה כי כבר נחתי פיזית בפועל."*
+ *
+ * The rest clock starts when the set is LOGGED (`completeSet` stamps `restStartedAtRef`), not when
+ * the set physically ended — the phone cannot know the second. So an athlete who finishes a set,
+ * stands for four minutes, then remembers to log, opens a full rest he has already taken and
+ * presses straight through it. Correct behaviour on his part, and the app then wrote the two
+ * seconds his thumb took as `restBeforeS` — **his rest, measured.**
+ *
+ * That number is not small, it is FALSE, and it does not stay in one place:
+ *
+ *   · it is a sample in his learned inter-set median (S-17), which IS his next prescription;
+ *   · the median feeds `enforceTimeCap` through the time budget, so an engine that believes he
+ *     rests three seconds will pack more sets into the same hour;
+ *   · `repsPerRung` carries it as the rest a set was performed under — the covariate that says
+ *     whether a rung was fresh or fatigued;
+ *   · L3's comparability window (`constants`) decides two sets are alike by how close their rests
+ *     are, and a false zero makes a heavy set look like it was taken cold.
+ *
+ * ⚠️ F-17 IS NOT THIS GUARD, though it was written against the same word. Its note names *"a
+ * mis-tapped skip"* and answers it with a COUNT — three samples before a median is trusted — which
+ * defends against ONE bad value among good ones. It cannot help here, because for an athlete who
+ * skips as a habit the skips are the majority: the median of five skips is a skip. A count gate
+ * asks *how many*; this asks *whether the thing is a rest at all*, and both are needed.
+ *
+ * TEN SECONDS, AND IT IS A FLOOR ON POSSIBILITY, NOT ON VIRTUE. This is not a judgement that a
+ * short rest is bad training — a fast-paced athlete who genuinely turns around in twenty-five
+ * seconds is training that way, that IS his pace, and the engine must learn it exactly. Below ten
+ * the screen has barely finished arriving; he cannot have used it as rest, whatever he did with the
+ * time. So the honest record is UNKNOWN — which is L3's own answer, written at the top of this
+ * file: *"an unknown rest is ABSENT, never zero, and never enters a median."*
+ *
+ * ⛔ SUPERSETS DO NOT COME THROUGH HERE AT ALL, and must not be mistaken for what this drops: a
+ * step with no rest never reaches a rest screen (`REST_SKIP_THRESHOLD_S`, §1.14), so its next set's
+ * `restBeforeS` is absent already. This only ever sees a rest that was OFFERED and declined.
+ */
+export const REST_SAMPLE_FLOOR_S = 10;
+
+/**
+ * Is this recorded `restBeforeS` evidence about her pace? The ONE answer, asked by the writer
+ * (`endRest`, so the falsehood is never persisted) and by every reader of history below (so the
+ * sessions already on the device are read honestly too — a gate at the write cannot reach them).
+ */
+export function isRestSample(restBeforeS: number | null | undefined): restBeforeS is number {
+  return typeof restBeforeS === 'number' && restBeforeS >= REST_SAMPLE_FLOOR_S;
 }

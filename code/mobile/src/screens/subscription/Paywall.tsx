@@ -33,7 +33,6 @@
  *
  * Copy obeys the voice laws (no hedge / exclamation / "Recommended").
  */
-// @ts-nocheck
 
 // 
 
@@ -43,7 +42,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { RangeMark } from '@/components/RangeMark';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
@@ -51,11 +50,20 @@ import { BILLING_EVENTS } from '@/platform/events';
 import { billing, PRODUCT_IDS, type ProductId, type SubscriptionProduct } from '@/platform/billing';
 import { annualSavingPct, monthlyEquivalentLabel } from '@/domain/pricing';
 import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
-import { color, space, font, textScale, tracking, trackingPx, radius, signal } from '@/design/tokens';
+import { paywallCase, type PaywallCase } from '@/domain/paywallCase';
+import { athleteFile } from '@/domain/athleteFile';
+import { engineReceipt, type EngineReceipt } from '@/domain/engineReceipt';
+import { displayWeight, unitLabel } from '@/domain/schedule';
+import { db } from '@/data/local/db';
+import { bidi } from '@/i18n/bidi';
+import { exerciseDisplayName } from '@/data/exercises';
+import { color, space, font, textScale, ramp, tracking, trackingPx, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'Paywall'>;
 const HIT = { top: 10, bottom: 10, left: 10, right: 10 };
+/** Below this, the file line draws nothing — a count that small proves nothing (see the render note). */
+const FILE_FACTS_FLOOR = 5;
 
 export function Paywall({ navigation, route }: Props) {
   const { t } = useCopy();
@@ -69,10 +77,39 @@ export function Paywall({ navigation, route }: Props) {
   const source = route.params?.source ?? 'gate';
 
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
+  /*
+   * ════ ⛔ THE ARGUMENT IS HER OWN NUMBERS (founder, 2026-08-23) ════
+   *
+   * One measured sentence under the headline — "your deadlift rose 12.5 kg since you started" —
+   * read from her log by `domain/paywallCase`. This is NOT the copy his 2026-08-13 ruling removed:
+   * that was generic promises; this is her own measurement, the one close no competitor can print.
+   * Null (nothing rose / young history) draws nothing — a paywall never fishes.
+   */
+  const [personalCase, setPersonalCase] = useState<PaywallCase | null>(null);
+  /** The engine's stocktake of her — the fallback close when no lift rose. See the render note. */
+  const [fileFacts, setFileFacts] = useState(0);
+  /** The fixed-plan counterfactual (audit M2) — the middle close. See `domain/engineReceipt`. */
+  const [receipt, setReceipt] = useState<EngineReceipt['counterfactual']>(null);
+  useEffect(() => {
+    let alive = true;
+    void db
+      .loadHistory()
+      .then((h) => {
+        if (!alive) return;
+        setPersonalCase(paywallCase(h, app.profile?.units ?? 'kg'));
+        setFileFacts(athleteFile(h).totalFacts);
+        setReceipt(engineReceipt(h).counterfactual);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [selected, setSelected] = useState<ProductId>(PRODUCT_IDS.annual);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<null | 'purchase' | 'restore' | 'pending'>(null);
 
   useEffect(() => {
     void track(BILLING_EVENTS.paywallViewed, { source });
@@ -104,13 +141,20 @@ export function Paywall({ navigation, route }: Props) {
   async function onSubscribe() {
     if (busy || products.length === 0) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
       const result = await app.purchaseSubscription(selected);
-      if (result.status === 'failed') setFailed(true);
+      if (result.status === 'failed') setFailed('purchase');
+      /*
+       * ASK-TO-BUY IS AN ANSWER, NOT SILENCE (2026-09-01, audit finding 5). `pending` means a
+       * parent got the request — before this line the sheet closed and NOTHING said why the app
+       * was still locked. When the approval lands, the persistent StoreKit listener re-reads the
+       * entitlement and the effect above pops this screen on its own.
+       */
+      if (result.status === 'pending') setFailed('pending');
       // On success the entitlement effect above pops the screen; cancel is a no-op.
     } catch {
-      setFailed(true);
+      setFailed('purchase');
     } finally {
       // ALWAYS: a throw from StoreKit used to leave `busy` true, disabling the Subscribe button
       // for good — on the one screen whose entire job is to take money.
@@ -121,12 +165,18 @@ export function Paywall({ navigation, route }: Props) {
   async function onRestore() {
     if (busy) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
       const result = await app.restorePurchases();
-      if (!(result.status === 'restored' && result.entitlement.active)) setFailed(true);
+      /*
+       * A FAILED RESTORE IS ITS OWN SENTENCE (2026-09-01, audit finding 5). It used to share the
+       * purchase error — "Your card was not charged" — which, to someone whose real problem is the
+       * wrong Apple ID, is a non-sequitur and a support ticket. The honest sentence names the
+       * actual fact: no membership on THIS Apple ID.
+       */
+      if (!(result.status === 'restored' && result.entitlement.active)) setFailed('restore');
     } catch {
-      setFailed(true);
+      setFailed('restore');
     } finally {
       setBusy(false);
     }
@@ -166,17 +216,110 @@ export function Paywall({ navigation, route }: Props) {
           * The renewal terms that used to sit under this headline are gone: the legal line at the
           * foot of the screen says the same thing, and it is the line Apple requires anyway.
           */}
-        <RangeMark width={44} height={18} tone={signal[0]} />
+        {/*
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ✦ IT ARRIVES (2026-08-27). `Arrive` was built for the founder's largest note — a screen
+          should ARRIVE, not appear (2026-08-12).
+
+          Three beats, and the order is the argument this screen makes: what she has spent of the
+          trial, the sentence that thanks her for it, and only THEN the prices. A paywall that puts
+          its numbers on the glass at the same instant as its thank-you has not made an argument, it
+          has made an ask. The prices are the last thing to land because they are the last thing
+          said.
+          ════════════════════════════════════════════════════════════════════════════════════════
+        */}
+        <Arrive order={0}>
+          <RangeMark width={44} height={18} tone={signal[0]} />
+        </Arrive>
+        <Arrive order={0}>
         <Legend tone="accent" track={0.16} style={styles.eyebrow}>
           {trialSpent
             ? t('paywall.trialDone', { n: FREE_SESSION_LIMIT })
             : t('paywall.trialLeft', { done: sessionsDone, n: FREE_SESSION_LIMIT })}
         </Legend>
-        <Text style={styles.title} accessibilityRole="header">{t('paywall.title')}</Text>
+        </Arrive>
+        <Arrive order={1}>
+          <Text style={styles.title} accessibilityRole="header">{t('paywall.title')}</Text>
+        </Arrive>
+
+        {/* the measured close — see `personalCase` above. The serif, because the coach is speaking. */}
+        {personalCase ? (
+          <Text style={styles.case}>
+        {/*
+          ⛔ THE HEBREW VERB COULD NOT AGREE WITH THE LIFT (2026-08-28).
+
+          It read `ה{{lift}} שלך עלה ב־{{delta}}` — `עלה` fixed masculine, against a lift name the
+          template does not contain. **Seventy-six of the app's 136 exercise names are feminine** —
+          every `לחיצת`, `חתירה`, `כפיפת`, `פשיטת`, `משיכה`, `הרמת` — so the sentence was wrong for
+          fifty-six per cent of athletes, on the screen that asks them to pay.
+
+          ⚠️ INVISIBLE IN ENGLISH, which is why it lasted: "your {{lift}} rose" is correct for all
+          136. Hebrew is the primary locale and the only one that could have shown it.
+
+          The verb is gone rather than duplicated. `ה{{lift}} שלך — {{delta}} {{unit}} יותר` states
+          the same fact with nothing left to agree, and the em-dash is already this app's own
+          construction (`לחיצת חזה במוט — סיימנו.`). Same treatment as the three pain and whyHere
+          templates on 2026-08-28; the shape is described in `lint-copy`'s note on agreement.
+
+          ⛔ AND THE ARTICLE WAS THE SECOND HALF OF IT. Rendering the fixed sentence across real
+          names showed `הלחיצת חזה במוט` — `ה` on the FIRST word of a construct phrase, which Hebrew
+          does not permit; the article belongs to the last word or to nowhere. `דחיפה אופקית` fails
+          differently (noun + adjective needs the article on both), and `דדליפט` and `חתירה במוט`
+          happen to survive. So `ה{{…}}` is only ever safe for a name whose shape you already know,
+          and these placeholders take 136 of them.
+
+          The article is gone with the verb. `לחיצת חזה במוט — 11 ק"ג יותר מאז שהתחלנו.` is right for
+          every shape, and `מאז שהתחלנו` already says whose lift it is.
+
+          ⚠️ THE VERB FIX ALONE WOULD HAVE SHIPPED THIS. It only appeared because the string was
+          rendered out against real values instead of read in the file — which is the same lesson as
+          `2.2g`: a thing not looked at is a thing not designed.
+        */}
+            {t('paywall.case', {
+              lift: bidi(exerciseDisplayName(personalCase.exerciseId)),
+              delta: personalCase.delta,
+              unit: personalCase.unit,
+            })}
+            {personalCase.othersUp > 0 ? ` ${t('paywall.caseOthers', { count: personalCase.othersUp })}` : ''}
+          </Text>
+        ) : receipt ? (
+          /*
+           * ════ THE COUNTERFACTUAL (2026-09-01, audit M2) — the middle close. ════
+           *
+           * Two prescriptions on one lift, and the reader draws the conclusion. Every number is
+           * either logged (the engine's figure is her latest `recommendedWeight`) or the NAMED
+           * rule's own arithmetic ("one step every session", from her own first prescription) —
+           * which is what keeps a comparison inside the voice law. `engineReceipt` stays silent
+           * under four occurrences or two grains of difference; when it speaks, it has a story.
+           * The templates carry no verb and no article agreeing with the lift name — the
+           * `paywall.case` lesson of 2026-08-28, kept.
+           */
+          <Text style={styles.case}>
+            {t(receipt.engineKg > receipt.fixedKg ? 'paywall.receiptAhead' : 'paywall.receiptBehind', {
+              lift: bidi(exerciseDisplayName(receipt.exerciseId)),
+              fixed: displayWeight(receipt.fixedKg, app.profile?.units ?? 'kg'),
+              engine: displayWeight(receipt.engineKg, app.profile?.units ?? 'kg'),
+              unit: unitLabel(app.profile?.units ?? 'kg'),
+            })}
+          </Text>
+        ) : fileFacts >= FILE_FACTS_FLOOR ? (
+          /*
+           * ════ THE FILE (2026-09-01, audit M5) — the fallback close, when no lift rose. ════
+           *
+           * `athleteFile` counts what the engine's own evidence gates have EARNED about her — the
+           * learned rests, the fitted slopes, the grids, the ceilings. It is the honest form of
+           * "what would I lose by leaving": not a promise, a stocktake. Shown only when the
+           * stronger close (a lift that rose) is absent — one measured sentence, never two, on the
+           * screen the founder stripped of claims. Below the floor it draws nothing: "3 measured
+           * facts" is the app reading its database back to her, which is the failure the whole
+           * whatIKnow module is written against.
+           */
+          <Text style={styles.case}>{t('paywall.file', { count: fileFacts })}</Text>
+        ) : null}
 
         {/* ⛔ THE PRICES ARE THE SCREEN. With the pitch gone they take the whole middle of the page
             rather than trailing a list of claims. */}
-        <View style={styles.plansWrap}>
+        <Arrive order={2} style={styles.plansWrap}>
           {loading ? (
             <ActivityIndicator color={color.accent} style={styles.loader} />
           ) : products.length === 0 ? (
@@ -200,15 +343,38 @@ export function Paywall({ navigation, route }: Props) {
             </View>
           )}
 
-          {failed ? <Text style={styles.error}>{t('paywall.error')}</Text> : null}
-        </View>
+          {failed ? (
+            <Text style={failed === 'pending' ? styles.pendingNote : styles.error}>
+              {failed === 'restore'
+                ? t('paywall.restoreNone')
+                : failed === 'pending'
+                  ? t('paywall.pendingNote')
+                  : t('paywall.error')}
+            </Text>
+          ) : null}
+        </Arrive>
       </ScrollView>
 
       <View style={styles.footer}>
-        {/* MOSS, not cream: the annual card above is already paper, and a cream act under a cream
-            card is two slabs of the same thing. The handoff draws it in the signal. */}
+        {/*
+          CREAM, LIKE EVERY OTHER ACT IN HUSH (design audit, 2026-08-24).
+
+          This button was moss, and the reason written here was sound when it was written: *"the
+          annual card above is already paper, and a cream act under a cream card is two slabs of the
+          same thing."* The cards stopped being paper. `plan` below carries no `backgroundColor` at
+          all now — it is a 1px lit edge on the dark canvas, and `planOn` answers a choice by
+          brightening that edge rather than filling it. There is no cream above this button to
+          collide with, so the only thing the moss still did was make the one commercial act in the
+          product look unlike every other act in it.
+
+          And the audit's second reason is the one that decides it: a green BUY under a dark sheet is
+          the house style of conversion optimisation, which is the thing this product sells against.
+          Hush's act is cream on the stage, in the gym and at the till alike. If a paper surface ever
+          returns behind this footer, the answer is to change THAT surface — not to give commerce its
+          own colour.
+        */}
         <Button
-          variant="signal"
+          variant="primary"
           size="act"
           block
           label={busy ? t('paywall.working') : t('paywall.keepTraining')}
@@ -225,6 +391,13 @@ export function Paywall({ navigation, route }: Props) {
             <Text style={styles.quiet}>{t('paywall.later')}</Text>
           </Pressable>
         </View>
+        {/*
+          ⛔ HER RECORD IS NEVER HELD HOSTAGE (founder, 2026-08-23: the Spotify mandate — trust is
+          what converts). The gate blocks STARTING new engine sessions and nothing else — History,
+          Progress, the body map and the record export all stay open — and the one screen where
+          she decides whether to trust us says so in words.
+        */}
+        <Text style={styles.recordYours}>{t('paywall.recordYours')}</Text>
         <Text style={styles.legal}>
           {selectedProduct
             ? t('paywall.legalDynamic', {
@@ -285,13 +458,25 @@ function PlanCard({
     >
       {savingPct != null ? (
         <View style={styles.saveTag}>
-          <Text style={styles.saveTagText}>{t('paywall.savePct', { pct: savingPct })}</Text>
+          <Legend size={ramp.body} weight="semibold" track={tracking.wide} style={styles.saveTagText}>
+            {t('paywall.savePct', { pct: savingPct })}
+          </Legend>
         </View>
       ) : null}
 
       <View style={styles.planText}>
         <Text style={[styles.planName, selected && styles.onChosen]} numberOfLines={1}>{name}</Text>
-        <Text style={styles.planSub} numberOfLines={1}>{sub}</Text>
+        {/*
+          TWO LINES, BECAUSE THIS LINE CARRIES THE AMOUNT SHE IS ACTUALLY CHARGED (audit 2026-08-24).
+
+          At one line it read "$59.99 billed once a ye…" / "‎$59.99 בחיוב אחד ל…" — the price column
+          beside it is wide (a hero figure plus its cadence), so the sub had nothing left. Every
+          other truncation in this app costs a word; this one truncates the single fact that makes
+          the annual plan honest — the yearly charge, next to the monthly figure the card leads with.
+          A paywall that shows "$5.00 / month" in hero type and clips the "$59.99 billed once a year"
+          under it is doing the thing this product refuses to do.
+        */}
+        <Text style={styles.planSub} numberOfLines={2}>{sub}</Text>
       </View>
 
       <View style={styles.planPriceCol}>
@@ -329,6 +514,17 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
 
+  /* The coach's one measured sentence — serif, quiet, under the headline. */
+  case: {
+    color: color.textSecondary,
+    fontFamily: font.serif,
+   
+    fontSize: 20,
+    lineHeight: 27,
+    marginTop: 12,
+    textAlign: 'left',
+  },
+  recordYours: { color: color.textMuted, fontFamily: font.sans, fontSize: 17, lineHeight: 22, textAlign: 'center' },
   loader: { marginVertical: space[8] },
   unavailable: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.base, textAlign: 'center', marginVertical: space[8] },
 
@@ -396,15 +592,16 @@ const styles = StyleSheet.create({
   saveTagText: {
     // Cream ink, asked for BY NAME — the tag's ground is deep moss, so this is the same cream that
     // carries every other word on a dark surface, not "whatever the paper ladder's first rung is".
+    /* ⛔ …and it was a hand-rolled `Legend` that tracked Hebrew, at a tracking sized for the 10.5pt
+       it stopped being set in — one of six found 2026-08-27. See `WellDone.heroLabel`. The tag is
+       the loudest word on the paywall; `חסכי 40%` came apart into letters to say it. */
     color: color.textPrimary,
-    fontFamily: font.sansSemibold,
-    fontSize: 17,
-    letterSpacing: trackingPx(10.5, tracking.wide),
-    textTransform: 'uppercase',
     textAlign: 'left',
   },
 
   error: { color: color.alert, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center', marginTop: space[5] },
+  // Ask-to-Buy is news, not an error — same slot, the text's own colour, no red (audit finding 5).
+  pendingNote: { color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center', marginTop: space[5] },
 
   footer: { paddingHorizontal: 26, paddingTop: space[3], gap: 12 },
   quietRow: { flexDirection: 'row', justifyContent: 'center', gap: 26 },

@@ -105,6 +105,17 @@ describe('⛔ the review tells her what we found', () => {
     expect(said).not.toContain('bb_back_squat');
   });
 
+  it('⛔ names a whole DAY that did not survive, by the name she gave it', () => {
+    /*
+     * A session whose every lift went unmatched used to become a training day with zero slots: it
+     * counted on this report, she could adopt it, and it opened on nothing. `toProgram` drops it —
+     * so it has to be a sentence here, or three sessions on her sheet quietly become two.
+     */
+    const findings = [{ kind: 'session_empty', subject: 'Odd Day' }];
+    const said = texts(mount({ sessionCount: 2, liftCount: 5, findings, onKeep: () => {}, onBalance: () => {} }));
+    expect(said).toContain(tg('import.findEmptySession', { day: 'Odd Day' }));
+  });
+
   it('names a long session and a muscle under the dose, in sentences', () => {
     const { findings } = herReview();
     const said = texts(mount({ sessionCount: 2, liftCount: 9, findings, onKeep: () => {}, onBalance: () => {} }));

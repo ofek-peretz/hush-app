@@ -15,7 +15,6 @@
  * mirror data; they are not separate projection states. Every action is a PROPOSAL
  * the phone validates (the phone is the sole authority over the session lifecycle).
  */
-// @ts-nocheck
 
 // 
 

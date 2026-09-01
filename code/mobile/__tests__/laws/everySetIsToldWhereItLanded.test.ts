@@ -1,247 +1,115 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * A SET IS CAPTURED, NEVER JUDGED, IN SESSION — the successor law (founder, 2026-08-26).
+ *
+ * This file used to be "every set is told where it landed": the band with a dot, three coloured
+ * outcomes, the correction reveal. The founder's ruling inverted the doctrine at its root:
+ *
+ *   *"בזמן האימון המתאמן רק רושם ומתעד את הביצועים שלו… לבטל את כל החלק הזה של אם הוא נפל בפנים
+ *   או מחוץ לטווח… החלק החשוב ביותר הוא לאחר האימון איזה החלטות מתקבלות."*
+ *
+ * Mid-workout she is a LOGGER — tired, loaded, non-compliant — and the app that respects that is
+ * the one she keeps. So the beat after a set is the RECORD, at stage size, and the verdicts moved
+ * to where the coach now lives: after the session, in the decisions door, each with its reason
+ * (`engineChanges`, Loop 2). This law pins the inversion so it cannot silently un-invert:
+ *
+ *   1. EVERY working set gets the capture beat, through the one shared predicate; a warm-up
+ *      bridge never does (`theBridgeLogsInSilence` holds the bridge half).
+ *   2. The capture carries HER figures — the reps she actually did (the dials made that number
+ *      honest) with the weight beside them — at a scale read across a gym.
+ *   3. NO verdict machinery survives on the session surfaces: no band placement, no landed copy,
+ *      no eased/raised chrome, no correction reveal.
+ *   4. The dwell and the wrist ask the SAME predicate the render guard asks — the three askers
+ *      answering separately is how the 2026-08-16 flash bugs happened, and that lesson outlives
+ *      the band it was learned on.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
 // @ts-nocheck
-// 
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { bandPlacement } from '@/screens/session/SessionFlow';
-import { bandOf } from '@/domain/setRow';
-import { up, down, hold } from '@/design/tokens';
 
-/**
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- * EVERY SET IS TOLD WHERE IT LANDED — including, and especially, the ones that landed right.
- *
- * ⛔ FOUNDER, 2026-08-04:
- *
- *   > *"I really did say that if the athlete is inside the range there would be a confirmation of
- *   > landing inside the range; if it falls out at the bottom that's out of the band in blue and the
- *   > weight comes down, and the same for going out at the top, in green."*
- *
- * ── HOW ONLY TWO OF THE THREE GOT BUILT ─────────────────────────────────────────────────────────
- * The band-and-dot lived inside `CorrectionBeat`, and a correction is by definition something Loop 1
- * only produces when the reps LEAVE the band. So the two edges were drawn and the middle could not
- * be — not by oversight in the drawing, but because the only thing that drew it was a decision that
- * never happens when she is right.
- *
- * Then build 36 removed the beat for ordinary sets. That note names its own replacement — *"the one
- * that matters is whether she landed inside or outside her band"* — and I read only the first half
- * of it. The result was an app that shows her the instrument measuring her ONLY when it disagrees.
- *
- * ── WHY THE PLACEMENT IS PURE, AND TESTED HERE ──────────────────────────────────────────────────
- * Because the interesting case is the one the screen cannot produce on demand: reps outside the band
- * with NO correction — the budget spent, the last set, the rail cancelling a raise. Three real
- * states in which the dot must sit outside while the load holds, and no fixture in a live session
- * reaches them.
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- */
+//
 
-const at = (reps: number, band?: [number, number]) =>
-  bandPlacement({ weight: 34, reps, n: 2, m: 4, ...(band ? { band } : {}) });
+import fs from 'fs';
+import path from 'path';
+import { beatSpeaksFor } from '@/screens/session/SessionFlow';
 
-describe('the three outcomes, each with its own colour', () => {
-  it('⛔ INSIDE the band is a real outcome with a real mark — cream, and the load holds', () => {
-    // The one that was missing. `hold.stage` is the law's middle colour (down = blue, hold = cream,
-    // raise = moss) and this was the only surface never given it.
-    const p = at(9, [8, 10]);
-    expect(p?.tone).toBe(hold.stage);
-    expect(p?.legend).toBe('landedInside');
+const ROOT = path.join(__dirname, '..', '..');
+const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+const flow = () => read('src/screens/session/SessionFlow.tsx');
+
+const working = { weight: 34, reps: 9, n: 2, m: 4, band: [8, 10] };
+
+describe('1 · every working set gets the capture', () => {
+  it('banded, band-less, mid-lift, last set, record — all speak', () => {
+    expect(beatSpeaksFor(working, null)).toBe(true);
+    expect(beatSpeaksFor({ ...working, band: undefined }, null)).toBe(true);
+    expect(beatSpeaksFor({ ...working, n: 4, m: 4 }, null)).toBe(true);
+    expect(beatSpeaksFor({ ...working, record: true }, null)).toBe(true);
   });
 
-  it('below the band is blue, above is moss', () => {
-    expect(at(6, [8, 10])?.tone).toBe(down.stage);
-    expect(at(6, [8, 10])?.legend).toBe('landedBelow');
-    expect(at(13, [8, 10])?.tone).toBe(up.stage);
-    expect(at(13, [8, 10])?.legend).toBe('landedAbove');
-  });
-
-  it('⚠️ the EDGES of the band are inside it', () => {
-    // A set at exactly Tlo met the contract and a set at exactly Thi did too — Loop 1 corrects on
-    // `< lo` and `> hi`, and a mark that disagreed with the engine by one rep would be worse than
-    // no mark at all.
-    expect(at(8, [8, 10])?.legend).toBe('landedInside');
-    expect(at(10, [8, 10])?.legend).toBe('landedInside');
+  it('a warm-up bridge never does, whatever it wears', () => {
+    expect(beatSpeaksFor({ ...working, warmup: true }, null)).toBe(false);
+    expect(beatSpeaksFor({ ...working, warmup: true, record: true, n: 4, m: 4 }, null)).toBe(false);
   });
 });
 
-describe('where the dot sits', () => {
-  it('inside, it moves with the reps — the top of the band LOOKS like the top of the band', () => {
+describe('2 · the capture carries her figures at stage scale', () => {
+  it('the beat draws the reps she did with the weight beside them', () => {
+    const f = flow();
+    expect(f).toContain('function LoggedCapture');
+    expect(f).toContain('confirm.reps');
+    expect(f).toContain('styles.capFigures');
+  });
+
+  it('at a size read across a gym — the capture is not a caption', () => {
+    const m = /capFigures:\s*\{[^}]*fontSize:\s*(\d+)/.exec(flow());
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThanOrEqual(56);
+  });
+});
+
+describe('3 · no verdict machinery survives in session', () => {
+  it('the band instrument, the landed copy and the correction reveal are gone from the stage', () => {
+    const f = flow();
+    /* Function-level probes — the words may survive in history comments; the MACHINERY may not. */
+    for (const dead of ['function BandMark', 'function CorrectionBeat', 'bandPlacement(', 'landedInside', 'easedForYou', 'raisedForYou', 'setBeatCorrection']) {
+      expect({ dead, present: f.includes(dead) }).toEqual({ dead, present: false });
+    }
+  });
+
+  it('and the store logs the set without judging it — carry only', () => {
+    const store = read('src/state/stores/sessionStore.tsx');
+    expect(store).not.toContain('applyLoop1(');
+    expect(store).toContain('carryWeightForward(plan, current.globalIndex');
+    expect(store).toContain('LOOP 1 NO LONGER TOUCHES THE IRON');
+  });
+
+  it('the verdicts live AFTER the session — the decisions door still explains every change', () => {
+    // Loop 2 concludes between sessions and `engineChanges` carries each decision with its reason
+    // to the WellDone door — the coach the ruling promised in place of the mid-set referee.
+    expect(fs.existsSync(path.join(ROOT, 'src/domain/engineChanges.ts'))).toBe(true);
+    expect(read('src/screens/session/WellDone.tsx')).toMatch(/decision/i);
+  });
+});
+
+describe('4 · one predicate, all three askers', () => {
+  it('the dwell asks it exactly as the render guard does', () => {
     /*
-     * This is the only warning she gets that the load is about to be raised: a dot creeping toward
-     * the high tick over three sets says what is coming without a word of copy.
+     * ⚠️ THE PREDICATE IS THE SUBJECT HERE, NOT THE CONSTANT. On 2026-08-26 the lift-close grew an
+     * animation (`SetRing` — the last arc sweeping, then the bloom leaving the ring), so the two
+     * beats no longer hold the stage for the same length of time and the ternary picks between
+     * them. What must never change is the GUARD: `beatSpeaksFor(confirm, null)` decides whether
+     * there is a dwell at all, exactly as the render guard decides whether there is a beat at all.
+     * The 2026-08-16 flash bugs were three askers answering apart; a second dwell VALUE is not a
+     * second asker.
      */
-    const lo = at(8, [8, 12])!.left;
-    const mid = at(10, [8, 12])!.left;
-    const hi = at(12, [8, 12])!.left;
-    expect(lo).toBeLessThan(mid);
-    expect(mid).toBeLessThan(hi);
-  });
-
-  it('⚠️ a one-rep band does not divide by zero', () => {
-    // `reps === lo === hi` is a legal prescription (a heavy single), and `(reps-lo)/(hi-lo)` is NaN
-    // there. A NaN `left` silently drops the dot off the mark, which draws an empty band.
-    const p = at(5, [5, 5]);
-    expect(Number.isFinite(p!.left)).toBe(true);
-  });
-
-  it('outside, the distance is not a measurement, so it does not scale', () => {
-    // Twelve reps over is not "twice as far out" as six. Both are simply above the band.
-    expect(at(13, [8, 10])?.left).toBe(at(30, [8, 10])?.left);
-    expect(at(6, [8, 10])?.left).toBe(at(1, [8, 10])?.left);
-  });
-});
-
-describe('and it says nothing when it has nothing to say', () => {
-  it('a step with no band gets no mark', () => {
-    // A plank, a 400 m repeat, a set logged on the wrist and read back — none of them has a rep
-    // band, and a mark drawn against a band that does not exist would be an invention.
-    expect(at(8)).toBeNull();
-  });
-
-  it('⚠️ a nonsense band is absence, not a mark at the wrong end', () => {
-    expect(at(9, [10, 8])).toBeNull();
-    expect(at(9, [Number.NaN, 10])).toBeNull();
-  });
-});
-
-/**
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- * ⛔ AND THE BAND HAS TO REACH IT — the half of this law that was missing.
- *
- * FOUNDER, 2026-08-05, holding a photograph of "SET 3 OF 4 LOGGED · 47 kg × 16 · Set recorded.":
- *
- *   > *"On the phone the LOGGED screens I explicitly asked you for still do not appear."*
- *
- * Sixteen reps against a band of eight to ten, and the screen had no comment — so he concluded the
- * verdict had never been built. **Every test above passed the whole time.** They exercise
- * `bandPlacement`, which is pure, was correct, and is not where the bug was.
- *
- * The bug was in the FEED. The beat and the set stage derived the band by two different ladders,
- * and the beat's was the stricter one: it required both ends of `repBandLo`/`repBandHi` and gave
- * up otherwise. A coach prescribing a fixed count writes `reps: [10]`, so the stage drew "× 10"
- * and the beat, one screen later, decided there was no band at all.
- *
- * **A law that tests a drawing and not its input can only prove the drawing is drawable.** Same
- * shape as `runName`: built, correct, and fed by nobody.
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- */
-describe('⛔ the band reaches the beat', () => {
-  it('a fixed rep count is a band, not an absence', () => {
-    // The exact shape that broke it: one number, because the coach prescribed a fixed count.
-    expect(bandOf({ recommendedReps: 10, repBandLo: 10 })).toEqual([10, 10]);
-    // …and it lands, rather than falling through to the readback.
-    expect(bandPlacement({ weight: 47, reps: 16, n: 3, m: 4, band: bandOf({ repBandLo: 10 })! })?.legend).toBe(
-      'landedAbove',
-    );
-  });
-
-  it('every shape the store can put on a target yields a band', () => {
-    // `sessionStore` builds a target from a `reps` item; these are the shapes it can produce.
-    expect(bandOf({ recommendedReps: 8, repBandLo: 8, repBandHi: 12 })).toEqual([8, 12]);
-    expect(bandOf({ recommendedReps: 8, repBandLo: 8 })).toEqual([8, 8]);
-    expect(bandOf({ recommendedReps: 8 })).toEqual([8, 8]);
-    // A reversed pair is repaired rather than refused — a band cannot end before it starts.
-    expect(bandOf({ repBandLo: 10, repBandHi: 8 })).toEqual([10, 10]);
-  });
-
-  it('⚠️ …and only a step with no rep prescription at all has none', () => {
-    expect(bandOf(null)).toBeNull();
-    expect(bandOf({})).toBeNull();
-    expect(bandOf({ recommendedReps: Number.NaN })).toBeNull();
-  });
-
-  /**
-   * ⚠️ ONE LADDER, MECHANICALLY. The two call sites were eight hundred lines apart in one file, and
-   * the drift between them survived a build and a founder review. Nothing in the session screen may
-   * derive a band by hand again.
-   */
-  it('the session screen derives the band in exactly one place', () => {
-    const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-    expect(src).not.toMatch(/repBandLo\s*\?\?/);
-    expect(src).not.toMatch(/repBandLo\s*!=\s*null/);
-  });
-});
-
-/**
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- * ⛔ AND IT HAS TO STAY ON SCREEN LONG ENOUGH TO BE READ — the third time this law was half-built.
- *
- * FOUNDER, 2026-08-16:
- *
- *   > *"the Logged screen does not appear after a set when the trainee lands in range."*
- *
- * ── THE SAME SHAPE AS "ONE LADDER", ONE SCREEN LATER ────────────────────────────────────────────
- * Two conditions in this one file decide the beat: `beatSpeaks` decides whether it is DRAWN, and a
- * `setTimeout` three hundred lines away decides how long it is drawn FOR. `beatSpeaks` has three
- * qualifying cases; the timer had one — the last set of a lift. So the in-band landing, restored on
- * 2026-08-04 and covering MOST SETS, rendered and was torn down on the next tick. Under one frame.
- *
- * ── WHY IT LOOKED FIXED ─────────────────────────────────────────────────────────────────────────
- * Every test above passed, because `bandPlacement` is pure and was never the bug — twice over now.
- * And the two cases a founder would naturally reach for, a raise and a drop, BOTH worked: an
- * out-of-band set produces a correction, which returns early into its own 2.2 s hold and never
- * touches this timer. Only the quiet middle was silent. The wrist gated on all three and held
- * unconditionally, so the same set logged on the WATCH showed the beat and on the PHONE did not.
- *
- * **A condition that decides whether to draw, and a second condition that decides how long, are one
- * decision. They may not be written twice.**
- * ════════════════════════════════════════════════════════════════════════════════════════════════
- */
-describe('⛔ the beat is held as long as it is spoken', () => {
-  const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-
-  it('the dwell asks about the band, exactly as the render guard does', () => {
-    // The release timer: `}, <condition> ? CONFIRM_DWELL_MS : 0);`
-    const dwell = src.match(/\}\s*,\s*([^;]*?)\?\s*CONFIRM_DWELL_MS\s*:\s*0\s*\)/);
-    expect(dwell).not.toBeNull();
-    /*
-     * ⚠️ THE ASSERTION IS ON THE BAND TERM, NOT ON THE WHOLE EXPRESSION. `beatCorrection` genuinely
-     * cannot appear here — it is not known until `completeSet` resolves, and it opens its own hold
-     * when it arrives. The last-set term and the band term are the two that ARE knowable at the
-     * moment the timer is armed, and both must be present or a beat is drawn that nobody can read.
-     */
-    expect(dwell![1]).toMatch(/bandPlacement\s*\(\s*confirm\s*\)/);
-    expect(dwell![1]).toMatch(/confirm\.n\s*>=\s*confirm\.m/);
+    expect(flow()).toContain('beatSpeaksFor(confirm, null) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0');
+    /* And the beat and the dwell ask ONE question about which of the two is up — the same shape of
+       mistake, one level down, is what `closesTheLift` exists to make impossible. */
+    expect(flow()).toContain('function closesTheLift(');
+    expect(flow()).toContain('if (closesTheLift(confirm)) {');
   });
 
   it('…and so does the wrist, which is where the divergence was visible', () => {
-    // The watch path was already right; it is asserted so the two surfaces cannot drift apart again.
-    const watch = src.slice(src.indexOf('setWatchBeat(beat)') - 400, src.indexOf('setWatchBeat(beat)'));
-    expect(watch).toMatch(/bandPlacement\s*\(\s*beat\s*\)/);
-  });
-
-  it('an ordinary in-band set really is a case the guard admits', () => {
-    // Guards against the assertions above passing while `bandPlacement` returns null for the shape
-    // the store actually produces on a middle set.
-    expect(bandPlacement({ weight: 34, reps: 9, n: 2, m: 4, band: [8, 10] })).not.toBeNull();
-  });
-});
-
-/**
- * ⛔ THE LIFT-DONE BEAT ALWAYS HAS A SUBJECT (founder 2026-08-05: *"the exercise-finished screen
- * shows a black screen with only dots at the top"*).
- *
- * It drew a row of pips and then the band mark — and the band mark is conditional, so on a step
- * with no band the entire screen was four green dots for 1.4 seconds, with no name and no verdict.
- * The name is unconditional now; the band is still the extra.
- */
-describe('⛔ the lift-done beat names the lift', () => {
-  it('the name is not drawn behind the band mark', () => {
-    const src = readFileSync(join(__dirname, '../../src/screens/session/SessionFlow.tsx'), 'utf8');
-    const from = src.indexOf('function ExerciseDone');
-    /*
-     * ⚠️ THE WINDOW IS THE FUNCTION, NOT A CHARACTER COUNT. This read `from + 2800`, and on
-     * 2026-08-12 a longer comment inside the beat pushed `{placed ?` past the cutoff — `indexOf`
-     * returned -1, and `title < -1` failed a law about ORDER because of a paragraph. A law that
-     * breaks when a comment grows is measuring the wrong thing.
-     */
-    const beat = src.slice(from, src.indexOf('\n}\n', from));
-    const title = beat.indexOf('beatDoneTitle');
-    const placed = beat.indexOf('{placed ?');
-    expect(title).toBeGreaterThan(-1);
-    // Drawn BEFORE the conditional, so nothing about the band can take it away.
-    expect(title).toBeLessThan(placed);
+    expect(flow()).toContain('if (!beatSpeaksFor(beat, null)) return;');
   });
 });

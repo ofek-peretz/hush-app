@@ -27,11 +27,14 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
-import { exercisesForMuscle, isSwapOnly, type Exercise, type MuscleGroup } from '@/data/exercises';
+import { exercisesForMuscle, engineMayAssign, type Exercise, type MuscleGroup } from '@/data/exercises';
 
-/** The lifts she may pick or refuse for a muscle — the ones the assembler can actually deal. */
+/** The lifts she may pick or refuse for a muscle — the ones the assembler can actually deal.
+ *  The choice-only shelf (2026-08-26) is excluded by the SAME doctrine as swap-only: the
+ *  assembler never deals it, so a pick here would be a promise the screen cannot keep. Its home
+ *  is the plan builder and the swap menu, where picking IS receiving. */
 export function libraryPool(muscle: MuscleGroup): Exercise[] {
-  return exercisesForMuscle(muscle).filter((e) => !isSwapOnly(e.id));
+  return exercisesForMuscle(muscle).filter((e) => engineMayAssign(e.id));
 }
 
 /** Why a refusal cannot be taken, or `null` when it can. */

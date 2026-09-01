@@ -12,7 +12,6 @@
  * OFF is the one state the handoff never draws — it is a neutral translucent well
  * with a paper knob, which is the only version of it that stays legible on the stage.
  */
-// @ts-nocheck
 
 // 
 

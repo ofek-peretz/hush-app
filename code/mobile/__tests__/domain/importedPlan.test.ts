@@ -206,6 +206,64 @@ describe('⛔ her week becomes a programme — unchanged', () => {
   });
 });
 
+/**
+ * ⛔ `toProgram` IS ALSO THE SHARED-PLAN PATH, and that path does not go through the matcher.
+ *
+ * `PlanReceivedScreen` builds a `MatchedWeek` straight out of a link's ids, and a shared week may
+ * deliberately hold a RUN — a movement, by design not in `EXERCISES`. `exerciseById(id)!` threw on
+ * it inside an async `onPress`, the rejection was swallowed, and the adopt button did nothing at all
+ * however many times she pressed it.
+ */
+describe('⛔ an id the catalogue does not carry', () => {
+  const handed = (ids: string[]) => ({
+    sessions: [{ name: 'Shared', lifts: ids.map((id) => ({ name: id, match: { id } })) }],
+    unmatched: [],
+  });
+
+  it('does not throw, and does not invent a slot for it', () => {
+    let p;
+    expect(() => {
+      p = toProgram(handed(['bb_row', 'run_outdoor', 'not_a_lift']));
+    }).not.toThrow();
+    expect(p.days[0].slots.map((s) => s.exerciseId)).toEqual(['bb_row']);
+    expect(isRunnable(p)).toBe(true);
+  });
+
+  it('leaves no day behind when nothing in it can be run', () => {
+    // A training day with zero slots counted on the review, was adoptable, and opened on nothing.
+    const p = toProgram(handed(['run_outdoor']));
+    expect(p.days).toEqual([]);
+    expect(p.frequency).toBe(0);
+    expect(isRunnable(p)).toBe(false);
+  });
+});
+
+describe('⛔ a session whose every lift went unmatched', () => {
+  const week: ImportedWeek = {
+    sessions: [
+      { name: 'Push', lifts: [{ name: 'Barbell Bench Press', sets: 4 }] },
+      { name: 'Odd Day', lifts: [{ name: 'Zercher Squat', sets: 3 }, { name: 'Sissy Squat', sets: 3 }] },
+    ],
+  };
+
+  it('is not a training day with nothing in it', () => {
+    const p = toProgram(matchWeek(week));
+    expect(p.days.map((d) => d.name)).toEqual(['Push']);
+  });
+
+  it('is SAID, so a day does not simply stop existing between her sheet and her week', () => {
+    const m = matchWeek(week);
+    expect(reviewFindings(m, toProgram(m))).toContainEqual({ kind: 'session_empty', subject: 'Odd Day' });
+  });
+
+  it('and the day she kept is numbered as she wrote it, so an accepted suggestion rebuilds it', () => {
+    // The ids stay keyed to the SESSION, not to the surviving days — `applySuggestion` re-runs
+    // `toProgram`, and a week that renumbered itself around a dropped day would move every id.
+    const p = toProgram(matchWeek(week), 'fixed');
+    expect(p.days[0].id).toBe('fixed-d1');
+  });
+});
+
 describe('⛔ what we found — reported, never fixed', () => {
   it('names an unmatched lift, so she is asked rather than quietly given something else', () => {
     const m = matchWeek(herWeek);

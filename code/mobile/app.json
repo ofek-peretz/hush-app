@@ -19,7 +19,7 @@
       "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "45",
+      "buildNumber": "65",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
@@ -31,7 +31,20 @@
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
-        "com.apple.developer.usernotifications.time-sensitive": true
+        "com.apple.developer.usernotifications.time-sensitive": true,
+        "com.apple.security.application-groups": [
+          "group.com.hushfitness.app"
+        ],
+        "com.apple.developer.icloud-container-identifiers": [
+          "iCloud.com.hushfitness.app"
+        ],
+        "com.apple.developer.icloud-services": [
+          "CloudDocuments"
+        ],
+        "com.apple.developer.ubiquity-container-identifiers": [
+          "iCloud.com.hushfitness.app"
+        ],
+        "com.apple.developer.ubiquity-kvstore-identifier": "$(TeamIdentifierPrefix)$(CFBundleIdentifier)"
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -43,10 +56,53 @@
               "CA92.1"
             ]
           }
+        ],
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeFitness",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
+          }
         ]
       }
     },
     "android": {
+      "package": "com.hushfitness.app",
       "userInterfaceStyle": "light",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -81,7 +137,9 @@
       ],
       "@bacons/apple-targets",
       "expo-font",
-      "expo-video"
+      "expo-video",
+      "@sentry/react-native/expo",
+      "expo-apple-authentication"
     ],
     "extra": {
       "eas": {
@@ -91,7 +149,12 @@
               "appExtensions": [
                 {
                   "bundleIdentifier": "com.hushfitness.app.widget",
-                  "targetName": "HushWidget"
+                  "targetName": "HushWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.hushfitness.app"
+                    ]
+                  }
                 },
                 {
                   "bundleIdentifier": "com.hushfitness.app.watch",

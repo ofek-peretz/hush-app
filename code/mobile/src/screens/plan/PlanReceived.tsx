@@ -11,14 +11,13 @@
  * allow-list, pinned by a test that reads the payload back as text). Her first working set is what
  * sets her loads — the same sentence the cold start has always made.
  */
-// @ts-nocheck
 
 // 
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { planBandSummary, planLiftCount, type SharedPlan } from '@/domain/planShare';
@@ -55,16 +54,31 @@ export function PlanReceivedView({ plan, splitName, onAdopt, onDecline }: PlanRe
           </View>
         </View>
 
-        <Text style={styles.title} accessibilityRole="header">
-          {from ? t('planReceived.title', { name: bidi(from), split: splitName }) : t('planReceived.titleAnon', { split: splitName })}
-        </Text>
+        {/* ✦ IT ARRIVES (2026-08-27) — see the note at `HomeView`. Two beats: who sent it and what
+            it is, then what it contains. Someone has just handed her a programme; the contents
+            should not be on the glass in the same instant as the fact that it came from a person. */}
+        <Arrive order={0}>
+          <Text style={styles.title} accessibilityRole="header">
+            {/*
+              ⛔ THE HEBREW TITLE CARRIED A DEFINITE ARTICLE AND `{{split}}` IS NOT A HEBREW WORD
+              (2026-08-28). It read `ה{{split}} של {{name}}` — and a split's name is authored, so on
+              `11.5` it came out **`הUpper / Lower של Dana`**: the article welded to a Latin capital,
+              with the bidi boundary falling inside a word.
+              *
+              ⚠️ AND EVERY OTHER `ה{{…}}` KEY IS SAFE, which is why this survived. The rest of them
+              interpolate a MUSCLE — `ה` + `חזה` is `החזה`, always Hebrew, always correct. This one
+              interpolates free text. `titleAnon` beside it already omitted the article; now they
+              agree. */}
+            {from ? t('planReceived.title', { name: bidi(from), split: splitName }) : t('planReceived.titleAnon', { split: splitName })}
+          </Text>
+        </Arrive>
 
         {/* What arrived, in three figures. */}
-        <View style={styles.facts}>
+        <Arrive order={1} style={styles.facts}>
           <Fact value={String(plan.days.length)} label={t('planReceived.days')} />
           <Fact value={String(planLiftCount(plan))} label={t('planReceived.lifts')} />
           {bands ? <Fact value={bands} label={t('planReceived.bands')} /> : null}
-        </View>
+        </Arrive>
 
         {/* THE PROMISE — the reason this is safe to accept. */}
         <View style={styles.assure}>
@@ -74,6 +88,15 @@ export function PlanReceivedView({ plan, splitName, onAdopt, onDecline }: PlanRe
               {from ? t('planReceived.yoursLead', { name: bidi(from) }) : t('planReceived.yoursLeadAnon')}
             </Text>
             <Text style={styles.assureSub}>{t('planReceived.yoursSub')}</Text>
+            {/*
+              ⛔ THE ONE THING ADOPTING DOES OVERWRITE (audit, 2026-08-18). Everything else about
+              this card is a promise that nothing of hers is touched — and then `onAdopt` writes the
+              sender's rep bands straight over her own. It is defensible (a band is a preference,
+              and adopting a shape you cannot read at your own rep range is adopting nothing), but
+              it was not said anywhere, on the one screen whose entire job is saying what she is
+              agreeing to. Only drawn when bands actually travelled.
+            */}
+            {bands ? <Text style={styles.assureSub}>{t('planReceived.bandsReplaced', { bands })}</Text> : null}
           </View>
         </View>
       </View>
@@ -93,9 +116,10 @@ export function PlanReceivedView({ plan, splitName, onAdopt, onDecline }: PlanRe
   );
 }
 
+/** One node, one sentence: "4 days" — not "4", stop, "days". The pattern is `WellDone`'s `Fact`. */
 function Fact({ value, label }: { value: string; label: string }) {
   return (
-    <View style={styles.fact}>
+    <View style={styles.fact} accessible accessibilityLabel={`${value} ${label}`}>
       <Text style={styles.factValue}>{value}</Text>
       <Text style={styles.factLabel}>{label}</Text>
     </View>

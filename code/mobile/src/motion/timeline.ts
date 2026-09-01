@@ -4,7 +4,6 @@
  * phases are eased (controlled), the endpoint holds are still — this is where "correct tempo" and
  * the endpoint holds that land on the range ticks are defined, once, for every exercise.
  */
-// @ts-nocheck
 
 // 
 
@@ -24,6 +23,13 @@ export const DEFAULT_TEMPO: Tempo = {
 export const repDurationMs = (t: Tempo): number =>
   t.topHoldMs + t.eccentricMs + t.bottomHoldMs + t.concentricMs;
 
+/**
+ * The same clock, for every lift whose WORKING ENDPOINT is reached by the muscle SHORTENING — the
+ * curls, rows, pulldowns, raises, pushdowns, calf raises, thrusts, extensions and presses that
+ * finish at lockout rather than at the stretch. See `Tempo.endpointIsConcentric`.
+ */
+export const CONCENTRIC_TEMPO: Tempo = { ...DEFAULT_TEMPO, endpointIsConcentric: true };
+
 export const loopDurationMs = (t: Tempo): number => repDurationMs(t) * t.reps;
 
 /**
@@ -31,15 +37,33 @@ export const loopDurationMs = (t: Tempo): number => repDurationMs(t) * t.reps;
  * lifts (deadlift from the floor) the curve is inverted so the rep opens at the stretch.
  */
 function romInRep(msIntoRep: number, t: Tempo): number {
+  /*
+   * WHICH PHASE GETS THE SLOW CLOCK.
+   *
+   * The loop's first timed move runs from wherever the rep opens to the other end; the second
+   * brings it back. Whether the first of those is the ECCENTRIC depends on two facts, and this used
+   * to assume both: that rom 1 is the loaded/lowered end (`endpointIsConcentric` says otherwise for
+   * every curl, row, raise and pull in the catalogue), and that the loop opens at rom 0 (`startAt`
+   * already said otherwise for the deadlift, which opens on the floor and PULLS first).
+   *
+   * Taken together they decide it: with `startAt: 'bottom'` the first move runs rom 1 → rom 0, so
+   * the two flags cancel. Every clip then spends 2.0s on the lowering and 1.1s on the lift, which
+   * is what `DEFAULT_TEMPO` has always claimed to be.
+   */
+  const rom0to1IsConcentric = t.endpointIsConcentric === true;
+  const firstIsConcentric = t.startAt === 'bottom' ? !rom0to1IsConcentric : rom0to1IsConcentric;
+  const firstMs = firstIsConcentric ? t.concentricMs : t.eccentricMs;
+  const secondMs = firstIsConcentric ? t.eccentricMs : t.concentricMs;
+
   const e0 = t.topHoldMs;
-  const e1 = e0 + t.eccentricMs;
+  const e1 = e0 + firstMs;
   const e2 = e1 + t.bottomHoldMs;
-  const e3 = e2 + t.concentricMs;
+  const e3 = e2 + secondMs;
   let rom: number;
   if (msIntoRep < e0) rom = 0;
-  else if (msIntoRep < e1) rom = easeInOut((msIntoRep - e0) / t.eccentricMs);
+  else if (msIntoRep < e1) rom = easeInOut((msIntoRep - e0) / firstMs);
   else if (msIntoRep < e2) rom = 1;
-  else if (msIntoRep < e3) rom = 1 - easeInOut((msIntoRep - e2) / t.concentricMs);
+  else if (msIntoRep < e3) rom = 1 - easeInOut((msIntoRep - e2) / secondMs);
   else rom = 0;
   return t.startAt === 'bottom' ? 1 - rom : rom;
 }
@@ -49,7 +73,11 @@ export function romAt(msElapsed: number, t: Tempo): number {
   const loop = loopDurationMs(t);
   const into = ((msElapsed % loop) + loop) % loop;
   const rep = repDurationMs(t);
-  return romInRep(into % rep, t);
+  const rom = romInRep(into % rep, t);
+  if (!t.repRanges || t.repRanges.length === 0) return rom;
+  /* A partial-rep protocol: this rep travels only its own slice of the range. See `Tempo.repRanges`. */
+  const [lo, hi] = t.repRanges[Math.min(t.repRanges.length - 1, Math.floor(into / rep))];
+  return lo + (hi - lo) * rom;
 }
 
 /** Evenly spaced sample times across exactly one loop (for validation + frame emit). */

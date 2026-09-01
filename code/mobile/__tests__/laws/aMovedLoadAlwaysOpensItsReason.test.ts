@@ -95,3 +95,32 @@ describe('a lift the coach moved', () => {
     expect(src).toMatch(/\{props\.line \? <Text style=\{styles\.line\}>\{props\.line\}<\/Text> : null\}/);
   });
 });
+
+describe('⛔ the answer carries the verb (founder, device QA 2026-08-23)', () => {
+  /*
+   * *"ובלחיצה על תרגיל למה זה מציג למה זה נבחר?"* — he tapped a lift to MANAGE it and the why sheet
+   * offered only understanding. His 2026-08-05 ruling (the row opens the WHY) stands; the sheet's
+   * foot now ends with the one thing she can do about it — the swap door — wherever the surface
+   * offers management at all (the pre-workout card), and never where it only reports (the Mirror).
+   */
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const src = (rel: string) => fs2.readFileSync(path2.join(__dirname, '..', '..', rel), 'utf8');
+
+  it('both why sheets can carry the swap door, dressed as a ghost under the act', () => {
+    for (const rel of ['src/components/WhyChangedSheet.tsx', 'src/components/WhyHereSheet.tsx']) {
+      const sheet = src(rel);
+      expect(sheet).toContain('onSwap?: () => void;');
+      expect(sheet).toContain("props.onSwap ? (");
+      expect(sheet).toContain("label={t('swap.title')} onPress={props.onSwap}");
+    }
+  });
+
+  it('…and the pre-workout card hands the door through — gated exactly like the row’s own swap', () => {
+    const host = src('src/screens/plan/PreWorkoutScreen.tsx');
+    // Both sheet hosts pass onSwap, and both are gated on the day not being done.
+    const doors = host.split('onSwap: () =>').length - 1;
+    expect(doors).toBe(2);
+    expect(host).toContain('setSwapFor(id)');
+  });
+});

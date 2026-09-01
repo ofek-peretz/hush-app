@@ -17,7 +17,6 @@
  * or a verdict — the engine decided those at the end of each occurrence and this only reads them
  * back, exactly as the Record screen (3.3b) reads `sessionForward` back.
  */
-// @ts-nocheck
 
 // 
 
@@ -81,6 +80,7 @@ export function liftClimb(sessions: Session[], exerciseId: string): LiftClimb {
   for (const s of sessions) {
     for (const log of s.sets) {
       if (log.exerciseId !== exerciseId) continue;
+      if (log.isApproach) continue; // a warm-up bridge is not a climb point — a bridges-only day draws nothing
       const atMs = Date.parse(log.persistedAt || s.startedAt);
       if (!Number.isFinite(atMs)) continue;
       const value = mode === 'load' ? log.actualWeight : log.actualReps;
@@ -168,8 +168,17 @@ export interface LiftChange {
    */
   decision: string;
   /** Structural / volume moves (S-45); absent on an ordinary load change. */
-  kind?: 'graduate' | 'swap' | 'volume' | 'rung';
+  /** `detrain` joined when B-9 landed — the engine stamps it, and this union simply predated it. */
+  kind?: 'graduate' | 'swap' | 'volume' | 'rung' | 'detrain' | 'deload' | 'ease';
   toExercise?: string;
+  /**
+   * ⛔ IS `decision` A SENTENCE, OR A CODE? The two producers disagree, and the screen had no way
+   * to ask. `liftChanges` (the engine) stamps a CODE — `progress`, `stall_backoff` — which the copy
+   * layer expands; `liftChangesFromCoach` stamps the coach's own written line. Printing the engine's
+   * value raw would put `stall_backoff` on her screen, and dropping the coach's threw away the only
+   * thing that row had to say. One flag, set by the producer that knows.
+   */
+  spoken?: boolean;
 }
 
 type ChangeEntry = NonNullable<EngineV5State['changeLog']>[number];
@@ -217,12 +226,20 @@ export function pointIndexAt(points: ClimbPoint[], atMs: number): number {
 }
 
 /**
- * ════ THE ALL-CHANGES TAB, FROM THE COACH ════
+ * ════ THE ALL-CHANGES TAB, FROM THE COACH — NOW THE FALLBACK, NOT THE SOURCE ════
  *
- * `liftChanges` above reads the engine's stamped changeLog. Nothing writes that log any more — the
- * between-session fold is deleted — so on any athlete who started after it went, this tab would be
- * permanently empty. Empty is not "no changes"; it is "we stopped recording", and the screen exists
- * to answer *why did this lift move?*
+ * ⛔ THE PREMISE UNDER THIS FUNCTION EXPIRED AND NOBODY TOLD IT (2026-08-19). It was written
+ * because *"nothing writes the engine's changeLog any more — the between-session fold is deleted"*,
+ * which was true of the v4 fold and has been false since v5 landed: `foldEngine` writes
+ * `state.changeLog` on every workout, `getWeeklyPlanV5` reads it back, and stage 7's tests pin it.
+ *
+ * ⚠️ AND THE COST WAS THE WHOLE TAB. This mapper hardcodes `loadFrom: null, loadTo: null` and no
+ * `kind`, so `changeDirection` returned `'hold'` for every row — a lift the engine had RAISED five
+ * times drew five identical grey rows reading "held · I held it where it was", on the one screen
+ * that exists to answer *why did this lift move?*
+ *
+ * It stays as the fallback for an athlete whose history is the coach era, where these really are
+ * the only decisions on record.
  *
  * The coach's log answers it better than the engine's ever did: the engine stamped a decision CODE
  * that the copy layer expanded into a sentence, and the coach wrote the sentence.
@@ -241,6 +258,8 @@ export function liftChangesFromCoach(log: CoachDecision[] | undefined, exerciseI
       loadFrom: null,
       loadTo: null,
       decision: d.say,
+      // The coach wrote this one; the screen may print it as it stands. See `spoken`.
+      spoken: true,
     }))
     .filter((c) => Number.isFinite(c.atMs))
     .sort((a, b) => b.atMs - a.atMs);

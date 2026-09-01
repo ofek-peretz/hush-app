@@ -37,7 +37,6 @@
  *      an unbounded sort would return a different-looking programme every week.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

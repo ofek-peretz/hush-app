@@ -90,16 +90,30 @@ describe('the band decides, and its edges are inclusive', () => {
     expect(run({ repsJustDone: 10 })).toEqual({ nextLoad: 60, ...NONE });
   });
 
-  it('one rep past Thi raises', () => {
-    expect(run({ repsJustDone: 11 }).direction).toBe('up');
+  it('one rep past Thi WAITS alone, and raises with its second witness (F-20)', () => {
+    // The founder's gym finding #3, mirrored on the raise side: a lone 1-rep overshoot is wobble.
+    expect(run({ repsJustDone: 11 })).toEqual({ nextLoad: 60, ...NONE });
+    expect(run({ repsJustDone: 11, prevMiss: 'up' }).direction).toBe('up');
   });
 
   it('exactly at Tlo is INSIDE the band — nothing moves', () => {
     expect(run({ repsJustDone: 8 })).toEqual({ nextLoad: 60, ...NONE });
   });
 
-  it('one rep short of Tlo drops', () => {
-    expect(run({ repsJustDone: 7 }).direction).toBe('down');
+  it('one rep short of Tlo WAITS alone, and drops with its second witness (F-20)', () => {
+    // The finding itself: 7 then 8 on an 8-lo band. The 7 alone may not renegotiate the bar.
+    expect(run({ repsJustDone: 7 })).toEqual({ nextLoad: 60, ...NONE });
+    expect(run({ repsJustDone: 7, prevMiss: 'down' }).direction).toBe('down');
+  });
+
+  it('F-20 · a 2-rep miss is evidence on its own — no witness needed, either side', () => {
+    expect(run({ repsJustDone: 6 }).direction).toBe('down'); // a grinding set acts immediately
+    expect(run({ repsJustDone: 12 }).direction).toBe('up');
+  });
+
+  it('F-20 · a witness on the WRONG side does not corroborate', () => {
+    expect(run({ repsJustDone: 7, prevMiss: 'up' })).toEqual({ nextLoad: 60, ...NONE });
+    expect(run({ repsJustDone: 11, prevMiss: 'down' })).toEqual({ nextLoad: 60, ...NONE });
   });
 
   it('every rep count strictly inside the band leaves the load alone', () => {
@@ -111,7 +125,7 @@ describe('the band decides, and its edges are inclusive', () => {
 
 describe('a raise is sized by the overshoot, and the rail is the hard stop', () => {
   it('the further past Thi she goes, the further the load moves', () => {
-    const one = run({ repsJustDone: 11 }).nextLoad;
+    const one = run({ repsJustDone: 11, prevMiss: 'up' }).nextLoad; // witnessed (F-20)
     const four = run({ repsJustDone: 14 }).nextLoad;
     expect(one).toBeGreaterThan(60);
     expect(four).toBeGreaterThan(one); // a bigger miss is worth more rungs
@@ -151,7 +165,7 @@ describe('a raise is sized by the overshoot, and the rail is the hard stop', () 
 
 describe('a drop is sized by the shortfall', () => {
   it('the further short of Tlo she falls, the further the load drops', () => {
-    const one = run({ repsJustDone: 7 }).nextLoad;
+    const one = run({ repsJustDone: 7, prevMiss: 'down' }).nextLoad; // witnessed (F-20)
     const four = run({ repsJustDone: 4 }).nextLoad;
     expect(one).toBeLessThan(60);
     expect(four).toBeLessThan(one);
@@ -182,13 +196,13 @@ describe('`corrected` is a statement about the LOAD, not about the branch taken'
   });
 
   it('a raise that lands reports corrected: true', () => {
-    const r = run({ repsJustDone: 11 });
+    const r = run({ repsJustDone: 11, prevMiss: 'up' });
     expect(r.corrected).toBe(true);
     expect(r.nextLoad).not.toBe(60);
   });
 
   it('a drop that lands reports corrected: true', () => {
-    const r = run({ repsJustDone: 7 });
+    const r = run({ repsJustDone: 7, prevMiss: 'down' });
     expect(r.corrected).toBe(true);
     expect(r.nextLoad).not.toBe(60);
   });

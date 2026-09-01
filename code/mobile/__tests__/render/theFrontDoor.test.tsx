@@ -180,3 +180,34 @@ describe('⛔ and the door is documented as the decision it is', () => {
     expect(fs.existsSync(path.resolve(__dirname, '..', '..', 'src', 'screens/onboarding/YourGoal.tsx'))).toBe(false);
   });
 });
+
+/* ══════════════════════════ THE CONSENT OPENS A DOCUMENT (founder 2026-09-01) ══════════════════ */
+
+describe('⛔ the legal line opens a real document, in the app, in her language', () => {
+  it('the door wires the line to the in-app sheet — never a dead tap, never a bare URL', () => {
+    const d = door();
+    expect(d).toContain('LegalSheet');
+    expect(d).toContain('setLegalOpen(true)');
+    // The external-link interim is gone from this screen: consent opens content, not a browser.
+    expect(d).not.toContain('Linking.openURL');
+  });
+
+  it('…and the sheet actually carries the four sections, in words', () => {
+    const { LegalSheet } = require('@/components/LegalSheet');
+    let r: ReactTestRenderer;
+    act(() => {
+      r = renderer.create(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <LegalSheet onClose={() => {}} />
+        </SafeAreaProvider>,
+      );
+    });
+    mounted.push(r!);
+    const said = JSON.stringify(r!.toJSON());
+    for (const k of ['legal.termsTitle', 'legal.privacyTitle', 'legal.healthTitle', 'legal.billingTitle']) {
+      expect(said).toContain(tg(k));
+    }
+    // The privacy section states the two facts the product actually lives by.
+    expect(tg('legal.privacyBody')).toContain('iCloud');
+  });
+});

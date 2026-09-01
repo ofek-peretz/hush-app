@@ -57,7 +57,6 @@
  * Pure and I/O-free. Knows nothing about any model, provider or transport.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -125,7 +124,13 @@ export interface DistanceItem extends ItemBase {
  * contain one, and history that cannot read its own record is a worse fault than the screen was.
  */
 
-export type PlannedItem = RepsItem | TimeItem | DistanceItem | OpenItem;
+/*
+ * ⛔ `OpenItem` LEFT THIS UNION WITH THE ITEM IT NAMED (founder 2026-08-12) — and `@ts-nocheck` let
+ * the dead name sit here for eleven days. The parser refuses `open` items, so nothing can produce
+ * one; `OpenResult` alone survives in `models.ts`, because a SAVED session from before the deletion
+ * can still contain one and history must be able to read its own record.
+ */
+export type PlannedItem = RepsItem | TimeItem | DistanceItem;
 
 /** A group of items done `rounds` times — a set, a lap and a circuit round are one idea. */
 export interface PlannedBlock {
@@ -148,6 +153,8 @@ export interface PlannedSession {
    */
   day?: Weekday;
   blocks: PlannedBlock[];
+  /* ⛔ `leanWarmup` IS DELETED WITH F-15 (founder 2026-08-30) — see `ProgramDay` for the ruling.
+     It mirrored a day-level flag whose whole job was to trim a price nothing is charged any more. */
 }
 
 export interface CoachPlan {
@@ -247,7 +254,7 @@ export interface CoachAnswer {
    * a session is running; ignored otherwise. `domain/liveRevision` owns what each verb does and the
    * invariant that nothing behind her moves.
    */
-  today?: LiveEdit[];
+  /* ⛔ `today` IS DELETED — see the note above `readToday`'s grave. */
   /**
    * Which of its two intake moves the coach says it just made — see `next` on the schema.
    *
@@ -458,46 +465,6 @@ export const COACH_PLAN_SCHEMA = {
       },
     },
     /*
-     * ════ WHAT TO CHANGE ABOUT THE WORKOUT SHE IS IN RIGHT NOW ════
-     *
-     * ⛔ FOUNDER, 2026-08-02: *"During the workout you can just ask the coach for anything in the
-     * chat window and it happens — skip an exercise, or anything else."*
-     *
-     * `sessions` is next week. This is today, mid-session, and the two must not be confused: a
-     * programme rewrite cannot express "take the last two sets off this lift, I have to leave", and
-     * a live edit cannot express "here is your next four weeks".
-     *
-     * ⚠️ SIX VERBS, AND THE NARROWNESS IS NOT A LEASH ON ITS JUDGEMENT. It writes into a machine
-     * that is mid-execution, with logged sets behind it and a watch mirroring it — prose cannot be
-     * applied to a state machine. The coach decides freely WHAT should change; this is the gauge of
-     * the wire that carries it. Anything outside these six it says in `say`, and she does it, which
-     * is exactly how pain has always worked.
-     */
-    today: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['do'],
-        properties: {
-          do: { type: 'string', enum: [...LIVE_EDIT_VERBS] },
-          /** The exercise id it is about. Absent only on `end`, which is about the session. */
-          ex: { type: 'string' },
-          /**
-           * `swap` only: the exercise id to put in its place.
-           *
-           * ⚠️ SEPARATE FROM `n` ON PURPOSE. One field holding either a word or a number would be
-           * declared `["string","number","null"]`, and `geminiSchema` collapses a union to its
-           * first non-null member — it would reach Google as a bare STRING and every numeric edit
-           * would come back as `"3"` and be dropped by the parse, silently.
-           */
-          to: { type: 'string' },
-          /** `sets`: how many rounds. `load`: the new weight, or null for bodyweight. */
-          n: { type: ['number', 'null'] },
-        },
-      },
-    },
-    /*
      * The programme's own name and reason. Declared beside `sessions` because they describe the same
      * object — and `propertyOrdering` puts them BEFORE it, so the coach says what it is building
      * before it builds it rather than labelling it afterwards.
@@ -654,56 +621,25 @@ function readLearned(raw: unknown): { learned?: LearnedAboutHer } {
  * within the ladder she has actually used (F-2) rather than a generic increment. Without it the
  * snap still works, it is just coarser.
  */
-/**
- * ════ THE LIVE EDITS, VALIDATED ONE VERB AT A TIME ════
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ `today` IS DELETED FROM THE WIRE (2026-08-26) — the coach could ask, and nothing ever answered.
  *
- * ⚠️ EVERY EDIT IS CHECKED ON ITS OWN AND A BAD ONE IS DROPPED, not the whole list. The coach
- * asking for three changes and getting two wrong on the third is far better than her getting none
- * — and a list rejected wholesale is the failure that is invisible from her side, because `say`
- * still describes all three.
+ * It was six verbs against the session she is standing in (`drop`, `defer`, `swap`, `sets`, `load`,
+ * `end`), declared on `COACH_PLAN_SCHEMA` and therefore on `COACH_DECISION_SCHEMA` too, parsed by
+ * `readToday`, carried on `CoachUpdate` — and **applied by nothing.** `reviseToday` survives on the
+ * store, and its only driver is the LOCAL pain table in `PainWhere`.
  *
- * An exercise id is NOT checked against the catalogue here: the session decides whether the lift is
- * in TODAY, which is a stronger question, and `reviseToday` already returns unchanged when it is
- * not. Two validators disagreeing about the same id is how an edit goes missing with nobody at
- * fault.
+ * ⚠️ IT IS NOT A DEAD FIELD, IT IS A BROKEN PROMISE. The ask that carried it told the coach *"put it
+ * in 'today' and say what you changed"*, and a coach that believes it dropped her last two sets will
+ * write exactly that in `say` — which she reads, on a screen where nothing has changed. The one
+ * class of wrong this repo calls the most expensive: everything looks fine and the athlete is the
+ * only one who can tell.
+ *
+ * `applyLiveEdit` / `applyLiveEdits` / `LiveEdit` are UNTOUCHED — the pain path is a real caller and
+ * its plan-shrink guard is real work (`theCoachCanChangeTodayButNotYesterday`).
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-function readToday(raw: unknown): { today?: LiveEdit[] } {
-  if (!Array.isArray(raw)) return {};
-  const out: LiveEdit[] = [];
-  for (const e of raw) {
-    if (!isObj(e) || typeof e.do !== 'string') continue;
-    const ex = typeof e.ex === 'string' ? e.ex.trim() : '';
-    switch (e.do) {
-      case 'end':
-        out.push({ do: 'end' });
-        break;
-      case 'drop':
-      case 'defer':
-        if (ex) out.push({ do: e.do, ex });
-        break;
-      case 'sets':
-        // A count is an integer above zero. `sets: 0` is `drop` said badly, and honouring it as a
-        // drop would be us deciding what it meant.
-        if (ex && typeof e.n === 'number' && Number.isFinite(e.n) && e.n >= 1) {
-          out.push({ do: 'sets', ex, n: Math.round(e.n) });
-        }
-        break;
-      case 'load':
-        // `null` is meaningful — it is bodyweight, and dropping it would leave a fabricated weight
-        // on a lift the coach just took the load off.
-        if (ex && (e.n === null || (typeof e.n === 'number' && Number.isFinite(e.n) && e.n >= 0))) {
-          out.push({ do: 'load', ex, n: e.n as number | null });
-        }
-        break;
-      case 'swap':
-        if (ex && typeof e.to === 'string' && e.to.trim()) out.push({ do: 'swap', ex, to: e.to.trim() });
-        break;
-      default:
-        break;
-    }
-  }
-  return out.length > 0 ? { today: out } : {};
-}
 
 export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): ParsedPlan {
   let root: unknown = raw;
@@ -738,7 +674,6 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     (hurtRaw.severity === 'twinge' || hurtRaw.severity === 'pain' || hurtRaw.severity === 'sharp')
       ? { hurts: { muscle: hurtRaw.muscle, severity: hurtRaw.severity as 'twinge' | 'pain' | 'sharp' } }
       : {};
-  const today = readToday(root.today);
   const learned = readLearned(root.learned);
   /*
    * Trimmed, capped, and dropped when empty. A brief of `""` would overwrite what the coach wrote
@@ -793,7 +728,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
    * would miss almost every one of them.
    */
   if (root.sessions === undefined || root.sessions === null) {
-    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief, ...spokenNotes, ...hurts, ...today }, snapped: 0 };
+    return { ok: true, answer: { say, plan: null, ...next, ...learned, ...brief, ...spokenNotes, ...hurts }, snapped: 0 };
   }
   if (!Array.isArray(root.sessions) || root.sessions.length === 0) {
     return { ok: false, reason: 'no_sessions' };
@@ -979,7 +914,6 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
       say,
       ...next,
       ...hurts,
-      ...today,
       /*
        * ⛔ THE NAME TRAVELS WITH THE PROGRAMME (founder 2026-08-04). Trimmed and dropped when empty,
        * because a title of "" is worse than no title: every surface would draw a blank heading where

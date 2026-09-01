@@ -13,7 +13,6 @@
  * decomposes EXACTLY onto standard plates; otherwise the per-side weight is shown as a plain number
  * (so we never print a plate stack that doesn't sum to the actual load).
  */
-// @ts-nocheck
 
 // 
 
@@ -191,4 +190,199 @@ export function heroType(figure: string): { fontSize: number; lineHeight: number
     lineHeight: Math.ceil(fontSize * HERO_LEADING),
     letterSpacing: Math.round(fontSize * HERO_TRACKING * 10) / 10,
   };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE SECOND TIER — THE REP BAND, AND WHY IT IS NOT THE HERO
+ *
+ * ⛔ FOUNDER, 2026-08-22, on the live set screen: *"זה המסך היחיד שאני רוצה כמה שפחות שיהיה מלא
+ * בדברים ומקסימום מה שהמתאמן צריך לראות בזמן אמת."*
+ *
+ * The load and the band were both drawn at `HERO_FONT_SIZE`, from this same function — a decision
+ * this file's own law recorded approvingly (*"both figures on the stage take their type from the
+ * rule"*). One rule was right. One SIZE was not.
+ *
+ * ── THEY ARE NOT THE SAME KIND OF FACT, AND THE ORDER IS PHYSICAL ───────────────────────────────
+ *   · the LOAD is what she must do to the equipment **before the set** — she walks to the bar and
+ *     puts this number on it;
+ *   · the BAND is what she checks **during** it, to know when to stop.
+ *
+ * Sequential, not equal. Two figures of identical weight give the eye two anchors and no subject,
+ * and the negative space between two equals reads as a VOID rather than as air around a thing —
+ * which is the whole of why the stage reads empty in a photograph while every measured gap on it is
+ * the size the founder last approved.
+ *
+ * ⚠️ SO THE HIERARCHY IS THE SPACING FIX. Nothing was added and nothing moved; the second figure
+ * dropped a tier, and the room around the first one became room instead of absence.
+ *
+ * ⚠️ AND IT IS STILL ENORMOUS. 62 is three and a half times the type floor and legible at four
+ * metres — this is a demotion relative to the load, never a small number in a gym.
+ * ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The rep band's figure at its designed size — one tier under the load. */
+export const BAND_FONT_SIZE = 62;
+
+/**
+ * The size the rep band may take. A band is `8–10` or `12–15` — four or five glyphs, always — so it
+ * never reaches the width the load has to budget for. The step-down is kept anyway, derived from the
+ * same measured glyph width, so a band nobody has thought of yet cannot be the thing that clips.
+ */
+export function bandFontSize(figure: string): number {
+  return figure.length <= 6 ? BAND_FONT_SIZE : Math.round(BAND_FONT_SIZE * 0.8);
+}
+
+/**
+ * The band's type, from the SAME leading and tracking ratios as the hero — so the two figures read
+ * as one typeface at two sizes rather than as two designs. One rule per figure; no size is ever
+ * written into a style on the screen (which is the property `loadPresentation.test` protects, and
+ * the reason the 2026-08-12 hardcode went unnoticed for a week).
+ */
+export function bandType(figure: string): { fontSize: number; lineHeight: number; letterSpacing: number } {
+  const fontSize = bandFontSize(figure);
+  return {
+    fontSize,
+    lineHeight: Math.ceil(fontSize * HERO_LEADING),
+    letterSpacing: Math.round(fontSize * HERO_TRACKING * 10) / 10,
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE THIRD TIER — THE PRESCRIPTION ROW (founder, 2026-08-31)
+ *
+ * ⛔ THE STAGE HAS A STATIC FIGURE AGAIN, AND THIS FILE'S LAW IS THE REASON IT IS SAFE.
+ *
+ * The 2026-08-26 redesign replaced both poster figures with the engraved dials, and the law under
+ * this file inverted to say so: *"the stage draws NO poster figure any more… what can regress is
+ * someone reintroducing a hand-set poster figure beside the dials."* That is exactly what the
+ * athlete-as-hero pass did — the founder's ruling that the load is not the hero once it is on the
+ * bar — so the two dials moved off the stage and their two numbers stayed, at gym size, side by
+ * side, each one tap from its own wheel.
+ *
+ * The GUARD, though, is not about posters. It is: **the screen must call a rule, never write a size
+ * into a style** — the property whose absence let a hardcoded size clip "37" for a week. So the new
+ * figures get the third rule rather than a literal, and the law is rewritten to require the call.
+ *
+ * ── WHY 46 AND WHY IT STEPS SOONER THAN THE OTHERS ──────────────────────────────────────────────
+ * The hero owned the full 338-point stage and could hold five glyphs at 92. These two share it:
+ * each cell is 169 points, and the weight's cell also carries its `↑1.5` delta (about 47 points at
+ * 17). So the budget for the figure itself is ~122 points, and IBM Plex Mono advances 0.6 em:
+ *
+ *     3 glyphs (`34`, `8`)      82  ✔ at 46        5 glyphs (`137.5`)  138 ✘ at 46, 120 ✔ at 40
+ *     4 glyphs (`82.5`)        110  ✔ at 46        6+                       ✘ — steps to 34
+ *
+ * ⚠️ AND THE LEADING AND TRACKING ARE THE HERO'S OWN RATIOS, so all three tiers read as one typeface
+ * at three sizes rather than as three designs — and `noGlyphIsClipped` holds here for free, because
+ * the line box is derived from whatever size was chosen rather than typed beside it.
+ */
+export const RX_FONT_SIZE = 46;
+
+export function rxFontSize(figure: string): number {
+  const glyphs = figure.length; // tabular-nums: '.' occupies a digit cell, so it counts as one
+  if (glyphs <= 4) return RX_FONT_SIZE;
+  if (glyphs === 5) return 40;
+  return 34;
+}
+
+export function rxType(figure: string): { fontSize: number; lineHeight: number; letterSpacing: number } {
+  const fontSize = rxFontSize(figure);
+  return {
+    fontSize,
+    lineHeight: Math.ceil(fontSize * HERO_LEADING),
+    letterSpacing: Math.round(fontSize * HERO_TRACKING * 10) / 10,
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE NUMBER SHE ACTUALLY PUTS ON THE EQUIPMENT (founder, 2026-08-31)
+ *
+ *   > *"הרבה הרבה יותר נוח באמצע האימון לדעת כמה משקל לשים בכל צד מאשר המשקל הכולל. זה הרבה יותר
+ *   > נוח. זה פחות נפוץ באפליקציות אחרות אבל זה באמת יותר נוח."*
+ *
+ * He is right, and the reason it is "less common in other apps" is that other apps are LOGBOOKS —
+ * they record a total because a total is what a history is made of. This one is used standing at a
+ * rack with plates in your hands, and the question there is never *"what is the total"*. It is
+ * **what do I hang on this end**.
+ *
+ * ── THE RULE GENERALISES, WHICH IS WHY IT IS A RULE AND NOT A BARBELL SPECIAL CASE ──────────────
+ *
+ * "Per side" is the barbell's answer to a question every implement answers differently, and
+ * `loadSetup` already computes all of them. The screen's figure is simply THE NUMBER SET ON THE
+ * EQUIPMENT:
+ *
+ *     barbell        the weight on ONE end       (the bar is a constant she never handles)
+ *     plate_loaded   the weight on ONE side
+ *     dumbbell       the dumbbell she picks up
+ *     selectorized   where the pin goes
+ *     cable          where the pin goes
+ *     fixed_barbell  the number painted on the bar
+ *
+ * For four of those six the equipment number IS the total and nothing changes on screen. Only the
+ * two loaded-by-hand styles differ — and those are exactly the two where the athlete does
+ * arithmetic in her head today.
+ *
+ * ⚠️ THE RECORD IS STILL THE TOTAL. Every engine, every history row, every record and every chart
+ * is in total kilos and none of that moves: this is a DISPLAY and an ENTRY transform, and
+ * `totalFromEquipment` is its exact inverse so the round trip is lossless.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export interface EquipmentLoad {
+  /** The figure she sets on the equipment — per side, per hand, or the pin. */
+  value: number;
+  /** Which of the six answers this is, so the caller can name it in her language. */
+  style: LoadStyle;
+  /** The total the record will carry, when it is NOT the same number as `value`. */
+  total: number | null;
+}
+
+export function equipmentLoad(setup: LoadSetup | null): EquipmentLoad | null {
+  if (!setup) return null;
+  switch (setup.style) {
+    case 'barbell':
+    case 'plate_loaded':
+      if (setup.perSide == null) return null;
+      return { value: setup.perSide, style: setup.style, total: setup.headline };
+    case 'dumbbell':
+      return { value: setup.perHand ?? setup.headline, style: setup.style, total: null };
+    case 'selectorized':
+    case 'cable':
+      return { value: setup.pin ?? setup.headline, style: setup.style, total: null };
+    case 'fixed_barbell':
+      return { value: setup.fixedBar ?? setup.headline, style: setup.style, total: null };
+    default:
+      return null;
+  }
+}
+
+/**
+ * The exact inverse: what she typed on the equipment → what the record stores.
+ *
+ * ⛔ A NEGATIVE OR NONSENSE ENTRY RETURNS NULL rather than a clamped number. She is reporting a
+ * fact; an unreadable report is not a fact with a default, and the caller must decline it.
+ */
+export function totalFromEquipment(exerciseId: string | null | undefined, value: number, units: Units): number | null {
+  if (!Number.isFinite(value) || value < 0) return null;
+  switch (loadStyleOf(exerciseId)) {
+    case 'bodyweight':
+      return null;
+    case 'barbell':
+      return round2(value * 2 + GEAR[units].bar);
+    case 'plate_loaded':
+      return round2(value * 2);
+    default:
+      return round2(value);
+  }
+}
+
+/**
+ * Any TOTAL, restated as the number set on the equipment — the display transform on its own, for
+ * callers that hold a raw load rather than a `LoadSetup` (her history, the last-time row).
+ *
+ * ⛔ IT FALLS BACK TO THE TOTAL RATHER THAN TO NULL. A load the setup cannot classify is still a
+ * load she lifted, and a row that prints nothing where a number belongs is worse than a row that
+ * prints the only number it has.
+ */
+export function equipmentValue(exerciseId: string | null | undefined, total: number | null, units: Units): number | null {
+  if (total == null) return null;
+  const eq = equipmentLoad(loadSetup(exerciseId, total, units));
+  return eq ? eq.value : total;
 }

@@ -96,9 +96,10 @@ describe('the sheet says what is known and nothing else', () => {
     // …which is why 0, and not 4, is what onboarding hands over. The screen's own value:
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const src = require('fs').readFileSync(
-      // ⚠️ THE STEP THAT HANDS IT OVER MOVED (2026-08-10): the body map is last now, so it is where
+      // ⚠️ THE STEP THAT HANDS IT OVER MOVED AGAIN (2026-08-29): the body map is deleted and the
+      // builder took its seat, so the relay is sealed one step earlier — `ConnectHealth` is where
       // `OnboardingInputs` is assembled and therefore the one place a placeholder could return.
-      require('path').join(__dirname, '..', '..', 'src', 'screens', 'onboarding', 'BodyMap.tsx'),
+      require('path').join(__dirname, '..', '..', 'src', 'screens', 'onboarding', 'ConnectHealth.tsx'),
       'utf8',
     ) as string;
     /*
@@ -112,7 +113,7 @@ describe('the sheet says what is known and nothing else', () => {
      * the fallback precisely so `coachFacts` omits the field rather than stating a figure nobody
      * gave — so this assertion still watches for a literal creeping back in.
      */
-    expect(src).toContain('daysPerWeek: p.daysPerWeek ?? 0,');
+    expect(src).toContain('daysPerWeek: route.params?.daysPerWeek ?? 0,');
     expect(src).not.toMatch(/daysPerWeek:\s*[1-9]/);
   });
 });

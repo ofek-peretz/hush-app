@@ -35,7 +35,6 @@
  * Pure & I/O-free: same session in, same poster out, on any device, forever.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -71,8 +70,10 @@ export interface SessionPoster {
   lifts: PosterLift[];
 }
 
+// Working sets only — a warm-up bridge (`isApproach`) never counts here, exactly as in
+// sessionMetrics, so the poster and the Log row state the same tonnes.
 const tonnesOf = (sets: readonly SetLog[]): number => {
-  const kg = sets.reduce((sum, s) => sum + (s.actualWeight ?? 0) * s.actualReps, 0);
+  const kg = sets.reduce((sum, s) => sum + (s.isApproach ? 0 : (s.actualWeight ?? 0) * s.actualReps), 0);
   return Math.round(kg / 100) / 10;
 };
 
@@ -88,6 +89,7 @@ export function posterLifts(session: Session | null | undefined, units: Units): 
   const out: PosterLift[] = [];
   const byId = new Map<string, PosterLift>();
   for (const s of session?.sets ?? []) {
+    if (s.isApproach) continue; // the receipt reads her WORK — a warm-up bridge is the road to it
     let row = byId.get(s.exerciseId);
     if (!row) {
       row = { exerciseId: s.exerciseId, load: null, unit: '', reps: [] };
@@ -122,7 +124,37 @@ export function sessionPoster(opts: {
    */
   const record = recordCardFromHistory(opts.history, opts.units);
 
-  const hero: PosterHero = record
+  /*
+   * ════ ⛔ A BEST IS SOMETHING SHE BEAT (founder screenshots, 2026-08-18) ════
+   *
+   * His FIRST EVER workout closed on **"NEW BEST · Deadlift · 60 kg"**, and one tap away the
+   * Progress tab read **"PERSONAL BESTS  0"**. Two screens, one fact, opposite answers — and both
+   * were behaving as written:
+   *
+   *   · `shareCard.recordCardFromHistory` counts a first-ever load as a record, deliberately and
+   *     with a test to say so. For a SHARE CARD that is right: it is a picture of one lift, and the
+   *     first time you pull 60 kg is a thing worth posting.
+   *   · `progressAggregate.raises` counts times a lift beat its own previous peak, so a first log
+   *     sets the baseline and counts nothing. Its own copy says why — *"Nothing has moved yet. The
+   *     first mark is what the rest is measured against."*
+   *
+   * ⚠️ AND ON DAY ONE THE PILL IS NOT NEWS FOR ANYONE. Every lift in a first session clears a
+   * previous best of nothing, so "NEW BEST" fires for **every athlete, on every first workout**,
+   * naming whichever lift happened to be heaviest. A celebration that cannot fail to happen is
+   * decoration, and this one is decoration standing next to a zero that contradicts it.
+   *
+   * `delta` is exactly the discriminator and needs no new derivation: `recordCardFromHistory`
+   * leaves it null when there was no prior peak to rise from. So the poster asks for a record that
+   * ROSE, and a first session falls through to its tonnage — which is a true, earned, specific fact
+   * about the session she just did.
+   *
+   * ⚠️ THE SHARE CARD IS UNTOUCHED. This is the app's own verdict on a session, sitting beside a
+   * lifetime counter; that is a picture she chooses to make. Different jobs, and only this one has
+   * a neighbour to agree with.
+   */
+  const rose = record != null && record.delta != null;
+
+  const hero: PosterHero = rose && record
     ? { kind: 'record', exerciseId: record.exerciseId, value: record.weight, unit: record.unit, reps: record.reps, delta: record.delta }
     : tonnes > 0
       ? { kind: 'tonnes', value: tonnes }

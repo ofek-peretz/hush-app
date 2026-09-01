@@ -12,7 +12,6 @@
  *   • bundled (offline, instant, grows the binary, needs a release to update):
  *       bb_bench_press: { kind: 'bundled', module: require('../../../assets/exercise-videos/bb_bench_press.mp4') }
  */
-// @ts-nocheck
 
 // 
 

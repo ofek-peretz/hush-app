@@ -36,7 +36,6 @@
  * Pure and I/O-free. The caller supplies the counter and persists what comes back.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

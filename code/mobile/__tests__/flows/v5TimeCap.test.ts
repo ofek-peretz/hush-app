@@ -27,10 +27,20 @@ describe('v5 · the ≤ budget cap holds for every generated day (S-64)', () => 
    */
   for (let days = 1; days <= 6; days++) {
     {
-      it(`${days}d · all-normal map — no day exceeds 60 min`, async () => {
+      it(`${days}d · all-normal map — no day exceeds 60 min, or says so out loud (S-3)`, async () => {
         const prog = await fixtureModel.generateProgram({ ...base, daysPerWeek: days });
         for (const d of prog.days) {
-          expect(estimateSessionMinutes(d)).toBeLessThanOrEqual(60);
+          const min = estimateSessionMinutes(d);
+          if (min > 60) {
+            /*
+             * Since the hour includes the warm-up bridges (2026-08-25, founder findings #4/#8), a
+             * low-frequency full-body day can be genuinely unfittable: every muscle is down to its
+             * last lift (S-35), every ramp is already lean, and the engine SAYS SO rather than
+             * starving a muscle. The overshoot it may confess to is minutes of warm-up, not work.
+             */
+            expect(d.overBudget).toBe(true);
+            expect(min).toBeLessThanOrEqual(63);
+          }
           expect(d.slots.length).toBeGreaterThan(0); // never starved to empty
         }
       });

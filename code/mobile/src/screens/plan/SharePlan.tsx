@@ -11,7 +11,6 @@
  * `domain/planShare` builds the payload as an ALLOW-LIST, and a test reads the encoded token back
  * as text to prove no load ever appears in it.
  */
-// @ts-nocheck
 
 // 
 
@@ -19,9 +18,11 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
+import { bidi } from '@/i18n/bidi';
+import { muscleGroupsLabel } from '@/data/exercises';
 import { planLiftCount, type SharedPlan } from '@/domain/planShare';
 import { color, font, radius, signal, stage, press } from '@/design/tokens';
 
@@ -38,6 +39,16 @@ export interface SharePlanViewProps {
 
 export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: SharePlanViewProps) {
   const { t } = useCopy();
+  /*
+   * ⛔ HER NAME IS IN THE PAYLOAD AND THE PREVIEW DID NOT SHOW IT (audit, 2026-08-18).
+   *
+   * `SharePlanScreen` passes `from: profile.name`, `sharedPlan` encodes it, and the receiving screen
+   * is built around it — the avatar's initial and "Dana shared a plan". All intended. But this card
+   * IS the payload rendered, and its docblock's whole claim is that "there is nothing on the screen
+   * she cannot see in the preview". The one identifying thing that travels was the one thing the
+   * preview left out. It draws with the rest of the card now, so the promise is true again.
+   */
+  const from = plan.from?.trim();
   // Hoisted out of the row: the mono law scans a mono-styled <Text> for any `t()` inside it, and
   // the word beside the count is sans anyway — resolving it here keeps both facts obvious.
   const liftsWord = t('planShare.liftsWord');
@@ -71,7 +82,11 @@ export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: Sh
           <Legend size={17} track={0.2} tone="accent">{t('planShare.legend')}</Legend>
         </View>
 
-        <Text style={styles.title} accessibilityRole="header">{t('planShare.title')}</Text>
+        {/* ✦ IT ARRIVES (2026-08-27) — `Arrive` was built for the founder's largest note, that a
+            screen should ARRIVE rather than appear (2026-08-12). See `HomeView` for the account. */}
+        <Arrive order={0}>
+          <Text style={styles.title} accessibilityRole="header">{t('planShare.title')}</Text>
+        </Arrive>
 
         {/* ════ THE PAYLOAD, RENDERED — AND DRESSED AS THE POSTER IT IS (founder A.4) ════
             "Restyle it in the manner of the personal-record share card."
@@ -113,12 +128,23 @@ export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: Sh
             </View>
           </View>
 
+          {/* Whose week it says it is, in the card that is about to become a link. */}
+          {from ? (
+            <View style={styles.sender}>
+              <Icon name="user" size={14} color={stage.ink2} strokeWidth={2} />
+              <Text style={styles.senderText} numberOfLines={1}>{t('planShare.fromYou', { name: bidi(from) })}</Text>
+            </View>
+          ) : null}
+
           <View>
             {plan.days.map((d) => (
               <View key={d.name} style={styles.dayRow}>
                 <View style={styles.dayText}>
                   <Text style={styles.dayName} numberOfLines={1}>{d.name}</Text>
-                  <Text style={styles.dayMuscles} numberOfLines={1}>{d.muscleGroups.join(' · ')}</Text>
+                  {/* ⛔ `.join(' · ')` PUT ENGINE IDS ON THE CARD. `muscleGroups` holds canonical names — `Chest`,
+                      `Quads` — and `muscleGroupsLabel` is the one door that turns them into her language.
+                      Joined raw, a Hebrew athlete read "Chest · Triceps" on a card about her own week. */}
+                  <Text style={styles.dayMuscles} numberOfLines={1}>{muscleGroupsLabel(d.muscleGroups)}</Text>
                 </View>
                 {/* The COUNT is mono; the word beside it is sans — mono draws no Hebrew (the law). */}
                 <Text style={styles.dayLifts}>
@@ -196,7 +222,12 @@ const styles = StyleSheet.create({
   // A quiet moss pill, not a filled one: on the record poster the moss is spent on a single small
   // mark, and a solid tag here was the loudest thing on a card that is mostly a list.
   daysTag: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: radius.full, backgroundColor: 'rgba(169,196,159,0.16)', borderWidth: 1, borderColor: 'rgba(169,196,159,0.4)' },
-  daysTagText: { fontFamily: font.sansSemibold, fontSize: 17, letterSpacing: 0.8, textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
+  /* ⚠️ NO TRACKING: this string is translated, and opening a Hebrew word is a rendering fault (`noTrackedHebrew`). */
+  daysTagText: { fontFamily: font.sansSemibold, fontSize: 17, textTransform: 'uppercase', color: signal[0], textAlign: 'left' },
+
+  // The sender line — the one identifying thing in the payload, said quietly and above the list.
+  sender: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  senderText: { flex: 1, minWidth: 0, fontFamily: font.sans, fontSize: 17, color: stage.ink2, textAlign: 'left' },
 
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: HAIRLINE },
   dayText: { flex: 1, minWidth: 0, gap: 1 },

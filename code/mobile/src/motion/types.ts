@@ -8,7 +8,6 @@
  *
  * See `docs/canonical/MOTION_FORM_STANDARD_V1.md` for the normative definitions these types encode.
  */
-// @ts-nocheck
 
 // 
 
@@ -18,9 +17,40 @@ export interface Vec2 {
   y: number;
 }
 
+/**
+ * Which of the two Duotone Athletes performs the demonstration. Both share ONE skeleton
+ * (`anthro.ATHLETE`) — same segment lengths, same poses, same FormSpecs — and differ only in the
+ * skin: silhouette profiles, limb thickness, and hair. 'male' is the default everywhere so every
+ * existing surface renders byte-identical output unless a caller asks for her.
+ */
+export type FigureSex = 'male' | 'female';
+
+/** A point in the athlete's own space: x across, y down the screen, z TOWARD the camera. */
+export interface Vec3 extends Vec2 {
+  z: number;
+}
+
 /** A pose is the position of every named joint at one instant, plus the head radius. */
 export interface Pose {
   j: Record<string, Vec2>;
+  /**
+   * DEPTH, per joint, and entirely optional — the one addition that makes the system
+   * three-dimensional without rewriting a single rig that does not want to be.
+   *
+   * `j` has always held the joint as the camera sees it. Rigs that leave `z` undefined keep
+   * exactly that meaning and render byte-identically forever: the projection is the identity at
+   * `z = 0`. A rig that DOES fill `z` is instead stating where the joint is in the athlete's own
+   * space, and hands three things to the renderer that it previously had to fake:
+   *
+   *   · **Foreshortening for free.** A bone turned toward the lens projects short because it IS
+   *     short in projection — no per-rig fudge, and no formula that can hairpin when the projected
+   *     span passes through zero (which is exactly how the fly family broke).
+   *   · **A real far side.** 28 of 40 library files build the far limb as `far(p, +6, +1)` — the
+   *     near limb copied and shifted a few pixels. With `z` it is the same joint at a different
+   *     depth, and the duotone reads which side is nearer instead of being told.
+   *   · **A camera.** Depth is what an azimuth needs to rotate around; see `camera.ts`.
+   */
+  z?: Record<string, number>;
   headR: number;
   /** Spinal flexion for crunch patterns: bows the trunk silhouette toward its front (units). */
   trunkBow?: number;
@@ -89,8 +119,36 @@ export interface Tempo {
   concentricMs: number;
   /** Reps drawn per loop (canon: 2, identical). */
   reps: number;
+  /**
+   * PARTIAL REPS — the rom sub-range each drawn rep covers, one entry per rep.
+   *
+   * Omitted (the canon) means every rep runs the whole range, which is what all but one exercise
+   * in the catalogue does. `bb_curl_21` is the one that does not: "21s" IS seven bottom-half reps,
+   * seven top-half, seven full, and with every rep identical the clip rendered byte-for-byte the
+   * same picture as `bb_curl` — four ids in this family shared one drawing. A rep scheme that
+   * cannot be drawn is a rep scheme the demonstration cannot teach.
+   *
+   * The FormSpec is unaffected: it samples rom 0 to 1 directly, so the exercise's start and its
+   * working endpoint are still asserted over the FULL range. This only says which slice of that
+   * range each drawn rep actually travels.
+   */
+  repRanges?: ReadonlyArray<readonly [number, number]>;
   /** 'top' = the rep starts at rom 0 (bench); 'bottom' = starts at rom 1 (deadlift from floor). */
   startAt: 'top' | 'bottom';
+  /**
+   * TRUE when travelling rom 0 → rom 1 is the CONCENTRIC — the muscle shortening.
+   *
+   * `eccentricMs` and `concentricMs` name PHASES, not durations of a fixed order, and the timeline
+   * used to assume the first timed phase was always the eccentric. That is right for a bench press
+   * (rom 1 is the chest) and wrong for most of the catalogue: a curl's rom 1 is the SQUEEZE, a
+   * row's is the ribs, a pulldown's is the collarbone, a calf raise's is the top of the toes. Every
+   * one of those clips was giving 2.0s to the concentric and 1.1s to the lowering — the exact
+   * inverse of the tempo `DEFAULT_TEMPO` documents itself as.
+   *
+   * Neither the FormSpec nor the auditor could see it. Both sample in `rom`; neither has an opinion
+   * about time.
+   */
+  endpointIsConcentric?: boolean;
 }
 
 // ── FormSpec predicates — every one is measurable on a Pose ────────────────────
@@ -103,7 +161,17 @@ export type PosePredicate =
   /** `a.x` reaches `x` within `tol` — a horizontal contact endpoint (fly hands meeting center). */
   | { kind: 'contactX'; a: string; x: number; tol: number; label?: string }
   /** `a` is below `b` by at least `by` (screen y grows downward) — e.g. squat depth. */
-  | { kind: 'jointBelow'; a: string; b: string; by: number; label?: string };
+  | { kind: 'jointBelow'; a: string; b: string; by: number; label?: string }
+  /**
+   * `a` is at least `by` further out along +x than `b`.
+   *
+   * For facts that are about one joint being OUTBOARD of another rather than about either being at
+   * a coordinate — a sumo's knees outside its grip, a snatch grip outside the shoulders. Written as
+   * a relation because coordinates go stale the moment a joint stops being hand-placed: sumo's knee
+   * predicate pinned x = 208 and broke the day the knee started being solved from the ankle, even
+   * though the thing it was there to protect had never been truer.
+   */
+  | { kind: 'jointRightOf'; a: string; b: string; by: number; label?: string };
 
 export type Invariant =
   /** `point` never moves more than `tol` from its start-of-rep position, across the whole rep. */
@@ -113,7 +181,28 @@ export type Invariant =
   /** The interior angle at `joint` never exceeds `aboveDeg` (no hyperextension). */
   | { kind: 'angleNever'; joint: string; neighbors: [string, string]; aboveDeg: number; label?: string }
   /** a–b–c stay within `tolDeg` of a straight line (the push-up plank line, drawn as a rule). */
-  | { kind: 'colinear'; a: string; b: string; c: string; tolDeg: number; label?: string };
+  | { kind: 'colinear'; a: string; b: string; c: string; tolDeg: number; label?: string }
+  /**
+   * `a`→`b` never spans more than `aboveUnits`. The projection-robust way to say "this limb never
+   * reaches full extension" — i.e. never presses. An `angleNever` on the elbow says the same thing
+   * only while the arm lies IN THE IMAGE PLANE: once it rotates to point at the camera its
+   * projected angle opens to 180° no matter how bent the real elbow is, and the assertion becomes
+   * a statement about the camera rather than about the athlete. A span cannot lie that way —
+   * foreshortening only ever SHRINKS it, so a limb that never spans full length never extended.
+   */
+  | { kind: 'spanNever'; a: string; b: string; aboveUnits: number; label?: string }
+  /**
+   * `a`->`b` never changes length at all — a RIGID LINK, the equipment counterpart of a bone.
+   *
+   * `spanNever` says a limb never reaches full extension; this says a distance is a fact of the
+   * scene. It exists because `t_bar_row` drew a landmine bar whose length grew 157.9 -> 173.8 units
+   * across the rep: the handle was authored on a straight vertical while the far end stayed pinned
+   * to the floor, so the lever stretched 10 % every rep. Nothing caught it — the auditor's
+   * bone-length law only knows about the athlete, and a path constraint only knows about the axis
+   * it was told to expect. A lever, a chain and a machine's press arm are all rigid, and this is
+   * how a rig says so.
+   */
+  | { kind: 'spanFixed'; a: string; b: string; tol: number; label?: string };
 
 export interface FormSpec {
   tempo: Tempo;
@@ -144,11 +233,25 @@ export interface Decor {
 export interface Rig {
   id: string;
   chains: FigureChains;
+  /**
+   * Where the camera stands. Omitted means `camera.FLAT` — the authored view, the identity
+   * projection, and the path every rig took before depth existed. A rig that sets an azimuth is
+   * also taking responsibility for projecting its own `decorAt` primitives, because equipment
+   * depth is scene knowledge only the rig has.
+   */
+  camera?: import('./camera').Camera;
   formspec: FormSpec;
   /** The full skeleton at a given rom ∈ [0,1]. */
   poseAt(rom: number): Pose;
-  /** Equipment + bar-path + range ticks at a given rom, split around the figure. */
-  decorAt(rom: number): Decor;
+  /**
+   * Equipment + bar-path + range ticks at a given rom, split around the figure.
+   *
+   * `j` is the FLATTENED joint map the figure is about to be drawn from — the same points, already
+   * through the camera. A flat rig ignores it and reads `poseAt` itself, exactly as before. A rig
+   * that orbits must use it, because anything anchored to a hand (a dumbbell, the end of a cable)
+   * has to land on the hand the viewer can actually see, not on the one in the athlete's own space.
+   */
+  decorAt(rom: number, j?: Record<string, Vec2>): Decor;
   /** The static side-view scene (floor line) — drawn behind everything. */
   scene: Primitive[];
 }

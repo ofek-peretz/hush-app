@@ -7,7 +7,7 @@
 
 // 
 
-import { extractOccurrences, foldSessionSwaps, learnedLeaveIts, undoEngineRotation } from '@/domain/swapLearning';
+import { extractOccurrences, foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { emptyLearning, offeredFor, type SwapLearning } from '@/engine/v5/learnedSwap';
 import { swapCandidates } from '@/domain/swapPool';
 import { muscleOf } from '@/data/exercises';
@@ -152,48 +152,13 @@ describe('Rev 7 · S-70 — the swap menu offers the blueprint original first', 
  * these tests hold both: the button and the two swap-backs must write the identical state, or the
  * app would have two ideas about what "no" means.
  */
-describe('undoEngineRotation — the explicit "leave it"', () => {
-  const prefs = () => ({
-    substitutes: { bb_bench_press: 'db_bench_press' },
-    engineRotated: { bb_bench_press: 'db_bench_press' },
-    leaveItsByMuscle: {} as Record<string, string>,
-  });
-  const muscle = (id: string) => (id === 'bb_bench_press' ? 'Chest' : null);
-
-  it('gives the lift back AND pins it — the engine stops rotating it', () => {
-    const next = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
-    expect(next.substitutes.bb_bench_press).toBeUndefined(); // the assembler goes back to her lift
-    expect(next.engineRotated!.bb_bench_press).toBeUndefined(); // …and it is no longer a rotation
-    expect(next.leaveItsByMuscle.Chest).toBe('bb_bench_press'); // the pin she just earned (S-30/S-59)
-  });
-
-  it('writes exactly what two silent swap-backs write — one "no", one outcome', () => {
-    // The K=2 path: the fold clears the substitute, and `learnedLeaveIts` reads that as resistance.
-    const before = prefs();
-    const { bb_bench_press: _dropped, ...afterFold } = before.substitutes;
-    expect(learnedLeaveIts(before.substitutes, afterFold, before.engineRotated)).toEqual(['bb_bench_press']);
-    // …and the button reaches the same place, in one tap.
-    const viaButton = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
-    expect(viaButton.leaveItsByMuscle.Chest).toBe('bb_bench_press');
-    expect(viaButton.substitutes.bb_bench_press).toBeUndefined();
-  });
-
-  it('a GRADUATION cannot be undone — it is a fact she demonstrated, not a preference', () => {
-    // Graduation writes `substitutes` but never `engineRotated` (S-52/S-71: deliberately not
-    // resistible). Without that mark there is nothing here to take back.
-    const graduated = { substitutes: { push_up: 'chest_dip' }, engineRotated: {}, leaveItsByMuscle: {} };
-    expect(undoEngineRotation(graduated, 'push_up', () => 'Chest')).toBe(graduated); // identity: untouched
-  });
-
-  it('her OWN learned swap is not ours to undo', () => {
-    // S-69 adopts a substitute from HER repeated choice. It is not marked `engineRotated`, so the
-    // button never appears over it — the app does not argue with the athlete on her behalf.
-    const hers = { substitutes: { leg_press: 'hack_squat' }, engineRotated: {}, leaveItsByMuscle: {} };
-    expect(undoEngineRotation(hers, 'leg_press', () => 'Quads')).toBe(hers);
-  });
-
-  it('a second tap invents nothing — the offer is spent', () => {
-    const once = undoEngineRotation(prefs(), 'bb_bench_press', muscle);
-    expect(undoEngineRotation(once, 'bb_bench_press', muscle)).toBe(once); // identity: no-op
-  });
-});
+/*
+ * ⛔ `undoEngineRotation`'s BLOCK IS DELETED WITH THE RULE (2026-08-26). It held five tests over the
+ * explicit one-tap undo of an engine rotation — a control that was wired end to end and never drawn
+ * by any view, so nothing could ever call it. The state it wrote is still reached, and still tested:
+ * `learnedLeaveIts` above is the K=2 path, it runs on every session save, and it writes the same pin.
+ *
+ * ⚠️ The block's own second test said so out loud — *"writes exactly what two silent swap-backs
+ * write — one 'no', one outcome"*. When one of two paths to an identical outcome has no door, the
+ * one with a door is the feature.
+ */

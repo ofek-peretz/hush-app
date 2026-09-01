@@ -6,7 +6,6 @@
  * each Complete Set (not at session end) so a killed app resumes from the last
  * persisted set (§7.4). Logged actuals are immutable (§9 law 17).
  */
-// @ts-nocheck
 
 // 
 
@@ -14,6 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   AthleteMode,
   CardioActivity,
+  CardioPoint,
+  CardioSplit,
   PortraitSnapshot,
   PortraitState,
   Profile,
@@ -28,6 +29,7 @@ import type { HealthState } from '@/platform/health/healthModel';
 import type { Entitlement } from '@/domain/entitlement';
 // Type-only for the decision shape; `appendDecisions` is the pure accumulator that owns the cap.
 import { appendDecisions, type CoachDecision } from '@/domain/coachLog';
+import { RECORD_VERSION, type AthleteRecord } from '@/domain/record';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { currentWeekOpen } from '@/domain/weekCadence';
 import type { CoachUpdate } from '@/platform/coach/afterSession';
@@ -61,16 +63,29 @@ const K = {
   sessionResume: 'hush.session.resume', // live machine snapshot — mid-workout resume (S3)
   history: 'hush.history.sessions',
   cardio: 'hush.cardio.activities', // recorded run/walk activities (Open training)
+  /* The run that is happening RIGHT NOW, written as its metres are earned — the cardio half of
+   * `sessionResume`, and it did not exist until 2026-08-18. See `platform/cardio/cardioRun`: the
+   * whole run lived in one module singleton and reached storage only when the summary mounted, so
+   * an eviction mid-run took the distance, the splits and the route with it. Cleared the moment a
+   * run ends. */
+  cardioResume: 'hush.cardio.resume',
   snapshots: 'hush.portrait.snapshots',
   recents: 'hush.exercise.recents',
   pendingSync: 'hush.sync.pending',
   telemetry: 'hush.telemetry.buffer',
+  /* The events not yet DELIVERED to the research sink — the wire half of the journal (2026-09-01).
+   * Separate from `telemetry` on purpose: the journal is a bounded ring for reconstruction and
+   * never shrinks on delivery; the outbox exists only while a sink URL is configured and empties
+   * on every successful ship. A build with no `EXPO_PUBLIC_TELEMETRY_URL` never writes it. */
+  telemetryOutbox: 'hush.telemetry.outbox',
   firsts: 'hush.telemetry.firsts',
   health: 'hush.health.state',
   preferences: 'hush.preferences',
   engineV5: 'hush.engine.v5', // Hush v5 exercise-keyed progression state (see engine/v5)
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
+  reminderOptIn: 'hush.reminder.optin', // training-day reminder — SHE asked (2026-08-23); absent/false = silence
+  telemetryOptOut: 'hush.telemetry.optout', // analytics wire opt-out (2026-09-01, audit 4) — absent/false = the wire ships
 
   /* ── THE COACH'S TWO MEMORIES ────────────────────────────────────────────────────────────────
    * They are separate because they are forgotten at different rates and for different reasons.
@@ -136,6 +151,7 @@ const K = {
   notificationsAsked: 'hush.notifications.asked', // 8.2 · platform/notifications
   watchOffered: 'hush.watch.offered', // 1.3 + 10.4 · platform/watch/watchPresence
   recoverySealed: 'hush.recovery.sealed', // 3.5 · screens/home/HomeView
+  reviewAsked: 'hush.review.asked', // the once-ever store-review ask · platform/review
 } as const;
 
 /**
@@ -190,6 +206,38 @@ export interface OwnedPreferences {
    */
   chosenByMuscle?: Record<string, string[]>;
   /**
+   * §11.2 — she chose to keep the number on her bar to herself in a shared session.
+   *
+   * ⛔ REMEMBERED, BECAUSE A PRIVACY DECISION THAT RESETS IS NOT A DECISION. She turned it off once
+   * and the next workout turned it back on: the app quietly reopening something she had closed,
+   * which is the one class of default nobody forgives. Absent (the norm) = the number crosses, and
+   * `domain/sharedSession`'s header argues why that default is the right one.
+   */
+  pairLoadsPrivate?: boolean;
+  /**
+   * ⛔ DECLARED — "give me THIS one instead of THAT one." A 1:1 standing replacement she named, on
+   * both sides, off the gym floor (founder 2026-08-22: *"אי אפשר ממש להכנס לתוכנית האימון שלנו
+   * ולהחליף תרגיל לתרגיל שנמצא בספרייה"*).
+   *
+   * ⚠️ WHY IT IS NOT `substitutes`, WHICH HOLDS EXACTLY THE SAME SHAPE. That map is LEARNED — it is
+   * written by the K=2 fold and by engine enactments, and **the fold CLEARS entries it no longer
+   * believes** (two swap-backs retire an adoption). A declaration she made once and a count of what
+   * she happened to do twice are two different kinds of fact, and this file already says what
+   * happens when they share a home: *"there are now TWO kinds of entry here and they must not be
+   * confused."* Putting a declaration in the learned map would let inference quietly delete it.
+   *
+   * ⚠️ AND IT IS 1:1, WHICH `chosenByMuscle` IS NOT. A pick LEADS a muscle — it takes the first
+   * seat and the engine fills the rest — so on a Chest that affords five lifts, picking one does
+   * not remove any. Naming both sides is the only way to say "not that one, this one".
+   *
+   * Resolution: DECLARED beats learned on a collision (`swapPool.effectiveSubstitutes`), for the
+   * reason stated above the interface — a declaration is unambiguous and immediate; a learned
+   * signal is ambiguous and takes two occurrences to say anything at all.
+   *
+   * Reversible the way she made it: naming the original again removes the entry.
+   */
+  declaredSubs?: Record<string, string>;
+  /**
    * DECLARED — lifts she has refused. A GATE, like the pain ban: no score may overrule it.
    *
    * ⚠️ IT MAY NEVER EMPTY A MUSCLE SHE LEFT ON. Refusing every lift of a muscle is a contradiction
@@ -211,6 +259,15 @@ export const EMPTY_PREFERENCES: OwnedPreferences = {
   workoutOrder: [],
   exerciseOrderByWorkout: {},
 };
+
+/*
+ * ⛔ `pairLoadsPrivate` LIVES IN THE PREFERENCES BAG AND NOT IN A KEY OF ITS OWN.
+ *
+ * It is a preference, and preferences are wiped with the account — which is exactly right here: a
+ * device handed to a second athlete must not inherit the first one's decision about who may see
+ * the number on her bar. A new `hush.*` key would have had to argue its way past
+ * `everyStorageKeyIsAccountedFor`; this one is already accounted for.
+ */
 
 /** Bump when a persisted shape changes incompatibly; boot guards against drift.
  *  v2: added the Health connection record (hush.health.state) — additive.
@@ -235,6 +292,29 @@ export interface PersistedSessionResume {
    *  .restBeforeS). Carried across an app kill so a crash between "Ready" and "Complete Set"
    *  does not silently drop the rest fact. Optional: snapshots written before v5 Stage 0. */
   pendingRestS?: number;
+}
+
+/** Persisted LIVE-RUN snapshot. Shape mirrors `platform/cardio/cardioRun`'s CardioResume — kept
+ *  structural here for the same reason `PersistedSessionResume` is: this layer stores it, the run
+ *  owns it, and neither has to import the other. */
+export interface PersistedCardioResume {
+  schema: 1;
+  savedAt: number; // epoch ms of the write — the resume window is measured from it
+  indoor: boolean;
+  activeMs: number;
+  distM: number;
+  cal: number;
+  lastKm: number;
+  splitStartSec: number;
+  /*
+   * ⚠️ TYPED FOR REAL AS OF 2026-08-23. These were `unknown[]` with the true type in a comment —
+   * "structural to avoid a layering cycle" was the justification elsewhere in this file, but
+   * `CardioSplit` and `CardioPoint` live in `models.ts`, which this file ALREADY imports from.
+   * The comment-type is the worst of both: no checking, and a claim the checker cannot verify.
+   */
+  splits: CardioSplit[];
+  hrReadings: number[];
+  route: CardioPoint[];
 }
 
 /**
@@ -267,7 +347,9 @@ export interface EngineV5State {
      *  VOLUME change (S-32/S-34/S-37 — Loop 3 grew or trimmed a muscle's weekly sets). `exerciseId`
      *  holds the FROM lift (or the muscle name, for 'volume'); the mirror narrates each with its copy.
      *  Absent on the ordinary load-change entries. */
-    kind?: 'graduate' | 'swap' | 'volume' | 'rung' | 'detrain';
+    kind?: 'graduate' | 'swap' | 'volume' | 'rung' | 'detrain' | 'deload' | 'ease';
+    /** kind 'ease' — the run that earned it, rounded km (null = qualified by duration alone). */
+    runKm?: number | null;
     toExercise?: string;
     /** For kind 'volume' — the muscle whose weekly set target moved (setsFrom → setsTo). */
     muscle?: string;
@@ -315,6 +397,25 @@ export interface EngineV5State {
    * re-read at the same moment is still a no-op.
    */
   detrainedRetained?: number;
+  /**
+   * THE LIGHT WEEK (engine/v5/deload, 2026-08-24) — the open deload window, when one is running.
+   * `restore` holds every pre-deload load so the week can end exactly where it began; absent =
+   * no light week is open. Opened only by the evidence trigger (never the calendar), closed by
+   * the first fold/read past `endsAt`.
+   */
+  deload?: { startedAt: number; endsAt: number; restore: Record<string, number | null> };
+  /** The previous deload's opening stamp — the hysteresis that stops a deload answering its own
+   *  aftermath (DELOAD_COOLDOWN_DAYS). Survives the window itself. */
+  lastDeloadStartedAt?: number;
+  /**
+   * THE RUN CARRIED INTO HER LEGS (engine/v5/runEase, 2026-08-24) — the open lower-body ease,
+   * when one is running. Same lifecycle discipline as `deload`; scoped to the lower-body lifts in
+   * `restore`; closed by the first eased occurrence or the window's lapse.
+   */
+  runEase?: { startedAt: number; endsAt: number; runAtMs: number; runKm: number | null; restore: Record<string, number | null> };
+  /** The `startedAt` ms of the newest run already ANSWERED with an ease — the idempotency stamp
+   *  (`detrainedAfter`'s shape), so one run can never ease twice. */
+  lastRunEasedForMs?: number;
 }
 
 /** A completed session awaiting backend delivery (offline → reconcile on reconnect, §6.4). */
@@ -371,6 +472,17 @@ export const db = {
   loadWeekOpen: () => getJSON<number>(K.weekOpen),
   saveWeekOpen: (ms: number) => setJSON(K.weekOpen, ms),
 
+  // The training-day reminder is OPT-IN (2026-08-23, releasing the 2026-07-13 "no reminders"
+  // decree for the one case it never meant: a reminder SHE asked for). Absent = false = silence.
+  loadReminderOptIn: async (): Promise<boolean> => (await getJSON<boolean>(K.reminderOptIn)) === true,
+  saveReminderOptIn: (on: boolean) => setJSON(K.reminderOptIn, on),
+
+  // ---- Analytics wire opt-out (2026-09-01, audit finding 4) ----
+  // Gates only the WIRE (`telemetry.shipToSink`) — the on-device journal stays, because a device
+  // debugging itself is not analytics. In K, so deleting the account resets it with everything else.
+  loadTelemetryOptOut: async (): Promise<boolean> => (await getJSON<boolean>(K.telemetryOptOut)) === true,
+  saveTelemetryOptOut: (on: boolean) => setJSON(K.telemetryOptOut, on),
+
   loadMode: () => getJSON<PersistedMode>(K.mode),
   saveMode: (m: PersistedMode) => setJSON(K.mode, m),
 
@@ -388,10 +500,48 @@ export const db = {
   async loadHistory(): Promise<Session[]> {
     return (await getJSON<Session[]>(K.history)) ?? [];
   },
+  /**
+   * Stamp who she trained with onto an already-saved session (the finish screen's door — the save
+   * has landed by the time she is asked). No-op on an id that is not there; an empty list clears.
+   */
+  async setSessionPartners(id: string, partners: string[]): Promise<void> {
+    const all = await this.loadHistory();
+    const at = all.findIndex((x) => x.id === id);
+    if (at < 0) return;
+    const clean = partners.map((n) => n.trim()).filter(Boolean).slice(0, 6);
+    const next = [...all];
+    if (clean.length === 0) {
+      const { partners: _drop, ...rest } = next[at];
+      next[at] = rest as Session;
+    } else {
+      next[at] = { ...next[at], partners: clean };
+    }
+    await setJSON(K.history, next);
+  },
+
   async appendCompletedSession(s: Session): Promise<void> {
     const all = await this.loadHistory();
     all.unshift(s);
     await setJSON(K.history, all);
+  },
+
+  /**
+   * Merge another app's log into hers (2026-09-01, `domain/historyImport`). Newest-first like the
+   * rest of the record; de-duplicated on the imported ids AND on (start-instant, set-count) so
+   * running the same file twice — the first thing anyone does when a screen doesn't visibly
+   * change — writes nothing twice. Returns how many actually landed (the confirm line reads it).
+   */
+  async appendImportedHistory(sessions: Session[]): Promise<number> {
+    const all = await this.loadHistory();
+    const seenIds = new Set(all.map((x) => x.id));
+    const seenShape = new Set(all.map((x) => `${Date.parse(x.startedAt)}|${x.sets.length}`));
+    const fresh = sessions.filter(
+      (s) => !seenIds.has(s.id) && !seenShape.has(`${Date.parse(s.startedAt)}|${s.sets.length}`),
+    );
+    if (fresh.length === 0) return 0;
+    const next = [...fresh, ...all].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+    await setJSON(K.history, next);
+    return fresh.length;
   },
 
   /* ── The coach's conversation ──────────────────────────────────────────────────────────────── */
@@ -588,6 +738,13 @@ export const db = {
   async loadCardio(): Promise<CardioActivity[]> {
     return (await getJSON<CardioActivity[]>(K.cardio)) ?? [];
   },
+  /* ---- The live run's resume snapshot (written as distance is credited; cleared when a run ends).
+   *      Structural on purpose, exactly like `PersistedSessionResume`: the shape belongs to
+   *      `platform/cardio/cardioRun` (`CardioResume`) and this layer only stores it. ---- */
+  loadCardioResume: () => getJSON<PersistedCardioResume>(K.cardioResume),
+  saveCardioResume: (r: unknown) => setJSON(K.cardioResume, r),
+  clearCardioResume: () => AsyncStorage.removeItem(K.cardioResume),
+
   async appendCardioActivity(a: CardioActivity): Promise<void> {
     const all = await this.loadCardio();
     all.unshift(a);
@@ -637,6 +794,13 @@ export const db = {
   async saveTelemetry<T>(events: T[]): Promise<void> {
     await setJSON(K.telemetry, events);
   },
+  /** The undelivered half — see the note on `K.telemetryOutbox`. */
+  async loadTelemetryOutbox<T>(): Promise<T[]> {
+    return (await getJSON<T[]>(K.telemetryOutbox)) ?? [];
+  },
+  async saveTelemetryOutbox<T>(events: T[]): Promise<void> {
+    await setJSON(K.telemetryOutbox, events);
+  },
   async loadFirsts(): Promise<string[]> {
     return (await getJSON<string[]>(K.firsts)) ?? [];
   },
@@ -681,6 +845,68 @@ export const db = {
   },
 
   // ---- Account lifecycle ----
+  /* ── HER RECORD, IN AND OUT ─────────────────────────────────────────────────────────────────
+   *
+   * ⛔ THE HOLES THIS CLOSES ARE NAMED IN `domain/record`, and the shortest of them is the one that
+   * matters most: **delete the app and reinstall it, and every measured fact about her is gone.**
+   * iOS carries `Library/Application Support` into a device backup, so a NEW PHONE restored from
+   * iCloud keeps everything — but a reinstall does not, an account with no iCloud room does not,
+   * and a second device gets nothing at all.
+   *
+   * ⚠️ AN ALLOW-LIST, NOT A DUMP. `domain/record.RECORD_KEYS` is the whole of what travels, and it
+   * is a list precisely so that adding a storage key is a DECISION: the telemetry buffer, the sync
+   * queue, the cached entitlement and the once-per-athlete flags are facts about a DEVICE and a
+   * PURCHASE, and restoring those onto another phone is how an app hands someone else's
+   * subscription to the wrong person.
+   */
+  async snapshotRecord(nowMs: number = Date.now()): Promise<AthleteRecord> {
+    const [sessions, cardio, profile, preferences, program, engine] = await Promise.all([
+      this.loadHistory(),
+      this.loadCardio(),
+      this.loadProfile(),
+      this.loadPreferences(),
+      this.loadProgram(),
+      this.loadEngineV5(),
+    ]);
+    return {
+      v: RECORD_VERSION,
+      at: new Date(nowMs).toISOString(),
+      sessions,
+      cardio,
+      profile,
+      preferences,
+      program,
+      engine,
+    };
+  },
+
+  /**
+   * Write a read-back record over local storage.
+   *
+   * ⚠️ IT DOES NOT DECIDE WHETHER IT MAY. `domain/record.restoreVerdict` owns that, and it is asked
+   * by the SCREEN — because the answer is a sentence she has to see ("this would replace 18 workouts
+   * with 4"), and a repo that refused silently would be the same defect as one that overwrote
+   * silently. This writes what it is given.
+   *
+   * ⚠️ AND IT NEVER WRITES A KEY THE RECORD DOES NOT CARRY. A backup taken before the athlete had a
+   * body map has `profile: null`; blanking the live profile over it would delete a fact the file
+   * never claimed anything about.
+   */
+  async restoreRecord(record: AthleteRecord): Promise<void> {
+    await setJSON(K.history, record.sessions);
+    await setJSON(K.cardio, record.cardio);
+    if (record.profile) await setJSON(K.profile, record.profile);
+    if (record.preferences) await setJSON(K.preferences, record.preferences);
+    if (record.engine) await setJSON(K.engineV5, record.engine);
+    /*
+     * ⛔ THE PROGRAMME IS RESTORED, NOT CLEARED — see the note on `AthleteRecord.program`. Clearing
+     * it destroyed a week she BROUGHT (which nothing can regenerate) and left an engine athlete in
+     * the app with a full history and no week at all, because `Root` gates on the profile and boot
+     * builds nothing.
+     */
+    if (record.program) await setJSON(K.program, record.program);
+  },
+
   async clearAll(): Promise<void> {
     // Preserve telemetry firsts? No — a wiped identity starts fresh. Telemetry
     // buffer is flushed best-effort before a revoke/reset by the caller.

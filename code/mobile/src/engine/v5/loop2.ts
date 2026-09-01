@@ -18,9 +18,9 @@ import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED, EPLEY_VA
 
 const EPS = 1e-6;
 
-/** Working sets only. `isApproach` marks LEGACY Build-#33 approach sets (Rev 8 deleted the
- *  mechanism; nothing writes the mark any more) — they stay excluded so those histories never
- *  pollute a decision. */
+/** Working sets only. `isApproach` marks warm-up bridges + LEGACY Build-#33 approach sets — never
+ *  part of a decision. Nothing else is excluded: every set she performs was PRESCRIBED, so every
+ *  set she performs is evidence (founder ruling, 2026-08-24 — see `theEngineDecidesWhatASetIs`). */
 const working = (sets: SetPerf[]): SetPerf[] => sets.filter((s) => !s.isApproach && s.reps >= 0);
 
 /** Did the set meet the target (reps ≥ Tlo, and it was really performed)? */

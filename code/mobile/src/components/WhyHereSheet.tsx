@@ -26,21 +26,27 @@
  * days it asks for ~208 weekly sets across the body, which is three hours a session — it is a set of
  * PROPORTIONS that `enforceTimeCap` scales into her hour. Printing "11 of 28 sets" would state a
  * goal she is being denied, when 28 was never a number anyone intended her to train. What is drawn
- * instead is what she actually receives, and the one weekly figure that IS ratified as a quantity:
- * `WEEKLY_SETS_FLOOR`, the least that grows a muscle.
+ * instead is the work she is actually given, and the one weekly figure that IS ratified as a
+ * quantity: `WEEKLY_SETS_FLOOR`, the least that grows a muscle.
+ *
+ * ⚠️ AND THE FIGURE SHE IS SHOWN IS NOT THE FIGURE THE VERDICT IS DECIDED ON. She reads the sets on
+ * her cards; the engine decides on `weeklyReceived`, which adds what her compounds lend the muscle.
+ * That split is deliberate and it is stated at the verdict below — a number shown may be the
+ * prescribed count, a number COMPARED must be the engine's.
  *
  * Nothing on this screen is computed here. Every line is a field of a measured `LiftPlacement`
  * (R7 — Hush never states a reason it did not measure).
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { Legend, Button } from '@/components/ds';
+import { Legend, Button, Arrive } from '@/components/ds';
+import { Icon } from '@/components/Icon';
+import { SHEET_SETTLE } from '@/components/BottomSheet';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { color, font, stage, hold } from '@/design/tokens';
@@ -65,6 +71,14 @@ export interface WhyHereProps {
   facts: WhyHereFact[];
   /** The closing sentence about the dose. Empty draws nothing, as on the changed sheet. */
   line: string;
+  /**
+   * ⛔ THE ANSWER CARRIES THE VERB (founder, device QA 2026-08-23: *"ובלחיצה על תרגיל למה זה מציג
+   * למה זה נבחר?"*). He tapped a lift to MANAGE it and got an explanation with no way to act — the
+   * swap lived on a 17-point glyph he never saw. His own 2026-08-05 ruling (the row opens the WHY)
+   * stands; what changes is that the why now ends with the one thing she can do about it. Absent on
+   * surfaces that only report (the Mirror), exactly like `PlanLifts.onSwap`.
+   */
+  onSwap?: () => void;
   onClose: () => void;
 }
 
@@ -91,15 +105,51 @@ export function WhyHereSheet(props: WhyHereProps) {
       </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        {/* ⛔ A WAY OUT THAT IS NOT AN OATH (design review 2026-09-01). The only exit was "הבנתי"
+            at the very foot — an athlete who opened this by mistake had to scroll past the whole
+            argument and declare she understood it. Every sheet in the product carries a close at
+            its head; this one does too now. */}
+        <View style={styles.closeRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            hitSlop={10}
+            onPress={props.onClose}
+            style={({ pressed }) => [styles.closeDisc, pressed && styles.closeDiscPressed]}
+          >
+            <Icon name="close" size={18} color={color.textPrimary} strokeWidth={2} />
+          </Pressable>
+        </View>
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <View style={styles.head}>
-            <View style={styles.dot} />
-            <Legend track={0.2} tone="accent" style={styles.legend}>{t('whyHere.legend')}</Legend>
-            <View style={styles.flex} />
-            <Legend track={0} weight="regular">{bidi(props.liftName)}</Legend>
-          </View>
+          {/*
+            ════════════════════════════════════════════════════════════════════════════════════
+            ⛔ STACKED, NOT SHARED — THE SAME FAULT ITS SIBLING HAD (2026-08-27).
 
-          <Text style={styles.title} accessibilityRole="header">{props.title}</Text>
+            `WhyChangedSheet` put its KIND and its SUBJECT on one line with a spacer between them,
+            and on the English locale the pair overflowed and broke a DATE in half. This sheet was
+            built the same way, and measured against the 326 points this body leaves it overflows
+            there too: `WHY THIS IS HERE` is ~214 points of tracked mono and `BARBELL ROW` ~112,
+            before the dot and the gaps.
+
+            ⚠️ IT FITS IN HEBREW, which is exactly why both copies survived. A header whose integrity
+            depends on the SUM OF TWO TRANSLATED STRINGS is fragile by construction — and fixing one
+            of them fixed one COPY of it.
+
+            ✦ AND IT ARRIVES, after the sheet does (`SHEET_SETTLE`): the kind and its subject, then
+            what the coach actually says.
+            ════════════════════════════════════════════════════════════════════════════════════
+          */}
+          <Arrive order={0} after={SHEET_SETTLE} style={styles.head}>
+            <View style={styles.headKind}>
+              <View style={styles.dot} />
+              <Legend track={0.2} tone="accent" style={styles.legend}>{t('whyHere.legend')}</Legend>
+            </View>
+            <Legend track={0} weight="regular">{bidi(props.liftName)}</Legend>
+          </Arrive>
+
+          <Arrive order={1} after={SHEET_SETTLE}>
+            <Text style={styles.title} accessibilityRole="header">{props.title}</Text>
+          </Arrive>
 
           {/* THE DOSE — the one figure a placement has. */}
           <View style={styles.dose}>
@@ -126,6 +176,10 @@ export function WhyHereSheet(props: WhyHereProps) {
               that one was decided from her sets, this one from the map she drew and the hour she gave. */}
           <Legend size={17} track={0.14} align="center">{t('whyHere.decidedFrom')}</Legend>
           <Button variant="primary" size="whySheet" block label={t('whyLoad.got')} onPress={props.onClose} />
+          {/* The verb under the answer — see `onSwap`. A ghost, so "understood" stays the act. */}
+          {props.onSwap ? (
+            <Button variant="ghost" size="whySheet" block label={t('swap.title')} onPress={props.onSwap} />
+          ) : null}
         </View>
       </SafeAreaView>
     </View>
@@ -173,6 +227,44 @@ export function whyHereProps(
   // lift can honestly say about its weight. Saying nothing would leave the blank column unexplained.
   if (p.firstTime) facts.push({ id: 'firstTime', text: t('whyHere.firstTime') });
 
+  /*
+   * ⛔ THE CLOSING LINE IS THE ENGINE'S VERDICT, AND IT USED TO CONTRADICT IT (2026-08-18).
+   *
+   * It was `p.weeklySetsHere >= weeklyFloor` — the DIRECT set count — while the engine decides a
+   * muscle is fed on `weeklyEffectiveSets`: direct sets plus what every compound lends the muscles it
+   * also drives. Her biceps take 4 direct sets and about 3.5 from her rows, so `raiseToWeeklyFloor`
+   * considers them dosed and will not spend another minute of her hour on them — and this sheet
+   * closed with *"6 sets a week is the least that grows a muscle. This one has 4, and your hour is
+   * why."* A complaint about a shortfall the engine does not believe in, that no regeneration could
+   * ever clear, on the one screen whose job is to read the engine's decisions back (R7).
+   *
+   * ── THE THREE CASES, AND WHY ONE OF THEM SAYS NOTHING ────────────────────────────────────────────
+   *   · her cards already carry the dose ......... `doseMet`, and the number she reads is the number
+   *                                                 she can count. Received is never less than
+   *                                                 prescribed, so the engine agrees.
+   *   · the ENGINE says she is short ............. `doseShort`. Short on received implies short on
+   *                                                 prescribed too, so the sentence's number is still
+   *                                                 the one on her cards and still under the floor.
+   *   · prescribed short, received enough ........ ⚠️ SILENCE. This is the case that was lying. The
+   *                                                 engine is satisfied, her cards show four rows,
+   *                                                 and no sentence in the copy can say *"and your
+   *                                                 pulling feeds the rest"* — so it says nothing,
+   *                                                 which is what R7 asks of a claim we cannot make.
+   *                                                 The sheet already draws an empty `line`.
+   *
+   * ⚠️ AND SUPPLEMENTAL WORK IS NOT JUDGED AT ALL. The core block sits outside the volume pot —
+   * `weeklyTargets` deletes Core before the week is dealt and every volume rule in `weekQuality`
+   * excludes it — so telling her a core lift is under the dose holds it to a standard nothing aimed
+   * at it. It said exactly that before this.
+   */
+  const line = !p.judgedByDose
+    ? ''
+    : p.weeklySetsHere >= weeklyFloor
+      ? t('whyHere.doseMet', { floor: weeklyFloor, sets: p.weeklySetsHere })
+      : p.weeklyReceived < weeklyFloor
+        ? t('whyHere.doseShort', { floor: weeklyFloor, sets: p.weeklySetsHere })
+        : '';
+
   return {
     liftName,
     title,
@@ -180,20 +272,24 @@ export function whyHereProps(
     setsNote: t('whyHere.setsToday'),
     weeklyNote: t('whyHere.weekly', { sets: p.weeklySetsHere, muscle }),
     facts,
-    line:
-      p.weeklySetsHere >= weeklyFloor
-        ? t('whyHere.doseMet', { floor: weeklyFloor, sets: p.weeklySetsHere })
-        : t('whyHere.doseShort', { floor: weeklyFloor, sets: p.weeklySetsHere }),
+    line,
   };
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },
-  flex: { flex: 1 },
-  body: { flexGrow: 1, paddingHorizontal: 32, paddingTop: 24 },
+  /* `justifyContent:'center'` when the content is short (design review 2026-09-01): the sheet's
+     three blocks ended mid-screen with ~180 points of void before the footer — two screens glued.
+     Centring shares that air above and below the argument instead of piling it underneath. */
+  body: { flexGrow: 1, paddingHorizontal: 32, paddingTop: 4, paddingBottom: 16, justifyContent: 'center' },
+  closeRow: { paddingHorizontal: 20, paddingTop: 8, alignItems: 'flex-start' },
+  closeDisc: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(241,238,229,0.08)', borderWidth: 1, borderColor: 'rgba(241,238,229,0.12)' },
+  closeDiscPressed: { backgroundColor: 'rgba(241,238,229,0.14)' },
 
-  head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  /* Two lines: the kind, then the subject — see the note at the markup. */
+  head: { gap: 4 },
+  headKind: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: hold.stage },
   legend: { color: hold.stage },
 
@@ -226,7 +322,7 @@ const styles = StyleSheet.create({
   bullet: { width: 5, height: 5, borderRadius: 2.5, marginTop: 8, backgroundColor: color.textMuted },
   factText: { flexShrink: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: stage.ink1, textAlign: 'left' },
 
-  line: { fontFamily: font.serif, fontStyle: 'italic', fontSize: 19, lineHeight: 27, color: stage.ink0, marginTop: 'auto', paddingTop: 16, paddingBottom: 4, textAlign: 'left' },
+  line: { fontFamily: font.serif, fontSize: 19, lineHeight: 27, color: stage.ink0, marginTop: 'auto', paddingTop: 16, paddingBottom: 4, textAlign: 'left' },
 
   footer: { paddingHorizontal: 26, paddingTop: 12, paddingBottom: 30, gap: 11 },
 });

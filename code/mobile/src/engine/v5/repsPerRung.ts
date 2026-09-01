@@ -165,6 +165,31 @@ export function rungsForHeadroom(
   // F-16 — past the end of the load–rep continuum the extra reps are not evidence about iron.
   const headroom = Math.min(Math.abs(headroomReps), EPLEY_VALID_REPS);
   const exact = headroom / slope;
+  /*
+   * ⛔ THE ASYMMETRY IS THE COACHING, AND IT WAS MEASURED — 2026-08-19.
+   *
+   * Read against L10 this line looks like the defect that explains the whole board: the register
+   * says *"a move is sized by that number, never by a fixed step"*, and for the ordinary case
+   * (2-rep band, 1–4 reps of overshoot, a real slope near 2.3 reps/rung) `floor` returns 0 and the
+   * clamp makes it 1 — so her fitted slope and B-5's un-fitted model give the SAME integer, and
+   * Loop 1 in week 10 emits exactly what it emitted in week 2. That reading is correct.
+   *
+   * ⚠️ AND RELEASING IT LOSES. Both arms were run on the full board (`thePrescriptionIsAccurate`):
+   *
+   *     floor on the up path (today) ..  58.3%   under 17.5   over 24.2   mean miss 0.87
+   *     round on the up path .........   58.6%   under 17.8   over 23.6   mean miss 0.89
+   *     ceil on both (symmetric) .....   58.9%   under 20.0   over 21.1   mean miss 0.93
+   *
+   * In-band buys 0.3–0.6 points and the MISSES GET BIGGER in both arms. The symmetric arm pays for
+   * it in the wrong currency: `under` +2.5 points — sets she cannot finish — to buy `over` −3.1,
+   * sets that were merely easy. Those two are not worth the same to an athlete, and
+   * `theProgrammeSurvivesTheMonths` grades one of them and not the other.
+   *
+   * So the floor stays, and it is a DECISION rather than an accident: **a coach who is unsure errs
+   * light.** A rung down is taken in full the moment she falls short; a rung up has to be earned
+   * outright. The register's sentence is about not inventing a fixed step — this reads her slope
+   * and then rounds the answer conservatively, which is a different thing and belongs in L10's text.
+   */
   return Math.max(1, direction === 'down' ? Math.ceil(exact) : Math.floor(exact));
 }
 

@@ -4,7 +4,6 @@
  * The app STORES and RENDERS these; it never derives loads, confidence,
  * capability scores, or forecasts (spec §8.7 — the model owns those).
  */
-// @ts-nocheck
 
 // 
 
@@ -114,6 +113,25 @@ export interface Profile {
   }[];
   /** Engine v5 — minutes she has for a workout (the time-budget ceiling, S-64). Absent => 60. */
   workoutMinutes?: number;
+  /**
+   * ════ THE ROOM (2026-09-01, audit finding 06) — which equipment families exist where she trains. ═
+   *
+   * The engine assumed a full commercial gym for everyone: a home lifter with two dumbbells got a
+   * week of machine rows and cable flys she cannot perform. This is the fix's whole storage: the
+   * families her room actually offers, edited in You. ABSENT = every family (the parity default —
+   * every existing athlete, every existing test, byte-for-byte the same programme). Bodyweight is
+   * never listed because it is never absent from a room. Enforced at the two candidate chokepoints
+   * — `pickExercises` (assembly) and the swap pool — via `domain/room.inRoom`; her OWN picks
+   * (library choices, imports, the builder) are hers and are never filtered.
+   */
+  equipment?: import('@/data/exercises').EquipmentFamily[];
+  /**
+   * WHEN HER WEEK TURNS (2026-09-01, audit 07) — the JS weekday (0=Sun … 6=Sat) of the weekly roll.
+   * Absent = Saturday, the founder's witnessable default. The hour stays 20:30 for everyone (one
+   * product, one hour); only the DAY follows her calendar — most of the world's quiet evening is
+   * Sunday, not Saturday. Applied at boot via `weekCadence.applyWeekOpenDow`; edited in You.
+   */
+  weekOpensDow?: number;
   healthConnected: boolean;
   /** ISO date the account was created (Profile §4.28 "Member since"). App-layer. */
   memberSince?: string;
@@ -151,6 +169,19 @@ export interface Slot {
   // progression target. One per week, 3 sets, placed last, preferring upper sessions.
   // Rendered like any slot; it just never drives capability load/progression.
   supplemental?: boolean;
+  /**
+   * ════ SUPERSET (founder mandate 2026-08-26): this slot and the NEXT run as one alternating
+   * block — A, B, A, B, resting once per round. ════
+   *
+   * Written ONLY by the plan builder (`togglePair` — her verb); the engine never writes it today
+   * (pairing as the time-cap's own instrument is a separate, register-tagged engine change).
+   * Contract: pairs are ADJACENT and NEVER CHAIN (a slot may not carry this while the previous
+   * slot does — no triplets), and both partners hold the SAME setCount (the builder syncs them).
+   * `enginePlan` translates a pair into one `PlannedBlock` with two items, which the session
+   * runner has always known how to interleave; `estimateSessionMinutes` prices the shared rest.
+   * Any structural edit that breaks adjacency clears the mark (`planBuilder.clearPairAround`).
+   */
+  pairedWithNext?: boolean;
   // STABLE engine-slot identity (founder 2026-07-09), stamped at generation from the CANONICAL
   // blueprint pattern-occurrence order — NOT the display order. This decouples a slot's durable
   // identity from equipment clustering + engine swaps, so an engine swap/graduation never shifts
@@ -185,6 +216,24 @@ export interface ProgramDay {
   // a muscle in silence. Absent (the norm) whenever the day fits. Read-only: it changes no load,
   // volume, selection or order — enforceTimeCap has already run; this only reports its verdict.
   overBudget?: boolean;
+  /*
+   * ⛔ F-15 (`leanWarmup`) IS DELETED (founder 2026-08-30). It was the first cut an over-budget day
+   * made — trim the bridges before a working set — and it existed only because the bridges were
+   * compulsory and therefore priced. They are neither now: the ramp is offered at the station
+   * (`warmupOffer`) and costs the promise nothing, so there is no warm-up minute to go lean on.
+   * The flag is removed rather than left unread, which is how a field becomes a live-looking
+   * surface that two builders still write and nothing consults.
+   */
+  /*
+   * ════ DAY-LEVEL OWNERSHIP (founder, 2026-08-25 — the hybrid week) ════
+   * On a program whose `authored` is 'engine', a day carrying `authored: true` is a day SHE wrote
+   * in the plan builder: the engine preserves it byte-for-byte through every rebuild and assembles
+   * its own days AROUND it — the weekly volume pot is reduced by what her days already deliver.
+   * On a fully-authored program ('athlete_or_coach') the flag is redundant and unread.
+   * Written ONLY by `domain/planBuilder.sealSmart` (the builder's diff-based seal); the engine
+   * reads it and never writes it (`aWeekSheBroughtIsNotOursToRewrite` sweeps for that).
+   */
+  authored?: boolean;
   /**
    * ⛔ THE MIRROR OF `overBudget` — her minutes could not be FILLED (founder 2026-08-12).
    *
@@ -252,11 +301,23 @@ export interface SetTarget {
    *  correction to HER number, not one cautious rung (B-5). Absent until enough like-for-like pairs
    *  exist, or for bodyweight → the live loop falls back to a single rung. */
   perRung?: number;
+  /** A LIGHT WEEK is open (engine/v5/deload) — the live loop must not raise this load mid-session:
+   *  a deliberately light bar always overshoots the band, and correcting it up would undo the
+   *  engine's own decision. Down-corrections stay allowed (too heavy is too heavy, always). */
+  deloadHold?: boolean;
   reasonType?: ReasonType; // present only on a changed set, ADVISORY only
   reasonDelta?: number; // for increase/decrease copy
 }
 
 /** A single logged set. Per-set actuals persisted at each Complete Set (§8.4). */
+/**
+ * A FREE-FORM session (screens/history/FreeLog, 2026-08-24) — work she did OFF the plan and told
+ * us about afterwards: a friend's gym, a hotel, a PR day. Marked so the RECORD keeps everything
+ * (History, tonnage, milestones, the weeks count, the clubs — a free-logged single can strike a
+ * club) while the ENGINE folds none of it: a fun max attempt must never read as a failed floor,
+ * and the engine coaches its own programme, not her holiday. It also never burns a trial session —
+ * the trial gates coached training, not her right to keep her own record.
+ */
 export interface SetLog {
   exerciseId: string;
   setIndex: number;
@@ -267,10 +328,24 @@ export interface SetLog {
   actualWeight: number | null;
   actualReps: number;
   edited: boolean; // true if athlete used Edit Result
-  /** LEGACY (Build #33) — this set was an approach measurement. Rev 8 deleted the mechanism and
-   *  nothing writes this mark any more; it survives so already-logged approach sets in testers'
-   *  on-device histories stay excluded from the engine's fold. */
+  /** "Not a working set — excluded from every engine decision." Born as the Build-#33 approach
+   *  mark (Rev 8 deleted that mechanism); since 2026-08-24 the WARM-UP RAMP writes it again
+   *  (together with `isWarmup` below), deliberately reusing the one mark every fold reader
+   *  already filters, so a warm-up can never leak into a decision through a missed filter. */
   isApproach?: boolean;
+  /** A warm-up bridge set (domain/warmupRamp, 2026-08-24). Always accompanied by `isApproach`
+   *  (the exclusion); this mark exists so surfaces can LABEL it honestly ("Warm-up"), and so the
+   *  rest learner can tell a warm-up first-touch from a legacy approach measurement. */
+  isWarmup?: boolean;
+  /*
+   * ⛔ NO `tag` HERE, AND NO SET-TYPE OF ANY KIND SHE AUTHORS (founder ruling, 2026-08-24).
+   * A 'failure' | 'drop' tag lived on this model for a few hours. The ruling that removed it is
+   * the product's thesis: the programme decides what a set IS, in advance, so that during the
+   * workout she thinks about nothing and only executes. A drop set she invents at the bar is the
+   * engine transcribing instead of coaching. When drop sets ship, they ship as a PRESCRIPTION and
+   * carry the engine's own mark — the shape `isWarmup`/`isApproach` above already sets. Pinned by
+   * `theEngineDecidesWhatASetIs`.
+   */
   persistedAt: string; // ISO
   /**
    * Seconds of rest ACTUALLY taken immediately before this set (engine v5 · Stage 0 · law L3).
@@ -425,10 +500,21 @@ export interface Session {
    *  in full — the athlete lifted it (founder 2026-07-11). Absent on sessions saved before the
    *  rule => counted (they finished the workout under the old law). */
   trained?: boolean;
+  /** A FREE-FORM log (see the note above `SetLog`) — kept whole in the record, folded by nothing:
+   *  the engine skips it, the trial never counts it, and no planned workout is marked done by it. */
+  freeform?: boolean;
   // Day name captured AT START so History reads stably even after the program
   // regenerates with fresh day ids (the backend composes a new id per session).
   // Optional: sessions saved before this field fall back to a program lookup.
   programDayName?: string;
+  /**
+   * ⛔ TRAINED TOGETHER (founder, 2026-08-23: the social mandate — *"אפשר לעשות שגם מסך האימון
+   * ממש מציג עם מי היה האימון המשותף"*). The people she trained WITH, by the names she gave them —
+   * a fact of the session, shown on the finish poster and carried onto the story card. v1 is
+   * names she writes; the live shared-session (CloudKit circles) will fill this from the pairing
+   * when it lands, on the same field — the record's shape is the contract, not the mechanism.
+   */
+  partners?: string[];
   /**
    * HOW MUCH WORK THIS SESSION WAS PRESCRIBED, stamped at START.
    *
@@ -498,6 +584,10 @@ export interface CardioSplit {
   durationSec: number; // seconds spent on this km
   paceSec: number; // sec per km (this split)
   gait: CardioGait; // gait held during this km
+  /** This kilometre's own burn (founder 2026-08-24: each kilometre's row carries its time AND its
+   *  calories). Stamped at the split's cut from the pace it was covered at; absent on splits saved
+   *  before the field, and on runs with no bodyweight — the row then shows time alone. */
+  kcal?: number;
 }
 
 /** One GPS fix on the route actually travelled. */

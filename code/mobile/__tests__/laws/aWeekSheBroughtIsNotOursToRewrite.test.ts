@@ -32,9 +32,13 @@
 
 import fs from 'fs';
 import path from 'path';
+import React from 'react';
+import renderer, { act } from 'react-test-renderer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { fixtureModel, estimateSessionMinutes } from '@/data/api/fixtureModel';
-import { engineMayRebuild } from '@/state/stores/appStore';
+import { AppProvider, engineMayRebuild, useApp } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 import { muscleOf, exerciseById } from '@/data/exercises';
 import { SESSION_MAX, WEEKLY_SETS_FLOOR, SETS_MAX } from '@/engine/v5/constants';
 import type { Profile, Program } from '@/data/local/models';
@@ -168,6 +172,16 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
     const ungated: string[] = [];
     for (const m of calls) {
       const before = STORE.slice(Math.max(0, m.index! - 900), m.index!);
+      /*
+       * ════ ONE exemption, and it is the door OUT (founder, 2026-08-25) ════
+       * `revertProgramToEngine` exists to hand the pen back: she built a week in the plan builder
+       * (authored), and this is her explicit, confirmed tap asking Hush to write again. Gating it
+       * on `engineMayRebuild` would make authorship a one-way trap — the gate would refuse the
+       * very act of lifting the gate. It is exempt BY NAME, not by pattern, so a sixth rebuild
+       * still cannot slip through.
+       */
+      const wideBefore = STORE.slice(Math.max(0, m.index! - 2200), m.index!);
+      if (/revertProgramToEngine/.test(wideBefore)) continue;
       if (!/engineMayRebuild\(/.test(before)) ungated.push(STORE.slice(Math.max(0, m.index! - 80), m.index! + 40));
     }
     expect(ungated).toEqual([]);
@@ -192,12 +206,38 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
     // ⚠️ `return;` OR `return false;` — `saveLibrary` reports the outcome to its caller so the
     // screen can say what actually happened, and a returned value is still a return BEFORE any
     // assembly runs, which is the whole of what this law checks.
-    const gates = [...STORE.matchAll(/if \(!engineMayRebuild\(state\.program\)\) return(?: false)?;/g)];
-    // ⚠️ 3 → 4 on 2026-08-16: `saveLibrary` (her picks and refusals in the exercise library) is the
-    // fourth thing she can do that reshapes which lifts a week is made of, so it rebuilds — and it
-    // asks the same question first. The count is named rather than loosened on purpose: the way this
-    // rule dies is a FIFTH trigger written by someone who never read this file.
-    expect(gates.length).toBe(4); // reportPain · updateProfileInfo · answerEaseCheck · saveLibrary
+    /*
+     * ⛔ AND THE GATE ASKS THE DISK, NOT `state.program` (found 2026-08-18). This pattern used to
+     * read `engineMayRebuild(state.program)` and the law was satisfied by it — while the thing being
+     * asked was EMPTY. Boot dispatches `program: null` deliberately, `engineMayRebuild(null)` is
+     * true, and so after every cold start the first pain report or profile edit rewrote her coach's
+     * week. The gates were all present, all correct, and all asked of nobody.
+     *
+     * The literal is pinned here for the same reason the count below is: this is the exact line that
+     * was wrong, and a law that accepted `engineMayRebuild(anything)` would accept it again.
+     */
+    const gates = [...STORE.matchAll(
+      /if \(!engineMayRebuild\(await db\.loadProgram\(\)\.catch\(\(\) => state\.program\)\)\) return(?: false)?;/g,
+    )];
+    // …and nothing anywhere in the store asks the question of React state again.
+    expect(STORE).not.toMatch(/engineMayRebuild\(state\.program\)/);
+    /*
+     * ⚠️ 3 → 4 on 2026-08-16: `saveLibrary` (her picks and refusals in the exercise library) is the
+     * fourth thing she can do that reshapes which lifts a week is made of, so it rebuilds — and it
+     * asks the same question first. The count is named rather than loosened on purpose: the way this
+     * rule dies is a FIFTH trigger written by someone who never read this file.
+     *
+     * ⚠️ 4 → 5 on 2026-08-22, AND THE LAW DID ITS JOB. `declareSwap` — *"give me this one instead of
+     * that one"*, from the pre-workout card (founder 2026-08-22) — is the fifth, and the count is
+     * what forced it to be declared here rather than added quietly. It carries the guard for exactly
+     * the reason the other four do: a substitution reshapes which lifts a week is made of, and a
+     * week she BROUGHT is not ours to reshape, however she asks.
+     *
+     * ⚠️ AND THE DECLARATION IS STILL SAVED on an authored week — the guard stops the REBUILD, not
+     * the record of what she said. That is the contract `saveLibrary` already keeps, and it is why
+     * both return a boolean instead of throwing: what she is told about her week is the caller's job.
+     */
+    expect(gates.length).toBe(5); // reportPain · updateProfileInfo · answerEaseCheck · saveLibrary · declareSwap
     for (const g of gates) {
       const after = STORE.slice(g.index!, g.index! + 400);
       // The very next statement is the build — nothing may sit between the guard and what it guards.
@@ -279,7 +319,9 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
     const root = fs.readFileSync(path.join(ROOT, 'src/app/Root.tsx'), 'utf8');
     const start = fs.readFileSync(path.join(ROOT, 'src/screens/onboarding/Start.tsx'), 'utf8');
     const building = fs.readFileSync(path.join(ROOT, 'src/screens/onboarding/BuildingProgramme.tsx'), 'utf8');
-    const profile = fs.readFileSync(path.join(ROOT, 'src/screens/profile/ProfileSheet.tsx'), 'utf8');
+    // ⛔ 2026-08-23: the in-app door moved from You to TOGETHER (the social home) — the founder:
+    // "החלק החברתי צריך להיות נישה נפרדת". The chain's shape is unchanged; only the door's address.
+    const profile = fs.readFileSync(path.join(ROOT, 'src/screens/together/Together.tsx'), 'utf8');
     const screen = fs.readFileSync(path.join(ROOT, 'src/screens/import/ImportPlan.tsx'), 'utf8');
 
     /*
@@ -300,21 +342,139 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
     expect(root).toMatch(/OnboardingStack\.Screen name="ImportPlan"/);
     expect(root).toMatch(/MainStack\.Screen name="ImportPlan"/);
 
-    // 3 · FROM THE INTAKE IT STARTS AND RETURNS — she does not wait on the collector.
+    /*
+     * 3 · FROM THE INTAKE THE WORK IS HANDED TO THE MODULE — but the SCREEN STAYS (2026-08-29).
+     *
+     * ⛔ IT USED TO CALL `goBack()` in the same breath as `startImport`, and the founder met exactly
+     * what that looks like: *"שלחתי את זה לאפשרות של צילום תוכנית האימון וזה לא עובד זה ישר יוצא
+     * מהמסך."* Nothing was broken; nothing said anything. `busy` was never set on that path, `Start`
+     * shows no pending state, and the report surfaced minutes later on the build step — which is
+     * indistinguishable from a crash, and teaches her the feature does not work.
+     *
+     * ⚠️ THE 08-11 RULING IS INTACT AND IS WHAT CLAUSES 4 AND 5 STILL ASSERT: the read lives in
+     * `pendingImport` so it outlives any screen, she may walk away, and the build step meets it.
+     * What is forbidden now is the screen walking away FOR her — so this clause asserts the module
+     * hand-off AND the subscription that makes the wait visible.
+     */
     expect(screen).toMatch(/startImport\(askCoach as never/);
-    expect(screen).toMatch(/if \(fromOnboarding\) return startAndReturn\(\{ images: \[img\] \}\)/);
+    expect(screen).toMatch(/if \(fromOnboarding\) return startAndWatch\(\{ images: picked \}\)/);
+    expect(screen).toMatch(/return watchImport\(\(st\) => \{/);
+    // …and no exit is fired at the moment the read begins. This is the regression itself, pinned.
+    expect(screen).not.toMatch(/startImport\([\s\S]{0,200}navigation\?\.goBack/);
 
     // 4 · THE BUILD STEP IS WHERE SHE MEETS IT, and it is a waiting screen already.
     expect(building).toMatch(/peekImport\(\)\.phase !== 'idle'/);
     expect(building).toMatch(/settledImport\(\)\.then/);
-    expect(building).toMatch(/navigation\.replace\('ImportPlan', \{ inputs, review: true \}\)/);
+    expect(building).toMatch(/navigation\.replace\('ImportPlan', \{ inputs, review: true,/);
 
-    // 5 · A FAILED import does not strand her — the ordinary build carries on.
-    expect(building).toMatch(/if \(result\?\.ok\) navigation\.replace/);
+    /*
+     * 5 · A FAILED import does not strand her — the ordinary build carries on.
+     *
+     * ⛔ AND SINCE 2026-08-19 IT ALSO SAYS SO. The build step is the last screen standing when the
+     * read settles: `startAndReturn` dismisses the importer the moment the read STARTS, so the
+     * failure arrived here minutes later with nowhere to go and was silently dropped. She finished
+     * the intake on a generated week believing it was her coach's. Carrying on is right; carrying
+     * on without a word is what this clause now forbids.
+     */
+    expect(building).toMatch(/if \(result\?\.ok\) \{/);
+    expect(building).toMatch(/const reason = result \? importFailure\(\) : null;/);
+    expect(building).toMatch(/note=\{importFailed \? t\(`import\.fail\.\$\{importFailed\}`\) : null\}/);
 
     // 6 · KEEPING IT GOES FORWARD, and the intake still finishes at `ProgramCreated`'s CTA.
     expect(screen).toMatch(/clearImport\(\)/);
-    expect(screen).toMatch(/navigation\?\.replace\?\.\('ProgramCreated', \{ inputs: onboardingInputs \}\)/);
+    /*
+     * ⛔ THREE DOORS REACH THE ADOPTION AND THEY ARE NOT ONE SITUATION (fixed 2026-08-30, on the
+     * onboarding sweep). This asserted a single exit, and the single exit was the bug: from the
+     * FORK there is no relay at all, so `onboardingInputs` is undefined and the fallback was
+     * `goBack` — **which is the fork**. She photographed her programme, watched it read, pressed
+     * "keep mine", and landed back on *"איפה מתחילים?"* with an authored week on disk and no
+     * profile. It was invisible while this screen dismissed itself the moment the read STARTED;
+     * making it stay moved the adoption to the fork and brought its missing relay with it.
+     */
+    // from the build step: forward to the screen that names her programme…
+    expect(screen).toMatch(/navigation\?\.replace\?\.\('ProgramCreated', \{/);
+    // …and the week she BROUGHT re-stamps the frequency, exactly as `PlanBuilder.onSave` does.
+    expect(screen).toMatch(/const days = program\.days\.filter\(\(d\) => !d\.isRest\)\.length;/);
+    // from the FORK: on into the intake, because she has not answered a single question yet.
+    expect(screen).toMatch(/if \(fromOnboarding\) \{[\s\S]{0,120}navigation\?\.navigate\?\.\('AboutYou'\)/);
+    /*
+     * …and the step she lands on at the end of that intake does NOT offer to rewrite what she
+     * brought: `PlanBuilder` reads the disk in the intake now and takes an authored week straight
+     * to the reveal. Before this, the blank sheet and the shelf would have overwritten it
+     * (`saveBuiltProgram` is deliberately ungated) and the engine door would have revealed a week
+     * `completeOnboarding` then refused to use.
+     */
+    const builderSrc = fs.readFileSync(path.join(ROOT, 'src/screens/plan/PlanBuilder.tsx'), 'utf8');
+    expect(builderSrc).toMatch(/if \(intake\) \{[\s\S]{0,900}db\.loadProgram\(\)/);
+    /*
+     * ⚠️ AND THE READ CAN NEVER LEAVE HER ON A BLACK SCREEN. `PlanBuilder` renders nothing until
+     * `loaded`, so a disk read that does not resolve is a blank rectangle on the step the whole
+     * intake rides on. It runs ONCE (a ref, not a dependency list — widening the deps was how I
+     * made it re-run and never settle) and the doors appear regardless after a bound.
+     */
+    expect(builderSrc).toContain('const readOnce = useRef(false);');
+    expect(builderSrc).toMatch(/setTimeout\(\(\) => \{ if \(alive\) setLoaded\(true\); \}, 2000\)/);
+    expect(builderSrc).toMatch(/authored \?\? 'engine'\) === 'athlete_or_coach' && inputs/);
+
+    /*
+     * 6b · MORE THAN ONE PAGE (founder 2026-08-29): *"שמתי לב שאפשר לשלוח רק תמונה אחת בשביל
+     * לייבא."*
+     *
+     * ⛔ `runImport` HAS ALWAYS TAKEN AN ARRAY and sent it in one turn, and `MAX_IMAGES_PER_TURN`
+     * has been 3 since the file was written — the whole restriction was one picker flag. A
+     * programme that runs over two pages could not be imported at all: she picked one, and the read
+     * returned half her week and reported it as the whole of it, which is worse than refusing.
+     */
+    const picker = fs.readFileSync(path.join(ROOT, 'src/platform/coach/coachImage.ts'), 'utf8');
+    expect(picker).toMatch(/allowsMultipleSelection: true/);
+    expect(picker).toMatch(/selectionLimit: MAX_IMAGES_PER_TURN/);
+    // …and the bound is stated where it is spent, not left to the caller to remember.
+    expect(picker).toMatch(/MAX_IMAGES_PER_TURN = 3/);
+
+    /*
+     * 6c · THE READER'S ADDRESS REACHES A REAL BUILD.
+     *
+     * ⛔ `EXPO_PUBLIC_COACH_URL` / `_TOKEN` live in `code/mobile/.env`, which the root `.gitignore`
+     * excludes — and EAS honours `.gitignore` when it packages the working tree. With no `env` and
+     * no `environment` on a build profile, both arrive EMPTY, `coachIsReachable()` is false, and
+     * every import dies instantly as `not_configured` → `unreachable`, on device, silently. That is
+     * a shipped feature that cannot work, and nothing in the repo said so.
+     *
+     * ⚠️ THE VALUES ARE NOT PUT IN THE REPO. `environment` points each profile at the EAS-stored
+     * set (`eas env:create --environment production --name EXPO_PUBLIC_COACH_URL …`), which is the
+     * one place a build-time public var belongs. This clause asserts the WIRING, which is the half
+     * that was missing; whether the values exist is an account fact only EAS can answer.
+     */
+    const eas = JSON.parse(fs.readFileSync(path.join(ROOT, 'eas.json'), 'utf8')) as {
+      build: Record<string, { environment?: string }>;
+    };
+    for (const profile of ['development', 'preview', 'production']) {
+      expect({ profile, env: eas.build[profile]?.environment }).toEqual({ profile, env: expect.any(String) });
+    }
+
+    /*
+     * 6d · SHE CAN SAY NO (founder 2026-08-30): *"תבחן את כל האפשרויות ותיקח את הטובה ביותר."*
+     *
+     * ⛔ THE REPORT CAN ARRIVE UNINVITED, and until now it arrived with no way out. She photographs
+     * a sheet at the fork, walks on into the intake, chooses who writes her week — and the landed
+     * import REPLACES the build she is watching. Both acts on that screen adopt the photograph, and
+     * the back chevron only exists on the collector branch, so a picture of the wrong page silently
+     * overrode the door she chose three minutes earlier. Her only non-adopting exit was an edge
+     * swipe back to step 2 of 3.
+     *
+     * ⚠️ AN EXIT, NOT A THIRD OPINION. Somebody who photographed a programme usually wants it, so
+     * "keep mine" stays the primary and this is a line under both buttons. And it is offered ONLY
+     * on the path where the screen was not asked for — from the profile she opened the importer
+     * herself and the chevron is right there.
+     */
+    expect(screen).toMatch(/const declineImport = \(\) => \{/);
+    // it DISCARDS the read rather than deferring it — being asked twice is the same interruption
+    expect(screen).toMatch(/declineImport = \(\) => \{\s*clearImport\(\);/);
+    // …and returns her to the SAME build, the sentence she typed included
+    expect(screen).toMatch(/coachAsk: route\.params\.coachAsk/);
+    expect(building).toMatch(/replace\('ImportPlan', \{ inputs, review: true, \.\.\.\(coachAsk != null/);
+    // …offered only where the screen arrived uninvited
+    expect(screen).toMatch(/reviewPending && onboardingInputs \? \{ onDecline: declineImport \}/);
 
     // 7 · THE ONLY WRITER of an adopted week stamps nothing extra on the way to disk.
     expect(screen).toMatch(/app\.adoptImportedProgram\(program\)/);
@@ -341,5 +501,100 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
     };
     for (const d of engineDirs) walk(d);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ AND IT SURVIVES A COLD START — the half of this law that was true on paper only.
+ *
+ * Everything above reads the SOURCE, and the source was right: four rebuilds, four gates, every one
+ * of them in front of the call it guards. What no clause here could see is that the gate was asked
+ * about `state.program`, and the store dispatches `program: null` at boot on purpose — so the first
+ * launch after she closed the app, `engineMayRebuild(null)` said yes and her coach's week was
+ * replaced by a Hush week the moment she edited anything.
+ *
+ * ⚠️ SO THIS ONE BOOTS THE STORE FOR REAL. A law written against source shape can only ever protect
+ * the shape it was written for; this mounts the provider with her week on DISK and nothing in React
+ * state — which is the exact state every athlete is in on every second launch — and then does the
+ * ordinary thing she does: she changes her body map.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('a cold start does not forget whose week it is', () => {
+  /** The api, off the live provider. Re-captured on every render; the last one is the current one. */
+  function Probe({ hold }: { hold: (api: unknown) => void }) {
+    hold(useApp());
+    return null;
+  }
+
+  /** Boot is a chain of awaited storage reads — let them all land before the athlete touches anything. */
+  const settle = async () => {
+    for (let i = 0; i < 30; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => { await Promise.resolve(); });
+    }
+  };
+
+  it('⛔ the first edit after a restart leaves her coach’s week exactly as it was', async () => {
+    await AsyncStorage.clear();
+    const brought = coachesWeek();
+    await db.saveProfile(athlete());
+    await db.saveProgram(brought); // …the week `adoptImportedProgram` wrote, before the app was killed
+
+    let api: any = null;
+    let tree: renderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = renderer.create(
+        React.createElement(AppProvider, null, React.createElement(Probe, { hold: (a: any) => { api = a; } })),
+      );
+    });
+    await settle();
+
+    // The trap, stated as a fact rather than assumed: she is an athlete, and the store holds no week.
+    expect(api.profile).toBeTruthy();
+    expect(api.program).toBeNull();
+
+    // The ordinary act — a muscle marked on the body map, which is a RESHAPE and rebuilds.
+    await act(async () => { await api.updateProfileInfo({ bodyMap: { Back: 'emphasis' } }); });
+    await settle();
+
+    // …and her week is the week her coach wrote, to the set.
+    expect(await db.loadProgram()).toEqual(brought);
+    // …and the store said so to the caller: nothing was rebuilt, so nothing may be announced as one.
+    let told: unknown = null;
+    await act(async () => { told = await api.updateProfileInfo({ bodyMap: { Chest: 'emphasis' } }); });
+    expect(told).toBe(false);
+    expect(await db.loadProgram()).toEqual(brought);
+
+    await act(async () => { tree!.unmount(); });
+  });
+
+  it('⛔ …and an ENGINE week on the same cold start is still rebuilt', async () => {
+    /*
+     * The other direction, and the one a careless fix breaks: reading the disk must not turn the
+     * gate into a freeze on everyone. An ordinary athlete's week still answers her body map on the
+     * first edit after a restart, exactly as it did before.
+     */
+    await AsyncStorage.clear();
+    const ours = await fixtureModel.generateProgram(athlete());
+    await db.saveProfile(athlete());
+    await db.saveProgram(ours);
+
+    let api: any = null;
+    let tree: renderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = renderer.create(
+        React.createElement(AppProvider, null, React.createElement(Probe, { hold: (a: any) => { api = a; } })),
+      );
+    });
+    await settle();
+
+    let told: unknown = null;
+    await act(async () => { told = await api.updateProfileInfo({ bodyMap: { Back: 'emphasis' } }); });
+    await settle();
+    expect(told).toBe(true);
+    expect(shapeOf(await db.loadProgram())).not.toEqual(shapeOf(ours));
+
+    await act(async () => { tree!.unmount(); });
   });
 });

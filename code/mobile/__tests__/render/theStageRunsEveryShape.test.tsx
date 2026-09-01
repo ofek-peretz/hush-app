@@ -148,12 +148,24 @@ describe('the readings', () => {
   });
 
   it('reads a distance in the unit the athlete would say', () => {
-    // The record is metres always; only the reading changes.
-    expect(distanceOf(30)).toEqual({ figure: '30', unit: 'm' });
-    expect(distanceOf(400)).toEqual({ figure: '400', unit: 'm' });
-    expect(distanceOf(1000)).toEqual({ figure: '1', unit: 'km' });
-    expect(distanceOf(5000)).toEqual({ figure: '5', unit: 'km' });
-    expect(distanceOf(18000)).toEqual({ figure: '18', unit: 'km' });
-    expect(distanceOf(2500)).toEqual({ figure: '2.5', unit: 'km' });
+    /*
+     * ⛔ THE UNITS WERE LATIN LITERALS AND THIS TEST PINNED THEM (2026-08-28). It asserted
+     * `unit: 'm'` and `unit: 'km'` — the English strings `distanceOf` returned without ever asking
+     * the locale — so a Hebrew athlete read `40 m` on the carry stage while every other surface in
+     * the app said `מ׳`. The law was doing its real job (the RECORD is metres always; only the
+     * READING changes) through literals that also froze the language.
+     *
+     * It asks the product for the words now, so what it pins is the RULE: under a kilometre the
+     * reading is metres, at or above it kilometres, and the figure is exact when it can be.
+     */
+    const m = tg('cardio.metresUnit');
+    const km = tg('cardio.km');
+    expect(m).not.toBe(km); // the guard on the guard — two units, or this proves nothing
+    expect(distanceOf(30, tg)).toEqual({ figure: '30', unit: m });
+    expect(distanceOf(400, tg)).toEqual({ figure: '400', unit: m });
+    expect(distanceOf(1000, tg)).toEqual({ figure: '1', unit: km });
+    expect(distanceOf(5000, tg)).toEqual({ figure: '5', unit: km });
+    expect(distanceOf(18000, tg)).toEqual({ figure: '18', unit: km });
+    expect(distanceOf(2500, tg)).toEqual({ figure: '2.5', unit: km });
   });
 });

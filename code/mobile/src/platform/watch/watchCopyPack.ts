@@ -29,7 +29,6 @@
  * and every line here is mixed, because the exercise names stay English by their own ruling.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 

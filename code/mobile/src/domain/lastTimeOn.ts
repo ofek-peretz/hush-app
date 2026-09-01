@@ -25,7 +25,6 @@
  * the athlete would be looking at one and being coached from the other.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -39,6 +38,26 @@ export interface LastTime {
   loadKg: number | null;
   /** Every set's reps, in the order she did them. */
   reps: number[];
+  /**
+   * ⛔ AND EVERY SET'S LOAD BESIDE THEM (founder, 2026-08-26): *"אני עדיין לא מבין איך אתה הולך
+   * להציג את החזרות והמשקלים מהאימון הקודם … כרגע אני לא רואה את זה."*
+   *
+   * `loadKg` above is the load she FINISHED on — the right single answer for the coach, and the
+   * right one for a delta. It is the WRONG answer for a row that draws each set, because Loop 1
+   * moves the load mid-exercise: printing one figure over four sets she did at two different
+   * weights states something that did not happen.
+   *
+   * Parallel to `reps` by construction — same filter, same order, same length — so `loads[i]` is
+   * always the load of `reps[i]`. `null` where the set carried none (a bodyweight lift).
+   *
+   * ⚠️ IT DELIBERATELY DOES NOT GO TO THE WRIST, and that is not an asymmetry left standing —
+   * checked against the Swift on 2026-08-26. The watch draws last time as REP GHOSTS, one per slot
+   * (`WatchScreens.setFigures` → `mirror.lastReps`), and it draws no per-set load at all. The one
+   * thing it spends `lastLoadKg` on is the ↑/↓ delta against today's target (`newsKg`), where the
+   * load she FINISHED at is the correct comparand — the same rule `loadNews` follows on the phone.
+   * Sending `loads` would add a field with no reader and a schema to keep in step for it.
+   */
+  loads: (number | null)[];
 }
 
 /**
@@ -66,6 +85,7 @@ export function lastTimeOn(
       ago: Number.isFinite(at) ? Math.max(0, Math.round((nowMs - at) / 86_400_000)) : 0,
       loadKg: sets[sets.length - 1].actualWeight ?? null,
       reps: sets.map((x) => x.actualReps),
+      loads: sets.map((x) => x.actualWeight ?? null),
     };
   }
   return null;

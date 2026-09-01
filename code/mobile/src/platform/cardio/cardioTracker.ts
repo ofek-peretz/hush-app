@@ -36,20 +36,17 @@
  * The GPS lock state is part of the sample (`gps`) so the screen can say "acquiring" / "location
  * off" instead of rendering confident zeros.
  */
-// @ts-nocheck
 
 // 
 
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import * as Location from 'expo-location';
-import type { CardioGait } from '@/data/local/models';
 import {
   beginRun,
   ingestStride,
   endRun,
-  heartRateReadings,
   ingestFix,
-  setGait,
   setGps,
   setHeartRate,
   setPaused,
@@ -87,19 +84,27 @@ const HR_POLL_MS = 5_000;
 const STRIDE_POLL_MS = 5_000;
 
 // The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
-export { fmtClock, fmtPace, hrZone, haversineM, kcalForKm, kcalForSegment, kcalPerKgKm, gaitFromPace, movementCredit, segmentCounts } from './cardioMath';
+// ⚠️ `kcalForKm` is NOT re-exported any more (2026-08-18): it prices a whole distance at a DECLARED
+// gait, and nothing has declared one since v7. Every caller here bills per segment at the pace it
+// was covered at (`kcalForSegment`). The function keeps its home in `cardioMath`, where its own
+// tests live; it simply has no business being handed out from the live tracker.
+export { fmtClock, fmtPace, hrZone, haversineM, kcalForSegment, kcalPerKgKm, gaitFromPace, movementCredit, segmentCounts } from './cardioMath';
 export type { CardioSample, GpsState } from './cardioRun';
 export { heartRateReadings } from './cardioRun';
 
 /**
  * Live cardio sample for an activity. `active` spans the whole activity (GPS stays warm across
- * pauses); `paused` gates accumulation. `liveGait` can change mid-activity (the athlete toggles
- * run/walk); calories and split attribution follow it.
+ * pauses); `paused` gates accumulation.
+ *
+ * ⚠️ THERE IS NO GAIT ARGUMENT (2026-08-18). This docblock still described "the athlete toggles
+ * run/walk mid-activity; calories and split attribution follow it" — a toggle deleted in v7, and a
+ * behaviour that has not existed since: every credited stretch is billed at the pace it was actually
+ * covered at, and every finished kilometre is labelled from its own split. The hook took a
+ * `liveGait` and handed it to a setter that wrote a field nobody read.
  */
 export function useCardioTracker(
   active: boolean,
   paused: boolean,
-  liveGait: CardioGait,
   weightKg?: number | null,
   /**
    * ⛔ INDOORS — a treadmill, a belt, a track under a roof (founder, 2026-08-12).
@@ -114,11 +119,8 @@ export function useCardioTracker(
   const [sample, setSample] = useState<CardioSample>(ZERO);
   const startedRef = useRef(false);
 
-  // The gait and the weight are facts about the run, not about this component — they go straight
-  // through to the run so a BACKGROUND fix prices its calories the same way a foreground one does.
-  useEffect(() => {
-    setGait(liveGait);
-  }, [liveGait]);
+  // The weight is a fact about the run, not about this component — it goes straight through to the
+  // run so a BACKGROUND fix prices its calories the same way a foreground one does.
   useEffect(() => {
     setWeight(weightKg);
   }, [weightKg]);
@@ -126,7 +128,7 @@ export function useCardioTracker(
   // ── The activity's own lifetime: one run, one background task, released together.
   useEffect(() => {
     if (!active) return;
-    beginRun(liveGait, weightKg, indoor);
+    beginRun(weightKg, indoor);
     startedRef.current = true;
     setSample(snapshot());
     return () => {
@@ -160,9 +162,14 @@ export function useCardioTracker(
     };
     read();
     const id = setInterval(read, HR_POLL_MS);
+    // Foreground return → read now (the same catch-up the stride poll makes; see its note).
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') read();
+    });
     return () => {
       alive = false;
       clearInterval(id);
+      sub.remove();
     };
   }, [active]);
 
@@ -231,6 +238,14 @@ export function useCardioTracker(
       })().catch(() => undefined);
       return ready;
     };
+    /*
+     * ⚠️ AND THE RETURN TO FOREGROUND READS IMMEDIATELY (same QA finding, the indoor half).
+     * Indoors there is no location session, so iOS suspends JS while the screen is off and the
+     * poll freezes with it — by design: Core Motion keeps counting in HARDWARE, and the cumulative
+     * read heals the whole gap in one delta. What must not happen is her reopening onto a frozen
+     * figure for up to five more seconds while the interval winds back up. The AppState listener
+     * below reads the instant she is back.
+     */
     const read = () => {
       void ensureSource()
         .then(() => health.distanceSince(startedAt))
@@ -254,9 +269,13 @@ export function useCardioTracker(
     };
     read();
     const id = setInterval(read, STRIDE_POLL_MS);
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') read();
+    });
     return () => {
       alive = false;
       clearInterval(id);
+      sub.remove();
     };
   }, [active, indoor]);
 
@@ -281,17 +300,33 @@ export function useCardioTracker(
           return;
         }
         /**
-         * ════ A RUN HAPPENS WITH THE PHONE IN A POCKET (founder 2026-07-29) ════
+         * ════ ⛔ THE TASK STARTS ON THE FOREGROUND GRANT — "ALWAYS" WAS NEVER REQUIRED ════
          *
-         * Asked AFTER the foreground grant, and only as a run is STARTING: a background-location
-         * prompt at launch, for an app she has not yet run with, is the kind of ask that gets
-         * refused once and then forever. A refusal is not a failure — she keeps exactly the
-         * behaviour she has today, and the run records perfectly while the screen is on. So this
-         * gates nothing; it only ever adds.
+         * FOUNDER, device QA 2026-08-23, and it was critical: *"כשאני סוגר את המסך המטרים
+         * והמדדים לא משתנים. כאילו זה היה בהפסקה."* He locked the phone mid-run and the whole
+         * run froze — metres, calories, the kilometre notes, everything.
+         *
+         * The root cause was one conditional: `if (bg?.granted) startCardioLocationTask()`. The
+         * TaskManager task was gated on the "Always" location upgrade — and expo-location's own
+         * source says the opposite in as many words (*"As a user-initiated foreground service,
+         * this does NOT require the background location permission"*): a session STARTED in the
+         * foreground keeps delivering in the background on the When-In-Use grant alone, because
+         * the task's own consumer sets `allowsBackgroundLocationUpdates = YES` and the app
+         * declares `UIBackgroundModes: location`. That is how every workout app on the store
+         * records with While-Using.
+         *
+         * Without the task, iOS SUSPENDS the JS runtime seconds after the screen locks — the
+         * foreground watcher's provider explicitly sets `allowsBackgroundLocationUpdates = false`
+         * — so nothing ran at all: not the accumulator, not the heart-rate poll, not the Live
+         * Activity updates, not the per-kilometre notes. A pocketed phone IS the run's normal
+         * state, which is what made this critical.
+         *
+         * So the task starts on the grant the run already has. The "Always" request stays, AFTER
+         * the start and still un-gating: it buys relaunch-after-eviction delivery, and a refusal
+         * now costs exactly nothing.
          */
-        const bg = await Location.requestBackgroundPermissionsAsync().catch(() => null);
-        if (cancelled) return;
-        if (bg?.granted) void startCardioLocationTask();
+        void startCardioLocationTask();
+        void Location.requestBackgroundPermissionsAsync().catch(() => null);
 
         sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },

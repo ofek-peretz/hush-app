@@ -3,7 +3,6 @@
  * lengths, so every isolation and machine rig places the same person and only authors what its
  * template actually moves. All functions are pure and return fresh joint maps.
  */
-// @ts-nocheck
 
 // 
 
@@ -64,6 +63,61 @@ export function seatedFrontCore(cx: number) {
     toeR: { x: cx + 25, y: FLOOR_Y },
     heelL: { x: cx - 14, y: FLOOR_Y },
     toeL: { x: cx - 25, y: FLOOR_Y },
+  };
+}
+
+/**
+ * HINGED-SEATED front core — sat on the bench with the chest folded down over the thighs, which is
+ * the position a bent-over reverse fly is DEFINED by and the only thing separating it from a
+ * seated lateral raise.
+ *
+ * The pitch is a real rotation in depth, not a shortened line: the trunk turns `pitchDeg` forward
+ * about the hip, so face-on it projects to a short torso with the head low and NEARER the camera,
+ * which is exactly how a folded-over athlete looks from in front. Returns the depths alongside the
+ * drawn points, because a body that leans has to say by how much — `z` is what makes the near/far
+ * ink read the fold, and what stops the auditor from measuring a 20u trunk against a 48u bone.
+ *
+ * The arms are left where the caller puts them, and for this family that matters: an arm hanging
+ * from a folded athlete still hangs STRAIGHT DOWN, and still opens to the sides, so its whole sweep
+ * stays in the image plane and projects at full length. The fold costs the torso and nothing else.
+ */
+export function hingedSeatedCore(cx: number, pitchDeg: number) {
+  const r = (pitchDeg * Math.PI) / 180;
+  const up = { y: -Math.cos(r), z: Math.sin(r) }; // hip → neck: up, and forward toward the camera
+  const HIP_Y = 150;
+  const neckY = HIP_Y + up.y * ATHLETE.torso;
+  const neckZ = up.z * ATHLETE.torso;
+  const shY = neckY - up.y * 2;
+  const shZ = neckZ - up.z * 2;
+  return {
+    j: {
+      hipC: { x: cx, y: HIP_Y },
+      neckBase: { x: cx, y: neckY },
+      head: { x: cx, y: neckY + up.y * ATHLETE.neck },
+      shoulderR: { x: cx + 15.5, y: shY },
+      shoulderL: { x: cx - 15.5, y: shY },
+      hipR: { x: cx + 9, y: HIP_Y },
+      hipL: { x: cx - 9, y: HIP_Y },
+      kneeR: { x: cx + 17, y: 150 },
+      kneeL: { x: cx - 17, y: 150 },
+      ankleR: { x: cx + 19, y: 186 },
+      ankleL: { x: cx - 19, y: 186 },
+      heelR: { x: cx + 14, y: FLOOR_Y },
+      toeR: { x: cx + 25, y: FLOOR_Y },
+      heelL: { x: cx - 14, y: FLOOR_Y },
+      toeL: { x: cx - 25, y: FLOOR_Y },
+    },
+    z: {
+      neckBase: neckZ,
+      head: neckZ + up.z * ATHLETE.neck,
+      shoulderR: shZ,
+      shoulderL: shZ,
+      /* The LEGS keep the plane the seated core has always drawn them in. Their thighs are already
+         a documented foreshortening — they point at the lens — and pinning a depth to them without
+         solving the knee from both bones just trades a silent approximation for a loud wrong
+         number: at z 18 the shank measures 40.3 against a canonical 37. The fold is a fact about
+         the TRUNK, and only the trunk states it. */
+    },
   };
 }
 

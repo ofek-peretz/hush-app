@@ -80,7 +80,7 @@ describe('⛔ the movement she reported is not handed back to her', () => {
   it('a PAIN report removes the muscle AND the lifts that muscle owns', async () => {
     const leaked: string[] = [];
     for (const site of SITES) {
-      if (site === 'Core') continue; // supplemental — its own path (addWeeklyCore), tested there
+      if (site === 'Core') continue; // supplemental — its own path (addWeeklyCore), tested below
       const p = await build(hurt(site, 'pain'));
       if (musclesIn(p).has(site)) leaked.push(`${site} pain → still trained`);
     }
@@ -164,5 +164,69 @@ describe('⛔ and it ends by itself', () => {
     const p = await build(stale);
     expect(musclesIn(p).has('Shoulders')).toBe(true);
     expect([...patternsIn(p)].some((pat) => allPatternsFor('Shoulders').includes(pat as string))).toBe(true);
+  });
+});
+
+/**
+ * ⛔ THE CORE IS DEALT ON ITS OWN PATH, AND THAT PATH DID NOT ASK (2026-08-19).
+ *
+ * The suite above skips Core with the note "supplemental — its own path (addWeeklyCore), tested
+ * there", and there was no there: no test in this repo named `addWeeklyCore` and a pain report in
+ * the same breath. `addWeeklyCore` took no ban argument at all, so it dealt straight out of
+ * `CORE_POOL` whatever she had reported.
+ *
+ * A TWINGE is the case that bites. It bans `crunch` and `rotation` and — correctly — does NOT rest
+ * the muscle, so Core stays on and the supplemental path runs. `pain` and `sharp` were safe only by
+ * accident, because they switch the muscle off and `coreStance === 'off'` returns early.
+ */
+describe('⛔ a core report reaches the core she is actually dealt', () => {
+  const coreLifts = (p: Program) =>
+    p.days.flatMap((d) => d.slots).map((s) => exerciseById(s.exerciseId)).filter((e) => e && e.muscle === 'Core');
+
+  /*
+   * ⚠️ SWEPT ACROSS FREQUENCIES, AND THAT IS NOT THOROUGHNESS — IT IS THE ONLY WAY THIS TEST WORKS.
+   *
+   * `addWeeklyCore` walks `CORE_POOL` from a cursor derived from her days per week, so a single
+   * four-day athlete lands on ONE entry. The first version of this test did exactly that, passed,
+   * and passed just as happily with the fix ripped out — the cursor happened to sit on a leg raise,
+   * which a twinge does not ban. A test that cannot fail is worse than no test. The sweep visits
+   * every cursor position, so the banned entries are certainly reached.
+   */
+  const FREQUENCIES = [2, 3, 4, 5, 6];
+  const atDays = (base: Profile, days: number): Profile => ({ ...base, daysPerWeek: days });
+
+  it('a TWINGE takes the banned movements out of the supplemental core, at every frequency', async () => {
+    const banned = patternsAt('Core', 'twinge');
+    expect(banned.length).toBeGreaterThan(0); // the test is worthless if the grade bans nothing
+
+    const leaked: string[] = [];
+    let drawnAnywhere = 0;
+    for (const days of FREQUENCIES) {
+      const drawn = coreLifts(await build(atDays(hurt('Core', 'twinge'), days)));
+      drawnAnywhere += drawn.length;
+      for (const e of drawn) if (banned.includes(e.pattern)) leaked.push(`${days}d → ${e.id} (${e.pattern})`);
+    }
+    // A twinge does not rest the muscle, so she must still be given core work…
+    expect(drawnAnywhere).toBeGreaterThan(0);
+    // …and none of it may be a movement she just reported.
+    expect(leaked).toEqual([]);
+  });
+
+  it('⚠️ and the ban does not quietly cost her the work — she gets as much core as before', async () => {
+    /*
+     * A banned entry must be walked PAST, not skipped in place. Skipping it would take the movement
+     * away twice: once from the pool, and again from her allowance.
+     */
+    for (const days of FREQUENCIES) {
+      const before = coreLifts(await build(atDays(hurt('Chest', 'twinge'), days))).length; // unrelated report
+      const after = coreLifts(await build(atDays(hurt('Core', 'twinge'), days))).length;
+      expect({ days, after }).toEqual({ days, after: before });
+    }
+  });
+
+  it('a PAIN report on the core takes the core out entirely', async () => {
+    for (const days of FREQUENCIES) {
+      expect(coreLifts(await build(atDays(hurt('Core', 'pain'), days)))).toEqual([]);
+    }
   });
 });

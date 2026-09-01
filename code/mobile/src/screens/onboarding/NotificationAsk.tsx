@@ -18,14 +18,13 @@
  * untouched and never asks again from here — iOS gives one prompt, and spending it on someone who
  * just said no is how an app loses it for good.
  */
-// @ts-nocheck
 
 // 
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '@/components/ds';
+import { Arrive, Button } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { RangeMark } from '@/components/RangeMark';
 import { useCopy } from '@/i18n/useCopy';
@@ -58,7 +57,11 @@ export function NotificationAsk({ onAllow, onDecline }: NotificationAskProps) {
         {/* The brand's mark in CREAM here — this screen carries no signal, it makes a promise. */}
         <RangeMark width={44} height={18} />
 
-        <Text style={styles.title} accessibilityRole="header">{t('notifAsk.title')}</Text>
+        {/* ✦ IT ARRIVES (2026-08-27) — `Arrive` was built for the founder's largest note, that a
+            screen should ARRIVE rather than appear (2026-08-12). See `HomeView` for the account. */}
+        <Arrive order={0}>
+          <Text style={styles.title} accessibilityRole="header">{t('notifAsk.title')}</Text>
+        </Arrive>
 
         {/* ════ THE SCREEN HAS TO EARN THE YES (founder 2026-07-28) ════
             It spent two of its four lines on what Hush will NOT do — "never a nudge for missing a
@@ -78,6 +81,12 @@ export function NotificationAsk({ onAllow, onDecline }: NotificationAskProps) {
         <View style={styles.rows}>
           <Row kind="will" text={t('notifAsk.willWeekly')} />
           <Row kind="will" text={t('notifAsk.willRest')} />
+          {/* ⛔ THIS LINE ENDED `— הטלפון נשאר בכיס` UNTIL 2026-08-27, and so did the one above
+              it (`כדי שהטלפון יישאר בכיס`) — the same promise, twice, on a three-line list. This is
+              the screen that asks her to let the app interrupt her, where every word has to earn
+              the yes; a reason repeated is a reason weakened. It stays on the REST line, where the
+              pocket is the whole point of a tap, and comes off here, where the value is the
+              kilometre and its pace. Same edit in both languages. */}
           <Row kind="will" text={t('notifAsk.willReport')} last />
         </View>
       </View>

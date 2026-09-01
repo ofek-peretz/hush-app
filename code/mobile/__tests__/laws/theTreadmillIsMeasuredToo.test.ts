@@ -41,7 +41,7 @@ describe('the indoor run credits what the phone measured', () => {
      * report 15 km inside a minute — the same defect the GPS path's monotonic guard exists for,
      * arriving through a different door.
      */
-    beginRun('run', 70, true);
+    beginRun(70, true);
     // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
     setPaused(false);
     ingestStride(0, 1_000); // the cursor only
@@ -52,7 +52,7 @@ describe('the indoor run credits what the phone measured', () => {
   });
 
   it('⚠️ the first reading sets the cursor and credits nothing — there is no interval yet', () => {
-    beginRun('run', 70, true);
+    beginRun(70, true);
     // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
     setPaused(false);
     ingestStride(1.4, 1_000); // she walked to the gym with the phone in her pocket
@@ -60,7 +60,7 @@ describe('the indoor run credits what the phone measured', () => {
   });
 
   it('⛔ a reading that goes backwards is dropped, not credited as negative distance', () => {
-    beginRun('run', 70, true);
+    beginRun(70, true);
     // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
     setPaused(false);
     ingestStride(0, 1_000);
@@ -72,7 +72,7 @@ describe('the indoor run credits what the phone measured', () => {
   it('⚠️ standing still on a moving belt credits nothing and blanks the pace', () => {
     // The whole point of the outdoor gates, arriving on the indoor path: a phone that is not moving
     // must read 0.00 km and "--:--", never a pace inferred from elapsed time.
-    beginRun('run', 70, true);
+    beginRun(70, true);
     // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
     setPaused(false);
     ingestStride(0, 1_000);
@@ -88,7 +88,7 @@ describe('the indoor run credits what the phone measured', () => {
      * Otherwise the walk to the water fountain arrives in one lump the moment she resumes — the
      * distance is real, the run it would be attributed to is not.
      */
-    beginRun('run', 70, true);
+    beginRun(70, true);
     // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
     setPaused(false);
     ingestStride(0, 1_000);
@@ -101,7 +101,7 @@ describe('the indoor run credits what the phone measured', () => {
 
   it('⚠️ an OUTDOOR run ignores stride readings entirely', () => {
     // Both sources deliver whenever the app is on screen. Crediting both would double every run.
-    beginRun('run', 70, false);
+    beginRun(70, false);
     setPaused(false);
     expect(isIndoor()).toBe(false);
     ingestStride(0, 1_000);
@@ -110,7 +110,7 @@ describe('the indoor run credits what the phone measured', () => {
   });
 
   it("⚠️ and it is never 'acquiring' — there is no satellite to wait for", () => {
-    beginRun('run', 70, true);
+    beginRun(70, true);
     expect(snapshot().gps).toBe('ready');
   });
 });
@@ -135,7 +135,7 @@ describe('⛔ the gait question answers itself indoors, exactly as it does outdo
   it('⚠️ and a treadmill segment is billed at its OWN pace, not the session average', () => {
     // A walk-run interval on a belt is the case a single declared gait gets wrong in both
     // directions; `creditDistance` bills each segment as it is credited.
-    beginRun('run', 70, true);
+    beginRun(70, true);
     // ⚠️ A RUN BEGINS PAUSED (`EMPTY().paused === true`) — the 3·2·1 countdown is what starts it.
     setPaused(false);
     ingestStride(0, 0);
@@ -163,7 +163,11 @@ describe('⛔ and the wire reaches the screen', () => {
     expect(tracker()).toContain('if (!active || !indoor) return;');
     expect(tracker()).toContain('if (!active || indoor) return;');
     expect(tracker()).toMatch(/health\s*\.distanceSince\(startedAt\)/);
-    expect(tracker()).toContain('beginRun(liveGait, weightKg, indoor);');
+    /* ⚠️ `beginRun(weightKg, indoor)` since 2026-08-18 — the gait argument is gone, with the setter
+       and the field behind it. Nothing had read a DECLARED gait since v7: the energy is priced per
+       segment at the pace it was covered at, indoors exactly as out. What this law is about is
+       unchanged — the MODE has to reach the run, or the treadmill is measured as a street. */
+    expect(tracker()).toContain('beginRun(weightKg, indoor);');
   });
 
   it('⚠️ a source that drops out mid-run keeps what it already credited', () => {

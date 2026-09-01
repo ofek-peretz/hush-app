@@ -154,14 +154,37 @@ describe('⛔ the day label is a WORD, and the general law cannot see it', () =>
      * ⚠️ AND IT NOW GUARDS TWO STYLES. The position (`letter`) is digits and could survive mono;
      * `dayTag` is the translated weekday and cannot. The blind spot did not close when the calendar
      * went — it moved.
+     *
+     * ── ⚠️ WHAT THIS ASSERTS CHANGED ON 2026-08-27, AND WHY THAT IS NOT A WEAKENING ────────────
+     * It used to demand the literal string `font.sans` inside each style, which pinned the SHAPE of
+     * one repair — a hard-set face — rather than the guarantee. The repair was half of one: the face
+     * was forced to sans and the `.16em` legend tracking was left sitting on top of it, so `א` was
+     * drawn in the right face and then pushed apart from nothing. Tracking and face are one question
+     * (*"can mono draw this string?"*), and answering half of it in a StyleSheet is what let the
+     * other half survive.
+     *
+     * Both labels go through `<Legend>` now, which asks that question ONCE and sets the face and
+     * the tracking from the single answer. So this law asks for the guarantee: the label is a
+     * `Legend`, and no style beside it re-hard-sets a face that would override what `Legend` chose.
+     * A future hard-set `font.mono` fails here exactly as it did before.
      */
     const src = read('src/components/WeekColumn.tsx');
+
+    /* Each label is drawn BY the component whose job is choosing the face per string. */
+    for (const style of ['styles.letter', 'styles.dayTag']) {
+      const at = src.indexOf(style);
+      expect({ style, found: at >= 0 }).toEqual({ style, found: true });
+      /* Walk back to the tag that opens this element. */
+      const tag = src.lastIndexOf('<', at);
+      expect({ style, drawnBy: src.slice(tag, tag + 7) }).toEqual({ style, drawnBy: '<Legend' });
+    }
+
+    /* …and neither style smuggles a face back in underneath it. */
     for (const name of ['  letter: {', '  dayTag: {']) {
       const at = src.indexOf(name);
       expect({ name, found: at >= 0 }).toEqual({ name, found: true });
       const style = src.slice(at, src.indexOf('},', at));
-      expect({ name, sans: style.includes('font.sans') }).toEqual({ name, sans: true });
-      expect({ name, mono: style.includes('font.mono') }).toEqual({ name, mono: false });
+      expect({ name, family: /font\.(mono|sans|serif)/.test(style) }).toEqual({ name, family: false });
     }
   });
 

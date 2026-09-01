@@ -15,7 +15,6 @@
  * session machine. The bridge holds no workout database; it keeps only the last
  * published mirror (to validate incoming intents) and a de-dupe set.
  */
-// @ts-nocheck
 
 // 
 
@@ -54,8 +53,17 @@ export interface WatchTransport {
    *
    * `false` means "the OS refused it", never "the watch did not see it" — delivery is not
    * knowable from here. The STUB returns true: no watch target is not a failure to send.
+   *
+   * ⚠️ AND THE OS ANSWERS ASYNCHRONOUSLY (build-59 wrist silence, 2026-08-26): the native call is
+   * an Expo AsyncFunction, so a refusal arrives as a PROMISE REJECTION that a synchronous
+   * try/catch here can never meet — `sendState` was returning `true` for frames the OS threw
+   * away. Late refusals surface on `onSendFailure`; the sync `false` remains for transports that
+   * can refuse inline.
    */
   sendState(env: WatchStateEnvelope): boolean;
+  /** Late (async) OS refusals of `sendState` — the reason string, for telemetry. Optional: the
+   *  stub and test fakes never fail late. Returns an unsubscribe fn. */
+  onSendFailure?(cb: (reason: string) => void): () => void;
   /** Subscribe to raw inbound intents from the watch. Returns an unsubscribe fn. */
   onIntent(cb: (raw: unknown) => void): () => void;
   /** Subscribe to reachability changes. Returns an unsubscribe fn. */
@@ -190,6 +198,15 @@ export class WatchSession {
     this.unsub.push(
       this.d.transport.onReachabilityChange((r) => this.handleReachability(r)),
     );
+    // Late OS refusals (async — see the interface note). Counted with the REASON, which is the
+    // one string that names the layer that died: not-activated, not-paired, payload-too-large.
+    if (this.d.transport.onSendFailure) {
+      this.unsub.push(
+        this.d.transport.onSendFailure((reason) =>
+          this.d.track(WATCH_EVENTS.statePublishFailed, { phase: 'os_refused', reason: reason.slice(0, 200) }),
+        ),
+      );
+    }
   }
 
   /** Begin mirroring: subscribe to the transport and emit session-started. */

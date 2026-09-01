@@ -24,7 +24,6 @@
  * its own screen.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -51,6 +50,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button, Legend, TextField, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { track } from '@/platform/telemetry';
+import { FUNNEL_EVENTS } from '@/platform/events';
+import * as Localization from 'expo-localization';
+import { unitsForDevice } from '@/domain/unitsForDevice';
+import { unitLabel } from '@/domain/schedule';
 import { useApp } from '@/state/stores/appStore';
 /*
  * ⛔ THIS LINE WAS MISSING AND IT CRASHED THE WHOLE APP (found 2026-08-12, in a browser).
@@ -63,19 +67,50 @@ import { useApp } from '@/state/stores/appStore';
  * ⚠️ AND NOTHING CAUGHT IT: this file carries `@ts-nocheck`, so the typechecker never looked, and
  * no test mounts `AboutYou`. 2,639 laws, a clean `tsc`, and the app did not start.
  */
-import { line, color, font, textScale } from '@/design/tokens';
+import { line, color, font, textScale, signal} from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
 
 /** Where each rule opens — a place to turn from, not a default anybody keeps. */
 const WEIGHT_OPENS_ON: Record<'kg' | 'lb', number> = { kg: 70, lb: 155 };
-const DAYS_OPENS_ON = 3;
+/*
+ * ⛔ THE FREQUENCY WHEEL LEFT THIS SCREEN (founder 2026-08-29): *"אני חושב שצריך לעשות שם ומשקל
+ * בתחילת המסך ולהוריד את כמות האימונים בשבוע. כי זה שייך לבניית התוכנית."*
+ *
+ * He is right on the classification, and the code had already half-admitted it: two of the three
+ * doors on step 3 IGNORE the answer given here. A template's frequency is its own, a week she
+ * writes by hand is counted from the days she wrote, and `PlanBuilder.onSave` re-stamps
+ * `daysPerWeek` from the sealed week regardless of what this wheel said. Only ONE door reads it —
+ * "build a programme for me" — so it was a question asked of everybody to serve a third of them,
+ * two screens before the thing it decides.
+ *
+ * It is asked in that door now, at the moment it is used (`PlanBuilder`, `DaysAsk`), and
+ * `DAYS_OPENS_ON` moved with it. What is left here is what the app cannot learn any other way and
+ * what every path needs: her name, her bodyweight, and the gender every Hebrew line conjugates to.
+ *
+ * ⚠️ THE RELAY STILL CARRIES THE FIELD, and `ConnectHealth` still sends 0 when nobody has answered
+ * — `theAppNeverAnswersForHer` is the law, and 0 is how "not asked" is spelled. Deleting a question
+ * may never turn into the app quietly answering it.
+ */
 
 export function AboutYou({ navigation }: Props) {
   const { t } = useCopy();
+  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. The first answering step. */
+  React.useEffect(() => {
+    void track(FUNNEL_EVENTS.aboutYouReached);
+  }, []);
   const app = useApp();
-  const units = app.profile?.units ?? 'kg';
+  /*
+   * ⛔ THE PHONE ALREADY KNOWS — AND THIS SCREEN ASKED THE ONE PLACE THAT DOES NOT.
+   *
+   * `app.profile` is null for the whole intake (the profile is written at the end, on accept), so
+   * `?? 'kg'` was not a fallback: it was the answer, every time. An American athlete set her
+   * bodyweight on a 30–250 wheel opening at 70 and was then handed a profile in pounds — the exact
+   * P0b.1 defect `ConnectHealth` fixed for the units it forwards, one screen too late to reach the
+   * only screen that asks for a weight. Same call, asked here.
+   */
+  const units = app.profile?.units ?? unitsForDevice(Localization.getLocales()[0]);
   /*
    * ⛔ THE NAME IS ALREADY OURS (founder 2026-08-04): *"onboarding is something people fill in and
    * move on."*
@@ -98,20 +133,13 @@ export function AboutYou({ navigation }: Props) {
    */
   const [sex, setSex] = useState<'female' | 'male' | null>(app.profile?.sex ?? null);
   /*
-   * ⛔ THE TWO RULERS CAME BACK HERE (founder 2026-08-10): *"תמשיך למיזוג המסכים."*
-   *
-   * `YourTraining` held three wheels — days, bodyweight, age — and once age left with experience
-   * (see the note below), the intake was FOUR answers spread over two screens, each half empty.
-   * Two half-screens is not a gentler form than one full one; it is the same form with an extra tap
-   * in the middle of it. The screen now asks everything a person is and everything she sets, and
-   * the next thing she sees is her own body.
+   * ⛔ THE TWO RULERS CAME BACK HERE (founder 2026-08-10): *"תמשיך למיזוג המסכים."* — and one of
+   * them left again on 2026-08-29; see the note over the constant above. What that merge was
+   * actually right about survives: one screen, not two half-empty ones.
    *
    * ⚠️ The wheel itself is untouched, on his standing instruction: *"אל תיגע בפונקציונליות של
-   * הסרגלים, הם עובדים מושלם."* Same `WheelPicker`, same ranges, same opening values.
+   * הסרגלים, הם עובדים מושלם."* Same `WheelPicker`, same range, same opening value.
    */
-  const [days, setDays] = useState<number>(
-    app.profile?.daysPerWeek && app.profile.daysPerWeek > 0 ? app.profile.daysPerWeek : DAYS_OPENS_ON,
-  );
   const [weight, setWeight] = useState<number>(() => {
     const known = app.profile?.weightKg;
     if (known && known > 0) return units === 'lb' ? Math.round(known * 2.2046226) : known;
@@ -139,16 +167,44 @@ export function AboutYou({ navigation }: Props) {
    * AI's fact pack) and the server payload, and the AI is out of the front door.
    */
 
+  /* "BODYWEIGHT · KG" — see the note at the wheel. `Legend` uppercases, so the unit arrives as the
+     app spells it everywhere else (`unitLabel`), and VoiceOver reads the same line. */
+  const weightLegend = `${t('ob.weightLegend')} · ${unitLabel(units)}`;
+
   function pickSex(v: string) {
     const next = v as 'female' | 'male';
     setSex(next);
+    setNeedsSex(false);
     // The rest of onboarding speaks to this person — in Hebrew, in their gender. Published the
     // moment it is picked, not at the end: the screens that follow already address her directly.
     app.setPendingSex(next);
   }
 
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ A DISABLED BUTTON THAT WILL NOT SAY WHY IS A DEAD END (founder's screenshots, 2026-08-21).
+   *
+   * `Continue` sat grey with `disabled={!sex}` and nothing on the screen named the reason. There are
+   * four things to fill in here and only one of them is required, so an athlete who typed her name
+   * and turned both wheels was left pressing a button that refused her without a word — on the step
+   * she cannot go around.
+   *
+   * The button is live now and the screen ANSWERS when she presses it: one line where the missing
+   * thing is, and the line clears the moment she picks. Grey-with-no-explanation is the one pattern
+   * that leaves her nowhere to go.
+   *
+   * ⚠️ THE LINE CARRIES NO GENDER, and it is the only line in the app that cannot. Her sex is what
+   * this control is FOR, so at the moment it is shown the app does not yet know how to conjugate a
+   * verb at her — see `pickSex`, which publishes the gender the instant it is picked. `צריך לבחור`
+   * is impersonal in Hebrew and stays true either way.
+   */
+  const [needsSex, setNeedsSex] = useState(false);
+
   function onContinue() {
-    if (!sex) return;
+    if (!sex) {
+      setNeedsSex(true);
+      return;
+    }
     Keyboard.dismiss();
     app.setPendingName(name);
     app.setPendingSex(sex);
@@ -156,13 +212,13 @@ export function AboutYou({ navigation }: Props) {
     const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
     // `OnboardingInputs` and there must be ONE place that does.
-    navigation.navigate('ConnectHealth', { sex, weightKg: kg, daysPerWeek: days });
+    navigation.navigate('ConnectHealth', { sex, weightKg: kg });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 1, total: 3 }}
+      progress={{ index: 2, total: 4 }}
       /*
        * ⛔ THE BODY OF THIS STEP IS TWO HORIZONTAL WHEELS, so it cannot also be a step you leave
        * with a horizontal drag (founder 2026-07-13): every attempt to set a bodyweight would drag
@@ -182,8 +238,6 @@ export function AboutYou({ navigation }: Props) {
             block
             label={t('ob.continue')}
             onPress={onContinue}
-            /* Sex has no default, so there is genuinely nothing to continue with until she picks. */
-            disabled={!sex}
           />
           {/*
             ⛔ THE DOOR FOR A PROGRAMME SHE ALREADY HAS IS NOT HERE ANY MORE (founder 2026-08-12).
@@ -202,11 +256,14 @@ export function AboutYou({ navigation }: Props) {
     >
       <View style={styles.rows}>
         {/*
-          ⚠️ NO LABEL OVER THE FIELD OR THE SEGMENT. The headline names the screen and both controls
-          say what they are — a placeholder of "Your name", and two labelled choices. A label that
-          explains a control steals the control's job (the founder's own law), and this screen now
-          carries four answers: every line it does not need is one it cannot afford.
+          ⛔ THE NAME GETS ITS LEGEND BACK (design review 2026-09-01). "No label over the field" was
+          argued from the placeholder — but a placeholder DIES the moment she types, and then this
+          is the one answer on a screen of three whose subject is unwritten (weight and sex both
+          carry theirs). A label that EXPLAINS a control steals its job; a legend that NAMES a
+          filled answer is the same instrument the two siblings already use.
         */}
+        <View style={styles.col}>
+          <Legend size={22} track={0.26} style={styles.fieldLegend}>{t('ob.nameLegend')}</Legend>
         <TextField
           block
           value={name}
@@ -217,6 +274,42 @@ export function AboutYou({ navigation }: Props) {
           maxLength={40}
           returnKeyType="done"
         />
+        </View>
+        {/*
+          ⛔ THE ORDER IS NAME, THEN WEIGHT, THEN SEX (founder 2026-08-29): *"צריך לעשות שם ומשקל
+          בתחילת המסך."*
+
+          It used to read name → sex → days → weight, which put the one number the ENGINE seeds
+          every opening load from at the bottom of a screen, behind a question about programme
+          frequency that has since left it entirely. The two things she is asked to state about
+          herself now stand together at the top, and the choice that changes how the app SPEAKS to
+          her closes the screen — the last thing she answers before every line after it is
+          conjugated at her.
+        */}
+        {/*
+          ⛔ THE ONE NUMBER SHE SET WITH NOTHING SAYING WHAT IT WAS IN.
+          The legend read "BODYWEIGHT", the wheel drew "70", and no `unit` prop was passed — so an
+          American athlete on a pounds wheel and an Israeli on a kilos wheel saw the SAME screen.
+          It is the number the engine seeds every opening load from, so a silent unit is not a
+          cosmetic gap; it is a wrong first workout.
+
+          ⚠️ THE UNIT RIDES ON THE LEGEND, NOT BESIDE THE DIGITS — `WheelPicker`'s own contract
+          ("WEIGHT · KG", no unit chip). Composed here exactly as `SessionFlow`'s Edit Result dial
+          composes its own, so the two rulers in the product state a unit the same way.
+        */}
+        <View style={styles.col}>
+          <Legend size={22} track={0.26} style={styles.fieldLegend}>{weightLegend}</Legend>
+          <WheelPicker
+            value={weight}
+            onChange={setWeight}
+            step={units === 'kg' ? 0.5 : 1}
+            min={units === 'kg' ? 30 : 66}
+            max={units === 'kg' ? 250 : 550}
+            size="lg"
+            ends="chevron"
+            label={weightLegend}
+          />
+        </View>
         {/*
           ⛔ NOT A SEGMENTED CONTROL (founder 2026-08-12: *"הפקדים של זכר ונקבה לא קשורים למסך
           וניראים בנאליים"*).
@@ -239,8 +332,23 @@ export function AboutYou({ navigation }: Props) {
           changed. Answering it with prose would have been defending the old shape instead of
           fixing it, twice.
         */}
+        {/*
+          ⛔ THE LEGEND OVER A WHEEL IS 22 AND FULLY INKED — the founder's own ruling, propagated
+          (2026-08-26, the elevation pass).
+
+          He made it on the set stage, twice: *"תגדיל את המלל שלידם ותשנה להם צבע"* (2026-08-12,
+          17 → 22 and ink1 → ink0) and again on 2026-08-26 when the dials grew (22 → 26). The
+          argument was never about that screen — it was about a LEGEND NAMING AN INSTRUMENT: with
+          nothing else naming the figure, a caption size in a secondary ink is ranking the word
+          twice and paying for it in legibility.
+
+          This screen is that screen's sibling — a legend over a wheel, three times — and it was
+          still drawing 17 points of `textMuted` over 64-point numerals. Same instrument, same rule.
+          22 rather than 26 because these wheels are `lg` (64) and the stage's are `xl` (78): the
+          label keeps its DISTANCE to the figure, which is what the ruling is actually about.
+        */}
         <View style={styles.col}>
-          <Legend>{t('ob.sexLegend')}</Legend>
+          <Legend size={22} track={0.26} style={styles.fieldLegend}>{t('ob.sexLegend')}</Legend>
           <View style={styles.choices}>
             {(['female', 'male'] as const).map((v) => (
               <Pressable
@@ -257,38 +365,7 @@ export function AboutYou({ navigation }: Props) {
               </Pressable>
             ))}
           </View>
-        </View>
-        {/*
-          ⛔ THE EXPERIENCE CONTROL STOOD HERE AND IS DELETED — see the note on the state above.
-          What is left above is the two things the app cannot learn any other way: what to call her,
-          and which gender every Hebrew sentence from here on conjugates against. Below it, the two
-          numbers she sets — one instrument each.
-        */}
-        <View style={styles.col}>
-          <Legend>{t('ob.daysPerWeek')}</Legend>
-          <WheelPicker
-            value={days}
-            onChange={setDays}
-            step={1}
-            min={2}
-            max={6}
-            size="lg"
-            ends="chevron"
-            label={t('ob.daysPerWeek')}
-          />
-        </View>
-        <View style={styles.col}>
-          <Legend>{t('ob.weightLegend')}</Legend>
-          <WheelPicker
-            value={weight}
-            onChange={setWeight}
-            step={units === 'kg' ? 0.5 : 1}
-            min={units === 'kg' ? 30 : 66}
-            max={units === 'kg' ? 250 : 550}
-            size="lg"
-            ends="chevron"
-            label={t('ob.weightLegend')}
-          />
+          {needsSex ? <Text style={styles.needs}>{t('ob.sexNeeded')}</Text> : null}
         </View>
       </View>
     </OnboardingScaffold>
@@ -296,10 +373,11 @@ export function AboutYou({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  bringYours: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 16 },
   /* Two answers, drawn on the same rules the wheels below are drawn with — a hairline each, the
      chosen one lit. Whole-row targets: this is a question, not a toolbar. */
   choices: { flexDirection: 'row', gap: 10 },
+  /* The one line that names what is missing — quiet, and only ever present when it is true. */
+  needs: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
   choice: {
     flex: 1,
     minHeight: 54,
@@ -309,12 +387,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: line[0],
   },
-  choiceOn: { borderColor: color.textPrimary },
+  /* ⛔ MOSS, NOT CREAM (design review 2026-09-01). The palette's own law: "moss marks a selection".
+     Cardio's twin control already answered in moss; a cream ring here was the same idiom giving a
+     second answer. One idiom, one mark — everywhere a CHOICE is made. */
+  choiceOn: { borderColor: signal[0], backgroundColor: signal.wash },
   /* A press is a WASH, never a fade (founder A.13). */
   choicePressed: { backgroundColor: 'rgba(241,238,229,0.06)' },
   choiceText: { fontFamily: font.sansMedium, fontSize: textScale.md, color: color.textMuted, textAlign: 'center' },
   choiceTextOn: { color: color.textPrimary },
 
+  /* The same full ink the stage's band headings carry. See the note at the first legend. */
+  fieldLegend: { color: color.textPrimary },
   rows: { gap: 20 },
   col: { gap: 12 },
 });

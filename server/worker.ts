@@ -47,6 +47,36 @@ export interface Env {
    * Worker that refused to start would be a worse failure than one that spends.
    */
   COACH_LIMIT?: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  /**
+   * ════ REAL AUTHENTICATION, BORROWED FROM THE WORKER THAT ALREADY HAS IT ════
+   *
+   * The same KV namespace `hush-identity` writes its sessions into (`session:<token>` → Apple
+   * `sub`, TTL 90 d). Sign-in is a hard wall at onboarding, so every real athlete holds one of
+   * these tokens in her Keychain — which means the coach can finally tell an athlete from a script
+   * by asking a question the script cannot answer. This worker only ever READS sessions; renewal
+   * stays hush-identity's job, one writer per key family.
+   *
+   * Optional at runtime for the same reason COACH_LIMIT is: a deploy without the binding still
+   * works, it is simply back to the speed-bump world it lived in before.
+   */
+  HUSH_KV?: {
+    get(key: string, opts?: { cacheTtl?: number }): Promise<string | null>;
+    put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
+  };
+  /**
+   * '1' → a call with no valid session is refused outright. Ships as '0' so every build already in
+   * the field (none of them send a bearer) keeps its coach; the founder flips it once the first
+   * bearer-sending build is the fleet. The flag is the migration, not a setting.
+   */
+  REQUIRE_AUTH?: string;
+  /** Per-account calls per UTC day. Default 40 — a real athlete's heaviest day is under ten. */
+  DAILY_ACCOUNT_CALLS?: string;
+  /**
+   * All accounts together, per UTC day — the kill switch that bounds the worst possible bill no
+   * matter what else fails. Default 2000; with hedging at 3 upstream launches per call and
+   * MAX_OUTPUT_TOKENS pricing, that is a ceiling the founder chose instead of one Google chose.
+   */
+  DAILY_GLOBAL_CALLS?: string;
 }
 
 /**
@@ -248,6 +278,21 @@ const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 1_400_000;
 const IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
 
+/**
+ * The same ceiling, for text — because until 2026-09-01 there was NONE. `blocks` was checked for
+ * being a non-empty array and nothing else, so a hostile client could post megabytes of text and
+ * bill it at Gemini input rates, times three once hedging launched its extra calls.
+ *
+ * The real app's heaviest request — preamble + athlete file + a season of history — measures in
+ * the tens of thousands of characters. These are the hostile-client ceilings, not the expectation,
+ * exactly like MAX_IMAGE_BYTES one comment up: generous to every request the app can make, a wall
+ * to the one it never would.
+ */
+const MAX_BLOCKS = 32;
+const MAX_TEXT_CHARS = 240_000;
+/** Everything together, pre-parse: all four images at ceiling, all the text, and JSON overhead. */
+const MAX_BODY_BYTES = 8_000_000;
+
 /* ─────────────────────────────────────────────────────────── the schema dialect (see geminiSchema) */
 
 const TYPE: Record<string, string> = {
@@ -328,7 +373,7 @@ const CORS = {
    * with a body at a null-body status, 2026-07-31), and both times the symptom was a bare failure
    * with nothing to read.
    */
-  'access-control-allow-headers': 'content-type, x-hush-token, x-hush-install',
+  'access-control-allow-headers': 'content-type, x-hush-token, x-hush-install, authorization',
   'access-control-allow-methods': 'POST, OPTIONS',
   // Cache the preflight for a day. Without it every single call is TWO round trips, and the first
   // one carries no data — pure latency, on a screen where she is waiting for an answer.
@@ -396,6 +441,35 @@ export default {
     if (!sameSecret(sent, stored)) return json({ error: 'unauthorized' }, 401);
 
     /*
+     * ════ WHO IS ASKING — THE QUESTION A SCRIPT CANNOT ANSWER ════
+     *
+     * The bearer is the hush-identity session token from her Keychain. Looked up in the shared KV
+     * (`session:<token>` → Apple sub) with a 60 s edge cache so the read costs a KV round trip once
+     * a minute per athlete, not once per call. An invalid or absent bearer is not an error by
+     * itself — REQUIRE_AUTH decides below whether the legacy speed-bump world is still open.
+     *
+     * The 401 here is deliberately the SAME 401 as a bad shared token: an attacker probing which
+     * half of the gate refused them learns nothing.
+     */
+    let sub: string | null = null;
+    if (env.HUSH_KV) {
+      const auth = (request.headers.get('authorization') ?? '').trim();
+      const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+      if (bearer.length > 0) {
+        sub = await env.HUSH_KV.get(`session:${bearer}`, { cacheTtl: 60 }).catch(() => null);
+      }
+    }
+    if (env.REQUIRE_AUTH === '1' && !sub) return json({ error: 'unauthorized' }, 401);
+
+    /*
+     * A body too large to be honest is refused before it is read. Content-length can be absent on a
+     * chunked request — the per-field ceilings after the parse catch that path; this one exists so
+     * a hundred-megabyte body is never even buffered.
+     */
+    const declared = Number(request.headers.get('content-length') ?? '0');
+    if (declared > MAX_BODY_BYTES) return json({ error: 'too_large' }, 413);
+
+    /*
      * ════ THE LIMIT, AND WHY IT IS KEYED ON THE INSTALL ════
      *
      * The token above is a speed bump, not a secret — it ships inside the app bundle, because that
@@ -411,7 +485,11 @@ export default {
      */
     if (env.COACH_LIMIT) {
       const install = (request.headers.get('x-hush-install') ?? '').trim();
-      const key = install.length > 0 ? `i:${install}` : `ip:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`;
+      // The session outranks the install as a key: an install id is minted by whoever sends it,
+      // a session was minted by us. Only the legacy (pre-bearer) world still keys on the install.
+      const key = sub ? `s:${sub}`
+        : install.length > 0 ? `i:${install}`
+        : `ip:${request.headers.get('cf-connecting-ip') ?? 'unknown'}`;
       const { success } = await env.COACH_LIMIT.limit({ key }).catch(() => ({ success: true }));
       if (!success) {
         // 429 so the app can say "too many, in a moment" rather than "no connection" — a different
@@ -428,6 +506,50 @@ export default {
     }
     if (!Array.isArray(call.blocks) || call.blocks.length === 0) {
       return json({ error: 'bad_request' }, 400);
+    }
+    // The text ceilings — see MAX_BLOCKS for why an unbounded body was the worker's biggest hole.
+    if (call.blocks.length > MAX_BLOCKS) return json({ error: 'too_large' }, 413);
+    let textChars = 0;
+    for (const b of call.blocks) textChars += String(b?.text ?? '').length;
+    if (textChars > MAX_TEXT_CHARS) return json({ error: 'too_large' }, 413);
+
+    /*
+     * ════ THE DAY'S BUDGET — COUNTED AFTER VALIDATION, SPENT BEFORE THE MODEL ════
+     *
+     * Two approximate counters in KV, reset by the UTC date in their key and erased by TTL:
+     *
+     *   quota:c:<sub>:<day>   what one account may spend in a day. A real athlete's heaviest
+     *                         honest day — intake, a build, a retry, a review — is under ten calls;
+     *                         the default of 40 is invisible to her and a wall to her shortcut.
+     *   quota:g:<day>         what EVERYONE together may spend — the kill switch. Every other layer
+     *                         here can be wrong at once and the worst possible day still costs what
+     *                         this number says, times the hedge factor of 3.
+     *
+     * KV counters race: two concurrent calls can both read n and both write n+1. That undercount is
+     * bounded by the per-key rate limit above (30/60 s), and a budget that can be exceeded by a few
+     * concurrent calls is a budget; the alternative — a Durable Object serializing every coach call
+     * on one object — is a global bottleneck bought to make a ceiling exact that only needs to be
+     * real. Counted after validation so a malformed loop cannot starve honest athletes for free.
+     */
+    if (env.HUSH_KV) {
+      const day = new Date().toISOString().slice(0, 10);
+      const spend = async (key: string, ceiling: number): Promise<boolean> => {
+        const n = Number((await env.HUSH_KV!.get(key).catch(() => null)) ?? '0');
+        if (n >= ceiling) return false;
+        await env.HUSH_KV!.put(key, String(n + 1), { expirationTtl: 172_800 }).catch(() => {});
+        return true;
+      };
+      const globalCeiling = Number(env.DAILY_GLOBAL_CALLS ?? '') || 2000;
+      if (!(await spend(`quota:g:${day}`, globalCeiling))) {
+        // 503, not 429: the day's budget being gone is our weather, not her behaviour.
+        return json({ error: 'budget' }, 503);
+      }
+      if (sub) {
+        const accountCeiling = Number(env.DAILY_ACCOUNT_CALLS ?? '') || 40;
+        if (!(await spend(`quota:c:${sub}:${day}`, accountCeiling))) {
+          return json({ error: 'rate_limited' }, 429);
+        }
+      }
     }
 
     /*

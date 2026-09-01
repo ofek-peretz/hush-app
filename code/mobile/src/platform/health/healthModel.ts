@@ -8,7 +8,6 @@
  * weight + actual reps (see ModelClient). The iPhone Profile stays the source of
  * truth — Health only ever proposes a value the phone may adopt.
  */
-// @ts-nocheck
 
 // 
 

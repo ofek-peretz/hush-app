@@ -30,8 +30,7 @@
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
 import { exerciseById } from '@/data/exercises';
-import { applyLoop1, carryWeightForward } from '@/engine/v5/liveSession';
-import { observedLoads, railCeilingFor } from '@/engine/v5/v5Engine';
+import { carryWeightForward } from '@/engine/v5/liveSession';
 import { modelledLoadKg } from '@/domain/startingLoad';
 import { loadFloor } from '@/engine/v5/grid';
 import type { Profile, Program, Session, SetLog } from '@/data/local/models';
@@ -184,7 +183,6 @@ export async function train(p: Person, weeks: number): Promise<TrainingRun> {
         startedAt: new Date(t).toISOString(), state: 'SAVED', earlyFinish: false, sets,
       };
       const history = await db.loadHistory();
-      const corrections: Record<string, number> = {};
 
       for (const step of plan) {
         const live = plan.find((s) => s.globalIndex === step.globalIndex)!; // Loop 1 may have moved it
@@ -208,15 +206,10 @@ export async function train(p: Person, weeks: number): Promise<TrainingRun> {
           bandHi: live.target.repBandHi ?? THI,
           reps,
         });
-        // Exactly the call sequence sessionStore makes on "Complete set".
-        const seen = [{ ...session, sets: [...sets] } as Session, ...history];
-        const grid = observedLoads(live.exerciseId, seen);
-        const rail = railCeilingFor(live.exerciseId, live.target.repBandLo ?? TLO, seen);
-        corrections[live.exerciseId] ??= 0;
-        const carried = carryWeightForward(plan as never, live.globalIndex, load);
-        const l1 = applyLoop1(carried as never, live.globalIndex, load, reps, corrections[live.exerciseId], grid, rail);
-        if (l1.corrected) corrections[live.exerciseId] += 1;
-        plan = l1.plan as never;
+        // Exactly the call sequence sessionStore makes on "Complete set" — which, since the
+        // 2026-08-26 ruling, is CARRY ONLY: mid-session she is a logger, Loop 1 no longer touches
+        // the iron, and the between-session mathematics (Loop 2) reads the sets as performed.
+        plan = carryWeightForward(plan as never, live.globalIndex, load) as never;
       }
 
       await db.appendCompletedSession(session);

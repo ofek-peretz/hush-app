@@ -19,6 +19,9 @@ import type { PlannedSession, PlannedItem } from '@/domain/coachPlan';
 const bench = (load: number | null = 40) =>
   ({ kind: 'reps', ex: 'bb_bench_press', reps: [8, 12], load } satisfies PlannedItem);
 
+/** The working (non-bridge) steps — most of this file's laws are about them alone. */
+const workOf = (plan: Step[]) => plan.filter((s) => !s.warmup);
+
 describe('a straight block is indistinguishable from the old builder', () => {
   const session: PlannedSession = {
     name: 'Upper A',
@@ -26,15 +29,35 @@ describe('a straight block is indistinguishable from the old builder', () => {
   };
 
   it('produces one step per set, numbered the way the machine already counts', () => {
+    // Since 2026-08-25 the LIVE builder also carries the warm-up ramp (it is the only builder any
+    // production start runs — `buildPlan` has no caller). The working steps are unchanged; the
+    // bridges ride ahead of them with negative indices, exactly as `buildPlan` shaped them.
     const plan = buildPlanFromCoach(session);
-    expect(plan.length).toBe(4);
-    expect(plan.map((s) => s.exerciseSetIndex)).toEqual([0, 1, 2, 3]);
-    expect(plan.every((s) => s.totalSetsInExercise === 4)).toBe(true);
-    expect(plan.map((s) => s.globalIndex)).toEqual([0, 1, 2, 3]);
+    const work = workOf(plan);
+    expect(work.length).toBe(4);
+    expect(work.map((s) => s.exerciseSetIndex)).toEqual([0, 1, 2, 3]);
+    expect(work.every((s) => s.totalSetsInExercise === 4)).toBe(true);
+    expect(plan.map((s) => s.globalIndex)).toEqual(plan.map((_, i) => i)); // contiguous, bridges included
+  });
+
+  /*
+   * ⛔ THIS BUILDER WROTE THE FIRST COMPOUND'S TWO BRIDGES FROM 2026-08-25 UNTIL 2026-08-30, when
+   * the founder ruled the warm-up an OFFER: *"לא לקבוע מראש לאף אחד חימום ומי שרוצה שילחץ על
+   * הפקד."* The bridges themselves are unchanged in every particular — negative indices, the fixed
+   * 45-second breath, never `lastSetOf*` — they are simply inserted by a press now, and the whole
+   * contract is held next door in `theWarmupIsABridgeNotAMeasurement` §5 against `warmupOffer` /
+   * `insertWarmup`. What this builder owes is the ABSENCE, which is what is asserted here.
+   *
+   * (`leanWarmup` went with the charge: F-15 existed to trim a price nothing pays any more.)
+   */
+  it('⛔ writes NO bridge — the session is what the coach wrote, and warm-ups are asked for', () => {
+    const plan = buildPlanFromCoach(session);
+    expect(plan.filter((s) => s.warmup)).toHaveLength(0);
+    expect(plan[0].exerciseSetIndex).toBe(0); // she opens on working set 1, not on a ramp
   });
 
   it('gives every reps step a real prescription, band included', () => {
-    const t = buildPlanFromCoach(session)[0].target!;
+    const t = workOf(buildPlanFromCoach(session))[0].target!;
     expect({ w: t.recommendedWeight, reps: t.recommendedReps, lo: t.repBandLo, hi: t.repBandHi })
       .toEqual({ w: 32.5, reps: 8, lo: 8, hi: 12 });
     // Tlo is the band FLOOR and is held immutably — the edit wheel overwrites `recommendedReps`,
@@ -43,9 +66,9 @@ describe('a straight block is indistinguishable from the old builder', () => {
   });
 
   it('marks the last set of the exercise and of the session', () => {
-    const plan = buildPlanFromCoach(session);
-    expect(plan.map((s) => s.lastSetOfExercise)).toEqual([false, false, false, true]);
-    expect(plan.map((s) => s.lastSetOfSession)).toEqual([false, false, false, true]);
+    const work = workOf(buildPlanFromCoach(session));
+    expect(work.map((s) => s.lastSetOfExercise)).toEqual([false, false, false, true]);
+    expect(work.map((s) => s.lastSetOfSession)).toEqual([false, false, false, true]);
   });
 });
 
@@ -62,12 +85,14 @@ describe('every shape that is not reps carries NO target', () => {
 
   it('is the only signal anything downstream needs', () => {
     const plan = buildPlanFromCoach(session);
-    const withTarget = plan.filter((s) => s.target != null);
+    // The bench's two bridges carry targets too (that is what a bridge IS); the law here is about
+    // WORKING steps of non-reps shapes, which still carry none.
+    const withTarget = workOf(plan).filter((s) => s.target != null);
     expect(withTarget.length).toBe(1);
     expect(withTarget[0].exerciseId).toBe('bb_bench_press');
     // A plank with a filler target of zeros would be mirrored to her wrist as "0 kg x 0", carried
     // forward by Loop 1, and logged as a set. Absence is what prevents all three.
-    for (const step of plan.filter((s) => s.item?.kind !== 'reps')) {
+    for (const step of workOf(plan).filter((s) => s.item?.kind !== 'reps')) {
       expect({ ex: step.exerciseId, target: step.target }).toEqual({ ex: step.exerciseId, target: undefined });
     }
   });
@@ -90,7 +115,7 @@ describe('every shape that is not reps carries NO target', () => {
   });
 
   it('carries the prescribed rest, and none after the final step', () => {
-    const plan = buildPlanFromCoach(session);
+    const plan = workOf(buildPlanFromCoach(session));
     // A block that states no rest carries UNDEFINED, not zero — the runner then rests her at her own
     // learned pace (S-17). Zero is an instruction ("straight on"), and handing it to every block
     // whose `restS` the coach left out would run four sets of squats back to back.
@@ -108,6 +133,10 @@ describe('a circuit', () => {
       items: [bench(40), { kind: 'time', ex: 'plank', seconds: 30 }],
     }],
   };
+
+  it('gets NO bridges — a bridge in the middle of a round would break the round', () => {
+    expect(buildPlanFromCoach(session).filter((s) => s.warmup)).toEqual([]);
+  });
 
   it('interleaves the items and counts laps as sets of each', () => {
     const plan = buildPlanFromCoach(session);

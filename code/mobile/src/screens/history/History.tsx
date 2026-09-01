@@ -22,17 +22,16 @@
  * a better way now: `Legend` picks the face from the STRING (`monoVoice`), so an English ledger reads
  * exactly as the handoff draws it and a Hebrew one falls back to Assistant instead of breaking.
  */
-// @ts-nocheck
 
 // 
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { SegmentedControl, Legend } from '@/components/ds';
+import { Arrive, SegmentedControl, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
 import { useApp } from '@/state/stores/appStore';
@@ -41,32 +40,34 @@ import type { CardioActivity, HistoryItem, Session } from '@/data/local/models';
 import { sessionDayName } from '@/domain/schedule';
 import { durationMinutes } from '@/domain/duration';
 import { cardioPerformed } from '@/domain/cardio';
+import {
+  raisesBySession,
+  sessionDurationSec,
+  sessionHasLoggedWork,
+  totalTonnageKg,
+} from '@/domain/sessionMetrics';
+import { parseHistoryCsv } from '@/domain/historyImport';
+import { recordFile } from '@/platform/recordFile';
+import { cloudAutoBackup } from '@/platform/cloudBackup';
+import { track } from '@/platform/telemetry';
+import { BUILD_EVENTS } from '@/platform/events';
 import { color, space, font, textScale, tracking, trackingPx, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+// The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
+import { currentLocale } from '@/i18n';
 
 // A Main-stack screen in v7 (folded out of the tab bar, opened from Progress · Lifts).
 type Props = NativeStackScreenProps<MainParamList, 'History'>;
 
-/**
- * Wall-clock seconds from the session's start to the last thing she did in it.
+/*
+ * ⛔ THIS FILE ONCE HELD THE ONLY CORRECT DURATION IN THE APP, AND KEPT IT TO ITSELF.
  *
- * ⚠️ IT READ ONLY SETS. An interval session — a warm-up, six 400 m repeats, a cool-down — logs no
- * `SetLog` at all, so its duration came out as zero: start to start. The canonical record holds
- * every shape (`items`), and the last stamp in it is the end of the workout whatever shape it was.
+ * The fix recorded here — "it read only sets; an interval session logs no `SetLog`, so its duration
+ * came out as zero: start to start; the canonical record holds every shape (`items`)" — was right,
+ * and five other surfaces went on getting it wrong beside it. It lives in `domain/sessionMetrics`
+ * now, with the tonnage, the workout count and the personal-best walk, so there is one answer to
+ * measure against instead of six to compare.
  */
-function sessionDurationSec(s: Session): number {
-  const start = Date.parse(s.startedAt);
-  const stamps = [
-    ...s.sets.map((x) => Date.parse(x.persistedAt)),
-    ...(s.items ?? []).map((i) => Date.parse(i.at)),
-  ].filter((n) => !Number.isNaN(n));
-  const end = stamps.length ? Math.max(...stamps) : start;
-  return Math.max(0, Math.round((end - start) / 1000));
-}
-
-function sessionVolumeKg(s: Session): number {
-  return s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
-}
 
 /**
  * How many distinct things a session trained (the "N lifts" figure on the row).
@@ -80,70 +81,116 @@ function sessionLiftCount(s: Session): number {
   return new Set(s.sets.map((x) => x.exerciseId)).size;
 }
 
-/**
- * The raises per session — how many lifts beat their own prior best load that day ("3 up").
+/*
+ * ⛔ "MIRRORS progressAggregate's RAISES SO THE LOG AND THE LIFTS LENS NEVER DISAGREE" — IT DID NOT.
  *
- * Display arithmetic, chronological: walk oldest → newest keeping each lift's running-best top-load;
- * a session's raise count is the lifts whose heaviest set that day exceeded that running best. The
- * first time a lift appears is not a raise (there is nothing to beat). Mirrors progressAggregate's
- * raises so the Log and the Lifts lens never disagree.
+ * The copy of the walk that lived here dropped the `actualReps >= 1` guard the lifetime count
+ * applies. A heavier load entered and then logged at ZERO reps earned a moss "1 up" on the Log that
+ * Progress never counted — and it poisoned the running best, so the real lift of that weight, weeks
+ * later, was silently not a raise either. The comment claimed the mirror; the code was a second
+ * opinion. There is one walk now, in `domain/sessionMetrics.raisesBySession`, and both lenses read
+ * it.
  */
-function raisesBySession(strength: Session[]): Map<string, number> {
-  const chron = [...strength].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
-  const best = new Map<string, number>();
-  const out = new Map<string, number>();
-  for (const s of chron) {
-    const top = new Map<string, number>();
-    for (const set of s.sets) {
-      const w = set.actualWeight ?? 0;
-      if (w > (top.get(set.exerciseId) ?? 0)) top.set(set.exerciseId, w);
-    }
-    let raises = 0;
-    for (const [id, load] of top) {
-      const prev = best.get(id);
-      if (prev != null && load > prev) raises++;
-      if (prev == null || load > prev) best.set(id, load);
-    }
-    out.set(s.id, raises);
-  }
-  return out;
-}
 
 /** Weekday, localized + uppercased ("SAT"). A WORD — rendered in sans, never mono. */
 function dowOf(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase();
+  return new Date(iso).toLocaleDateString(currentLocale(), { weekday: 'short' }).toUpperCase();
 }
 /** The day of the month ("18"). A figure — mono. */
 function dayOf(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric' });
+  return new Date(iso).toLocaleDateString(currentLocale(), { day: 'numeric' });
 }
 /** Month chapter display name ("July"). */
 function monthNameOf(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'long' });
+  return new Date(iso).toLocaleDateString(currentLocale(), { month: 'long' });
 }
 /** Month + year, for grouping (so July 2025 and July 2026 stay distinct chapters). */
 function monthKeyOf(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString(currentLocale(), { month: 'long', year: 'numeric' });
 }
 
 export function History({ navigation }: Props) {
   const app = useApp();
+  const { t } = useCopy();
   const [sessions, setSessions] = useState<Session[] | null>(null); // null = loading
   const [cardio, setCardio] = useState<CardioActivity[]>([]);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      let active = true;
-      Promise.all([db.loadHistory(), db.loadCardio()]).then(([all, cd]) => {
-        if (!active) return;
-        setSessions(all);
-        setCardio(cd);
+  const refresh = React.useCallback(() => {
+    let active = true;
+    Promise.all([db.loadHistory(), db.loadCardio()]).then(([all, cd]) => {
+      if (!active) return;
+      setSessions(all);
+      setCardio(cd);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useFocusEffect(refresh);
+
+  /*
+   * ════ BRING YOUR LOG (2026-09-01, audit M1) — another app's export joins this ledger. ═════════
+   *
+   * The picker and the read are `recordFile.pick()` — the record-restore's own seam, which already
+   * refuses nothing by extension and reads bytes rather than trusting a label. The parse is
+   * `domain/historyImport` (local matching, no model). What she is shown BEFORE anything is
+   * written is the report: how many workouts, how many lifts recognised, and how many names were
+   * not — an import that writes silently and an import that guesses are the two failure modes this
+   * confirm exists to rule out. The merge itself de-dupes, so the same file twice writes nothing.
+   */
+  const importLog = React.useCallback(async () => {
+    const picked = await recordFile.pick();
+    if (!picked.ok) return; // cancelled / unavailable — she stays on the ledger, nothing changed
+    const report = parseHistoryCsv(picked.text, app.profile?.units ?? 'kg');
+    void track('history_import_parsed', {
+      sessions: report.sessions.length,
+      lifts: report.recognisedLifts,
+      unmatched: report.unmatched.length,
+      rowsSeen: report.rowsSeen,
+    });
+    /*
+     * ⛔ AND THE NAMES WE COULD NOT PLACE ARE THE POINT (audit M1, closed 2026-09-01).
+     *
+     * `BUILD_EVENTS.catalogueGap` already learns what the MODEL asked for and we lacked. This is
+     * the same question answered by something stronger than a preference: lifts a real athlete has
+     * really been performing, for years, in another app. It is the most concrete answer there is to
+     * *which exercise do we author next*, and it was being counted on this screen and discarded.
+     *
+     * ⚠️ BOUNDED, exactly as that event's own note demands: the ten most frequent names, 40 chars
+     * each, and nothing else. The vocabulary is the signal; a whole file's worth of strings would
+     * be her training record leaving the phone through a research event.
+     */
+    if (report.unmatched.length > 0) {
+      void track(BUILD_EVENTS.importGap, {
+        wanted: report.unmatched.slice(0, 10).map(([name]) => name.slice(0, 40)),
       });
-      return () => {
-        active = false;
-      };
-    }, []),
-  );
+    }
+    if (report.sessions.length === 0) {
+      Alert.alert(t('history.importNoneTitle'), t('history.importNoneBody'));
+      return;
+    }
+    const from = new Date(report.firstMs).toLocaleDateString(currentLocale(), { month: 'short', year: 'numeric' });
+    const to = new Date(report.lastMs).toLocaleDateString(currentLocale(), { month: 'short', year: 'numeric' });
+    const body =
+      t('history.importConfirmBody', { sessions: report.sessions.length, lifts: report.recognisedLifts, from, to }) +
+      (report.unmatched.length > 0 ? `\n${t('history.importUnmatched', { count: report.unmatched.length })}` : '');
+    Alert.alert(t('history.importConfirmTitle'), body, [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('history.importKeep'),
+        onPress: () => {
+          void (async () => {
+            const kept = await db.appendImportedHistory(report.sessions);
+            void track('history_import_kept', { kept });
+            // Her record changed — the same promise every completion keeps.
+            void cloudAutoBackup();
+            refresh();
+          })();
+        },
+      },
+    ]);
+  }, [app.profile?.units, refresh, t]);
 
   return (
     <HistoryView
@@ -153,6 +200,8 @@ export function History({ navigation }: Props) {
       onLifts={() => navigation.goBack()}
       onSession={(id) => navigation.navigate('WorkoutDetail', { sessionId: id })}
       onCardio={(activity) => navigation.navigate('CardioDetail', { activity })}
+      onFreeLog={() => navigation.navigate('FreeLog')}
+      onImportLog={recordFile.available() ? () => void importLog() : undefined}
     />
   );
 }
@@ -171,6 +220,8 @@ export function HistoryView({
   onLifts,
   onSession,
   onCardio,
+  onFreeLog,
+  onImportLog,
 }: {
   sessions: Session[] | null;
   cardio: CardioActivity[];
@@ -178,6 +229,10 @@ export function HistoryView({
   onLifts: () => void;
   onSession: (sessionId: string) => void;
   onCardio: (activity: CardioActivity) => void;
+  /** Opens the free-form log ("I trained without Hush") — absent in fixtures that predate it. */
+  onFreeLog?: () => void;
+  /** Brings another app's CSV export into this ledger (audit M1) — absent where no picker exists. */
+  onImportLog?: () => void;
 }) {
   const { t } = useCopy();
 
@@ -189,8 +244,13 @@ export function HistoryView({
    * finished to the last repeat — saved, counted as trained, sent to the coach — **never appeared in
    * her Log at all.** The app kept it and the one screen that shows her what she has done behaved as
    * though it had not happened.
+   *
+   * ⚠️ THIS IS `sessionHasLoggedWork`, NOT `sessionCountsAsWorkout`, AND THE DIFFERENCE IS MEANT.
+   * The ledger lists PERFORMED work, partials included — she lifted it, so it is a record. The
+   * narrower "did that finish the week's workout?" belongs to the counters (Progress's workouts
+   * figure, the weekly band, the milestones), not to the page of rows.
    */
-  const strength = (sessions ?? []).filter((s) => s.sets.length > 0 || (s.items?.length ?? 0) > 0);
+  const strength = (sessions ?? []).filter(sessionHasLoggedWork);
   const performedCardio = cardio.filter((a) => cardioPerformed(a.durationSec, a.distanceKm));
   const raises = raisesBySession(strength);
 
@@ -201,8 +261,9 @@ export function HistoryView({
   ].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 
   // Header summary — the STRENGTH work so far (cardio is never counted as "t moved").
+  // The count is the number of ROWS below it, which is what a header over a list has to say.
   const totalSessions = strength.length;
-  const totalTonnes = strength.reduce((sum, s) => sum + sessionVolumeKg(s), 0) / 1000;
+  const totalTonnes = totalTonnageKg(strength) / 1000;
   const tonnesLabel = totalTonnes >= 10 ? String(Math.round(totalTonnes)) : String(+totalTonnes.toFixed(1));
 
   const isEmpty = sessions != null && items.length === 0;
@@ -211,7 +272,13 @@ export function HistoryView({
     <SafeAreaView style={styles.root} edges={['top']}>
       {/* The Progress tab's header, LOG lens — the same serif name + Lifts / Log toggle the Lifts
           lens wears; Log is active, and its Lifts segment returns to that lens. */}
-      <View style={styles.header}>
+      {/*
+        ✦ IT ARRIVES (2026-08-27). `Arrive` was built for the founder's largest note — a screen
+        should ARRIVE, not appear (2026-08-12). Two beats: the page and its lens, then the ledger.
+        A LOG is a long list; staggering its rows would make scrolling into a performance, so the
+        list lands as one thing and the reading is hers.
+      */}
+      <Arrive order={0} style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">{t('progress.title')}</Text>
         <SegmentedControl
           size="pill"
@@ -225,7 +292,7 @@ export function HistoryView({
             if (v === 'lifts') onLifts();
           }}
         />
-      </View>
+      </Arrive>
 
       {isEmpty ? (
         // The first day is not a blank page (founder 2026-07-12) — it is the ledger, open and clean.
@@ -235,6 +302,26 @@ export function HistoryView({
           </View>
           <Text style={styles.emptyTitle}>{t('history.emptyTitle')}</Text>
           <Text style={styles.empty}>{t('history.empty')}</Text>
+          {onFreeLog ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onFreeLog}
+              style={({ pressed }) => [styles.freeLogDoor, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.freeLogDoorText}>{t('history.freeLogDoor')}</Text>
+            </Pressable>
+          ) : null}
+          {/* THE SECOND DOOR — a ledger that starts empty is exactly where two years of another
+              app's log belongs (audit M1). Same quiet geometry as the free-form door above. */}
+          {onImportLog ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onImportLog}
+              style={({ pressed }) => [styles.freeLogDoor, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.freeLogDoorText}>{t('history.importDoor')}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -242,9 +329,47 @@ export function HistoryView({
             // "18 sessions · 46.8 t moved. Every rep you've done is here." — the figures ride mono
             // inside a sans sentence.
             <Text style={styles.summaryLine}>
-              <Text style={styles.summaryFig}>{totalSessions}</Text> {t('history.logSessions', { count: totalSessions })} ·{' '}
-              <Text style={styles.summaryFig}>{tonnesLabel}</Text> {t('history.tonneUnit')} {t('history.logMoved')}
+              {/*
+                ⛔ THIS WAS A SENTENCE ASSEMBLED IN JSX. Four `t()` calls, a literal middot and two
+                literal spaces — and `history.logMoved` was authored as a leading-space fragment so
+                the seams would meet. In Hebrew the figures run left-to-right inside a right-to-left
+                clause, so the order the code fixed here was the wrong one: word order in Hebrew is
+                the translator's decision and this took it away from her. One key carries the whole
+                clause now, middot included, and the four fragments are deleted.
+
+                ⚠️ THE FIGURES LOSE THEIR MONO SPAN and that is the trade. A span can only be put back
+                by splitting the translated string on its own interpolations, which is the same
+                mistake one layer down.
+              */}
+              {t('history.summaryLine', {
+                count: totalSessions,
+                sessions: totalSessions,
+                tonnes: tonnesLabel,
+                unit: t('weekly.tonneUnit'),
+              })}
             </Text>
+          ) : null}
+
+          {/* THE FREE-FORM DOOR (2026-08-24) — work she did without Hush belongs in this ledger
+              too. A quiet bordered row, not a act: the page is hers to read, this is an aside. */}
+          {onFreeLog ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onFreeLog}
+              style={({ pressed }) => [styles.freeLogDoor, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.freeLogDoorText}>{t('history.freeLogDoor')}</Text>
+            </Pressable>
+          ) : null}
+          {/* And the log she kept somewhere else — same aside, second door (audit M1). */}
+          {onImportLog ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onImportLog}
+              style={({ pressed }) => [styles.freeLogDoor, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.freeLogDoorText}>{t('history.importDoor')}</Text>
+            </Pressable>
           ) : null}
 
           {items.map((item, i) => {
@@ -264,10 +389,14 @@ export function HistoryView({
                 : item.calories != null
                   ? t('history.rowCardioMetaNoHr', { kcal: item.calories })
                   : t('history.minutesShort', { min: durationMinutes(item.durationSec) })
-              : t('history.rowStrengthMeta', {
-                  lifts: sessionLiftCount(item),
-                  min: durationMinutes(sessionDurationSec(item)),
-                });
+              : (() => {
+                  // A free-form log is written after the fact — its stamps span no time, and a
+                  // "0 min" would be a measurement the record never took (2026-08-24).
+                  const min = durationMinutes(sessionDurationSec(item));
+                  return min > 0
+                    ? t('history.rowStrengthMeta', { lifts: sessionLiftCount(item), min })
+                    : t('history.rowStrengthMetaNoTime', { lifts: sessionLiftCount(item) });
+                })();
             const raiseN = isCardio ? 0 : raises.get(item.id) ?? 0;
 
             return (
@@ -350,6 +479,9 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, letterSpacing: trackingPx(textScale.lg, tracking.tight), color: color.textPrimary, textAlign: 'center' },
   empty: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 8, maxWidth: 280 },
+  /* The free-form door — a quiet bordered row; the ledger is the page, this is an aside. */
+  freeLogDoor: { borderWidth: 1, borderColor: color.border, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 16, marginTop: 16, alignSelf: 'stretch' },
+  freeLogDoorText: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textPrimary, textAlign: 'center' },
 
   list: { paddingHorizontal: 30, paddingBottom: 40 },
 

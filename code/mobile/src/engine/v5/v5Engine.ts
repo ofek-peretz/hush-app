@@ -14,18 +14,20 @@
 
 import type { Session, Program } from '@/data/local/models';
 import { db, type EngineV5State } from '@/data/local/db';
-import { exerciseMeta } from '@/engine/catalog';
+import { exerciseMeta, type Equipment } from '@/engine/catalog';
 import { exerciseDisplayName } from '@/data/exercises';
 import { currentWeekOpen } from '@/domain/weekCadence';
 import type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanWorkout, WeeklyPlanLift, WeekPlanChange, WeeklyVolumeMove, Explanation, ExplanationLine } from '@/engine/weeklyView';
 import { decideExercise } from './loop2';
 import { decideVolume } from './loop3';
+import { deloadDue, deloadActiveAt, DELOAD_DAYS, DELOAD_FRACTION } from './deload';
+import { easeDueFor, runEaseActiveAt, runEaseEndsAt, RUN_EASE_MUSCLES, RUN_EASE_MIN_KM, type RunView } from './runEase';
 import { repsPerRung } from './repsPerRung';
-import { snapDown, nextRung } from './grid';
+import { snapDown, nextRung, prevRung } from './grid';
 import { retainedAfterGap, daysSinceLastSession, lastSessionStartMs } from './detraining';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
-import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
+import { RECENCY_WINDOW_SESSIONS, SETS_MIN, STARTING_INCREMENT } from './constants';
 import { track } from '@/platform/telemetry';
 
 export type SeedFor = (exerciseId: string) => number | null;
@@ -44,16 +46,41 @@ const resolveBand = (src: BandSource, exerciseId: string): Band =>
 // ───────────────────────────── meta + history reads ─────────────────────────────
 function metaWithGrid(exerciseId: string, history: Session[]): ExerciseMeta {
   const m = exerciseMeta(exerciseId);
-  return { equipment: m.equipment, bodyweight: m.bodyweight, observedLoads: observedLoads(exerciseId, history) };
+  return { equipment: m.equipment, bodyweight: m.bodyweight, observedLoads: observedLoads(exerciseId, history, m.equipment) };
 }
 
 /** The distinct real loads she has performed on an exercise (the learned grid, F-2). De-duped to 0.5.
  *  Exported so the LIVE loop can snap a mid-session correction to a weight that physically exists at her
  *  gym (a 2 kg dumbbell jump, a 5 kg stack), the same grid the between-session prescription already uses. */
-export function observedLoads(exerciseId: string, sessions: Session[]): number[] {
+export function observedLoads(exerciseId: string, sessions: Session[], equipment?: Equipment): number[] {
+  /*
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE GRID IS ROUNDED TO THE EQUIPMENT'S GRAIN, NOT TO A FLAT HALF-KILO (2026-08-21).
+   *
+   * This de-duped to 0.5 for every lift in the catalogue, so a single set logged at 41.5 kg became a
+   * permanent RUNG on a barbell whose declared grain is 2.5 — and `observedLoads` reads her WHOLE
+   * history, so nothing ever aged it out. The founder produced exactly that with one turn of the old
+   * edit wheel, which stepped in halves on everything.
+   *
+   * ⚠️ THE HISTORY IS NOT TOUCHED, AND THAT IS THE WHOLE POINT. A migration over her saved sets was
+   * the obvious answer and the wrong one: it destroys the record of what she actually lifted, and it
+   * would be indistinguishable from deleting a real microloaded set for an athlete whose gym stocks
+   * fractional plates. This is the DERIVED grid — what the engine believes the room offers — and
+   * normalising a derivation is free and reversible. Her set still says 41.5 for ever.
+   *
+   * It also heals what is already stored: a rung that was never on the grid stops being read as one
+   * the next time the engine looks, without anybody running anything.
+   *
+   * `equipment` is optional so the older callers (and the tests that price a lift in isolation) keep
+   * the half-kilo behaviour they were written against.
+   * ════════════════════════════════════════════════════════════════════════════════════════════
+   */
+  const grain = equipment ? STARTING_INCREMENT[equipment] || 0.5 : 0.5;
   const seen = new Set<number>();
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualWeight > 0) seen.add(Math.round(log.actualWeight * 2) / 2);
+    if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualWeight > 0) {
+      seen.add(Math.round(log.actualWeight / grain) * grain);
+    }
   }
   return [...seen];
 }
@@ -274,7 +301,7 @@ export async function advanceV5(
    */
   reseedUnperformed: boolean = true,
 ): Promise<Record<string, 'graduate' | 'rotate'>> {
-  void nowMs; void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
+  void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
   const state = await ensureExercisesV5(exerciseIds, band, history, seedFor, reseedUnperformed);
   const ex = asStates(state);
   const managed = new Set(exerciseIds);
@@ -283,11 +310,96 @@ export async function advanceV5(
   // state accumulates (Monday's gain is there for Thursday). `startedAt` strictly after the cursor.
   const lastFolded = state.lastFoldedAt ?? 0;
   const unfolded = history
+    // A FREE-FORM log is a record, never a decision input (models.ts `Session.freeform`): the
+    // engine coaches its own programme, and a holiday PR single must not read as a failed floor.
+    .filter((s) => !s.freeform)
     .filter((s) => { const t = Date.parse(s.startedAt); return Number.isFinite(t) && t > lastFolded; })
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
-  if (unfolded.length === 0) { await save(state); return {}; }
 
   const log = state.changeLog ?? [];
+
+  /*
+   * ── THE LIGHT WEEK ENDS AT ITS WINDOW, EVEN ON A PURE READ ─────────────────────────────────────
+   * (engine/v5/deload — see its header for the whole design.) The restore cannot wait for the next
+   * fold: she may open the app eight days later with nothing new to fold, and the prescription she
+   * is handed must already be the restored one — the same one-line-either-side placement lesson as
+   * `applyDetrainingV5`. Every restored load is stamped, so the mirror says the week ended.
+   */
+  const endDeload = (atMs: number): void => {
+    const open = state.deload;
+    if (!open || atMs < open.endsAt) return;
+    for (const [id, prevLoad] of Object.entries(open.restore)) {
+      const st = ex[id];
+      if (!st || prevLoad == null || st.load == null) continue;
+      if (Math.abs(prevLoad - st.load) <= 1e-6) continue;
+      log.push({ exerciseId: id, decision: 'deload', loadFrom: st.load, loadTo: prevLoad, setsFrom: st.sets, setsTo: st.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [st.band.lo, st.band.hi], at: atMs, kind: 'deload' });
+      ex[id] = { ...st, load: prevLoad };
+    }
+    delete state.deload;
+  };
+
+  /*
+   * ── THE RUN CARRIED INTO HER LEGS (engine/v5/runEase — the header holds the whole design) ──────
+   * Same lifecycle discipline as the deload, scoped to the lower body and to one occurrence.
+   * `closeRunEase` restores and stamps; `openRunEase` answers a qualifying run exactly once.
+   */
+  const cardioRuns: RunView[] = await db
+    .loadCardio()
+    .then((all) => all.map((c) => ({ gait: c.gait, startedAt: c.startedAt, durationSec: c.durationSec, distanceKm: c.distanceKm })))
+    .catch((): RunView[] => []);
+
+  const closeRunEase = (atMs: number): void => {
+    const open = state.runEase;
+    if (!open) return;
+    for (const [id, prevLoad] of Object.entries(open.restore)) {
+      const st = ex[id];
+      if (!st || prevLoad == null || st.load == null) continue;
+      if (Math.abs(prevLoad - st.load) <= 1e-6) continue;
+      log.push({ exerciseId: id, decision: 'ease', loadFrom: st.load, loadTo: prevLoad, setsFrom: st.sets, setsTo: st.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [st.band.lo, st.band.hi], at: atMs, kind: 'ease', runKm: open.runKm });
+      ex[id] = { ...st, load: prevLoad };
+    }
+    delete state.runEase;
+  };
+  const closeRunEaseIfLapsed = (atMs: number): void => {
+    if (state.runEase && atMs >= state.runEase.endsAt) closeRunEase(atMs);
+  };
+
+  const openRunEase = (atMs: number): void => {
+    if (state.deload || state.runEase) return; // one decision speaks at a time (a light week is already the answer)
+    const due = easeDueFor(cardioRuns, atMs, state.lastRunEasedForMs ?? null);
+    if (!due) return;
+    const runAt = Date.parse(due.startedAt);
+    // Answered even when nothing can be eased (bodyweight lower body, empty roster) — a run is
+    // answered ONCE, whatever the answer turned out to weigh. detrainedAfter's idempotency shape.
+    state.lastRunEasedForMs = Math.max(state.lastRunEasedForMs ?? 0, runAt);
+    const runKm = due.distanceKm >= RUN_EASE_MIN_KM ? Math.round(due.distanceKm * 10) / 10 : null;
+    const restore: Record<string, number | null> = {};
+    for (const id of exerciseIds) {
+      const st = ex[id];
+      if (!st || st.load == null) continue; // bodyweight — no load axis to ease (S-51)
+      const muscle = muscleOf(id);
+      if (!muscle || !RUN_EASE_MUSCLES.has(muscle)) continue; // the run cost her legs, not her bench
+      const meta = exerciseMeta(id);
+      const light = prevRung(st.load, meta.equipment); // one honest rung on the room's own ladder
+      if (!(light < st.load - 1e-6)) continue; // already at the floor — nothing honest below
+      restore[id] = st.load;
+      log.push({ exerciseId: id, decision: 'ease', loadFrom: st.load, loadTo: light, setsFrom: st.sets, setsTo: st.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [st.band.lo, st.band.hi], at: atMs, kind: 'ease', runKm });
+      ex[id] = { ...st, load: light };
+    }
+    if (Object.keys(restore).length > 0) {
+      state.runEase = { startedAt: atMs, endsAt: runEaseEndsAt(due), runAtMs: runAt, runKm, restore };
+      void track('engine_run_ease_opened', { runKm, lifts: Object.keys(restore).length });
+    }
+  };
+
+  if (unfolded.length === 0) {
+    endDeload(nowMs);
+    closeRunEaseIfLapsed(nowMs);
+    openRunEase(nowMs);
+    state.changeLog = log.slice(-CHANGELOG_KEEP);
+    await save(state);
+    return {};
+  }
   // Engine-initiated exercise changes wanted from the LATEST fold per lift (S-52 graduate / S-25.2
   // rotate). The integration layer resolves the target and enacts it (writes substitutes). A later
   // progress/hold clears it — she is climbing again, so no change is wanted any more.
@@ -296,24 +408,48 @@ export async function advanceV5(
   const streaks = (state.unfinishedByMuscle ??= {}); // S-34 — consecutive-unfinished per muscle
   for (const sess of unfolded) {
     const at = Date.parse(sess.startedAt);
+    // The light week: a session past the window first closes it (restored loads are what this
+    // session folds against); a session INSIDE it is recorded and never folded — light work is
+    // recovery, not evidence about her capability (engine/v5/deload).
+    endDeload(at);
+    if (deloadActiveAt(state.deload, at)) continue;
+    /*
+     * ⚠️ AN EASE NEVER OPENS AT A HISTORICAL FOLD TIME — caught in the 2026-08-24 review, first
+     * written the other way. A catch-up fold (an offline stretch, a restore) would have "opened"
+     * an ease at the moment an old session folded — but that session was TRAINED at the full
+     * prescription (a session can only start with the app open, and an open app is a read, so a
+     * live ease would already exist in state). Fabricating one retroactively both lied about what
+     * she was shown and THREW AWAY the real evidence of a session she really performed. So: the
+     * loop only CLOSES a lapsed window; opening happens exclusively at the read moment (below and
+     * in the empty-fold branch), where the prescription is actually handed out. A session that
+     * folds inside a persisted open window really was the eased session — the skip is honest.
+     */
+    closeRunEaseIfLapsed(at);
+    const easedNow = state.runEase && runEaseActiveAt(state.runEase, at) ? state.runEase : null;
     const advancedThisOcc = new Set<string>(); // lifts that ROSE this occurrence (Loop 3 anyAdvanced)
     // Sets she LOGGED per managed exercise this occurrence. `loggedByEx` is WORKING sets only (approach
-    // excluded, S-60) — it decides which lifts were really trained. `performedByEx` is ALL logged sets
-    // INCLUDING the approach set, because the approach set OCCUPIES a prescribed slot (it is set 0 of the
-    // N prescribed, not an extra) and she really performed it. The completion check must use this, or an
-    // approach occurrence — (N−1) working + 1 approach — reads as (N−1) < N "unfinished", which would
-    // both block S-32 growth and, on a layoff return (S-38), wrongly TRIM a muscle. The approach set is
-    // excluded from volume EARNING (it never advances), never a penalty against it (S-60).
+    // excluded, S-60) — it decides which lifts were really trained. `performedByEx` is what counts
+    // against the PRESCRIPTION, and its two flavours of "not a working set" differ on purpose:
+    //   · a LEGACY approach set (isApproach without isWarmup, Build #33) OCCUPIES a prescribed slot
+    //     (it was set 0 of the N prescribed, not an extra) — it counts, or an approach occurrence of
+    //     (N−1) working + 1 approach reads as unfinished and wrongly trims a muscle (S-38);
+    //   · a WARM-UP BRIDGE (isWarmup, 2026-08-24) is an EXTRA step at a negative index — it must NOT
+    //     count, or two bridges + half the working sets would read as "completed everything" and
+    //     Loop 3 would grow volume on a muscle she half-trained.
     const loggedByEx: Record<string, number> = {};
     const performedByEx: Record<string, number> = {};
     for (const log0 of sess.sets) {
       if (!managed.has(log0.exerciseId)) continue;
-      performedByEx[log0.exerciseId] = (performedByEx[log0.exerciseId] ?? 0) + 1;
+      if (!log0.isWarmup) performedByEx[log0.exerciseId] = (performedByEx[log0.exerciseId] ?? 0) + 1;
       if (log0.isApproach) continue;
       loggedByEx[log0.exerciseId] = (loggedByEx[log0.exerciseId] ?? 0) + 1;
     }
     for (const id of Object.keys(ex)) {
       if (!managed.has(id)) continue; // only exercises in the current programme advance
+      // An EASED lift's occurrence is a deliberately-cautious start, not capability news — it does
+      // not fold (no decision, no history record), exactly as a deload session does not. Every
+      // other lift of the same session folds normally; the run cost her legs, not her bench.
+      if (easedNow && easedNow.restore[id] !== undefined) continue;
       const st = ex[id];
       const meta = metaWithGrid(id, history);
       const sets = setPerfs(id, [sess]); // THIS occurrence's working sets
@@ -332,7 +468,8 @@ export async function advanceV5(
       if ((out.decision === 'progress' || out.decision === 'stall_backoff') && st.load != null && out.load != null && Math.abs(out.load - st.load) > 1e-6) {
         // The worst set of the occurrence — the number S-22 and S-24 actually read, and the one the
         // letter needs so it can say "the top of its range" only when she was there.
-        const worstReps = sets.length > 0 ? Math.min(...sets.map((x) => x.reps)) : undefined;
+        const spoken = sets.filter((x) => x.reps > 0);
+        const worstReps = spoken.length > 0 ? Math.min(...spoken.map((x) => x.reps)) : undefined;
         log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at, ...(worstReps != null ? { worstReps } : {}) });
       }
       // S-28 · the ONE hold the engine must narrate. Every other hold says nothing (R7/S-16) because
@@ -384,11 +521,75 @@ export async function advanceV5(
         log.push({ exerciseId: m, decision: res.decision, loadFrom: null, loadTo: null, setsFrom: current, setsTo: res.sets, bandFrom: [0, 0], bandTo: [0, 0], at, kind: 'volume', muscle: m });
       }
     }
+
+    // The ease is spent the moment an eased lift has been TRAINED inside its window — one cautious
+    // occurrence was the whole scope. The loads walk back now, stamped at this fold, so her next
+    // session (even tomorrow, still inside the 36 h) is her standing prescription again.
+    if (easedNow && state.runEase === easedNow && sess.sets.some((l) => !l.isApproach && easedNow.restore[l.exerciseId] !== undefined)) {
+      closeRunEase(at);
+    }
   }
   state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
+
+  // The read moment itself: a window that lapsed since the last session closes, and a run she
+  // recorded after it opens — so the prescription handed out NOW already carries the answer.
+  endDeload(nowMs);
+  closeRunEaseIfLapsed(nowMs);
+  openRunEase(nowMs);
+
+  /*
+   * ── IS A LIGHT WEEK DUE? — asked once, after everything above has been folded ──────────────────
+   * The trigger is pure evidence (engine/v5/deload): most of her judgeable lifts below their rep
+   * floor twice running, with the load not lower. Opened HERE — at the fold, the moment the
+   * evidence completes (L7) — so the next prescription she reads is already the light one, told
+   * before she meets it. Every lightened load is stamped like any other decision.
+   */
+  if (!state.deload && !state.runEase) {
+    // …and the deload holds its question while an ease is open (one decision at a time; the ease
+    // is 36 h at most, so the question waits a day, never a week).
+    const foldAt = state.lastFoldedAt;
+    const verdict = deloadDue({
+      atMs: foldAt,
+      exercises: ex,
+      managed,
+      historySessions: history.length,
+      lastDeloadStartedAt: state.lastDeloadStartedAt ?? null,
+    });
+    if (verdict.due) {
+      const restore: Record<string, number | null> = {};
+      for (const id of exerciseIds) {
+        const st = ex[id];
+        if (!st || st.load == null) continue;
+        const meta = exerciseMeta(id);
+        /*
+         * ⚠️ EQUIPMENT INCREMENTS, NOT HER LEARNED GRID. `snapDown` with a sparse grid rounds to a
+         * PERFORMED rung — on a [40, 60] grid a 90% deload of 60 would land on 40, a 33% cut
+         * wearing a 10% label. The room's own increments are the honest ladder below her range
+         * (the same choice `warmupRamp` makes, for the same reason).
+         */
+        const light = snapDown(st.load * DELOAD_FRACTION, meta.equipment);
+        if (!(light < st.load - 1e-6)) continue; // no honest step below (already at the floor)
+        restore[id] = st.load;
+        log.push({ exerciseId: id, decision: 'deload', loadFrom: st.load, loadTo: light, setsFrom: st.sets, setsTo: st.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [st.band.lo, st.band.hi], at: foldAt, kind: 'deload' });
+        ex[id] = { ...st, load: light };
+      }
+      if (Object.keys(restore).length > 0) {
+        state.deload = { startedAt: foldAt, endsAt: foldAt + DELOAD_DAYS * 24 * 60 * 60 * 1000, restore };
+        state.lastDeloadStartedAt = foldAt;
+        void track('engine_deload_opened', { eligible: verdict.eligible, fatigued: verdict.fatigued, lifts: Object.keys(restore).length });
+      }
+    }
+  }
+
   state.changeLog = log.slice(-CHANGELOG_KEEP);
   await save(state);
   return wantsChange;
+}
+
+/** Is a light week open at `nowMs`? The façade read for targets/surfaces (never decides anything). */
+export async function activeDeloadV5(nowMs: number = Date.now()): Promise<boolean> {
+  const state = await load();
+  return deloadActiveAt(state.deload, nowMs);
 }
 
 // ───────────────────────────── prescription read ─────────────────────────────
@@ -660,6 +861,54 @@ export function explainChange(c: ChangeEntry): Explanation {
       text: L('detrain.text', { ex }),
     };
   }
+  /*
+   * THE LIGHT WEEK (engine/v5/deload). Two entries share the kind and the direction tells them
+   * apart: DOWN opened it (the evidence called a recovery week — the one sentence no competing
+   * engine ever shows), UP closed it (the loads walked back to exactly where they stood). Both
+   * carry real from→to loads, so every why-sheet opens with the honest numbers.
+   */
+  if (c.kind === 'deload') {
+    const opening = c.loadFrom != null && c.loadTo != null && c.loadTo < c.loadFrom;
+    return opening
+      ? {
+          slotId: c.exerciseId, pattern: '' as never,
+          observation: L('deloadStart.observation'),
+          conclusion: L('deloadStart.conclusion'),
+          action: L('deloadStart.action', { ex }),
+          text: L('deloadStart.text', { ex }),
+        }
+      : {
+          slotId: c.exerciseId, pattern: '' as never,
+          observation: L('deloadEnd.observation'),
+          conclusion: L('deloadEnd.conclusion'),
+          action: L('deloadEnd.action', { ex }),
+          text: L('deloadEnd.text', { ex }),
+        };
+  }
+  /*
+   * THE RUN CARRIED INTO HER LEGS (engine/v5/runEase). Direction tells the two apart, exactly as
+   * the deload: DOWN opened it (the run is the observation — with its distance when it qualified
+   * by distance), UP closed it (the standing weight walked back).
+   */
+  if (c.kind === 'ease') {
+    const opening = c.loadFrom != null && c.loadTo != null && c.loadTo < c.loadFrom;
+    const km = c.runKm ?? null;
+    return opening
+      ? {
+          slotId: c.exerciseId, pattern: '' as never,
+          observation: km != null ? L('easeStart.observationKm', { km }) : L('easeStart.observationLong'),
+          conclusion: L('easeStart.conclusion'),
+          action: L('easeStart.action', { ex }),
+          text: km != null ? L('easeStart.textKm', { ex, km }) : L('easeStart.textLong', { ex }),
+        }
+      : {
+          slotId: c.exerciseId, pattern: '' as never,
+          observation: L('easeEnd.observation'),
+          conclusion: L('easeEnd.conclusion'),
+          action: L('easeEnd.action', { ex }),
+          text: L('easeEnd.text', { ex }),
+        };
+  }
   // A STRUCTURAL change (S-45): the lift changed identity. A graduation says "you outgrew X → Y"; a
   // rotation / adopted learned-swap says "that slot missed the mark → Y". Reuses the existing copy.
   if (c.kind && c.toExercise) {
@@ -841,8 +1090,19 @@ export async function getSessionForwardV5(
   const state = await load();
   const out: Record<string, { loadFrom: number | null; loadTo: number | null }> = {};
   for (const c of state.changeLog ?? []) {
-    if (c.at !== sessionStartedAtMs || c.kind != null) continue;
-    out[c.exerciseId] = { loadFrom: c.loadFrom, loadTo: c.loadTo };
+    if (c.at !== sessionStartedAtMs) continue;
+    if (c.kind != null && c.kind !== 'deload' && c.kind !== 'ease') continue;
+    /*
+     * A deload (or a run's ease) stamped at the SAME fold supersedes the Loop 2 move it overrode —
+     * those entries are pushed after the loop's, so last-write-wins is the truthful order. The
+     * FROM is kept from the earlier entry when one exists: "60 → 56" is what this session actually
+     * bought her, not "62.5 → 56" via a raise she never saw.
+     */
+    const prev = out[c.exerciseId];
+    out[c.exerciseId] =
+      (c.kind === 'deload' || c.kind === 'ease') && prev
+        ? { loadFrom: prev.loadFrom, loadTo: c.loadTo }
+        : { loadFrom: c.loadFrom, loadTo: c.loadTo };
   }
   return out;
 }
@@ -853,7 +1113,14 @@ export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<Wee
   const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
   if (changes.length === 0) return null;
   const { end } = closedWeek(nowMs);
-  return { weekIndex: 0, at: new Date(end).toISOString(), explanations: changes.map(explainChange), seen: state.seenWeekEnd === end };
+  /*
+   * ONE SENTENCE PER LIFT PER MOMENT: a deload stamped at the same fold as a Loop 2 move overrode
+   * it before she ever saw it, so the letter narrates the deload alone — never "raised to 62.5"
+   * and "set lighter" about the same lift in the same breath.
+   */
+  const deloadAt = new Set(changes.filter((c) => c.kind === 'deload' || c.kind === 'ease').map((c) => `${c.exerciseId}@${c.at}`));
+  const spoken = changes.filter((c) => !(c.kind == null && deloadAt.has(`${c.exerciseId}@${c.at}`)));
+  return { weekIndex: 0, at: new Date(end).toISOString(), explanations: spoken.map(explainChange), seen: state.seenWeekEnd === end };
 }
 
 /** Mark the current closed-week mirror as seen (keyed to its week-end, so a new week reads unseen). */
@@ -887,9 +1154,10 @@ export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now
    * move — one lift, one weight, down — it simply has a different cause, and `explainChange` tells
    * that cause. Left out, the Saturday LETTER narrated a layoff and the weekly PLAN showed the lift
    * with no change against it: the two surfaces disagreeing about the same fact, which is precisely
-   * what `thePillAndTheLetterCountTheSameThing` exists to stop.
+   * what `thePillAndTheLetterCountTheSameThing` exists to stop. `deload` (2026-08-24) rides with
+   * them for the same reason — one lift, one weight, moved, with its own cause.
    */
-  const loadByEx = new Map(changes.filter((c) => c.kind == null || c.kind === 'detrain').map((c) => [c.exerciseId, c]));
+  const loadByEx = new Map(changes.filter((c) => c.kind == null || c.kind === 'detrain' || c.kind === 'deload' || c.kind === 'ease').map((c) => [c.exerciseId, c]));
   const rungByEx = new Map(changes.filter((c) => c.kind === 'rung').map((c) => [c.exerciseId, c]));
   // A structural change attaches to the lift that ARRIVED (`toExercise`) — the one she can see.
   const structByTo = new Map(

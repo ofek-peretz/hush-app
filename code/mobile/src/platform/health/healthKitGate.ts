@@ -23,7 +23,6 @@
  * readability gate adoption (a denied read returns no sample → "nothing to adopt").
  * This is the documented HealthKit pattern and keeps the denied path == granted.
  */
-// @ts-nocheck
 
 // 
 
@@ -48,8 +47,15 @@ const WORKOUT = 'HKWorkoutTypeIdentifier';
 
 /** Read-only auth request — cardio metrics, `toRead` only, never `toShare`
  *  (Hush never writes to Health). */
-const READ_AUTH = {
+/*
+ * ⛔ `toShare` JOINED ON 2026-08-23, and the contract line above ("never write to Health") is
+ * superseded with it — see `healthWrite.ts` for the ruling. The WRITE is workouts only: Hush saves
+ * the finished session so her rings close, and nothing else. Reads are unchanged, and the standing
+ * law is intact — HealthKit is still NOT a model input; a write is an OUTPUT.
+ */
+const AUTH = {
   toRead: [HEART_RATE, ACTIVE_ENERGY, DISTANCE, WORKOUT],
+  toShare: [WORKOUT],
 } as const;
 
 export const healthKitGate: HealthGate = {
@@ -58,7 +64,7 @@ export const healthKitGate: HealthGate = {
       if (!(await isHealthDataAvailableAsync())) return false;
       // Resolves true once the request flow completes (prompt shown or already
       // determined). For READ-only this is NOT a grant signal — readability is.
-      return await requestAuthorization(READ_AUTH);
+      return await requestAuthorization(AUTH);
     } catch {
       return false;
     }
@@ -67,7 +73,7 @@ export const healthKitGate: HealthGate = {
   async permissionState(): Promise<HealthPermissionState> {
     try {
       if (!(await isHealthDataAvailableAsync())) return 'unavailable';
-      const status = await getRequestStatusForAuthorization(READ_AUTH);
+      const status = await getRequestStatusForAuthorization(AUTH);
       // 'unnecessary' = already determined → treat as granted (read grant is opaque;
       // adoption is gated on a real readable sample). Else not yet asked.
       if (status === AuthorizationRequestStatus.unnecessary) return 'granted';

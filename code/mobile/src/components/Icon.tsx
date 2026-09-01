@@ -12,7 +12,6 @@
  * LEGIBILITY BEATS AESTHETICS. A slightly heavy glyph that is recognised in a fraction of a
  * second across a gym is worth more than a harmonious one that disappears at 16px.
  */
-// @ts-nocheck
 
 // 
 
@@ -22,6 +21,8 @@ import Svg, { Path, Rect, Circle, Line, G } from 'react-native-svg';
 import { color as tokens } from '@/design/tokens';
 
 export type IconName =
+  | 'camera'
+  | 'search'
   | 'menu' // line.3.horizontal (hamburger)
   | 'chevronRight'
   | 'chevronLeft'
@@ -31,6 +32,7 @@ export type IconName =
   | 'swap' // arrow.left.arrow.right
   | 'check' // checkmark
   | 'close' // xmark
+  | 'backspace' // lucide delete — the keypad's erase key (mirrors under RTL: it erases toward the start)
   | 'grip' // reorder handle
   | 'home' // house / house.fill
   | 'todayRange' // v7 2.1 — the brand's measured range with the dot at centre (the Today tab)
@@ -68,6 +70,7 @@ export type IconName =
   | 'plus' // plus — "where it began", inside a dashed ring (v7 3.2b)
   | 'alert' // a warning triangle — the ONE place it appears is the pain door (v7 13.1)
   | 'share' // a tray with an arrow out of it — sending a plan link (v7 11.4)
+  | 'link' // two chain links — the superset couple (builder, 2026-08-26)
   | 'twoPeople' // two figures — the door to the share cards, from Today (v7 2.1)
   | 'speech' // a single bubble — the door to the coach, in the corner of Today
   | 'eyeOff' // an eye, struck — "this does NOT travel" (v7 11.4's privacy line)
@@ -110,7 +113,7 @@ function resolveDirection(name: IconName): IconName {
 
 /** Glyphs whose SVG geometry must be flipped (no mirrored twin exists to swap to). */
 function mirrorsGeometry(name: IconName): boolean {
-  return I18nManager.isRTL && name === 'play';
+  return I18nManager.isRTL && (name === 'play' || name === 'backspace');
 }
 
 export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled, noMirror }: Props) {
@@ -180,6 +183,15 @@ function render(
           <Path d="M17 16H5l3 3" />
         </G>
       );
+    case 'link':
+      // Two chain links at 45° — the superset couple (builder, 2026-08-26).
+      return (
+        <G {...common}>
+          <Path d="M10.5 13.5l3-3" />
+          <Path d="M8.5 15.5l-1.8 1.8a3.2 3.2 0 0 0 4.5 4.5l1.8-1.8a3.2 3.2 0 0 0 0-4.5" />
+          <Path d="M15.5 8.5l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5l-1.8 1.8a3.2 3.2 0 0 0 0 4.5" />
+        </G>
+      );
     case 'check':
       return <Path d="M5 12.5l4.5 4.5L19 7" {...common} />;
     case 'close':
@@ -187,6 +199,15 @@ function render(
         <G {...common}>
           <Line x1="6" y1="6" x2="18" y2="18" />
           <Line x1="18" y1="6" x2="6" y2="18" />
+        </G>
+      );
+    case 'backspace':
+      // lucide `delete`: the key's body pointing at what it erases, the small x inside it.
+      return (
+        <G {...common}>
+          <Path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" />
+          <Line x1="18" y1="9" x2="12" y2="15" />
+          <Line x1="12" y1="9" x2="18" y2="15" />
         </G>
       );
     case 'todayRange':
@@ -351,6 +372,25 @@ function render(
       return <Line x1="5" y1="12" x2="19" y2="12" {...common} />;
     case 'circle':
       return <Circle cx="12" cy="12" r="8" {...common} strokeDasharray="3 3" />;
+    /* lucide `camera` — "photograph your plan" is an ACT, and a `+` only says "add something".
+       The one glyph that names the act in every language. */
+    case 'camera':
+      return (
+        <G {...common}>
+          <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+          <Circle cx="12" cy="13" r="3.2" />
+        </G>
+      );
+    /* lucide `search` — the one glyph a search field cannot do without. See the note at
+       `ExerciseLibrary`'s field: this app draws inputs on a RULE rather than in a box (founder
+       2026-07-12), which is right, and leaves a search field with nothing at all to identify it. */
+    case 'search':
+      return (
+        <G {...common}>
+          <Circle cx="11" cy="11" r="7" />
+          <Path d="M20 20 L16 16" />
+        </G>
+      );
     case 'dumbbell':
       // lucide `dumbbell` (current diagonal form, verbatim) — matches the Claude
       // Design history rows (which render `data-lucide="dumbbell"` from lucide@latest).

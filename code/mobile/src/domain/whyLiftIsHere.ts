@@ -30,6 +30,7 @@
  *     stance          HER mark on the body map, which is the one input she gave by hand
  *     weeklyTarget    `weeklyTargets(...)[muscle]` — the exact number the assembler dealt against
  *     setsHere        the slot's own `setCount`
+ *     weeklyReceived  `weeklyEffectiveSets` — the assembler's OWN accounting, exported from it
  *     essential       `ESSENTIAL_PATTERNS[muscle]` — a pattern the muscle may not be programmed without
  *     firstTime       her saved history, asked plainly
  *
@@ -45,6 +46,7 @@
  */
 
 import { exerciseById, indirectMusclesOf, type MuscleGroup } from '@/data/exercises';
+import { weeklyEffectiveSets } from '@/data/api/fixtureModel';
 import { ESSENTIAL_PATTERNS, essentialPatternOf } from '@/engine/v5/programAssembly';
 import { weeklyTargets } from '@/engine/v5/assembler';
 import { stanceOf, type BodyMap } from '@/engine/v5/bodyMap';
@@ -66,6 +68,27 @@ export interface LiftPlacement {
   setsHere: number;
   /** How many sets of this muscle the whole week carries — `setsHere` in context. */
   weeklySetsHere: number;
+  /**
+   * ⛔ WHAT THE ENGINE COUNTS THE MUSCLE AS RECEIVING — `weeklyEffectiveSets`, the assembler's own
+   * function, and the ONLY number on this sheet that may be compared to a threshold (2026-08-18).
+   *
+   * `weeklySetsHere` above is a DESCRIPTION: the rows she can count on her cards. This is a
+   * JUDGEMENT: direct sets plus what every compound lends the muscles it also drives, which is the
+   * number `raiseToWeeklyFloor` decides against when it chooses whether to spend another minute of
+   * her hour. They differ, and the difference is the whole defect this field closes — see the
+   * closing line in `whyHereProps`.
+   *
+   * ⚠️ AND THAT IS THE LAW HERE NOW, so this cannot happen a second time: a number that is SHOWN may
+   * be the prescribed count; a number that is COMPARED must come from the engine's accounting.
+   */
+  weeklyReceived: number;
+  /**
+   * The engine holds this lift to the weekly dose at all. False for supplemental work — the core
+   * block `addWeeklyCore` appends outside the volume pot, which `weeklyTargets` deletes before the
+   * week is dealt and which every volume rule in `domain/weekQuality` excludes. Holding it to a dose
+   * nothing ever aimed at it is the same false complaint this file exists to stop making.
+   */
+  judgedByDose: boolean;
   /** It fills a movement the muscle may not be programmed without (`ESSENTIAL_PATTERNS`). */
   essential: boolean;
   /** She has never logged a set of it. The load line then says so instead of naming a weight. */
@@ -74,7 +97,7 @@ export interface LiftPlacement {
 
 /** The week as this module needs it — slots and their set counts, nothing else. */
 export interface PlacementWeek {
-  days: { isRest?: boolean; slots: { exerciseId: string; setCount: number }[] }[];
+  days: { isRest?: boolean; slots: { exerciseId: string; setCount: number; supplemental?: boolean }[] }[];
 }
 
 /**
@@ -109,6 +132,22 @@ export function liftPlacement(
     .reduce((n, s) => n + s.setCount, 0);
 
   /*
+   * ⛔ AND WHAT THE ENGINE COUNTS HER AS RECEIVING — ITS FUNCTION, NOT A SECOND OPINION (2026-08-18).
+   *
+   * The count above was the sheet's only weekly number and it was being held against
+   * `WEEKLY_SETS_FLOOR`. The engine does not judge a muscle that way: `raiseToWeeklyFloor` counts
+   * direct sets PLUS `INDIRECT_SHARE` of every compound that also drives the muscle, and skips
+   * supplemental work. So a woman with 4 direct biceps sets and 3.5 more from her rows was told
+   * *"6 sets a week is the least that grows a muscle. This one has 4, and your hour is why"* — about
+   * a shortfall the engine had already decided did not exist, and would never have raised however
+   * many times her week was rebuilt.
+   *
+   * `weeklyEffectiveSets` is that pass's own function, exported rather than copied — a copy is how
+   * the two accountings came apart in the first place.
+   */
+  const received = weeklyEffectiveSets(workouts);
+
+  /*
    * ⚠️ THE TARGET IS RE-ASKED, NOT STORED. `weeklyTargets` is pure and cheap, and it is the single
    * function the assembler itself dealt against — so the number on this sheet cannot drift from the
    * number that built the week. A copy stamped into the programme could, the first time her body
@@ -125,6 +164,8 @@ export function liftPlacement(
     weeklyTarget: targets[ex.muscle] ?? 0,
     setsHere,
     weeklySetsHere,
+    weeklyReceived: received[ex.muscle] ?? 0,
+    judgedByDose: !mine[0].supplemental,
     essential: !!essentials?.includes(essentialPatternOf(ex.pattern)),
     firstTime: !history.some((s) => s.sets.some((x) => x.exerciseId === exerciseId)),
   };

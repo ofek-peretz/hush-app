@@ -157,7 +157,31 @@ function textOf(r: ReactTestRenderer): string {
  * timers have run sees no beat whether one was drawn or not — the leftover screen would simply have
  * flashed past. Asserting here is what makes the test able to fail.
  */
+
+/**
+ * ⛔ A SET CANNOT BE LOGGED WITHOUT A REP COUNT ANY MORE (founder, 2026-08-31: *"ובחזרות להשאיר
+ * ריק"*). The count starts empty on every set, and pressing the act with it empty opens the field
+ * rather than writing a number nobody said. So a test that logs a set has to do what an athlete
+ * does: say how many reps, then finish. That extra step IS the feature.
+ */
+function enterReps(r: ReactTestRenderer, n: string): void {
+  const cell = r.root.find(
+    (x) =>
+      x.props?.accessibilityRole === 'button' &&
+      String(x.props?.accessibilityLabel ?? '').startsWith(tg('workout.repsUnit')) &&
+      typeof x.props?.onPress === 'function',
+  );
+  act(() => cell.props.onPress());
+  for (const d of n.split('')) {
+    const key = r.root.find(
+      (x) => x.props?.accessibilityRole === 'button' && x.props?.accessibilityLabel === d && typeof x.props?.onPress === 'function',
+    );
+    act(() => key.props.onPress());
+  }
+}
+
 function pressCompleteSet(r: ReactTestRenderer): void {
+  enterReps(r, '8');
   const btn = r.root.find(
     (n) => n.props.accessibilityLabel === tg('workout.completeSet') && typeof n.props.onPress === 'function',
   );
@@ -175,16 +199,19 @@ async function settle(): Promise<void> {
 
 const NO_CORRECTION: Result = { ended: false, unlockedPortrait: false, correction: null };
 
-describe('an ordinary set gets no ceremony', () => {
-  it('logging set 2 of 4 in the band shows no "Set recorded" beat at all', async () => {
+describe('an ordinary set gets the capture — and only the capture', () => {
+  /* 2026-08-26: the founder's logger ruling. Every working set now gets ONE beat — the set she
+     wrote, at stage size — and nothing else: no band verdict, no correction reveal, no promise
+     about the next set. The old leftover "Set recorded" readback stays dead. */
+  it('logging set 2 of 4 shows the capture — and none of the dead ceremonies', async () => {
     const r = draw(makeSession(2, 4, NO_CORRECTION));
     pressCompleteSet(r);
 
-    // Read the stage AT the beat — the instant the leftover screen used to own it.
     const read = textOf(r);
-    // The leftover beat, in all its parts.
+    expect(read.toUpperCase()).toContain(tg('workout.setCaptured', { n: 2 }).toUpperCase());
     expect(read).not.toContain(tg('workout.recorded'));
     expect(read).not.toMatch(/SET 2 OF 4 LOGGED/i);
+    expect(read).not.toMatch(/landed|band|holds for/i);
   });
 
   it('⚠️ the LAST set of a lift is a beat, and it ASKS NOTHING', async () => {
@@ -209,7 +236,9 @@ describe('an ordinary set gets no ceremony', () => {
     }
   });
 
-  it('a CORRECTION still takes the whole beat — the set moved the next load', async () => {
+  it('⛔ even a result CLAIMING a correction cannot resurrect the reveal — the beat stays the capture', async () => {
+    /* The store returns correction: null forever (the 2026-08-26 ruling), but the stage must not
+       depend on the store's good manners: hand it a poisoned result and the reveal stays dead. */
     const correction = {
       exerciseId: 'db_shoulder_press',
       direction: 'up',
@@ -220,9 +249,9 @@ describe('an ordinary set gets no ceremony', () => {
     };
     const r = draw(makeSession(2, 4, { ended: false, unlockedPortrait: false, correction }));
     pressCompleteSet(r);
-    await settle(); // the correction is only known once completeSet resolves
-    // The band verdict — the screen the founder said is the one that matters.
-    expect(textOf(r)).toMatch(/BAND/i);
+    await settle();
+    expect(textOf(r)).not.toMatch(/BAND/i);
+    expect(textOf(r).toUpperCase()).toContain(tg('workout.setCaptured', { n: 2 }).toUpperCase());
   });
 
   it('a single-set lift is not treated as a finished lift', async () => {

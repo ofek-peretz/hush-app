@@ -233,7 +233,12 @@ describe('⛔ the engine’s week reaches the screen', () => {
     const bridges = globSync('**/*.{ts,tsx}', { cwd: path.resolve(__dirname, '..', '..', 'src'), absolute: true })
       .filter((f: string) => !f.includes('enginePlan'))
       .filter((f: string) => fs.readFileSync(f, 'utf8').includes('coachPlanFromProgram('));
-    expect(bridges.map((f: string) => path.basename(f))).toEqual(['weekPlan.ts']);
+    /*
+     * `planReview.ts` joined 2026-08-25 (the plan builder's AI opinion): it converts the DRAFT she
+     * is editing so the coach reviews exactly the week on her screen, loads included. Same bridge,
+     * second consumer — still nothing else may run its own conversion.
+     */
+    expect(bridges.map((f: string) => path.basename(f)).sort()).toEqual(['planReview.ts', 'weekPlan.ts']);
 
     // 2 · …and it is the door every surface actually goes through.
     const door = src('data/local/weekPlan.ts');
@@ -246,17 +251,21 @@ describe('⛔ the engine’s week reaches the screen', () => {
       'screens/home/Home.tsx',
       'screens/plan/PreWorkoutScreen.tsx',
       'screens/plan/SharePlanScreen.tsx',
-      'screens/profile/ProfileSheet.tsx',
       'screens/progress/LiftDetail.tsx',
       'screens/weekly/WeeklyUpdate.tsx',
       'screens/session/SessionFlow.tsx',
     ];
     /*
-     * ⛔ `screens/pain/PainWhere.tsx` CAME OFF THIS LIST ON 2026-08-12, and it is the only removal.
-     * It used to read her week because it was a CHAT and the coach needed the context. It is the
-     * body map again — she points at a muscle and picks a severity — and it reads nothing but her
-     * body map and the pain tables. A screen listed here that does not draw her week would be a
-     * law asking for a read nobody needs.
+     * ⛔ `screens/pain/PainWhere.tsx` CAME OFF THIS LIST ON 2026-08-12. It used to read her week
+     * because it was a CHAT and the coach needed the context. It is the body map again — she points
+     * at a muscle and picks a severity — and it reads nothing but her body map and the pain tables.
+     * A screen listed here that does not draw her week would be a law asking for a read nobody needs.
+     *
+     * ⛔ AND `screens/profile/ProfileSheet.tsx` CAME OFF IT ON 2026-08-18, for the same reason worn
+     * differently: it drew NOTHING from the week. Its read fed a `hasPlan` flag that gated a
+     * Share-or-Bring fork, the fork was removed (one destination, see the door there), and the flag
+     * was then a whole-week disk read on every open of the You tab that no pixel could see. The law
+     * was holding the read in place after the row it served had gone.
      */
     expect(src('screens/pain/PainWhere.tsx')).not.toContain('loadWeekPlan');
     /* Comments are stripped first — several of these files EXPLAIN the old read in prose, and a law

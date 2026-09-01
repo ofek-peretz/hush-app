@@ -146,8 +146,15 @@ export async function runImport(
     findings: reviewFindings(matched, program),
     suggestions: [],
     matched,
-    sessionCount: program.days.length,
-    liftCount: program.days.reduce((n, d) => n + d.slots.length, 0),
+    /*
+     * ⚠️ BOTH FIGURES COUNT WHAT WAS **READ**, and until now the lift one counted what SURVIVED.
+     * The review says "{{sessions}} sessions · {{lifts}} exercises read" — so a sheet of twelve
+     * lifts with two we could not place reported ten, understating her own programme back at her
+     * while the findings underneath named the two by name. The counts and the findings now measure
+     * the same week: this line is what arrived, the findings are what happened to it.
+     */
+    sessionCount: matched.sessions.length,
+    liftCount: matched.sessions.reduce((n, s) => n + s.lifts.length, 0),
     ...(matched.title ? { title: matched.title } : {}),
   };
   input.onReady?.(outcome);

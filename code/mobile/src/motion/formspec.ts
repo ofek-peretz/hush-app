@@ -5,7 +5,6 @@
  * this fail, in jest, on every commit. This is the mechanism that stops the demonstration from
  * ever contradicting Hush's own cues (MOTION_FORM_STANDARD_V1 §1).
  */
-// @ts-nocheck
 
 // 
 
@@ -45,6 +44,15 @@ function checkPredicate(pose: Pose, p: PosePredicate): string | null {
     if (Math.abs(a.x - p.x) > p.tol) return `${p.label ?? p.a} x=${a.x.toFixed(1)} not within ${p.tol} of contact line ${p.x}`;
     return null;
   }
+  if (p.kind === 'jointRightOf') {
+    const a = need(pose, p.a);
+    const b = need(pose, p.b);
+    if (!(a.x > b.x + p.by)) {
+      return `${p.label ?? p.a} not outboard of ${p.b} by ${p.by} (Δx=${(a.x - b.x).toFixed(1)})`;
+    }
+    return null;
+  }
+
   // jointBelow
   const a = need(pose, p.a);
   const b = need(pose, p.b);
@@ -67,6 +75,19 @@ function checkInvariant(pose: Pose, start: Pose, inv: Invariant): string | null 
   if (inv.kind === 'angleNever') {
     const a = angleAt(need(pose, inv.neighbors[0]), need(pose, inv.joint), need(pose, inv.neighbors[1]));
     if (a > inv.aboveDeg) return `${inv.label ?? inv.joint} angle ${a.toFixed(1)}° exceeded ${inv.aboveDeg}°`;
+    return null;
+  }
+  if (inv.kind === 'spanNever') {
+    const d = dist(need(pose, inv.a), need(pose, inv.b));
+    if (d > inv.aboveUnits) return `${inv.label ?? `${inv.a}→${inv.b}`} spans ${d.toFixed(1)} (> ${inv.aboveUnits})`;
+    return null;
+  }
+  if (inv.kind === 'spanFixed') {
+    const now = dist(need(pose, inv.a), need(pose, inv.b));
+    const was = dist(need(start, inv.a), need(start, inv.b));
+    if (Math.abs(now - was) > inv.tol) {
+      return `${inv.label ?? `${inv.a}→${inv.b}`} spans ${now.toFixed(2)} against ${was.toFixed(2)} at the rep start (> ${inv.tol}) — the link changed length`;
+    }
     return null;
   }
   // colinear — a–b–c hold a straight line within tolDeg for the whole rep

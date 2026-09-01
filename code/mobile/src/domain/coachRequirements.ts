@@ -37,7 +37,6 @@
  * only for now, and expand from there if this works smoothly."* A full gym is the assumption.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
@@ -135,7 +134,9 @@ export function missingForCoach(profile: Profile | null | undefined): CoachRequi
     // A bodyweight of 0 is absence wearing a number — the shape `weightKg?: number` cannot say so.
     // Every numeric requirement has the same failure mode: a 0 that means "nobody asked" rather
     // than a real answer. `daysPerWeek` is the one the founder actually caught, as a placeholder.
-    if (r.key === 'weightKg' || r.key === 'age' || r.key === 'daysPerWeek') {
+    // (`age` was in this guard until 2026-08-23 — it left REQUIRED_FOR_COACH on 2026-08-08 and the
+    //  dead comparison sat here invisibly until the typechecker was allowed to look.)
+    if (r.key === 'weightKg' || r.key === 'daysPerWeek') {
       return typeof v !== 'number' || !Number.isFinite(v) || v <= 0;
     }
     return v == null;

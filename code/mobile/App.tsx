@@ -31,13 +31,18 @@ import {
 import { initI18n } from '@/i18n';
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
+import { PairProvider } from '@/state/stores/pairStore';
 import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
-import { installCrashHandler, flush as flushTelemetry } from '@/platform/telemetry';
+import { installCrashHandler, flush as flushTelemetry, track } from '@/platform/telemetry';
+import { LIFECYCLE_EVENTS } from '@/platform/events';
+import { loadRemoteConfig } from '@/platform/remoteConfig';
+import { installCrashReporting } from '@/platform/crash';
 import { color } from '@/design/tokens';
 import { installGlobalFontDefault } from '@/design/typography';
 
 installGlobalFontDefault();
+installCrashReporting(); // Sentry when a DSN is configured; a silent no-op otherwise
 
 export default function App() {
   const [i18nReady, setI18nReady] = useState(false);
@@ -57,10 +62,31 @@ export default function App() {
 
   useEffect(() => {
     installCrashHandler(); // capture JS crashes → telemetry (observability)
+    void loadRemoteConfig(); // tunables (trial length…) — cached word applies now, fresh word lands quietly
     initI18n().then(() => setI18nReady(true));
-    // Ship buffered telemetry whenever the app foregrounds.
+    /*
+     * ════ THE HEARTBEAT, AND THE FLUSH THAT CATCHES THE ONE WHO LEAVES ════
+     *
+     * `app_open` fires once per cold launch (here, on mount) and once per warm return from
+     * background — the event every retention curve is computed from; see LIFECYCLE_EVENTS.
+     *
+     * The flush runs on BOTH edges of the lifecycle, and the leaving edge is the one that was
+     * missing (audit finding 2): flushing only on 'active' meant an athlete who abandoned
+     * onboarding and never came back kept her funnel events on the device forever — the highest-
+     * churn cohort was exactly the invisible one. 'background' is the last breath iOS reliably
+     * gives us; the ship's own 10 s timeout fits inside it.
+     */
+    void track(LIFECYCLE_EVENTS.appOpen, { kind: 'cold' });
+    let wasBackground = false;
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') void flushTelemetry();
+      if (st === 'active') {
+        if (wasBackground) void track(LIFECYCLE_EVENTS.appOpen, { kind: 'warm' });
+        wasBackground = false;
+        void flushTelemetry();
+      } else if (st === 'background') {
+        wasBackground = true;
+        void flushTelemetry();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -75,9 +101,13 @@ export default function App() {
         <StatusBar style="light" />
         <AppProvider>
           <SessionProvider>
-            <ToastProvider>
-              <Root />
-            </ToastProvider>
+            {/* The pair reads the live session and publishes a count — so it sits INSIDE the
+                session it spectates, and outside nothing. See `state/stores/pairStore`. */}
+            <PairProvider>
+              <ToastProvider>
+                <Root />
+              </ToastProvider>
+            </PairProvider>
           </SessionProvider>
         </AppProvider>
       </SafeAreaProvider>

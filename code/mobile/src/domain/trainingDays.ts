@@ -30,7 +30,6 @@
  * Pure & I/O-free: same sessions in, same days out, on any device, forever.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-// @ts-nocheck
 
 // 
 
