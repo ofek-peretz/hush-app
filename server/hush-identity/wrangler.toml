@@ -1,0 +1,57 @@
+# hush-identity — Sign in with Apple verification + the circle (see src/index.ts header).
+# Deployed 2026-08-24 from the founder's machine (wrangler account: ofek34458@gmail.com).
+name = "hush-identity"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[[kv_namespaces]]
+binding = "HUSH_KV"
+id = "14a55c2d60944fdfb81d9895cf6b7a66"
+
+# ── THE RESEARCH SINK + REMOTE CONFIG (2026-09-01, audit findings 01/03) ────────────────────────
+# Two new endpoints ride this worker; both work with ZERO new bindings, and each arms with one
+# operator step from the founder's machine:
+#   /events  → forwards telemetry batches to the analytics store. Until the secrets exist it
+#              answers 204 and drops (by design — the app is never broken by an unarmed sink):
+#                npx wrangler secret put EVENTS_URL    (e.g. https://eu.i.posthog.com/batch)
+#                npx wrangler secret put EVENTS_KEY    (the PostHog project api_key)
+#   /config  → serves ONE KV entry as the app's remote tunables (trial length, time cap):
+#                npx wrangler kv key put --binding=HUSH_KV config:app '{"trialSessionLimit":14}'
+#   /        → the front door (static). No step needed.
+
+# Per-IP rate limit — identity endpoints are where credential-stuffing scripts go.
+[[unsafe.bindings]]
+name = "ID_LIMIT"
+type = "ratelimit"
+namespace_id = "1"
+simple = { limit = 60, period = 60 }
+
+# ── THE PAIR'S ROOM (2026-08-31) ────────────────────────────────────────────────────────────────
+# One Durable Object per live pair — two athletes on one bar, for the length of one workout. The
+# class never touches `state.storage`; see its header for why that is the feature and not an
+# oversight, and `docs/architecture/SHARED_SESSION_V1.md` for the design it serves.
+#
+# ⚠️ A BINDING ALONE IS NOT ENOUGH. A Worker that declares a Durable Object class must also declare
+# the MIGRATION that brings it into existence, or the deploy fails on an unknown class — the two
+# lines below are one change, not two.
+[[durable_objects.bindings]]
+name = "PAIR_ROOM"
+class_name = "HushPairRoom"
+
+# ⛔ `new_sqlite_classes`, NOT `new_classes` — and the deploy is where you find that out.
+#
+#   "In order to use Durable Objects with a free plan, you must create a namespace using a
+#    `new_sqlite_classes` migration."  [Cloudflare API, code 10097, 2026-08-31]
+#
+# ⚠️ IT NAMES THE STORAGE BACKEND, AND THIS ROOM HAS NO STORAGE. `HushPairRoom` never calls
+# `state.storage` — that absence is a promise the app makes about the one weight it lets off the
+# phone, and a law reads the file to prove it. So the backend is a formality here; what matters is
+# that it is the one the account can actually create, and SQLite-backed is Cloudflare's own default
+# for new namespaces either way.
+#
+# ⚠️ AND A MIGRATION TAG IS NOT RE-WRITABLE. If `v1` had ever landed as `new_classes`, this would
+# need a fresh tag rather than an edit — it did not (the deploy failed before anything was created),
+# so `v1` is still free.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HushPairRoom"]

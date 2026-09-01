@@ -56,7 +56,7 @@ export interface Env {
  * an edit and a deploy, which is exactly the friction it should have.
  */
 /*
- * `gemini-3.6-flash`, and the two readings it took to get here.
+ * The model, and the three readings it took to get here (3.5 → 3.6 → 3.7).
  *
  * ⚠️ FIRST: GOOGLE'S PRICE PAGE MIXES TWO CURRENCIES INSIDE ONE ROW SET. The Hebrew page prints
  * some figures in USD and some in shekels — `ש"ח` means USD x 4. Verified against the English page
@@ -117,6 +117,53 @@ export interface Env {
  *
  * None of this is settled by argument. Unreadable-response counts per model on real athlete data
  * are the honest comparison, and switching is this line plus a deploy.
+ */
+/*
+ * ── ⚠️ 3.7 FLASH IS OUT, AND THE CASE FOR IT IS SPEED RATHER THAN MONEY (2026-08-30) ────────────
+ *
+ * Founder: *"יצא gemini flash 3.7 אולי זה יותר זול ועדיף ממה שיש לנו כעת."* Cheaper, no — the two
+ * are priced IDENTICALLY: $0.75 / $3.75 per million on the introductory rate that runs to the end
+ * of 2026, and $1.50 / $7.50 for both from 1 January 2027. The "50% price cut" in the coverage is
+ * 3.7's introductory discount against its OWN standard rate, which is the same arrangement 3.6 is
+ * already on. Switching saves nothing.
+ *
+ * Better, probably, and on the axis this product actually spends: Artificial Analysis measures
+ * 3.7 at **329.7 output tokens/sec against 3.6's 173.1**, and time-to-first-token at **9.13s
+ * against 18.03s** — roughly twice as fast on both, at the same price.
+ *
+ * ⚠️ THOSE ARE `high`-REASONING BENCHMARKS AND OURS IS A `low` CALL, so do not read the absolutes:
+ * our whole build already completes in 5–8 seconds, well inside 3.6's benchmarked 18-second TTFT.
+ * The RATIO is the signal, and it points at the one thing the plan-build screen is designed around
+ * — the wait she watches.
+ *
+ * It also clears the bar that kept us off Pro: `gemini-3.7-flash` is GENERALLY AVAILABLE, not a
+ * `preview` id, so it is not a model Google may retire under a product with no second decider.
+ * Same tunable thinking levels, so `think: 'low'` carries over unchanged; 64k max output, so
+ * `MAX_OUTPUT_TOKENS` is untouched.
+ *
+ * ⛔ SWITCHED ON THE FOUNDER'S INSTRUCTION, 2026-08-30: *"תחליף את gemini ל 3.7."* — and switched
+ * back the same day on the measurement below, which is the whole reason the instruction was worth
+ * carrying out rather than debating.
+ *
+ * ⛔ AND THE COMPARISON WAS RUN, AND **3.7 LOST** — REVERTED THE SAME DAY (2026-08-30).
+ *
+ * Both arms deployed for real, same Worker code, same sixteen plan builds, minutes apart:
+ *
+ *     3.7 ── 10/16 usable · 6 TRUNCATED · median 9.8s · five calls hit the 45s ceiling
+ *     3.6 ── 16/16 usable · 0 truncated · median 5.0s · slowest 7.0s
+ *
+ * Confirmed on a second run of sixteen REAL athlete sentences: 16/16, median 4.2s, slowest 12.3s,
+ * nothing over thirteen seconds. **Thirty-two consecutive builds without a failure.**
+ *
+ * ⚠️ AND EVERY WORD OF THE ARGUMENT ABOVE FOR 3.7 IS STILL TRUE — generally available, same
+ * thinking levels, better published ratios. It was a good argument. On this call, with this schema
+ * at `think: 'low'`, it is beaten by the older model on the only two numbers that reach an athlete:
+ * whether an answer arrives, and when. Published benchmarks are not a measurement OF OUR CALL.
+ *
+ * ⛔ SO THE FOUNDER'S INSTRUCTION IS RECORDED AS CARRIED OUT AND MEASURED, NOT AS DECLINED. He
+ * asked for the switch on a cost-and-quality hunch — *"אולי זה יותר זול ועדיף ממה שיש לנו כעת"* —
+ * which is a hypothesis, and it was tested rather than argued with. Anyone tempted to try 3.7
+ * again: run the sixteen-call probe first, and expect truncation to be the thing that breaks.
  */
 const MODEL = 'gemini-3.6-flash';
 /**
@@ -548,140 +595,68 @@ export default {
      * Just above the fast case is the right place: the common turn never spawns a second call at
      * all, and a bad draw gets its replacement while she is still watching the dots.
      */
-    const HEDGE_MS = conversational ? 1_800 : 20_000;
+    /*
+     * ⛔ RESIZED FOR COMPLETION, NOT HEADERS (2026-08-30) — see the race below for why the meaning
+     * of this number changed under it.
+     *
+     * ⚠️ 1,800 ms WOULD NOW BE A DISASTER. It was measured against the moment headers come back,
+     * which is sub-second for everything; against the moment an ANSWER is finished it is under the
+     * fastest call this Worker has ever served, so every single request would spawn all three
+     * attempts. The same constant, unchanged, would have tripled the bill silently.
+     *
+     * The two call shapes finish on completely different clocks, so they get different numbers:
+     *
+     *   · A CHAT TURN completes in about 1.8s (twelve measured: 1.4 · 1.5 · 1.5 · 1.5 · 1.6 · 1.6
+     *     · 1.7 · 1.8 · 2.4 · 7.0 · 8.5 · 41.6). 3s is just past the healthy band.
+     *   · A PLAN BUILD has a median of 8.4s (sixteen measured, listed at the race). 9s sits just
+     *     past it, so the ordinary build never spawns a second call and the tail — 11.6, 13.1,
+     *     16.4, 19.1, 21.5 — gets a fresh attempt running beside it with time left to win.
+     *
+     * `schema` is the discriminator because it is the honest one: a structured call IS the build,
+     * and a flag would be a second opinion about the same fact.
+     */
+    const BUILD_HEDGE_MS = 9_000;
+    const CHAT_HEDGE_MS = 3_000;
+    const HEDGE_MS = conversational ? (call.schema ? BUILD_HEDGE_MS : CHAT_HEDGE_MS) : 20_000;
     const OVERALL_MS = conversational ? 45_000 : 110_000;
     const MAX_IN_FLIGHT = 3;
 
-    let upstream: Response;
-    {
-      const controllers: AbortController[] = [];
-      /** Resolves with the first attempt that comes back with usable headers. */
-      let win!: (r: Response) => void;
-      const firstGood = new Promise<Response>((r) => (win = r));
-      /** Whose body we are going to read — the only one that must NOT be aborted. */
-      let keep: AbortController | undefined;
-      let settled = 0;
-      let lastStatus: number | undefined;
-      let lastWhy: string | undefined;
-      let allDone!: () => void;
-      const exhausted = new Promise<void>((r) => (allDone = r));
-
-      const launch = () => {
-        const controller = new AbortController();
-        controllers.push(controller);
-        void fetch(url, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            // The key rides in a header, never in the URL — a URL ends up in logs and referrers.
-            'x-goog-api-key': env.GEMINI_API_KEY,
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        })
-          .then((res) => {
-            // A non-ok status is a real answer about our request and every attempt will get the
-            // same one — so it is remembered, not raced. Only a usable response wins.
-            if (res.ok) {
-              keep = controller;
-              win(res);
-              return undefined;
-            }
-            lastStatus = res.status;
-            /*
-             * ⚠️ THE BODY GOES TO THE TAIL, NEVER TO THE CALLER. An upstream 400 commonly quotes the
-             * offending request back, and the request is an athlete's record — relaying it would put
-             * her training history into whatever log the app's error path happens to write to.
-             * `npx wrangler tail` is the owner's own console.
-             */
-            return res.text().then((detail) => {
-              console.log(`gemini ${res.status} :: ${detail.slice(0, 800)}`);
-              /*
-               * ONE NARROW EXCEPTION, AND ONLY FOR 404 — a 404 is the one status whose message is
-               * about the URL rather than the payload ("models/X is not found for API version
-               * v1beta"), so it names our own configuration and nothing of hers. It turns a
-               * deploy-per-guess into a single answer, and it cost an hour to learn that the fix is
-               * usually to WAIT: Google enables the read path and the billed path on different
-               * clocks, so a fresh key 404s on `:generateContent` while `GET /models` already works.
-               */
-              if (res.status === 404) {
-                try {
-                  lastWhy = String((JSON.parse(detail) as { error?: { message?: string } })?.error?.message ?? '');
-                } catch {
-                  lastWhy = '';
-                }
-              }
-            });
-          })
-          .catch(() => {
-            /* aborted, stalled, or the connection died. Nothing to say; another attempt may land. */
-          })
-          .finally(() => {
-            /*
-             * ⛔ EVERYTHING IN FLIGHT HAS FAILED — DO NOT SIT OUT THE HEDGE TIMER.
-             *
-             * ⚠️ Found in the live battery, 2026-08-02: a build came back 503 and the athlete got
-             * nothing. The hedge is timed for a call that is STILL RUNNING — waiting 1.8s before
-             * asking again makes sense when the first attempt might yet answer. A 503 already
-             * answered: it said no. Waiting is then pure delay, and three of them in a row is the
-             * difference between a slow programme and no programme.
-             *
-             * So this fires whenever nothing is left in flight, and the loop below either launches
-             * the next attempt at once or gives up because there are none left. It replaces the
-             * immediate-503-retry that the move to hedging quietly dropped.
-             */
-            settled += 1;
-            if (settled >= controllers.length) allDone();
-          });
-      };
-
-      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-      launch();
-      let winner: Response | null = null;
-      const stopAt = Date.now() + OVERALL_MS;
-      for (let n = 1; n <= MAX_IN_FLIGHT && !winner; n += 1) {
-        const remaining = stopAt - Date.now();
-        if (remaining <= 0) break;
-        const waitFor = n < MAX_IN_FLIGHT ? Math.min(HEDGE_MS, remaining) : remaining;
-        winner = await Promise.race([
-          firstGood,
-          // Nothing is in flight any more and none of it was usable — go again NOW rather than
-          // waiting out a hedge that was timed for a call still running.
-          exhausted.then(() => null),
-          sleep(waitFor).then(() => null),
-        ]);
-        if (!winner && n < MAX_IN_FLIGHT) {
-          // A failure that came back FAST deserves a breath before the next ask; a hedge does not,
-          // because the first attempt is still going.
-          if (settled >= controllers.length) await sleep(700);
-          launch();
-        }
-      }
-      // Whoever is still running is no longer wanted. Aborting them stops the bytes and the bill.
-      // ⚠️ Except the winner: its body has not been read yet, and aborting it would cancel the very
-      // stream we are about to consume.
-      for (const c of controllers) if (c !== keep) c.abort();
-
-      if (!winner) {
-        // Nothing usable from any attempt. If one of them was told something specific, relay THAT
-        // rather than a generic unreachable — a 401 must not be reported as a bad connection.
-        if (lastStatus === 404) {
-          return json({ error: 'upstream_error', status: 404, why: (lastWhy ?? '').slice(0, 300), url }, 502);
-        }
-        if (lastStatus !== undefined) return json({ error: 'upstream_error', status: lastStatus }, 502);
-        // Nothing was decided, and the app knows what to do: nothing is written, the update waits.
-        return json({ error: 'upstream_unreachable' }, 502);
-      }
-      upstream = winner;
-    }
-
     /*
-     * NOTE: there is no `!upstream.ok` branch here, and that is not an omission. Only a response
-     * with usable headers can win the hedge above, so by the time we reach this line the status is
-     * good by construction. Everything that used to live here — the never-relay-Google's-body rule
-     * and the one narrow 404 exception — moved INTO the launch handler, which is the only place
-     * that now sees a failing attempt.
+     * ════════════════════════════════════════════════════════════════════════════════════════════
+     * ⛔ THE RACE IS ON A FINISHED ANSWER, NOT ON HEADERS (2026-08-30).
+     *
+     * ⚠️ MEASURED ON THIS WORKER, 16 consecutive plan builds, one attempt each:
+     *
+     *     4.6  4.7✗  5.1  6.1  6.3  6.4✗  7.3  8.2  8.4  8.8  11.6  13.1  16.4  19.1  21.5  3.4✗
+     *
+     * Three came back TRUNCATED — `finishReason` null, at 4, 465 and 1,124 characters — and four of
+     * the thirteen healthy ones arrived after the intake could still use them. Nine in sixteen.
+     *
+     * ── WHY THE HEDGE COULD NOT SAVE ANY OF THEM ────────────────────────────────────────────────
+     * It raced `res.ok` — HEADERS. Headers come back fast from every attempt, healthy or not, so
+     * the first one always won within a few hundred milliseconds and every sibling was aborted on
+     * the spot. **From that moment there was no recourse.** If the winner's stream then died
+     * mid-document, or ground on for twenty-one seconds, the hedge had already thrown away the
+     * calls that could have covered for it. It was racing the one part of a streaming call that
+     * never varies, and standing down before the part that does.
+     *
+     * A response with good headers is not an answer. `finishReason === 'STOP'` is an answer. So the
+     * attempt now OWNS its whole life — fetch, then read the stream to the end — and the race is
+     * decided on the first attempt that comes back complete. Both failures fall out of the same
+     * change: a dead stream loses to its sibling, and so does a slow one.
+     *
+     * ⚠️ AND `HEDGE_MS` HAD TO MOVE WITH IT. 1.8s was tuned against headers; against COMPLETION it
+     * would spawn three calls for every build on earth. It is sized from the measurement above:
+     * just past the median, so the ordinary call never spawns a second, and the tail gets its
+     * replacement while she is still watching the muscles light.
+     * ════════════════════════════════════════════════════════════════════════════════════════════
      */
+    type Answer = { text: string; finishReason: string | null; usage: Record<string, number> | null };
+    type Chunk = {
+      candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+      usageMetadata?: Record<string, number>;
+    };
+
     /*
      * READING THE STREAM.
      *
@@ -689,39 +664,34 @@ export default {
      * pieces and is joined; `finishReason` and `usageMetadata` turn up on the last chunks and simply
      * overwrite, so what we answer with is the final word on both.
      *
-     * `AbortSignal.timeout` above covers the headers, not the body — a stream that stalled mid-way
-     * would hang here for ever without the deadline below, which is the one failure mode streaming
-     * introduces that a plain request could not have.
+     * `AbortSignal.timeout` covers the headers, not the body — a stream that stalled mid-way would
+     * hang here for ever without the deadline, which is the one failure mode streaming introduces
+     * that a plain request could not have.
      */
-    type Chunk = {
-      candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-      usageMetadata?: Record<string, number>;
-    };
-    const deadline = Date.now() + OVERALL_MS;
-    const reader = upstream.body?.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let text = '';
-    let finishReason: string | null = null;
-    let usage: Record<string, number> | null = null;
+    const readStream = async (res: Response, deadline: number): Promise<Answer> => {
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let text = '';
+      let finishReason: string | null = null;
+      let usage: Record<string, number> | null = null;
 
-    const take = (line: string) => {
-      if (!line.startsWith('data:')) return;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === '[DONE]') return;
-      let chunk: Chunk;
-      try {
-        chunk = JSON.parse(payload) as Chunk;
-      } catch {
-        return;
-      }
-      const candidate = chunk.candidates?.[0];
-      text += candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-      if (candidate?.finishReason) finishReason = candidate.finishReason;
-      if (chunk.usageMetadata) usage = chunk.usageMetadata;
-    };
+      const take = (line: string) => {
+        if (!line.startsWith('data:')) return;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') return;
+        let chunk: Chunk;
+        try {
+          chunk = JSON.parse(payload) as Chunk;
+        } catch {
+          return;
+        }
+        const candidate = chunk.candidates?.[0];
+        text += candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+        if (candidate?.finishReason) finishReason = candidate.finishReason;
+        if (chunk.usageMetadata) usage = chunk.usageMetadata;
+      };
 
-    try {
       while (reader) {
         if (Date.now() > deadline) throw new Error('stream_stalled');
         const { done, value } = await reader.read();
@@ -733,17 +703,189 @@ export default {
         for (const line of lines) take(line.trim());
       }
       take(buffer.trim());
-    } catch {
-      // Same ruling as a dropped connection above: a partial answer is not a decision that arrived.
+      return { text, finishReason, usage };
+    };
+
+    const stopAt = Date.now() + OVERALL_MS;
+    const controllers: AbortController[] = [];
+    /*
+     * ⚠️ HELD ON AN OBJECT, NOT IN TWO `let`s, AND THE COMPILER IS THE REASON.
+     *
+     * Both are written from inside an async callback, which TypeScript's flow analysis does not
+     * follow — so a bare `let winner: Answer | null = null` is still narrowed to `null` at the
+     * bottom of this function, `winner ?? salvage` becomes `never`, and reading `.text` off it is
+     * an error. Narrowing on a property is invalidated by any intervening call, which is exactly
+     * the truth here: something else may well have assigned it.
+     */
+    const race: {
+      /** The first attempt that came back COMPLETE. Nothing else ends the race. */
+      winner: Answer | null;
+      salvage: Answer | null;
+    } = { winner: null, salvage: null };
+    /*
+     * ⚠️ `race.salvage` IS THE BEST INCOMPLETE ANSWER, KEPT AS A LAST RESORT — never as a result.
+     *
+     * A truncated reply is still information: the app reads `finishReason`, counts it, and retries
+     * or falls back deliberately. Throwing it away to report `upstream_unreachable` would tell the
+     * app the network failed when in fact the model answered and stopped short, which are different
+     * problems with different fixes. The race simply refuses to be WON by one.
+     */
+    let lastStatus: number | undefined;
+    let lastWhy: string | undefined;
+    let settled = 0;
+    let resolveWin!: () => void;
+    const won = new Promise<void>((r) => (resolveWin = r));
+    /*
+     * ⛔ A ONE-SHOT PROMISE IS NOT A REPEATABLE SIGNAL — AND THIS COST A BAD DEPLOY (2026-08-30).
+     *
+     * This was `const exhausted = new Promise(r => allDone = r)`, raced once per round. A promise
+     * stays resolved: the moment the FIRST attempt settled, every later round's `Promise.race`
+     * returned instantly, so the loop stopped waiting and fired all three attempts within
+     * milliseconds of each other. Three identical calls at once, and the measurement said so —
+     * **eleven of sixteen truncated**, against three before the change, with repeated 45-second
+     * exhaustions where the old code had none.
+     *
+     * ⚠️ IT WAS LATENT IN THE OLD CODE TOO. Racing HEADERS meant round one almost always won, so
+     * this path was never reached. Moving the race to completion is what walked into it — a bug I
+     * did not write so much as uncover, which is the kind that ships.
+     *
+     * So the signal is re-armed per round, and `idle()` is asked as a QUESTION rather than
+     * remembered as an event.
+     */
+    /** Nothing is in flight: every attempt launched so far has finished, none of them usably. */
+    const idle = () => settled >= controllers.length;
+    /** Resolves the next time that becomes true. Re-armed each round; a missed edge only costs a wait. */
+    let wake: (() => void) | null = null;
+    const nextIdle = () => new Promise<void>((r) => (wake = r));
+    const allDone = () => {
+      const w = wake;
+      wake = null;
+      w?.();
+    };
+
+    const launch = () => {
+      const controller = new AbortController();
+      controllers.push(controller);
+      void (async (): Promise<void> => {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            // The key rides in a header, never in the URL — a URL ends up in logs and referrers.
+            'x-goog-api-key': env.GEMINI_API_KEY,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          // A non-ok status is a real answer about our request and every attempt will get the same
+          // one — so it is remembered, not raced.
+          lastStatus = res.status;
+          /*
+           * ⚠️ THE BODY GOES TO THE TAIL, NEVER TO THE CALLER. An upstream 400 commonly quotes the
+           * offending request back, and the request is an athlete's record — relaying it would put
+           * her training history into whatever log the app's error path happens to write to.
+           * `npx wrangler tail` is the owner's own console.
+           */
+          const detail = await res.text();
+          console.log(`gemini ${res.status} :: ${detail.slice(0, 800)}`);
+          /*
+           * ONE NARROW EXCEPTION, AND ONLY FOR 404 — a 404 is the one status whose message is about
+           * the URL rather than the payload ("models/X is not found for API version v1beta"), so it
+           * names our own configuration and nothing of hers. It turns a deploy-per-guess into a
+           * single answer, and it cost an hour to learn that the fix is usually to WAIT: Google
+           * enables the read path and the billed path on different clocks, so a fresh key 404s on
+           * `:generateContent` while `GET /models` already works.
+           */
+          if (res.status === 404) {
+            try {
+              lastWhy = String((JSON.parse(detail) as { error?: { message?: string } })?.error?.message ?? '');
+            } catch {
+              lastWhy = '';
+            }
+          }
+          return;
+        }
+        const answer = await readStream(res, stopAt);
+        if (answer.finishReason === 'STOP') {
+          if (!race.winner) {
+            race.winner = answer;
+            resolveWin();
+          }
+          return;
+        }
+        // Short, or stopped for a reason of its own. It does not win; it waits in case nothing does.
+        if (!race.salvage || answer.text.length > race.salvage.text.length) race.salvage = answer;
+      })()
+        .catch(() => {
+          /* aborted, stalled, or the connection died. Nothing to say; another attempt may land. */
+        })
+        .finally(() => {
+          /*
+           * ⛔ EVERYTHING IN FLIGHT HAS FAILED — DO NOT SIT OUT THE HEDGE TIMER.
+           *
+           * ⚠️ Found in the live battery, 2026-08-02: a build came back 503 and the athlete got
+           * nothing. The hedge is timed for a call that is STILL RUNNING — waiting before asking
+           * again makes sense when the first attempt might yet answer. A 503 already answered: it
+           * said no. Waiting is then pure delay, and three of them in a row is the difference
+           * between a slow programme and no programme.
+           */
+          settled += 1;
+          if (idle()) allDone();
+        });
+    };
+
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    launch();
+    for (let n = 1; n <= MAX_IN_FLIGHT && !race.winner; n += 1) {
+      const remaining = stopAt - Date.now();
+      if (remaining <= 0) break;
+      const waitFor = n < MAX_IN_FLIGHT ? Math.min(HEDGE_MS, remaining) : remaining;
+      /* ⚠️ ASKED, NOT REMEMBERED. If everything has already finished there is nothing to wait for
+         — and waiting on a stale resolved promise is what fired three calls at once. */
+      if (!idle()) {
+        await Promise.race([
+          won,
+          // Nothing is in flight any more and none of it was usable — go again NOW rather than
+          // waiting out a hedge that was timed for a call still running.
+          nextIdle(),
+          sleep(waitFor),
+        ]);
+      }
+      if (!race.winner && n < MAX_IN_FLIGHT) {
+        // A failure that came back FAST deserves a breath before the next ask; a hedge does not,
+        // because the first attempt is still going.
+        if (settled >= controllers.length) await sleep(700);
+        launch();
+      }
+    }
+    /*
+     * Whoever is still running is no longer wanted. Aborting them stops the bytes and the bill.
+     *
+     * ⚠️ AND THERE IS NO `keep` EXCEPTION ANY MORE, WHICH IS THE POINT: the winner's body was read
+     * to the end inside its own attempt, so by the time we are here there is no stream left to
+     * cancel. That exception existed only because the old race handed back an unread `Response`.
+     */
+    for (const c of controllers) c.abort();
+
+    const answer = race.winner ?? race.salvage;
+    if (!answer) {
+      // Nothing usable from any attempt. If one of them was told something specific, relay THAT
+      // rather than a generic unreachable — a 401 must not be reported as a bad connection.
+      if (lastStatus === 404) {
+        return json({ error: 'upstream_error', status: 404, why: (lastWhy ?? '').slice(0, 300), url }, 502);
+      }
+      if (lastStatus !== undefined) return json({ error: 'upstream_error', status: lastStatus }, 502);
+      // Nothing was decided, and the app knows what to do: nothing is written, the update waits.
       return json({ error: 'upstream_unreachable' }, 502);
     }
 
     return json({
-      text,
-      finishReason,
+      text: answer.text,
+      finishReason: answer.finishReason,
       // Passed through so the app can count what a call actually cost, per model, on real data —
       // the only honest way to compare a cheap model with an expensive one.
-      usage,
+      usage: answer.usage,
       model: MODEL,
     });
   },
