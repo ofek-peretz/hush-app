@@ -40,6 +40,8 @@ import type { Pose, Rig, Vec2 } from './types';
 import { FLAT, project, type Camera } from './camera';
 import { ATHLETE } from './anthro';
 import { angleAt, dist } from './geometry';
+import { frameParts, VIEWBOX } from './frame';
+import type { Primitive } from './types';
 
 export interface AuditFinding {
   rig: string;
@@ -109,6 +111,11 @@ const STRETCH_TOL = 1.5;
 const SCAPULAR_ELEVATION: Record<string, number> = {
   bb_shrug: 8,
   db_shrug: 8,
+  /* The standing press's girdle rises 2.5u on `leads(0.2)` as the bar clears the head — the
+     scapulohumeral rhythm the seated presses draw for free on their `hipC→neckBase` torso bone.
+     This one is side-view on `hip→shoulder`, so the same honest rise needs the same slack
+     (execution pass, 2026-09-03). */
+  bb_overhead_press: 2.5,
 };
 
 interface Bone {
@@ -385,6 +392,96 @@ export function auditRig(id: string, rig: Rig, frames = 96): AuditFinding[] {
         detail: `${L.name} knee sits ${worst.toFixed(1)} BELOW its own ankle at frame ${at}/${frames} while the foot is flat on the floor`,
       });
     }
+  }
+
+  // ── 7: nothing leaves the frame ───────────────────────────────────────────────
+  /*
+   * The one law that is about the PICTURE rather than the body. Every surface draws the shared
+   * 16:10 `VIEWBOX`, and a rig that reaches past it is cropped on every one of them — the crown of
+   * a standing press at lockout, the pulley of a face pull, the head's halo on a leg-press sled.
+   * Ten rigs shipped that way (1.2–3u over) because nothing measured the drawing: the FormSpec
+   * measures technique, and the five laws above measure bones. So the drawing is measured here,
+   * across the loop, from the same primitives the renderer ships — the floor line excluded, because
+   * a ground rule runs past a photograph's edge on purpose.
+   *
+   * The ATHLETE keeps a unit of air above the crown: a head that touches the edge reads as cut even
+   * when it is not. The EQUIPMENT may run exactly to the edge — a cable tower or a pull-up rack that
+   * stops at the frame reads as a structure that continues, which is what it is — but never past it.
+   */
+  const FRAME_SAMPLES = 24;
+  const TOP_AIR = 1;
+  let bx0 = Infinity;
+  let by0 = Infinity;
+  let bx1 = -Infinity;
+  let by1 = -Infinity;
+  let fy0 = Infinity; // the athlete's own crown
+  const push = (x: number, y: number) => {
+    if (x < bx0) bx0 = x;
+    if (x > bx1) bx1 = x;
+    if (y < by0) by0 = y;
+    if (y > by1) by1 = y;
+  };
+  const bounds = (p: Primitive): void => {
+    switch (p.kind) {
+      case 'line':
+      case 'dash':
+        push(p.a.x, p.a.y);
+        push(p.b.x, p.b.y);
+        return;
+      case 'polyline':
+      case 'poly':
+        for (const q of p.pts) push(q.x, q.y);
+        return;
+      case 'quad':
+        push(p.a.x, p.a.y);
+        push(p.b.x, p.b.y);
+        push(p.c.x, p.c.y);
+        return;
+      case 'circle':
+        push(p.c.x - p.r, p.c.y - p.r);
+        push(p.c.x + p.r, p.c.y + p.r);
+        return;
+      case 'ellipse':
+        push(p.c.x - p.rx, p.c.y - p.ry);
+        push(p.c.x + p.rx, p.c.y + p.ry);
+        return;
+      case 'rect':
+        push(p.x, p.y);
+        push(p.x + p.width, p.y + p.height);
+        return;
+      case 'path':
+        push(p.start.x, p.start.y);
+        for (const s of p.segs) push(s.to.x, s.to.y);
+        return;
+      default:
+        return;
+    }
+  };
+  for (let i = 0; i < FRAME_SAMPLES; i++) {
+    const parts = frameParts(rig, i / (FRAME_SAMPLES - 1), 'male');
+    for (const p of parts.back) bounds(p);
+    for (const p of parts.front) bounds(p);
+    const decorTop = by0;
+    by0 = Infinity;
+    for (const p of parts.figure) bounds(p);
+    if (by0 < fy0) fy0 = by0;
+    by0 = Math.min(by0, decorTop);
+  }
+  const over = {
+    crown: VIEWBOX.y + TOP_AIR - fy0,
+    top: VIEWBOX.y - by0,
+    bottom: by1 - (VIEWBOX.y + VIEWBOX.h),
+    left: VIEWBOX.x - bx0,
+    right: bx1 - (VIEWBOX.x + VIEWBOX.w),
+  };
+  const outside = (Object.entries(over) as Array<[string, number]>).filter(([, v]) => v > 0);
+  if (outside.length) {
+    found.push({
+      rig: id,
+      law: 'nothing leaves the frame',
+      severity: 'fail',
+      detail: `the drawing crosses the viewBox: ${outside.map(([k, v]) => `${k} by ${v.toFixed(1)}u`).join(', ')}`,
+    });
   }
 
   return found;

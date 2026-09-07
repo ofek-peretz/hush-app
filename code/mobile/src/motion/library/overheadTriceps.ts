@@ -90,7 +90,10 @@ function overheadExt(p: OverheadParams): Rig {
     const back: Primitive[] = [...p.furniture, ...sampledPathTicks(ARC)];
     let front: Primitive[] = [];
     if (p.implement === 'cable' && p.pulleyAt) {
-      const travelled = rom;
+      /* The stack is HIGHEST at lockout (rom 0), where the cable is longest (138.9u pulley→hand),
+         and lowest in the stretch (100.5u): it used to rise as the cable slackened, 18u of weight
+         going up while 38u of cable paid out — the physics backwards (audit, 2026-09-03). */
+      const travelled = 1 - rom;
       const tower = stackTower(
         { x0: p.pulleyAt.x - 30, x1: p.pulleyAt.x - 6, capY: FLOOR_Y - 96, stackTopY: FLOOR_Y - 34 },
         travelled * 18,
@@ -98,9 +101,9 @@ function overheadExt(p: OverheadParams): Rig {
       back.push(...tower.prims, ...pulley(p.pulleyAt));
       front = [cable(p.pulleyAt, pose.j.hand)];
     } else if (p.implement === 'db') {
-      front = dumbbellSide(pose.j.hand, { x: 0, y: 1 }, 6.5, 4);
+      front = dumbbellSide(pose.j.hand, { x: 0, y: 1 }, 9, 5.5); // 6.5/4 read as two dots in the fist; 18u ≈ 20cm (audit, 2026-09-03)
     } else {
-      front = plateGhost(pose.j.hand, 9);
+      front = plateGhost(pose.j.hand, 6); // r 9 + headR 8 > the 12.7u hand→head gap at the stretch: the disc hit the face (audit, 2026-09-03)
     }
     return { back, front };
   };
@@ -163,8 +166,8 @@ function overheadExt(p: OverheadParams): Rig {
  * seated version IS the gym's canonical form of this lift — the bench takes the lower back out
  * of it, which is why every card and coach defaults there. The frame and the form agree.
  */
-const OT_HIP: Vec2 = { x: 172, y: 155 };
-const OT_SHOULDER: Vec2 = { x: 172, y: 155 - ATHLETE.torso };
+const OT_HIP: Vec2 = { x: 185, y: 155 }; // 172 centred the drawing at x=159 against a frame centre of 180 (audit, 2026-09-03)
+const OT_SHOULDER: Vec2 = { x: OT_HIP.x, y: OT_HIP.y - ATHLETE.torso };
 const SEATED_BODY = {
   head: { x: OT_SHOULDER.x + 1, y: OT_SHOULDER.y - ATHLETE.neck },
   shoulder: OT_SHOULDER,
@@ -184,7 +187,7 @@ export const overheadTricepsExt = overheadExt({
   body: SEATED_BODY,
   upperArmDeg: 12,
   phiFrom: 8, // lockout: interior ≈ 172°
-  phiTo: 122, // the stretch: interior ≈ 58°
+  phiTo: 118, // the stretch: interior 62° — 122 gave 58°, 3° above the ~55° merge floor (audit, 2026-09-03)
   implement: 'cable',
   pulleyAt: { x: OT_HIP.x - 56, y: FLOOR_Y - 10 },
   furniture: OT_BENCH,
@@ -195,7 +198,7 @@ export const dbOverheadTricepsExt = overheadExt({
   body: SEATED_BODY,
   upperArmDeg: 12,
   phiFrom: 8,
-  phiTo: 122,
+  phiTo: 118, // as the cable member (audit, 2026-09-03)
   implement: 'db',
   furniture: OT_BENCH,
 });
@@ -207,7 +210,9 @@ export const dbOverheadTricepsExt = overheadExt({
  * bar toward the forehead, which sits exactly where the arc's bottom lands.
  */
 const BENCH_TOP = FLOOR_Y - 34;
-const SK_SHOULDER: Vec2 = { x: 168, y: BENCH_TOP - 8 };
+/** The ankle, this far past the hip: the feet stand on the floor beyond the bench's end, knee 77°. */
+const SK_ANKLE_OUT = 34;
+const SK_SHOULDER: Vec2 = { x: 148, y: BENCH_TOP - 8 }; // 168 centred the drawing at x≈205 once the foot grew to 25u; 148 → ≈185 (audit, 2026-09-03)
 const SK_BODY = {
   head: { x: SK_SHOULDER.x - 16, y: SK_SHOULDER.y - 1 },
   shoulder: SK_SHOULDER,
@@ -217,14 +222,16 @@ const SK_BODY = {
      shin came out at 52.9 against a canonical 37. */
   knee: twoBoneIKToward(
     { x: SK_SHOULDER.x + ATHLETE.torso, y: BENCH_TOP - 7 },
-    { x: SK_SHOULDER.x + ATHLETE.torso + 34, y: FLOOR_Y - ATHLETE.ankleH },
+    { x: SK_SHOULDER.x + ATHLETE.torso + SK_ANKLE_OUT, y: FLOOR_Y - ATHLETE.ankleH },
     ATHLETE.thigh,
     ATHLETE.shank,
     { x: SK_SHOULDER.x + ATHLETE.torso + 20, y: BENCH_TOP - 24 },
   ),
-  ankle: { x: SK_SHOULDER.x + ATHLETE.torso + 34, y: FLOOR_Y - ATHLETE.ankleH },
-  heel: { x: SK_SHOULDER.x + ATHLETE.torso + 29, y: FLOOR_Y },
-  toe: { x: SK_SHOULDER.x + ATHLETE.torso + 43, y: FLOOR_Y },
+  ankle: { x: SK_SHOULDER.x + ATHLETE.torso + SK_ANKLE_OUT, y: FLOOR_Y - ATHLETE.ankleH },
+  /* A canonical foot — 25u heel to toe, the ankle 10u ahead of the heel as in every standing body.
+     It was 14u (heel +29, toe +43): a stump, on both legs, in every frame (audit, 2026-09-03). */
+  heel: { x: SK_SHOULDER.x + ATHLETE.torso + SK_ANKLE_OUT - 10, y: FLOOR_Y },
+  toe: { x: SK_SHOULDER.x + ATHLETE.torso + SK_ANKLE_OUT + 15, y: FLOOR_Y },
 };
 
 export const skullcrusher = overheadExt({

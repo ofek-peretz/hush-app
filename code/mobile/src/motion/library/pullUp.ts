@@ -32,6 +32,11 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** The sticking point (iron rule 12, 2026-09-07): the driver slows to a dwell where leverage is
+ *  worst and runs on. Endpoints untouched. */
+const STICK = sticksAt(0.6, 0.07); // the elbows at ~90°, where a pull-up stalls
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { barPathTicks, floorScene, padStroke } from '../kit';
@@ -50,7 +55,7 @@ const F = ATHLETE.foreArm;
  * own laws within a minute of each other. 47, a 3-unit chest-to-bar bonus, and a slightly tighter
  * leg fold leave 1.5u of headroom and 2u of air under the toe.
  */
-const BAR: Vec2 = { x: 168, y: 47 };
+const BAR: Vec2 = { x: 168, y: 50 }; // 47 put the chin-up's crown 1.6u past the top edge; the legs fold tighter to keep the toe's air (audit, 2026-09-03)
 
 /**
  * The shoulder's travel, DERIVED so the endpoint angles hold by construction — the same discipline
@@ -117,14 +122,21 @@ function pullUp(p: PullUpParams): Rig {
   const HANG_DROP = hangDropFor(p.gripDX);
 
   const poseAt = (rom: number): Pose => {
-    const drop = lerp(HANG_DROP, p.top.drop, rom);
+    const drop = lerp(HANG_DROP, p.top.drop, STICK(rom));
     const shoulder: Vec2 = { x: bodyX, y: BAR.y + drop };
     /* The whole column translates with the shoulder — the rigid-body move the invariants pin. */
     const hip: Vec2 = { x: bodyX + 2, y: shoulder.y + ATHLETE.torso };
     /* Knees bent back, ankles crossed — the canonical hang; the fold is constant, so it reads as
        carriage rather than as kicking. */
-    const knee: Vec2 = { x: hip.x - 8, y: hip.y + ATHLETE.thigh * 0.58 }; // tucked a shade tighter — see `BAR`
-    const ankle: Vec2 = { x: knee.x - 14, y: knee.y + ATHLETE.shank * 0.5 };
+    const knee: Vec2 = p.assisted
+      ? { x: hip.x + 2, y: hip.y + ATHLETE.thigh * 0.96 } // KNEELING on the pad — see `decorAt`
+      : { x: hip.x - 8, y: hip.y + ATHLETE.thigh * 0.53 }; // tucked a shade tighter — see `BAR`
+    const ankle: Vec2 = p.assisted
+      ? { x: knee.x - ATHLETE.shank * 0.9, y: knee.y + 4 } // the shin lies back along the pad
+      : { x: knee.x - 14, y: knee.y + ATHLETE.shank * 0.45 };
+    /* Kneeling, the foot continues back along the pad, toes pointing away; hanging, it dangles. */
+    const heel: Vec2 = p.assisted ? { x: ankle.x - 2, y: ankle.y + 4 } : { x: ankle.x - 6, y: ankle.y + 5 };
+    const toe: Vec2 = p.assisted ? { x: ankle.x - 13, y: ankle.y + 5 } : { x: ankle.x + 6, y: ankle.y + 9 };
     const head: Vec2 = { x: shoulder.x + 2, y: shoulder.y - ATHLETE.neck };
     const hand: Vec2 = { x: BAR.x + p.gripDX, y: BAR.y };
     const farHand: Vec2 = { x: BAR.x - p.gripDX, y: BAR.y };
@@ -136,8 +148,8 @@ function pullUp(p: PullUpParams): Rig {
         hip,
         knee,
         ankle,
-        heel: { x: ankle.x - 6, y: ankle.y + 5 },
-        toe: { x: ankle.x + 6, y: ankle.y + 9 },
+        heel,
+        toe,
         hand,
         elbow: twoBoneIK(shoulder, hand, U, F, 1),
         farShoulder: far(shoulder, -6, 1),
@@ -150,8 +162,8 @@ function pullUp(p: PullUpParams): Rig {
         farHip: far(hip, -6, 1),
         farKnee: far(knee, -6, 1),
         farAnkle: far(ankle, -6, 1),
-        farHeel: far({ x: ankle.x - 6, y: ankle.y + 5 }, -6, 0),
-        farToe: far({ x: ankle.x + 6, y: ankle.y + 9 }, -6, 0),
+        farHeel: far(heel, -6, 0),
+        farToe: far(toe, -6, 0),
       },
     };
   };
@@ -168,17 +180,18 @@ function pullUp(p: PullUpParams): Rig {
     ];
     if (p.assisted) {
       /*
-       * The assist platform rides under the SHIN and rises with her; the counterweight stack rises
-       * too — assistance is the resistance's mirror, and both must move to read as a machine.
-       *
-       * It used to sit at the knee and run FORWARD from it, while this athlete's shin goes down and
-       * BACK: the pad floated in front of a leg that never touched it. Hung off the ankle instead,
-       * it lands under the shin and foot, which is where the weight she is not lifting goes.
+       * SHE KNEELS ON THE PAD (audit, 2026-09-03). The pad used to hang under the ankle of a
+       * near-straight leg (knee 162°) — a standing platform, while the card says "set the assist"
+       * of the knee machine every gym has, where the shins lie on a pad that rises with her. So
+       * the thigh hangs vertical, the shin lies back along the pad, and the pad runs from the knee
+       * to the toes; the counterweight stack rises too — assistance is the resistance's mirror, and
+       * both must move to read as a machine. The assist arm joins the pad to the tower.
        */
-      const ank = pose.j.ankle;
+      const kn = pose.j.knee;
+      const padY = kn.y + 8;
       back.push(
-        ...padStroke({ x: ank.x - 12, y: ank.y + 7 }, { x: ank.x + 22, y: ank.y + 7 }, 8),
-        { kind: 'line', a: { x: ank.x + 24, y: ank.y + 7 }, b: { x: BAR.x + 46, y: ank.y + 7 }, w: 2.5, color: 'ink3' },
+        ...padStroke({ x: pose.j.toe.x - 6, y: padY }, { x: kn.x + 10, y: padY }, 8),
+        { kind: 'line', a: { x: kn.x + 12, y: padY }, b: { x: BAR.x + 46, y: padY }, w: 2.5, color: 'ink3' },
       );
       const risen = (HANG_DROP - lerp(HANG_DROP, TOP_DROP, rom)) * 0.4;
       const tower = stackTower({ x0: BAR.x + 48, x1: BAR.x + 74, capY: 30, stackTopY: FLOOR_Y - 34 }, risen);
@@ -224,15 +237,23 @@ function pullUp(p: PullUpParams): Rig {
     formspec,
     poseAt,
     decorAt,
-    scene: floorScene(FLOOR_Y, BAR.x, 0),
+    /* No floor under the bar members: at the hang the toe was 6u above a floor line, which at phone
+       size reads as standing on tiptoe. The machine member keeps its floor — a stack stands on one
+       (audit, 2026-09-03). */
+    scene: p.assisted ? floorScene(FLOOR_Y, BAR.x, 0) : [],
   };
 }
 
 /** Overhand, wide: the finish is CHIN over the bar. */
 const OVERHAND: TopStyle = { drop: TOP_DROP };
-/** Supinated, shoulder-width: the finish is CHEST to the bar — 5u higher, and its card says so. */
-const SUPINATED: TopStyle = { drop: TOP_DROP - 3 };
+/** Supinated, shoulder-width: the finish is CHEST to the bar — higher, and its card says so. At −3
+    both elbows closed under 55° at the top (near 37.8°, far 24.9°) and the far arm was a lump;
+    −1.5 keeps the chest at the bar inside the finish's tolerance and opens the near elbow (audit,
+    2026-09-03). */
+const SUPINATED: TopStyle = { drop: TOP_DROP - 1.5 };
 
 export const pullUpRig = pullUp({ id: 'pull_up', gripDX: 24, top: OVERHAND });
-export const chinUpRig = pullUp({ id: 'chin_up', gripDX: 15, top: SUPINATED });
+/* gripDX 15 → 18: shoulder width IS ±18u (a 40 cm grip at 1.13 cm/u); 15 was narrower than the
+   shoulders and folded the top elbow to 38° (audit, 2026-09-03). */
+export const chinUpRig = pullUp({ id: 'chin_up', gripDX: 18, top: SUPINATED });
 export const assistedPullUpRig = pullUp({ id: 'assisted_pull_up', gripDX: 24, top: OVERHAND, assisted: true });

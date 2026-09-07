@@ -110,6 +110,16 @@ export function CardioDetail({ navigation, route }: Props) {
     d.toLocaleDateString(currentLocale(), { month: 'long' }),
   ].join(' ');
 
+  /**
+   * Did this activity actually change gait? Derived from the SPLITS, never from `a.gait` — that
+   * field is the mode a picker used to set, and the picker was removed on 2026-08-04 (see
+   * `cardioMath.kcalPerKgKm`), so on every activity recorded since it is a frozen constant that
+   * describes nothing. The splits each carry their own measured gait, which is the live fact.
+   *
+   * A single split can never be "mixed" — one kilometre has nothing to differ from.
+   */
+  const mixedGait = a.splits.length > 1 && a.splits.some((s) => s.gait !== a.splits[0].gait);
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
@@ -152,7 +162,29 @@ export function CardioDetail({ navigation, route }: Props) {
         {/* the route, finally drawn — see `RouteMap`. Absent (treadmill, no lock) draws nothing. */}
         {a.route && a.route.length >= MIN_ROUTE_POINTS ? <RouteMap route={a.route} /> : null}
 
-        {/* kilometre splits — plain rows, no bars, no grade */}
+        {/*
+          kilometre splits — plain rows, no bars, no grade.
+
+          ════════════════════════════════════════════════════════════════════════════════════════
+          ⛔ A COLUMN THAT NEVER CHANGES IS NOT A COLUMN (founder, 2026-09-02):
+
+            *"כרגע זה נראה מטופש שרשום זמן לכל סיבוב וכל פעם כתוב אותו קלוריות — זה אותו מידע
+            שמופיע אינספור פעמים על המסך."*
+
+          TWO columns on this row were guilty of it, for the same reason, and both are handled here.
+
+          ① THE BURN IS GONE. `kcalPerKgKm` is flat below 6.4 km/h and flat above 8, so every split
+            of an ordinary walk (or an ordinary run) is priced at the identical integer. The row was
+            printing the athlete's bodyweight once per kilometre. The run's TOTAL burn is in the
+            band above, where it is a fact that actually moves. See the long note in `Cardio.tsx`.
+
+          ② THE GAIT TAG IS NOW AN EXCEPTION MARKER, NOT A LABEL. It had the same disease one seat
+            along: on a pure walk EVERY row read "הליכה", which tells the reader nothing they did not
+            know from the first row — and on a pure run every row was blank, so the column was 44
+            points of reserved emptiness. It draws only when this activity actually CHANGED gait,
+            which is the only case where knowing which kilometre was which is worth a column.
+          ════════════════════════════════════════════════════════════════════════════════════════
+        */}
         {a.splits.length > 0 ? (
           <View style={styles.splitsWrap}>
             <Legend style={styles.splitsLegend}>{t('cardio.kilometres')}</Legend>
@@ -164,22 +196,17 @@ export function CardioDetail({ navigation, route }: Props) {
                     capitals, while the LIVE stage two screens back said "ק״מ 3" from
                     `cardio.kmOrdinal`. Same fact, same product, two languages. */}
                 <Text style={styles.splitKm}>{t('cardio.kmOrdinal', { n: s.km })}</Text>
-                {s.kcal != null ? (
-                  <View style={styles.splitKcalWrap} accessible accessibilityLabel={`${s.kcal} ${t('cardio.kcal')}`}>
-                    <Text style={styles.splitKcal}>{s.kcal}</Text>
-                    {/* the WORD rides sans beside the mono figure (monoCarriesNoWords) */}
-                    <Text style={styles.splitKcalUnit}>{t('cardio.kcal')}</Text>
-                  </View>
-                ) : null}
                 <Text style={styles.splitPace}>{fmtPace(s.paceSec)}</Text>
-                <Text
-                  style={[
-                    styles.splitTail,
-                    { letterSpacing: legendVoice(s.gait === 'walk' ? t('cardio.walkTag') : '', 17, tracking.legend).letterSpacing },
-                  ]}
-                >
-                  {s.gait === 'walk' ? t('cardio.walkTag') : ''}
-                </Text>
+                {mixedGait ? (
+                  <Text
+                    style={[
+                      styles.splitTail,
+                      { letterSpacing: legendVoice(s.gait === 'walk' ? t('cardio.walkTag') : '', 17, tracking.legend).letterSpacing },
+                    ]}
+                  >
+                    {s.gait === 'walk' ? t('cardio.walkTag') : ''}
+                  </Text>
+                ) : null}
               </View>
             ))}
           </View>
@@ -266,9 +293,6 @@ const styles = StyleSheet.create({
      (`monoCarriesNoWords`). The uppercase keeps the row looking exactly as it did in English. */
   splitKm: { fontFamily: font.sansMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, textTransform: 'uppercase', color: color.textSecondary, textAlign: 'left' },
   splitPace: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
-  splitKcal: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
-  splitKcalWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  splitKcalUnit: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
   /* The WALK tag at the end of a split row.
      ⚠️ THE TRACKING IS SUPPLIED AT THE CALL SITE, from `legendVoice`. It is an answer about the
      STRING — Latin keeps the instrument's open track, Hebrew never gets it — and a StyleSheet

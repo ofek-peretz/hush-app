@@ -25,7 +25,12 @@
 //
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
-import { bendToward, lerp, twoBoneIK, twoBoneIKToward, withinReach } from '../geometry';
+import { bendToward, lerp, lerpV, twoBoneIK, twoBoneIKToward, withinReach } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** A single-joint rig still has a sticking point — the last fifth, where the moment arm is longest;
+ *  the driver slows there and arrives (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { barPathTicks, dumbbellSide, floorScene, padStroke, plateGhost } from '../kit';
@@ -92,7 +97,7 @@ interface CalfBentParams {
 
 function seatedCalfRaise(p: CalfBentParams): Rig {
   const poseAt = (rom: number): Pose => {
-    const { heel, ankle } = footAt(lerp(THETA_LOW, THETA_HIGH, rom));
+    const { heel, ankle } = footAt(lerp(THETA_LOW, THETA_HIGH, STICK(rom)));
     const KNEE = kneeAt(ankle);
     /* The hands rest on the pad, so they RIDE THE KNEE — they were pinned to a fixed one, and a
        hand that stays put while the thing under it rises is a hand resting on nothing. */
@@ -146,14 +151,22 @@ function seatedCalfRaise(p: CalfBentParams): Rig {
       /* The lever pivots off a FIXED post — only the pad end travels, which is what makes it a
          lever. Pinning the pivot to the moving knee made the whole machine ride up with the rep. */
       const PIVOT: Vec2 = { x: TOE.x + 26, y: KNEE_LOW.y + 4 };
+      const padEnd: Vec2 = { x: KNEE.x - 4, y: KNEE.y - 11 };
+      /*
+       * The loading horn stands ON THE LEVER, between the pivot and the pad, and the disc rides it
+       * up with every rep (audit, 2026-09-03: the horn used to stick out PAST the pivot, fixed in
+       * space — the pad rose 14u and the weight moved not at all; and a horn beyond the pivot would
+       * have to DROP as the pad rose, a seesaw). 65 % of the way out from the pivot the disc travels
+       * ~8.5u, clear of the pad, the shin and the hands.
+       */
+      const horn: Vec2 = lerpV(PIVOT, padEnd, 0.65);
       back.push(
         { kind: 'line', a: { x: PIVOT.x, y: PIVOT.y }, b: { x: PIVOT.x, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
         { kind: 'line', a: { x: PIVOT.x - 10, y: FLOOR_Y - 2 }, b: { x: PIVOT.x + 12, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3', cap: 'round' },
-        { kind: 'line', a: PIVOT, b: { x: KNEE.x - 4, y: KNEE.y - 11 }, w: 3, color: 'ink3' },
+        { kind: 'line', a: PIVOT, b: padEnd, w: 3, color: 'ink3' },
         { kind: 'circle', c: PIVOT, r: 3, fill: 'paper1', stroke: 'ink3', w: 2 },
-        // the loading horn, out past the pivot, carrying its disc
-        { kind: 'line', a: PIVOT, b: { x: PIVOT.x + 16, y: PIVOT.y - 6 }, w: 3, color: 'ink3' },
-        ...plateGhost({ x: PIVOT.x + 18, y: PIVOT.y - 7 }, 13),
+        { kind: 'line', a: horn, b: { x: horn.x, y: horn.y - 16 }, w: 3, color: 'ink3' },
+        ...plateGhost({ x: horn.x, y: horn.y - 20 }, 13),
       );
     }
     const front: Primitive[] =

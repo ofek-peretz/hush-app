@@ -18,7 +18,7 @@ const EX = process.argv[3] || 'bb_bench_press';
 const FIG = process.argv[4] === 'female' ? 'female' : 'male';
 if (!OUT) { console.error('usage: node emit.js <outDir> [exerciseId]'); process.exit(2); }
 
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const { EXERCISE_MOTION } = require(path.join(BUILD, 'registry.js'));
 const { buildFrame, VIEWBOX } = require(path.join(BUILD, 'frame.js'));
 const { validate } = require(path.join(BUILD, 'formspec.js'));

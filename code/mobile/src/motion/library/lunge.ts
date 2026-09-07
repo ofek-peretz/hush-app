@@ -1,45 +1,71 @@
 /**
  * lunge — the split-stance family: one leg in front carrying the work, one behind, and the body
- * dropping STRAIGHT DOWN between them. Side view, because a split stance IS a side-view fact — from
- * the front the two legs collapse into one another.
+ * sinking between them. Side view, because a split stance IS a side-view fact — from the front the
+ * two legs collapse into one another.
  *
  * ── THE ONE MOVEMENT UNDER ALL FOUR NAMES ───────────────────────────────────────────────────────
  * Every member holds the same canon, and it is the cue printed on every card in this family: the
- * body travels VERTICALLY. "Drop straight down" (bulgarian, reverse lunge) is drawn as the hip's
- * tracked path being `vertical` — not forward onto the knee, which is the fault that makes lunges
- * hurt. The front shin stays near its plant, the torso stays tall, and the drive is "through the
- * front heel": the front foot is `pointFixed` and the rep is the hip rising off it.
+ * body sinks BETWEEN the feet, never forward onto the knee. "Drop straight down" (bulgarian,
+ * reverse lunge) means the hip does not drift out over the toes — the fault that makes lunges
+ * hurt — and it is asserted as a corridor about the hip's chord, not as a vertical rail: descending
+ * into a split with the shin tilting over the foot takes the hip BACK as it goes down, because the
+ * thigh has to go somewhere. The torso stays tall, and the drive is "through the front heel": the
+ * front foot is `pointFixed` and the rep is the hip rising off it.
  *
- * ── HOW THE SKELETON IS SOLVED ──────────────────────────────────────────────────────────────────
- * The two feet are anchors. The hip descends its vertical line; the FRONT knee is solved by IK from
- * the planted front ankle (bend +1: it folds forward over the foot, tracking the toes), and the
- * BACK knee by IK from the rear anchor (bend −1: it folds down and under, toward the floor). Depth
- * bottoms out where the back knee approaches the floor — the honest bottom of a lunge — asserted by
- * `jointBelow` on the front hip vs its own start rather than by a posed frame.
+ * ── HOW THE SKELETON IS SOLVED (rebuilt for the audit, 2026-09-03) ──────────────────────────────
+ * The front SHIN is the driver, and the hip follows it. The shin's forward tilt runs from a soft
+ * 4° standing to `shinLeanDeg` at the bottom on `leads(0.3)` — the knee travels out over the toes
+ * first and settles by rom 0.7 (iron rule 12: the knee leads a lunge) — and the hip is then SOLVED
+ * one thigh behind the knee at the height the rep gives it. Solved that way the knee's path is
+ * monotonic by construction. It used to be the other way round — the hip on a straight line, the
+ * knee by IK from the planted foot — and the knee then bowed 10u forward at rom 0.4 and came 12u
+ * back by the bottom: a leg pumping inside one descent, measured on every member.
+ * The BACK knee is IK from the rear anchor (bend −1: it folds down and under, toward the floor).
+ *
+ * The STEP is its own clock. On the stepping members the travelling foot leaves the floor on an
+ * arc (6u at its apex), lands by rom 0.45 (`leads(0.55)`) and stays put, and the body sinks after
+ * it. Before this it slid along the floor for the whole 2 s of the eccentric, in step with the hip
+ * — a foot that never lifted, on a movement whose whole coaching point is the step.
  *
  * ── MEMBERS, AND WHAT ACTUALLY DIFFERS ──────────────────────────────────────────────────────────
  *   · `bulgarian_split_squat` — the rear foot is ELEVATED on the bench (its anchor is up at pad
- *     height, toes down on it); deepest member, and the front leg carries nearly everything.
- *   · `reverse_lunge` / `walking_lunge` — both feet on the floor. The STEP that distinguishes them
- *     happens between reps, not during the working rep, and canon (§0, two identical reps) films
- *     the rep itself: in-place they are the same drawing, and drawing the walk would be animating
- *     the rest, not the work. Both carry dumbbells at the sides.
+ *     height, toes down on it); the front leg carries nearly everything, and the torso inclines
+ *     12° at the bottom — the mass has to sit over the working foot, not over the bench.
+ *   · `reverse_lunge` — the front foot is planted; the REAR foot steps back and lands on its ball.
+ *   · `walking_lunge` — the rear foot stays; the FRONT foot steps out and the body travels over
+ *     it (an in-place forward lunge: canon films the rep, not the walk between reps).
+ *   · `curtsy_lunge` — a reverse lunge whose rear foot lands ACROSS the midline. Depth carries the
+ *     cross (see the member note): the rear leg is built in 3D and the camera stands 35° round.
  *   · `step_up` — NOT here, deliberately: its rear foot must LEAVE the floor, and this family's
  *     model pins both feet. See the note at the end of this file for what the validator caught.
  */
 
 //
 
-import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
-import { lerp, lerpV, twoBoneIK, withinReach } from '../geometry';
+import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2, Vec3 } from '../types';
+import { lerp, twoBoneIK, twoBoneIK3 } from '../geometry';
+import { leads, lags } from '../curves';
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { barPathTicks, dumbbellSide, floorScene, padStroke } from '../kit';
+import { barPathTicks, dumbbellSide, floorScene } from '../kit';
 import { FLOOR_Y, far } from '../bodies';
+import { project, type Camera } from '../camera';
 
 const T = ATHLETE.thigh;
 const S = ATHLETE.shank;
 const DOWN: Vec2 = { x: 1, y: 0 };
+const deg = (d: number): number => (d * Math.PI) / 180;
+
+/** The knee leads: the front shin reaches its bottom tilt at rom 0.7 and the hip finishes under it. */
+const SHIN_LEADS = leads(0.3);
+/** The stepping foot lands by rom 0.45, and the descent is what follows the landing. */
+const STEP = leads(0.55);
+/** The torso holds tall through the first fifth of the descent and inclines as the bottom nears. */
+const LEAN_LAGS = lags(0.2);
+/** The front shin standing: a soft 4° over the foot, not a locked plumb line. */
+const SHIN_TOP_DEG = 4;
+/** The stepping foot's arc apex — a step clears the floor, it does not skate along it. */
+const STEP_LIFT = 6;
 
 interface LungeParams {
   id: string;
@@ -50,95 +76,135 @@ interface LungeParams {
   /** The front foot's plant. */
   frontAnkle: Vec2;
   /**
-   * How bent the FRONT knee is at the bottom, in degrees. Everything about where the hip finishes
-   * follows from it — see `HIP_BOTTOM`.
+   * How bent the FRONT knee is at the bottom, in degrees (interior angle). With the shin tilted
+   * `shinLeanDeg` forward, a horizontal thigh is `90 − shinLeanDeg`.
    */
   bottomKneeDeg: number;
+  /** The front shin's forward tilt at the bottom — the knee out over the toes, as every card cues. */
+  shinLeanDeg: number;
+  /** How far the torso inclines at the bottom, degrees from vertical. */
+  leanDeg: number;
+  /**
+   * Standing, the hip sits this much below the straight-leg top. The bulgarian needs 3: with the
+   * rear foot up behind on the bench the rear leg cannot reach a fully locked stand (81u wanted of
+   * a 77u leg), and a soft front knee at the top — 154°, which is how one actually stands on a
+   * bulgarian — brings the anchor into reach without pulling the foot off the pad.
+   */
+  softTop?: number;
   /** The bench under the bulgarian's elevated rear foot. */
   bench?: { x0: number; x1: number; top: number };
   /**
-   * WHICH FOOT ARRIVES — the one thing that separates a reverse lunge from a walking one, and the
-   * one thing neither clip was drawing.
+   * WHICH FOOT ARRIVES — the one thing that separates a reverse lunge from a walking one.
    *
-   * `reverse_lunge` and `walking_lunge` were declared with byte-identical parameter sets: same
-   * anchors, same hip travel, same implement. Two ids, one drawing, and the difference between them
-   * is not decoration — it is the whole coaching point. A reverse lunge STEPS BACK: the front foot
-   * is planted and the rear one travels to meet the floor behind. A walking lunge STEPS FORWARD:
-   * the rear foot is the one that stays, the front foot arrives out in front, and the body travels
-   * over it. Omitted, both feet are placed once and never move — the split squats.
+   * A reverse lunge STEPS BACK: the front foot is planted and the rear one travels to meet the
+   * floor behind. A walking lunge STEPS FORWARD: the rear foot is the one that stays, the front
+   * foot arrives out in front, and the body travels over it. Omitted, both feet are placed once
+   * and never move — the split squats.
    */
   stepping?: 'front' | 'rear';
+  /**
+   * The curtsy's cross, in depth. The rear foot lands `crossZ` toward the camera of the working
+   * leg's plane (past it — that is the cross), the far hip sits a true half-pelvis behind, the
+   * rear leg is solved in 3D between them, and the camera orbits by `azimuth` so the cross reads.
+   */
+  cross?: { crossZ: number; azimuth: number };
   implement: 'db' | 'bodyweight';
+  /** The range statement's distance left of the hip's leftmost x — clear of the trunk (±6u). */
+  ticksLeft: number;
 }
+
+/** A true half-pelvis, hip joint to hip joint, for the one member that builds its rear leg in 3D. */
+const HALF_PELVIS = 14;
 
 function lunge(p: LungeParams): Rig {
   /*
-   * ── WHERE THE HIP GOES, AND WHY IT IS SOLVED RATHER THAN TYPED (rebuilt 2026-08-29) ────────────
-   *
-   * The hip used to be two authored numbers — an x pinned 12u behind the front plant for the whole
-   * rep, and a y lerped between two constants. Both were wrong, and the second hid the first.
-   *
-   * At the bottom the front SHIN ended up leaning BACKWARDS: the knee sat 32u behind its own ankle,
-   * because a hip only 12u back cannot get a 40u thigh and a 37u shank down to a planted foot any
-   * other way. That is the opposite of the cue every one of these four cards carries — "knee tracks
-   * the toes", "drive through the front heel" — and it is the position that makes lunges hurt.
-   *
-   * Solved, the bottom is stated the way a coach states it: the front shin VERTICAL over the planted
-   * foot, and the knee bent to `bottomKneeDeg`. The thigh's direction falls out of that angle, so
-   * the hip lands where it has to — for 90° that is a horizontal thigh, one thigh-length behind the
-   * ankle and at knee height. The hip therefore travels BACK as it descends, which is what stepping
-   * back into a lunge actually is, and what a hip pinned in x could never show.
+   * ── THE BOTTOM, STATED THE WAY A COACH STATES IT ──────────────────────────────────────────────
+   * The front shin tilted `shinLeanDeg` over the planted foot, the knee bent to `bottomKneeDeg`.
+   * The thigh's direction falls out of those two angles, so the hip lands where it has to: for a
+   * 15° shin and an 80° knee that is a thigh 5° above horizontal, and a hip 30u behind the ankle.
    */
-  const kb = (p.bottomKneeDeg * Math.PI) / 180;
-  /** The front knee at the bottom: directly above the planted foot, a shank up. */
-  const KNEE_BOTTOM: Vec2 = { x: p.frontAnkle.x, y: p.frontAnkle.y - S };
-  /** And the hip, one thigh from it in the direction that opens the knee to `bottomKneeDeg`. */
+  const lamB = deg(p.shinLeanDeg);
+  const kb = deg(p.bottomKneeDeg);
+  const KNEE_BOTTOM: Vec2 = { x: p.frontAnkle.x + S * Math.sin(lamB), y: p.frontAnkle.y - S * Math.cos(lamB) };
   const HIP_BOTTOM: Vec2 = {
-    x: KNEE_BOTTOM.x - T * Math.sin(kb),
-    y: KNEE_BOTTOM.y + T * Math.cos(kb),
+    x: KNEE_BOTTOM.x - T * Math.sin(lamB + kb),
+    y: KNEE_BOTTOM.y + T * Math.cos(lamB + kb),
   };
-  /** Standing tall, hips over the planted foot: the top of the rep, not a shade into it. */
-  const HIP_TOP: Vec2 = { x: p.frontAnkle.x - 6, y: FLOOR_Y - ATHLETE.ankleH - S - T + 1 };
-  const HIP_X = HIP_BOTTOM.x;
+  /** Standing: the hip at the straight-leg top (less `softTop`), solved a thigh behind the 4° shin. */
+  const HIP_TOP_Y = FLOOR_Y - ATHLETE.ankleH - S - T + 1 + (p.softTop ?? 0);
+  const kneeFor = (ankle: Vec2, lam: number): Vec2 => ({ x: ankle.x + S * Math.sin(lam), y: ankle.y - S * Math.cos(lam) });
+  const hipBehind = (knee: Vec2, y: number): Vec2 => ({ x: knee.x - Math.sqrt(Math.max(0, T * T - (y - knee.y) * (y - knee.y))), y });
+  const HIP_TOP: Vec2 = hipBehind(kneeFor(p.frontAnkle, deg(SHIN_TOP_DEG)), HIP_TOP_Y);
 
   /*
-   * The rear foot is clamped into the trailing leg's reach ONCE, against the tallest position of
-   * the rep, and then it never moves again.
-   *
-   * The authored anchor is where the foot ought to land, and on the walking and curtsy members that
-   * landing sits 79 and 82 units from the hip against a whole leg of 77. `twoBoneIK` answers an
-   * out-of-reach target by putting the knee a true thigh from the hip and letting the shank span
-   * whatever is left — 42.9 and 46.4 against a canonical 37.
-   *
-   * Clamping per FRAME would fix the shank and break something worse: the foot would creep as the
-   * hip descended and the anchor came back into range, and `pointFixed` on the rear ankle — "the
-   * rear foot stays where it was placed" — is the invariant that makes a lunge a lunge. Clamping
-   * against the top of the rep, where the hip is furthest away, gives one static foot that every
-   * lower position can also reach.
+   * The rear foot's landing is the authored anchor, unclamped. It used to be pulled into reach
+   * along the ray from the STANDING hip — and on the stepping members the standing hip is 90u from
+   * where the foot lands, so the clamp lifted the anchor 12u off the floor (184 → 172.4) and every
+   * lunge in the family kneeled on air, rear toes 13.6u up. The foot lands when the hip is already
+   * on its way down and 34u closer; the anchors below are placed so that moment is in reach
+   * (measured: 66u of a 76u leg at rom 0.45), and the bulgarian's `softTop` does the same for the
+   * one member whose foot never moves. (audit, 2026-09-03)
    */
-  const REAR_FOOT = withinReach(HIP_TOP, p.rearAnchor, (T + S) * 0.99);
+  const REAR_FOOT = p.rearAnchor;
 
   /** Where each foot is at rom 0, before the step that this member is named for. */
   const REAR_START: Vec2 = p.stepping === 'rear' ? { x: HIP_TOP.x - 4, y: p.frontAnkle.y } : REAR_FOOT;
   const FRONT_START: Vec2 = p.stepping === 'front' ? { x: REAR_FOOT.x + 15, y: p.frontAnkle.y } : p.frontAnkle;
   const HIP_START_X = p.stepping === 'front' ? REAR_FOOT.x + 7 : HIP_TOP.x;
 
+  /** The curtsy's camera — a pure spin about the vertical, declared so a leaning trunk cannot tilt it. */
+  const CAM: Camera | undefined = p.cross ? { azimuth: p.cross.azimuth, pivotX: 176, axis: { x: 0, y: -1 } } : undefined;
+
   const poseAt = (rom: number): Pose => {
     /* rom 0 = TALL (the rep opens standing and lowers first); rom 1 = the bottom. */
-    const hip: Vec2 = { x: lerp(HIP_START_X, HIP_BOTTOM.x, rom), y: lerp(HIP_TOP.y, HIP_BOTTOM.y, rom) };
-    const frontAnkle: Vec2 = lerpV(FRONT_START, p.frontAnkle, rom);
-    const rearFoot: Vec2 = lerpV(REAR_START, REAR_FOOT, rom);
-    /* bend −1 — the branch that puts the knee OVER the foot. +1 put it behind the ankle, which
-       is the fault, not the lift. */
-    const frontKnee = twoBoneIK(hip, frontAnkle, T, S, -1);
-    /* The trailing leg is solved from the FAR hip, which is the joint it is actually drawn from.
-       Solved from the near hip it came out a thigh long between the wrong two points — 42.2 against
-       a canonical 40 once the walking member's hip started travelling, and quietly off before that. */
-    const farHipJ = far(hip, -6, 1);
-    const rearKnee = twoBoneIK(farHipJ, rearFoot, T, S, p.rearBend);
-    const shoulder: Vec2 = { x: hip.x + 2, y: hip.y - ATHLETE.torso };
+    const st = STEP(rom);
+    const lift = STEP_LIFT * Math.sin(Math.PI * st);
+    const frontAnkle: Vec2 = p.stepping === 'front' ? { x: lerp(FRONT_START.x, p.frontAnkle.x, st), y: p.frontAnkle.y - lift } : p.frontAnkle;
+    const rearFoot: Vec2 = p.stepping === 'rear' ? { x: lerp(REAR_START.x, REAR_FOOT.x, st), y: lerp(REAR_START.y, REAR_FOOT.y, st) - lift } : REAR_FOOT;
+    const hipY = lerp(HIP_TOP.y, HIP_BOTTOM.y, rom);
+    let hip: Vec2;
+    let frontKnee: Vec2;
+    if (p.stepping === 'front') {
+      /*
+       * The walking member's hip travels FORWARD with the step — the body goes over the arriving
+       * foot — so its x rides the step's own lead and the knee is IK from the flying ankle; solved
+       * behind a shin that is still in the air, the hip would sit still while the foot flew and
+       * then lurch 30u at the landing. With the step carrying the knee forward, it is monotonic
+       * here too (145.8 → 205.6, measured at 20 samples).
+       */
+      hip = { x: lerp(HIP_START_X, HIP_BOTTOM.x, SHIN_LEADS(rom)), y: hipY };
+      frontKnee = twoBoneIK(hip, frontAnkle, T, S, -1);
+    } else {
+      const lam = deg(lerp(SHIN_TOP_DEG, p.shinLeanDeg, SHIN_LEADS(rom)));
+      frontKnee = kneeFor(frontAnkle, lam);
+      hip = hipBehind(frontKnee, hipY);
+    }
+    /* The trailing leg is solved from the FAR hip, which is the joint it is actually drawn from. */
+    const farHipJ = p.cross ? { x: hip.x, y: hip.y + 1 } : far(hip, -6, 1);
+    let rearKnee: Vec2;
+    let z: Record<string, number> | undefined;
+    if (p.cross) {
+      /*
+       * THE CROSS. The far hip is a true half-pelvis behind the working leg's plane; the rear foot
+       * starts beside the near one, under its own hip, and lands `crossZ` PAST the working leg —
+       * toward the camera. The leg between them is solved in 3D on canonical bones (a 2D solve with
+       * a depth painted on would draw a shank 28u of depth longer than it is), and the knee folds
+       * forward-and-down, tucked behind the front calf, which is the curtsy's kneel.
+       */
+      const fz = lerp(-HALF_PELVIS + 2, p.cross.crossZ, st);
+      const hip3: Vec3 = { x: farHipJ.x, y: farHipJ.y, z: -HALF_PELVIS };
+      const foot3: Vec3 = { x: rearFoot.x, y: rearFoot.y, z: fz };
+      const knee3 = twoBoneIK3(hip3, foot3, T, S, { x: 0.8, y: 0.6, z: 0 });
+      rearKnee = { x: knee3.x, y: knee3.y };
+      z = { farHip: hip3.z, farKnee: knee3.z, farAnkle: fz, farHeel: fz, farToe: fz };
+    } else {
+      rearKnee = twoBoneIK(farHipJ, rearFoot, T, S, p.rearBend);
+    }
+    /* The torso: tall, inclining to `leanDeg` late in the descent — the mass comes over the working foot. */
+    const lean = deg(lerp(0, p.leanDeg, LEAN_LAGS(rom)));
+    const shoulder: Vec2 = { x: hip.x + 2 + ATHLETE.torso * Math.sin(lean), y: hip.y - ATHLETE.torso * Math.cos(lean) };
     const head: Vec2 = { x: shoulder.x + 1, y: shoulder.y - ATHLETE.neck };
-    /* Arms hang with the load at the sides, riding the body's descent. */
+    /* Arms hang plumb with the load at the sides, riding the body's descent. */
     const elbow: Vec2 = { x: shoulder.x + 3, y: shoulder.y + ATHLETE.upperArm };
     const hand: Vec2 = { x: elbow.x + 1, y: elbow.y + ATHLETE.foreArm };
     return {
@@ -162,15 +228,27 @@ function lunge(p: LungeParams): Rig {
         farHeel: { x: rearFoot.x - 4, y: rearFoot.y + 6 },
         farToe: { x: rearFoot.x + 8, y: rearFoot.y + 7 },
       },
+      ...(z ? { z } : {}),
     };
   };
 
-  const decorAt = (rom: number): Decor => {
-    const pose = poseAt(rom);
-    const back: Primitive[] = [
-      // The hip's own travel is the range statement — the "straight down" made visible.
-      ...barPathTicks(HIP_TOP.x - 30, HIP_TOP.y, HIP_BOTTOM.y),
-    ];
+  /** A flat point through the member's camera (identity without one) — the equipment is scene knowledge. */
+  const P = (q: Vec2): Vec2 => {
+    if (!CAM) return q;
+    const r = project(q, 0, CAM);
+    return { x: r.x, y: r.y };
+  };
+
+  const decorAt = (rom: number, j?: Record<string, Vec2>): Decor => {
+    const J = j ?? poseAt(rom).j;
+    /*
+     * The range statement stands clear of the body. It sat at HIP_TOP.x − 30, which on the
+     * walking member — whose hip starts 53u further back — was inside the trunk for the whole rep,
+     * and on the split members was covered by the descending torso from rom 0.75. Left of the
+     * hip's leftmost x by `ticksLeft` it is on paper at every rom. (audit, 2026-09-03)
+     */
+    const tx = Math.min(HIP_START_X, HIP_BOTTOM.x) - p.ticksLeft;
+    const back: Primitive[] = [...barPathTicks(P({ x: tx, y: 0 }).x, HIP_TOP.y, HIP_BOTTOM.y)];
     if (p.bench) {
       back.push(
         { kind: 'rect', x: p.bench.x0, y: p.bench.top, width: p.bench.x1 - p.bench.x0, height: 8, rx: 3, fill: 'paper3', stroke: 'ink3', w: 2 },
@@ -178,10 +256,21 @@ function lunge(p: LungeParams): Rig {
         { kind: 'line', a: { x: p.bench.x1 - 5, y: p.bench.top + 8 }, b: { x: p.bench.x1 - 5, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
       );
     }
+    /* Neutral grip at the side: the handle runs front-to-back, so side-on it shows its length with
+       a plate at each end — the farmer's-carry silhouette. End-on is what a FRONT camera sees. */
     const front: Primitive[] =
-      p.implement === 'db' ? [...dumbbellSide(pose.j.farHand, DOWN), ...dumbbellSide(pose.j.hand, DOWN)] : [];
+      p.implement === 'db' ? [...dumbbellSide(J.farHand, DOWN), ...dumbbellSide(J.hand, DOWN)] : [];
     return { back, front };
   };
+
+  /*
+   * THE CORRIDOR. The hip's honest path is not a rail: with the knee leading, the hip goes BACK
+   * first (the shin tilts, the thigh has to go somewhere) and then down, bowing behind the chord
+   * from standing to the bottom by up to 8u (measured; the walking member's step carries it 7u
+   * the other way). The predicate holds it within that bow of the chord — forward of the chord by
+   * the same amount would be the fault, the hip diving out over the knee.
+   */
+  const CHORD_TOL = 9;
 
   const formspec: FormSpec = {
     tempo: DEFAULT_TEMPO,
@@ -189,23 +278,10 @@ function lunge(p: LungeParams): Rig {
       { kind: 'contactY', a: 'hip', y: HIP_TOP.y, tol: 2, label: 'standing tall' },
     ],
     end: [
-      { kind: 'contactY', a: 'hip', y: HIP_BOTTOM.y, tol: 2, label: 'drop straight down — the back knee toward the floor' },
+      { kind: 'contactY', a: 'hip', y: HIP_BOTTOM.y, tol: 2, label: 'sink between the feet — the back knee toward the floor' },
       { kind: 'jointAngle', joint: 'knee', neighbors: ['hip', 'ankle'], min: 70, max: 115, label: 'front knee square, tracking the toes' },
     ],
-    /*
-     * THE CANON: the hip travels vertically. Forward drift onto the knee is the family's fault —
-     * for the SPLIT members, which is what the canon was written about. A walking lunge's hip is
-     * supposed to travel: she is stepping forward onto the front foot and the body goes with her,
-     * so its path is the step's own line and the vertical rule would forbid the exercise.
-     */
-    /*
-     * A LINE, for every member. It was `vertical` for the non-stepping ones, on the strength of the
-     * cue "drop straight down" — but that cue means "do not let the hip drift forward over the
-     * toes", not "the hip does not move". Descending into a split with the shin vertical takes the
-     * hip 34u BACK, because the thigh has to go somewhere, and declaring a vertical path was the
-     * assertion that hid a front knee sitting behind its own ankle.
-     */
-    path: { kind: 'line', track: 'hip', tol: 1.5, dir: { x: HIP_BOTTOM.x - HIP_START_X, y: HIP_BOTTOM.y - HIP_TOP.y } },
+    path: { kind: 'line', track: 'hip', tol: CHORD_TOL, dir: { x: HIP_BOTTOM.x - HIP_START_X, y: HIP_BOTTOM.y - HIP_TOP.y } },
     invariants: [
       /* The planted foot is the one that ISN'T stepping — and which one that is IS the exercise. */
       ...(p.stepping === 'front'
@@ -214,7 +290,7 @@ function lunge(p: LungeParams): Rig {
       ...(p.stepping == null
         ? [{ kind: 'pointFixed' as const, point: 'farAnkle', tol: 0.5, label: 'the rear foot stays where it was placed' }]
         : []),
-      { kind: 'segmentAngleFixed', a: 'hip', b: 'shoulder', tolDeg: 4, label: 'torso tall — no diving over the knee' },
+      { kind: 'segmentAngleFixed', a: 'hip', b: 'shoulder', tolDeg: p.leanDeg + 2, label: 'torso tall — no diving over the knee' },
     ],
   };
 
@@ -231,6 +307,7 @@ function lunge(p: LungeParams): Rig {
       farLeg: ['farHip', 'farKnee', 'farAnkle'],
       farFoot: ['farHeel', 'farToe'],
     },
+    ...(CAM ? { camera: CAM } : {}),
     formspec,
     poseAt,
     decorAt,
@@ -240,9 +317,22 @@ function lunge(p: LungeParams): Rig {
 
 /** The floor lunges: front foot planted ahead, rear foot's ball on the floor behind. */
 const FRONT_PLANT: Vec2 = { x: 196, y: FLOOR_Y - ATHLETE.ankleH };
-const REAR_PLANT: Vec2 = { x: 138, y: FLOOR_Y - ATHLETE.ankleH - 2 }; // on the ball, heel up
+/*
+ * The rear plant: 66u behind the front (a 75 cm split). It was 138 — and at 138 the rear knee
+ * folded to 55° at the bottom, under the angle at which two fleshed limbs merge into one wedge.
+ * At 130 it bottoms at 75°, and the landing is still in reach of the descending hip. (audit, 2026-09-03)
+ */
+const REAR_PLANT: Vec2 = { x: 130, y: FLOOR_Y - ATHLETE.ankleH - 2 }; // on the ball, heel up
 /** Bench pad height for the bulgarian's elevated rear foot. */
 const PAD_TOP = FLOOR_Y - 32;
+
+/*
+ * The bottom, shared by the floor members: shin 15° over the toes, knee 80° — a thigh 5° above
+ * parallel and the hip 30u behind the ankle. The shin was vertical at 90°, and vertical is what
+ * made the knee bow out and back inside one descent (see the header). (audit, 2026-09-03)
+ */
+const SHIN_LEAN = 15;
+const BOTTOM_KNEE = 80;
 
 export const reverseLungeRig = lunge({
   id: 'reverse_lunge',
@@ -250,8 +340,11 @@ export const reverseLungeRig = lunge({
   rearAnchor: REAR_PLANT,
   rearBend: -1,
   frontAnkle: FRONT_PLANT,
-  bottomKneeDeg: 90, // front thigh parallel, shin vertical — the depth every lunge cue means
+  bottomKneeDeg: BOTTOM_KNEE,
+  shinLeanDeg: SHIN_LEAN,
+  leanDeg: 5, // a lunge's torso is tall; five degrees is the natural counterbalance, not a hinge
   implement: 'db',
+  ticksLeft: 26,
 });
 
 export const walkingLungeRig = lunge({
@@ -260,35 +353,55 @@ export const walkingLungeRig = lunge({
   rearAnchor: REAR_PLANT,
   rearBend: -1,
   frontAnkle: FRONT_PLANT,
-  bottomKneeDeg: 90,
+  bottomKneeDeg: BOTTOM_KNEE,
+  shinLeanDeg: SHIN_LEAN,
+  leanDeg: 5,
   implement: 'db',
+  ticksLeft: 26,
 });
 
 /*
- * curtsy_lunge (batch 2, 2026-08-26) — the reverse lunge with the rear foot reaching BACK AND
- * ACROSS the midline. The cross is a frontal-plane fact and folds into depth from this camera
- * (the sumo rule: the drawing carries the shape, the written cues carry the stance); what the
- * side view CAN say truthfully is the longer rear reach and the slightly deeper bottom, so the
- * rear plant sits 6u further back and the hip finishes 2u lower than the reverse lunge's.
+ * curtsy_lunge (batch 2, 2026-08-26; restaged in depth for the audit, 2026-09-03) — the reverse
+ * lunge with the rear foot reaching BACK AND ACROSS the midline. The cross is a frontal-plane
+ * fact, and from the pure side view it folded into nothing: the audit measured this clip 1.3u
+ * from reverse_lunge on average — two ids, one drawing. So the rear leg is built in 3D — the foot
+ * lands 14u past the working leg's plane, 31u behind the front foot (a curtsy tucks closer than a
+ * reverse lunge steps), the far hip a true half-pelvis behind — and the camera stands 35° toward
+ * her front, where the crossing leg is seen going behind the working one and the kneel tucks its
+ * knee behind the front calf. Negative azimuth, not positive: from behind, the crossed foot's depth
+ * carries the whole rear leg in FRONT of the working leg and the duotone swaps the legs' inks.
  */
 export const curtsyLungeRig = lunge({
   id: 'curtsy_lunge',
   stepping: 'rear', // a curtsy is a reverse lunge that crosses — the rear foot is what travels
-  rearAnchor: { x: 132, y: FLOOR_Y - ATHLETE.ankleH - 2 },
+  rearAnchor: { x: 165, y: FLOOR_Y - ATHLETE.ankleH - 2 },
   rearBend: -1,
   frontAnkle: FRONT_PLANT,
-  bottomKneeDeg: 86, // a curtsy finishes a shade deeper
+  bottomKneeDeg: 78, // a curtsy finishes a shade deeper
+  shinLeanDeg: SHIN_LEAN,
+  leanDeg: 5,
+  cross: { crossZ: 14, azimuth: -35 },
   implement: 'db',
+  ticksLeft: 26,
 });
 
 export const bulgarianSplitSquatRig = lunge({
   id: 'bulgarian_split_squat',
-  rearAnchor: { x: 128, y: PAD_TOP - 3 }, // the rear foot rests ON the pad, toes down
+  /*
+   * The rear foot rests ON the pad, toes down, 76u behind the front plant: at 128 the rear knee
+   * folded to 53° at the bottom (the merge threshold is 55°); at 124, with the front foot at 200,
+   * it bottoms at 64°. The bench moved back with it. (audit, 2026-09-03)
+   */
+  rearAnchor: { x: 124, y: PAD_TOP - 3 },
   rearBend: -1,
   frontAnkle: { x: 200, y: FLOOR_Y - ATHLETE.ankleH },
-  bottomKneeDeg: 88,
-  bench: { x0: 108, x1: 148, top: PAD_TOP },
+  bottomKneeDeg: BOTTOM_KNEE,
+  shinLeanDeg: SHIN_LEAN,
+  leanDeg: 12, // the mass over the working foot: a bulgarian's torso inclines, it does not stay plumb
+  softTop: 3,
+  bench: { x0: 104, x1: 144, top: PAD_TOP },
   implement: 'db',
+  ticksLeft: 40, // past the rear shank, which crosses a 26u line at the very height the ticks end
 });
 
 /*

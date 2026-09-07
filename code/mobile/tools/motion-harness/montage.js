@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const { EXERCISE_MOTION } = require(path.join(BUILD, 'registry.js'));
 const { buildFrame, VIEWBOX } = require(path.join(BUILD, 'frame.js'));
 const { MOTION_PALETTE } = require(path.join(BUILD, 'palette.js'));
@@ -43,7 +43,7 @@ const html = `<!doctype html><meta charset=utf8><title>${NAME}</title>
  .lab{font-size:13px;font-weight:700;margin:0 0 2px}
  .cells{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
  .pan{aspect-ratio:${(VIEWBOX.w / VIEWBOX.h).toFixed(4)};border:1px solid #dcdad8;border-radius:5px;overflow:hidden;
-   background:repeating-linear-gradient(45deg,#e4e3de 0 9px,#eeede9 9px 18px)}
+   background:#e3ded0}
  .pan svg{display:block;width:100%;height:100%}
 </style>
 ${rows}`;

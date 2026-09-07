@@ -700,16 +700,31 @@ export function skinFigure(
     out.push({ kind: 'line', a: shoulder, b: neckJoin(head, pose.headR, shoulder), w: skin.neckW, color: 'ink1', cap: 'round' });
   }
   if (skull) out.push(skullPath(head, pose.headR, shoulder, facing, 0, 'ink1'));
-  else if (head) out.push({ kind: 'circle', c: head, r: pose.headR, fill: 'ink1' });
+  else if (head && front) {
+    /* A face is TALLER than it is wide, as the side view's skull already is; a disc read as a ball
+       on the shoulders and made the 30 front-view rigs a different person from the 106 side-view
+       ones (execution pass, 2026-09-07). Same area as the disc, so no rig's headroom changes. */
+    out.push({ kind: 'ellipse', c: head, rx: pose.headR * 0.94, ry: pose.headR * 1.064, fill: 'ink1' });
+  } else if (head) out.push({ kind: 'circle', c: head, r: pose.headR, fill: 'ink1' });
 
   const nearArm = chainPts(pose, chains.nearArm);
   // the fist closing the chain — the figure visibly holds the implement
   if (nearArm) {
-    out.push(
-      ...(front
-        ? nearLimb(nearArm, flattenLean(skin.limb.arm), 'ink0', fistR)
-        : nearLimb(nearArm, skin.limb.arm, 'ink0', fistR, backOfArm)),
-    );
+    const armProf = front ? flattenLean(skin.limb.arm) : skin.limb.arm;
+    out.push(...nearLimb(nearArm, armProf, 'ink0', fistR, front ? undefined : backOfArm));
+    /*
+     * A FOLDED ARM IN TWO INKS (execution pass, 2026-09-03). Where a rig holds the bar on the back —
+     * the good morning, the back squat — the upper arm and the forearm close to ~10° and two limbs
+     * in one ink are one lump. A rig that declares `nearArmInk` gets its upper arm drawn again on
+     * top in the trunk's ink, so the fold reads as two segments; the fist is re-laid over it so a
+     * hand parked at the shoulder is never buried. Everything else in the pass is untouched.
+     */
+    const split = chains.nearArmInk;
+    if (split && nearArm.length >= 3 && split.upper !== 'ink0') {
+      const upper: LimbProfile = { w: armProf.w.slice(0, 2), belly: armProf.belly.slice(0, 1) };
+      out.push(...taperedLimb(nearArm.slice(0, 2), upper, split.upper, 0, front ? undefined : backOfArm));
+      if (fistR != null) out.push(fistAt(nearArm, fistR, 'ink0', 0));
+    }
   }
 
   return out;

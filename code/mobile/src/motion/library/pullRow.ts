@@ -15,6 +15,7 @@ import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2, Vec3 } from '../types
 import { lerp, lerpV, twoBoneIK, twoBoneIK3, twoBoneIKToward, withinReach } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
+import { lags } from '../curves';
 import { barPathTicks, dumbbellEnd, flatBench, floorScene, leverBar, linePathTicks, plateGhost, padStroke, sampledPathTicks } from '../kit';
 import { facePullStation, machineRowStation, seatedRowStation } from '../machines';
 import { far, FLOOR_Y, standingFrontCore } from '../bodies';
@@ -22,6 +23,19 @@ import { project, type Camera } from '../camera';
 
 const UPPER = ATHLETE.upperArm;
 const FORE = ATHLETE.foreArm;
+
+/*
+ * THE ELBOW LEADS, THE SHOULDER-LINE FINISHES LAST (iron rule 12, audit 2026-09-03).
+ *
+ * Every hinged member of this family has two drivers — the handle and the torso's honest hip
+ * drive — and they used to run on one clock, so the trunk rose in lock-step with the hand and the
+ * row read as a mechanism. A real row starts with the elbow: the arm has bent well before the
+ * trunk moves, and the trunk arrives last. So the torso sits still for the first fifth of the pull
+ * (and, mirrored, finishes its return before the arm has finished reaching). Same endpoints; only
+ * the middle of the rep tells the difference. The frozen-torso members have one driver and get no
+ * curve — there is no second joint to sequence until the shoulder girdle exists.
+ */
+const TORSO_LAGS = lags(0.2);
 
 const rowChains = {
   torso: ['hip', 'shoulder'] as [string, string],
@@ -64,13 +78,17 @@ export const tBarRow: Rig = (() => {
   const TORSO_RISE = 8; // the authored hip-drive arc
   const DEG = Math.PI / 180;
 
+  const torsoAt = (rom: number): number => (TORSO_HANG + TORSO_RISE * TORSO_LAGS(rom)) * DEG;
   const shoulderAt = (rom: number): Vec2 => {
-    const th = (TORSO_HANG + TORSO_RISE * rom) * DEG;
+    const th = torsoAt(rom);
     return { x: HIP.x + ATHLETE.torso * Math.cos(th), y: HIP.y - ATHLETE.torso * Math.sin(th) };
   };
   const SHOULDER0 = shoulderAt(0);
-  const BAR_X = SHOULDER0.x;
-  const HANG_Y = SHOULDER0.y + (UPPER + FORE) * 0.995;
+  /* 4u behind the shoulder, not under it: on the shoulder's own vertical the elbow spent rom
+     0.36–0.55 within 1.3° of the trunk line — an arm growing out of the belly for two frames.
+     Hung slightly back, it crosses the trunk line earlier and clears it sooner (audit, 2026-09-03). */
+  const BAR_X = SHOULDER0.x - 4;
+  const HANG_Y = SHOULDER0.y + Math.sqrt(((UPPER + FORE) * 0.993) ** 2 - (SHOULDER0.x - BAR_X) ** 2);
   const ANCHOR: Vec2 = { x: 46, y: 190 };
 
   /*
@@ -88,15 +106,24 @@ export const tBarRow: Rig = (() => {
    * bottom of the rep is unchanged, and `spanFixed` now holds the lever rigid in the validator.
    */
   const R = Math.hypot(BAR_X - ANCHOR.x, HANG_Y - ANCHOR.y);
-  /** The handle's height at the endpoint: where its own arc meets the trunk's front surface. */
-  const CHEST_Y = 102;
+  /** The handle's height at the endpoint: where its own arc meets the trunk's front surface —
+   *  105, not 102: the lower 3u keep the elbow out of the trunk silhouette (audit, 2026-09-03). */
+  const CHEST_Y = 105;
   const handAt = (rom: number): Vec2 => {
     const y = lerp(HANG_Y, CHEST_Y, rom);
     return { x: ANCHOR.x + Math.sqrt(Math.max(1, R * R - (ANCHOR.y - y) ** 2)), y };
   };
+  /* The plates ride the lever BEYOND the handle — 12u further along it, away from the anchor —
+     where a T-bar's loaded end actually is. Concentric with the fist, the ring covered the
+     handle-to-chest contact and the whole range arc (audit, 2026-09-03). */
+  const platesAt = (rom: number): Vec2 => {
+    const bar = handAt(rom);
+    const d = Math.hypot(bar.x - ANCHOR.x, bar.y - ANCHOR.y) || 1;
+    return { x: bar.x + ((bar.x - ANCHOR.x) / d) * 12, y: bar.y + ((bar.y - ANCHOR.y) / d) * 12 };
+  };
 
   const poseAt = (rom: number): Pose => {
-    const th = (TORSO_HANG + TORSO_RISE * rom) * DEG;
+    const th = torsoAt(rom);
     const shoulder = shoulderAt(rom);
     // the head rides the spine, biased upright (neutral neck, eyes forward-down)
     const head: Vec2 = {
@@ -124,11 +151,11 @@ export const tBarRow: Rig = (() => {
     return {
       // the shaft draws in the BAR voice (§3.5): floor anchor → hinge pin → solid lever
       back: [
-        ...leverBar(ANCHOR, bar),
+        ...leverBar(ANCHOR, platesAt(rom)),
         // the range statement follows the ARC, because that is the path the handle actually takes
         ...sampledPathTicks(Array.from({ length: 13 }, (_, i) => handAt(i / 12))),
       ],
-      front: plateGhost(bar, 12), // t-bar plates ride close to the handle
+      front: [...plateGhost(platesAt(rom), 12), { kind: 'circle', c: bar, r: 2.5, fill: 'ink0' }], // the fist on the handle
     };
   };
 
@@ -162,7 +189,11 @@ export const dbRow: Rig = (() => {
   const TOE: Vec2 = { x: 246, y: FLOOR_Y };
   const FAR_KNEE: Vec2 = { x: 198, y: 156 }; // kneeling on the pad
   const FAR_ANKLE: Vec2 = { x: 232, y: 152 }; // shin resting along the bench
-  const SUPPORT_HAND: Vec2 = { x: 136, y: 158 }; // planted on the pad
+  /* Planted a foot ahead of the bell's hang: at x 136 the support fist sat 9.8u from the dumbbell
+     ring at the dead hang and for the first 15 % of the rep nobody could tell which hand held the
+     weight. At 124 the gap is 20.8u, and the support arm locks out straight — the setup every
+     coach teaches (audit, 2026-09-03). */
+  const SUPPORT_HAND: Vec2 = { x: 124, y: 158 };
   const HANG_Y = SHOULDER.y + (UPPER + FORE) * 0.995;
   /*
    * WHERE THE DUMBBELL FINISHES, AND WHY IT IS NOT STRAIGHT UP.
@@ -285,15 +316,17 @@ function seatedRow(p: SeatedRowParams): Rig {
   const DEG = Math.PI / 180;
   const hinged = p.lean.start !== p.lean.end;
 
+  // the hinged members sequence the trunk behind the arm (TORSO_LAGS); a braced trunk has no clock
+  const leanAt = (rom: number): number => lerp(p.lean.start, p.lean.end, hinged ? TORSO_LAGS(rom) : rom) * DEG;
   const shoulderAt = (rom: number): Vec2 => {
-    const th = lerp(p.lean.start, p.lean.end, rom) * DEG;
+    const th = leanAt(rom);
     return { x: HIP.x + ATHLETE.torso * Math.sin(th), y: HIP.y - ATHLETE.torso * Math.cos(th) };
   };
   const SHOULDER0 = shoulderAt(0);
   const startX = SHOULDER0.x + Math.sqrt(((UPPER + FORE) * 0.995) ** 2 - (p.handleY - SHOULDER0.y) ** 2);
 
   const poseAt = (rom: number): Pose => {
-    const th = lerp(p.lean.start, p.lean.end, rom) * DEG;
+    const th = leanAt(rom);
     const shoulder = shoulderAt(rom);
     const head: Vec2 = {
       x: shoulder.x + ATHLETE.neck * Math.sin(th * 0.7),
@@ -373,7 +406,9 @@ function seatedRow(p: SeatedRowParams): Rig {
 
 export const cableRow = seatedRow({
   id: 'cable_row',
-  handleY: 132,
+  // 134, not 132: two units lower the elbow crosses the trunk line sooner and lies on it for
+  // less of the rep — it spent rom 0.5–0.75 within 3.4° of the spine (audit, 2026-09-03)
+  handleY: 134,
   // 150, not 158: the trunk's front surface at handle height is x = 147, so at 158 the handle
   // finished a fist-and-a-half OFF the body and the row never made contact. 150 lands it on the
   // abdomen and opens the elbow from 82 to 68 degrees on the way.
@@ -386,12 +421,22 @@ export const cableRow = seatedRow({
   shadow: { cx: 178, rx: 62 },
 });
 
+/*
+ * machine_row's handle finishes LOWER and CLOSER than it did (118/168 → 124/163), because at the
+ * old endpoint the elbow never passed the trunk: hip-shoulder-elbow ran 77.8° → 19.0° with the
+ * elbow 6.5u IN FRONT of the shoulder line at rom 1, and the card's own cue ("drive the elbows
+ * back") was not drawn. The endpoint is bounded by the station, not the athlete: the pull arm is
+ * two 38u links from a pivot at (210,64), so the handle cannot come nearer than 76u to it — the
+ * audit's 130/154 needs 85u. 124/163 is the closest the arm honestly reaches; lengthening the
+ * links to 42 (machines.ts) would let the handle finish at 126/160 with the elbow 8° past the
+ * trunk (audit, 2026-09-03).
+ */
 export const machineRow = seatedRow({
   id: 'machine_row',
-  handleY: 118,
-  endX: 168,
-  endLabel: 'handle back, elbows past the torso',
-  lean: { start: 4, end: 4 }, // braced into the chest pad — the torso does not move
+  handleY: 126, // with the station's 42u links the handle reaches 160/126 and the elbow finishes 8° behind the trunk (2026-09-03)
+  endX: 160,
+  endLabel: 'handle back, elbows to the torso line',
+  lean: { start: 2, end: 2 }, // braced into the chest pad — the torso does not move (2°: the chest meets the pad's face)
   station: machineRowStation,
   grip: 'machine',
   legs: { knee: { x: 186, y: 150 }, ankle: { x: 193, y: 186 }, heel: { x: 187, y: FLOOR_Y }, toe: { x: 212, y: FLOOR_Y } },
@@ -420,8 +465,18 @@ export const smithRow: Rig = (() => {
   const TH = 45 * DEG2; // the hinge, frozen — "hinge to about 45"
   const SHOULDER: Vec2 = { x: HIP.x + ATHLETE.torso * Math.cos(TH), y: HIP.y - ATHLETE.torso * Math.sin(TH) };
   const HEAD: Vec2 = { x: SHOULDER.x + ATHLETE.neck * Math.cos(TH + 10 * DEG2), y: SHOULDER.y - ATHLETE.neck * Math.sin(TH + 10 * DEG2) };
-  const BAR_X = SHOULDER.x;
-  const HANG_Y = SHOULDER.y + (UPPER + FORE) * 0.995;
+  /*
+   * The shoulders stand 9u IN FRONT of the bar — the Smith-row setup cue itself. Directly under
+   * the shoulder, the rails' vertical path carried the elbow into the trunk from rom 0.55 to the
+   * end (hip-shoulder-elbow ≤ 10.9°, the elbow 4.7u off the spine inside a 13u half-width) and the
+   * last third of the rep drew an arm growing from the belly. Nine units back the elbow finishes
+   * 29.5° behind the trunk line and opens to 64°; the dead hang leans 11° off vertical, which is
+   * what a bar on rails and a hinged athlete honestly look like together. Nine, not more, because
+   * the near rail (at BAR_X + 9) must clear the head: at 191 it grazes the back of the skull
+   * instead of running through the face (audit, 2026-09-03).
+   */
+  const BAR_X = SHOULDER.x - 9;
+  const HANG_Y = SHOULDER.y + Math.sqrt(((UPPER + FORE) * 0.99) ** 2 - (SHOULDER.x - BAR_X) ** 2);
   const RIB_Y = SHOULDER.y + 24; // pulled to the lower ribs
 
   const poseAt = (rom: number): Pose => {
@@ -465,8 +520,12 @@ export const smithRow: Rig = (() => {
           color: 'ink3' as const,
         })),
         ...barPathTicks(BAR_X + 30, HANG_Y, RIB_Y),
+        /* The plate ring drops BEHIND the athlete once the bar is above the hip line: in front, the
+           r16 ring covered the whole lower trunk from rom 0.5 on and hid the exact bar-to-ribs
+           contact it exists to show. The bar-point stays in front (audit, 2026-09-03). */
+        ...(bar.y < 115 ? plateGhost(bar) : []),
       ],
-      front: plateGhost(bar),
+      front: bar.y < 115 ? [{ kind: 'circle', c: bar, r: 2.5, fill: 'ink0' }] : plateGhost(bar),
     };
   };
 
@@ -529,13 +588,17 @@ export const inclineDbRow: Rig = (() => {
   const KNEE_HINT: Vec2 = { x: HIP.x - ATHLETE.thigh * DIR.x, y: HIP.y - ATHLETE.thigh * DIR.y };
   const ANKLE: Vec2 = { x: 72.6, y: 186 };
   const KNEE: Vec2 = twoBoneIKToward(HIP, ANKLE, ATHLETE.thigh, ATHLETE.shank, KNEE_HINT);
-  const HEEL: Vec2 = { x: ANKLE.x - 6, y: FLOOR_Y };
-  const TOE: Vec2 = { x: ANKLE.x + 19, y: FLOOR_Y };
+  /* On the balls of the feet behind the bench: flat on the floor, the shank at 47° from vertical
+     put the ankle at 23° of dorsiflexion (knee-ankle-toe 66.8°, the physiological limit). The toe
+     comes back under the ankle and the heel rides 4u up — the foot is steep, as it is when a real
+     athlete stands on the toes here; knee-ankle-toe opens to 86° (audit, 2026-09-03). */
+  const HEEL: Vec2 = { x: ANKLE.x - 16.6, y: FLOOR_Y - 4 };
+  const TOE: Vec2 = { x: ANKLE.x + 7.4, y: FLOOR_Y };
 
   /* The hang is solved from its angle (the file rule elsewhere): dx = 2 to the hand, target 168. */
   const HANG_REACH = Math.sqrt(UPPER * UPPER + FORE * FORE - 2 * UPPER * FORE * Math.cos((168 * Math.PI) / 180));
   const HANG_Y = SHOULDER.y + Math.sqrt(HANG_REACH * HANG_REACH - 4);
-  const TOP_Y = SHOULDER.y + 26; // the bells to the lower ribs, under the pad's edge
+  const TOP_Y = SHOULDER.y + 22; // the bells to the lower ribs — 22, not 26: 4u above the pad's edge, where the ring no longer merges with the upholstery outline (audit, 2026-09-03)
   /*
    * THE HAND COMES BACK, not just up.
    *
@@ -545,8 +608,13 @@ export const inclineDbRow: Rig = (() => {
    * lower ribs on a 40° pad means the hand finishes back along the torso as well as up, and 14u is
    * where the ribs are; the elbow then solves above and behind it and the forearm hangs the way a
    * loaded forearm has to.
+   *
+   * −20, not −14 (audit, 2026-09-03): at −14 the elbow finished 7.3u off the spine — inside the
+   * trunk's 13u half-width — and at rom 0.75 lay within 1.9° of the back line, so the one thing a
+   * chest-supported row is for, the elbow drive, was a bump on the back. Six units further back the
+   * elbow clears the back line by 13.2u (hip-shoulder-elbow 31.8°) at the same 72° fold.
    */
-  const TOP_DX = -14;
+  const TOP_DX = -20;
 
   const handAt = (rom: number): Vec2 => ({
     x: SHOULDER.x + 2 + lerp(0, TOP_DX, rom),
@@ -639,7 +707,10 @@ export const singleArmCableRow = seatedRow({
   endLabel: 'pull to your waist',
   station: seatedRowStation,
   grip: 'machine',
-  lean: { start: 14, end: -4 },
+  // 10 → −4, not 14 → −4: the 18° swing out-swung the two-arm row (15°) and taught body English;
+  // the card's "let the shoulder travel forward" is scapular protraction, undrawable while the
+  // girdle is shared, and this 14° lean stands in for it (audit, 2026-09-03)
+  lean: { start: 10, end: -4 },
   legs: { knee: { x: 197, y: 149 }, ankle: { x: 219, y: 174 }, heel: { x: 214, y: 181 }, toe: { x: 231, y: 186 } },
   shadow: { cx: 175, rx: 52 },
 });
@@ -789,7 +860,7 @@ export const facePull: Rig = (() => {
    * of horizontal across 92u of depth, and the clip draws a bar across the athlete's forehead
    * instead of a cable coming down to him.
    */
-  const PULLEY: Vec3 = { x: CX, y: 27, z: STATION_Z };
+  const PULLEY: Vec3 = { x: CX, y: 31, z: STATION_Z }; // 27 drew the pulley 3u past the top edge (audit, 2026-09-03); the slope survives 4u
   const ROPE_HALF = 40;
 
   /*
@@ -939,15 +1010,40 @@ export const meadowsRow: Rig = (() => {
   const TORSO_RISE = 8; // the same capped, honest hip-drive arc
   const DEG = Math.PI / 180;
 
+  const torsoAt = (rom: number): number => (TORSO_HANG + TORSO_RISE * TORSO_LAGS(rom)) * DEG;
   const shoulderAt = (rom: number): Vec2 => {
-    const th = (TORSO_HANG + TORSO_RISE * rom) * DEG;
+    const th = torsoAt(rom);
     return { x: HIP.x + ATHLETE.torso * Math.cos(th), y: HIP.y - ATHLETE.torso * Math.sin(th) };
   };
   const SHOULDER0 = shoulderAt(0);
   const BAR_X = SHOULDER0.x;
   const HANG_Y = SHOULDER0.y + (UPPER + FORE) * 0.995;
-  const RIB_Y = 112; // the plates finish beside the ribs — the elbow high and back
-  const ANCHOR: Vec2 = { x: 58, y: 190 };
+  /*
+   * ── RESTAGED THREE-QUARTER (execution pass, 2026-09-07) ─────────────────────────────────────
+   * A Meadows row is done standing BESIDE the sleeve, perpendicular to the bar: the bar runs
+   * ACROSS the athlete's plane, not along it. Side-on that bar projects to a point, and what the
+   * clip drew instead was the t-bar's one-arm cousin with the bar between the legs — a landmine
+   * row, which is a different exercise (the review's c12 finding). The camera now orbits 25° about
+   * the vertical, and the bar is stated in depth: its anchor sits BAR_DEPTH behind the sleeve, the
+   * plates ride inboard of the fist along it, and the athlete stands beside the whole thing — the
+   * stance the card's first cue names.
+   *
+   * The rigid link is kept in three dimensions. The sleeve's arc about the anchor lies in the
+   * plane the bar and the vertical share — perpendicular to the athlete — so in his own plane the
+   * sleeve's path is a true vertical, and the arc shows as the fist drifting BAR_DEPTH − √(L²−dy²)
+   * into depth as it rises (13.8u at the ribs). The arm is solved in three dimensions to that
+   * hand so both bones stay canonical (twoBoneIK3, the sumo's own device).
+   */
+  const AZ = 25;
+  const BAR_DEPTH = 150; // the sleeve to the landmine's floor anchor, along the bar — a 2.2 m bar less the loaded sleeve
+  const ANCHOR_Y = 190;
+  const BAR_LEN = Math.hypot(BAR_DEPTH, ANCHOR_Y - HANG_Y); // the link's true length, set at the hang (z 0)
+  const RIB_Y = 115; // the plates finish beside the ribs — the elbow high and back
+  const handAt = (rom: number): Vec2 => ({ x: BAR_X, y: lerp(HANG_Y, RIB_Y, rom) });
+  /** How far the sleeve has come toward the anchor (into depth) at this height — the arc's own account. */
+  const handZ = (y: number): number => -(BAR_DEPTH - Math.sqrt(Math.max(1, BAR_LEN * BAR_LEN - (ANCHOR_Y - y) ** 2)));
+  const ANCHOR3: Vec3 = { x: BAR_X, y: ANCHOR_Y, z: -BAR_DEPTH };
+  const CAM: Camera = { azimuth: AZ, pivotX: 176, axis: { x: 0, y: -1 } }; // about the VERTICAL: a hinged athlete's spine is no orbit axis
   /* The free hand braced on the knee — the setup's own tripod. */
   const BRACE: Vec2 = { x: KNEE.x - 2, y: KNEE.y - 5 };
   /* Clamped ONCE, against the rom where that shoulder is furthest from the pad — a per-frame clamp
@@ -962,19 +1058,34 @@ export const meadowsRow: Rig = (() => {
   })();
 
   const poseAt = (rom: number): Pose => {
-    const th = (TORSO_HANG + TORSO_RISE * rom) * DEG;
+    const th = torsoAt(rom);
     const shoulder = shoulderAt(rom);
     const head: Vec2 = {
       x: shoulder.x + ATHLETE.neck * Math.cos(th + 10 * DEG),
       y: shoulder.y - ATHLETE.neck * Math.sin(th + 10 * DEG),
     };
-    const hand: Vec2 = { x: BAR_X, y: lerp(HANG_Y, RIB_Y, rom) };
-    const elbow = twoBoneIK(shoulder, hand, UPPER, FORE, 1);
+    const hand = handAt(rom);
+    const hz = handZ(hand.y);
+    /* The flat solution names the bend (elbow up and BACK past the trunk); the 3D solve keeps
+       both bones canonical to a fist that has drifted into depth. */
+    const flat = twoBoneIK(shoulder, hand, UPPER, FORE, 1);
+    const e3 = twoBoneIK3({ x: shoulder.x, y: shoulder.y, z: 0 }, { x: hand.x, y: hand.y, z: hz }, UPPER, FORE, {
+      x: flat.x - (shoulder.x + hand.x) / 2,
+      y: flat.y - (shoulder.y + hand.y) / 2,
+      z: 0,
+    });
+    const elbow: Vec2 = { x: e3.x, y: e3.y };
+    /* The plates sit INBOARD of the fist along the bar — 12u toward the anchor. */
+    const toAnchor = { x: 0, y: ANCHOR_Y - hand.y, z: -BAR_DEPTH - hz };
+    const tl = Math.hypot(toAnchor.y, toAnchor.z) || 1;
+    const plate3: Vec3 = { x: hand.x, y: hand.y + (toAnchor.y / tl) * 12, z: hz + (toAnchor.z / tl) * 12 };
     const farShoulder = far(shoulder, -7, 2);
     return {
       headR: 8,
       j: {
         head, shoulder, elbow, hand, hip: HIP, bar: hand,
+        pivot: { x: ANCHOR3.x, y: ANCHOR3.y }, // the floor anchor, carried as a joint (with its depth) so the decor can draw the projected lever
+        plate: { x: plate3.x, y: plate3.y },
         knee: twoBoneIKToward(HIP, ANKLE, ATHLETE.thigh, ATHLETE.shank, KNEE), ankle: ANKLE, heel: HEEL, toe: TOE,
         farShoulder,
         /* The bracing arm is SOLVED, not halved. A midpoint between shoulder and brace makes both
@@ -984,14 +1095,26 @@ export const meadowsRow: Rig = (() => {
         farHip: far(HIP, -7, 1), farKnee: far(twoBoneIKToward(HIP, ANKLE, ATHLETE.thigh, ATHLETE.shank, KNEE), -7, 1), farAnkle: far(ANKLE, -7, 1),
         farHeel: far(HEEL, -8), farToe: far(TOE, -8),
       },
+      // the bar leaves the plane — and says so
+      z: { hand: hz, bar: hz, elbow: e3.z, pivot: ANCHOR3.z, plate: plate3.z },
     };
   };
 
-  const decorAt = (rom: number): Decor => {
-    const bar: Vec2 = { x: BAR_X, y: lerp(HANG_Y, RIB_Y, rom) };
+  /* The range statement stands beside the sleeve's path, in the athlete's plane, projected once. */
+  const TICK_X = project({ x: BAR_X + 22, y: HANG_Y }, 0, CAM).x;
+  const decorAt = (rom: number, pj?: Record<string, Vec2>): Decor => {
+    const j = pj ?? poseAt(rom).j;
+    const bar = j.bar;
+    const anchor = j.pivot;
+    const plate = j.plate;
     return {
-      back: [...leverBar(ANCHOR, bar), ...barPathTicks(BAR_X + 22, HANG_Y, RIB_Y)],
-      front: plateGhost(bar, 12), // the landmine's plates ride at the gripped sleeve
+      back: [
+        ...leverBar(anchor, bar),
+        /* the plates, deeper than the fist and drawn behind it */
+        ...plateGhost(plate, 12),
+        ...barPathTicks(TICK_X, HANG_Y, RIB_Y),
+      ],
+      front: [],
     };
   };
 
@@ -999,8 +1122,12 @@ export const meadowsRow: Rig = (() => {
     tempo: CONCENTRIC_TEMPO,
     start: [{ kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 165, max: 179, label: 'dead hang off the sleeve — the full stretch' }],
     end: [{ kind: 'contactY', a: 'bar', y: RIB_Y, tol: 2, label: 'plates to the ribs — elbow high and back' }],
+    /* vertical, in the athlete's plane: the sleeve's arc about the anchor lies ACROSS that plane
+       (see the restage note), so its projection here is a plumb line; the rigid link is held by
+       construction in depth (BAR_LEN), which a two-dimensional spanFixed cannot read. */
     path: { track: 'bar', kind: 'vertical', tol: 1.5 },
     invariants: [
+      { kind: 'pointFixed', point: 'pivot', tol: 0.01, label: 'the landmine pivot is bolted to the floor' },
       { kind: 'segmentAngleFixed', a: 'hip', b: 'shoulder', tolDeg: 10, label: 'controlled hip drive (≤10°, no body English)' },
       { kind: 'pointFixed', point: 'hip', tol: 0.5, label: 'hips fixed — the pivot' },
       { kind: 'pointFixed', point: 'knee', tol: 0.5, label: 'knees fixed' },
@@ -1010,5 +1137,5 @@ export const meadowsRow: Rig = (() => {
     ],
   };
 
-  return { id: 'meadows_row', chains: rowChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 176, 30) };
+  return { id: 'meadows_row', chains: rowChains, camera: CAM, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 176, 30) };
 })();

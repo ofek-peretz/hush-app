@@ -7,19 +7,13 @@
  * well as this map, so a clip cannot reach for an accent hue without a compile error. The range
  * statement is ink + a dash now — `kit.barPathTicks` carries the reasoning.
  *
- * ── ⚠️ THIS IS NO LONGER A MIRROR OF tokens.ts, AND THAT IS AN OPEN QUESTION ──────────────────
- * The header used to claim these values MIRROR `src/design/tokens.ts` "so the figure is drawn in
- * the exact product palette", maintained "by eye in review". The READOUT redesign (525341e) re-cut
- * every one of those tokens and nobody mirrored it, so the claim is simply false: the values below
- * are the PRE-READOUT palette, and the clips ship — `FormMedia` renders them inside the new world.
- *
- * It was NOT mechanically re-mirrored, deliberately. The inks are near-identical (ink0 #191714 vs
- * #1b1917), but `paper3` — 14 uses, the machine parts — would go from #e4e3de (89 %) to #d5cfc7
- * (62.9 %), and `paper2` and `up` move too. That is not a token sync; it is a restyle of every clip
- * the founder has already ratified by eye, and it needs his eye and a GIF review, not a sed.
- *
- * So: the drift is bounded (a drawing is internally consistent, and these are its own greys) and
- * documented. Decide it deliberately; do not "fix" it in passing.
+ * ── THE PAPER MAP IS THE APP'S PAPER (execution pass, 2026-09-07) ──────────────────────────────
+ * This map once mirrored `src/design/tokens.ts`; the READOUT redesign re-cut the tokens and the
+ * clips drifted (a pre-READOUT ground under a post-READOUT screen). The drift is closed: the
+ * `paper*` family IS the app's paper ladder and the ground is `paper[2]`, the well FormMedia draws
+ * the clip on. The figure's greys are the drawing's own, re-cut for contrast on that ground (see
+ * the numbers on the map). Any future token change to `paper` must be mirrored here, and checked
+ * on a contact sheet — the sheets in `tools/motion-harness` render on the same well.
  */
 
 // 
@@ -27,19 +21,27 @@
 import type { ColorToken } from './types';
 
 export const MOTION_PALETTE: Record<ColorToken, string> = {
-  paper0: '#fbfaf8',
-  paper1: '#f7f6f3',
-  paper2: '#eeede9',
-  paper3: '#e4e3de',
-  ink0: '#191714',
-  ink1: '#43403e',
-  ink2: '#726f6c',
-  ink3: '#a09e9b',
-  ink4: '#c5c4c1',
-  line0: '#dcdad8',
-  line1: '#c5c4c0',
-  line2: '#b3b1ad',
-  up: '#597f60',
+  /*
+   * ALIGNED TO THE APP'S OWN PAPER (execution pass, 2026-09-07 — the "open question" above is
+   * closed). The clip sits on `paper[2]` (#e3ded0, the well) in FormMedia, so its ground IS that
+   * token, and the objects drawn in paper — pads, machine shells — are the app's paper ladder.
+   * The figure's own greys are re-cut against that ground, not copied from the text tokens:
+   *   ink0 13.1:1 · ink1 (trunk) 7.6:1 · ink4 (far limb) 3.0:1 on the well and 2.5:1 against the
+   *   trunk — the far side reads in daylight and still reads as BEHIND.
+   */
+  paper0: '#fbf9f3', // app paper[1] — the raised card
+  paper1: '#f3f0e8', // app paper[0] — the card
+  paper2: '#e3ded0', // app paper[2] — the well, the ground every clip stands on
+  paper3: '#d8d4c8', // app paper[3] — the deepest well: machine shells
+  ink0: '#1b1913', // app ink[0] — the near limb
+  ink1: '#45413a', // the trunk
+  ink2: '#6e685c', // cables, rules
+  ink3: '#9a937f', // app ink[4] — equipment
+  ink4: '#857d6b', // app ink[3] — the far limb
+  line0: '#cbc6b8',
+  line1: '#bdb7a8',
+  line2: '#afa899',
+  up: '#3e573f', // app up[0] — moss on paper
 };
 
 export const hex = (c: ColorToken): string => MOTION_PALETTE[c];
@@ -91,7 +93,7 @@ export const MOTION_PALETTE_STAGE: Record<ColorToken, string> = {
   ink1: '#d3ccbc', // the trunk silhouette
   ink2: '#a8a290', // stage.ink1
   ink3: '#7d786b', // equipment
-  ink4: '#5c5850', // the far limb — dimmer than the trunk, never absent
+  ink4: '#6e6a60', // the far limb — dimmer than the trunk, never absent: 3.26:1 on the stage (was 2.48:1 at #5c5850)
   // Rules and hairlines: on paper they are barely-there greys; here, barely-there darks.
   line0: '#26231d',
   line1: '#332f27',

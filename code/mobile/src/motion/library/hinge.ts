@@ -11,9 +11,10 @@
  *
  *   · The shoulder rides directly above the bar at arm's length — arms hang, so the shoulder's
  *     x IS the bar's x. That makes `path: vertical` a consequence of gravity, not a tuned number.
- *   · The deadlift authors its torso angle (83° standing → 35° at the plates — the real setup
- *     angle canonical proportions give) and the KNEE is solved by two-bone IK between the planted
- *     ankle and the derived hip: shins yield forward exactly as far as the descent demands.
+ *   · The deadlift authors its torso angle at the two ENDPOINTS (87° standing → 20° at the plates
+ *     — the real setup angle canonical proportions give) and, between them, interpolates the KNEE
+ *     angle and solves the hip: the knee closes monotonically and the torso angle falls out (audit,
+ *     2026-09-03 — a torso-driven middle re-opened the knee mid-descent; see `pullFromFloorPose`).
  *   · The RDLs pin the KNEE outright (soft, frozen — the template's own invariant, checkable as
  *     `pointFixed`) and solve the HIP between the fixed knee and the descending shoulder: the
  *     hips travel back and up-to-down along the one arc the two bones allow. "Push the hips
@@ -35,16 +36,25 @@
 //
 
 import type { Decor, FormSpec, Pose, Rig, Vec2, Vec3 } from '../types';
-import { lerp, twoBoneIK, twoBoneIK3, withinReach } from '../geometry';
+import { angleAt, dist, lerp, twoBoneIK, twoBoneIK3, withinReach } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE, PLATE_R } from '../anthro';
-import { leads } from '../curves';
+import { type Curve, easesOut, leads } from '../curves';
 import { barbellFront, barPathTicks, cable, dumbbellEnd, floorScene, plateGhost, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { far, FLOOR_Y } from '../bodies';
 
-/** The torso arrives at its setup angle with ~29 % of the descent still to run, and holds. */
+/** The sumo's torso arrives at its setup angle with ~29 % of the descent still to run, and holds. */
 const TORSO_LEADS = leads(0.29);
+/**
+ * The pulls from the floor (audit, 2026-09-03): the KNEE waits — rom^1.5 — so the first third of
+ * the descent is a hinge (knee still at 154 at rom 0.25) and the knee closes as the bar passes it.
+ * Smooth at both ends, so the knee has no velocity corner anywhere in the rep; see
+ * `pullFromFloorPose` for why the knee, not the torso, is the interpolated joint.
+ */
+const KNEE_WAITS: Curve = (rom) => Math.pow(rom, 1.5);
+/** "Shoulders slightly in front of the bar" develops early, with the lean, and settles smoothly. */
+const SHOULDERS_AHEAD = easesOut(2);
 
 const DEG = Math.PI / 180;
 const TORSO = ATHLETE.torso;
@@ -130,23 +140,43 @@ function pullFromFloorPose(
   aheadBot = 0,
 ): Pose {
   const barY = lerp(barTopY, barBotY, rom);
-  /*
-   * The torso reaches its setup angle EARLY and the knees do the rest — a deadlift lowers as a
-   * hinge first and a knee bend second. A linear torso made the middle of the descent read as a
-   * squat (caught by filmstrip QC, not by the validator: both are legal skeletons; only one is the
-   * lift).
-   *
-   * This used to be written `Math.min(1, rom * 1.4)` right here, and for a long time it was the
-   * only sequencing anywhere in the library — one hand-written multiply in one file out of forty.
-   * It is `curves.leads(0.29)` now: same shape, but said in the vocabulary every other rig can
-   * reach for. See `curves.ts` for why one clock for the whole body was the ceiling on all of this.
-   */
-  const alpha = lerp(torsoTopDeg, torsoBotDeg, TORSO_LEADS(rom)) * DEG; // torso angle above horizontal
   /* The shoulder rides forward with the torso, and its HEIGHT is then solved so the hanging arm is
      exactly canonical — never stretched to reach a bar it was placed away from. */
-  const ahead = lerp(0, aheadBot, TORSO_LEADS(rom));
+  const ahead = lerp(0, aheadBot, SHOULDERS_AHEAD(rom));
   const shoulder: Vec2 = { x: BAR_X + ahead, y: barY - Math.sqrt(ARM * ARM - ahead * ahead) };
-  const hip: Vec2 = { x: shoulder.x - TORSO * Math.cos(alpha), y: shoulder.y + TORSO * Math.sin(alpha) };
+  /*
+   * THE TWO ENDPOINTS ARE AUTHORED BY TORSO ANGLE; THE REP BETWEEN THEM IS AUTHORED BY THE KNEE.
+   *
+   * The lockout and the setup are the two poses a coach states — "stand tall", "35 degrees at the
+   * plates" — so they stay written as torso angles, exactly as before, and the hip and knee are
+   * derived from them. What changed (audit, 2026-09-03) is how the body gets between them. The
+   * torso used to be interpolated on `leads(0.29)` and the knee solved from wherever the hip landed,
+   * and the knee was NOT monotonic: 163 → 120 (rom 0.33) → back OPEN to 135 (rom 0.71) → 93, with
+   * a velocity corner at rom 0.71 where the ramp hit its clamp (135.0 → 127.2 in one 0.04 step).
+   * The reason is geometric, not a tuning miss: while the torso lays down, the hip swings BACK and
+   * its distance from the planted ankle grows, which straightens the knee mid-descent — no torso
+   * curve can stop it (linear, `easesOut`, a smoothstep were all measured: every one re-opens the
+   * knee or keeps the corner).
+   *
+   * So the KNEE ANGLE is the interpolated quantity now — the one joint that must simply close —
+   * and the HIP is solved as the middle joint of an ankle→hip→shoulder chain (leg length from the
+   * knee angle, torso 48). The torso angle falls out. Its shape is the honest descent: the knee
+   * waits (`KNEE_WAITS`, rom^1.5) so the first eighth is a hinge — hips back 18u with the knee
+   * still at 160 — and the knee closes as the bar passes it. Measured over 25 samples: knee 163 →
+   * 93 monotonic and torso 87 → 20 monotonic (a steeper exponent re-opened the torso by 1° late).
+   */
+  const endpoint = (y: number, torsoDeg: number, ax: number): Vec2 => {
+    const sh = { x: BAR_X + ax, y: y - Math.sqrt(ARM * ARM - ax * ax) };
+    return { x: sh.x - TORSO * Math.cos(torsoDeg * DEG), y: sh.y + TORSO * Math.sin(torsoDeg * DEG) };
+  };
+  const kneeDegOf = (hipAt: Vec2) => angleAt(hipAt, twoBoneIK(ANKLE, hipAt, ATHLETE.shank, ATHLETE.thigh, 1), ANKLE);
+  const kneeDeg = lerp(kneeDegOf(endpoint(barTopY, torsoTopDeg, 0)), kneeDegOf(endpoint(barBotY, torsoBotDeg, aheadBot)), KNEE_WAITS(rom));
+  // the leg's chord for that knee angle — law of cosines on the canonical thigh and shank
+  const legChord = Math.sqrt(ATHLETE.thigh ** 2 + ATHLETE.shank ** 2 - 2 * ATHLETE.thigh * ATHLETE.shank * Math.cos(kneeDeg * DEG));
+  /* bend = -1 puts the hip BEHIND the ankle→shoulder line — hips back, the hinge. The mirror
+     solution is a pelvis thrust forward of the bar (the RDL's own recorded fault). */
+  const hip = twoBoneIK(ANKLE, shoulder, legChord, TORSO, -1);
+  const alpha = Math.atan2(hip.y - shoulder.y, shoulder.x - hip.x); // torso angle above horizontal, derived
   /*
    * bend = +1, and the sign is the whole correctness of the lift. The mirror solution (-1) is
    * fine while the athlete stands — both branches sit near the straight leg — but as the hip
@@ -184,9 +214,22 @@ function pullFromFloorPose(
  */
 const RDL_KNEE: Vec2 = { x: ANKLE.x - ATHLETE.shank * Math.sin(5 * DEG), y: ANKLE.y - ATHLETE.shank * Math.cos(5 * DEG) };
 
+/**
+ * THE SHOULDER FINISHES AHEAD OF THE BAR (execution pass, 2026-09-07). With the shoulder pinned
+ * over the bar the arm hung plumb, and the only way the hips could travel back was for the knee
+ * to fold: 132° at the bottom, and the torso at 40° — a half-squat with straight arms. In a real
+ * RDL the lats hold the bar against the shins while the shoulders travel OVER it; the arm hangs
+ * ~15° back from the vertical, which is what lets the hips go back with a soft knee. Measured
+ * (hinge scan): at 14u ahead and the bar at 144 the knee is 150°, the torso 27° above the floor,
+ * the hip 10u above and 22u behind the knee. It reaches its lean with the bar, so the top is still
+ * the plumb standing carry.
+ */
+const RDL_SHOULDER_AHEAD = 14;
+
 function rdlPose(rom: number, barTopY: number, barBotY: number): Pose {
   const barY = lerp(barTopY, barBotY, rom);
-  const shoulder: Vec2 = { x: BAR_X, y: barY - ARM };
+  const ahead = RDL_SHOULDER_AHEAD * rom;
+  const shoulder: Vec2 = { x: BAR_X + ahead, y: barY - Math.sqrt(ARM * ARM - ahead * ahead) };
   /*
    * bend = -1, and like the deadlift's own branch this sign IS the exercise.
    *
@@ -219,7 +262,7 @@ const plantedFeet = (label: string): FormSpec['invariants'] => [
 
 // ═══ bb_deadlift — the pull from the floor ═════════════════════════════════════════════════════
 export const bbDeadlift: Rig = (() => {
-  const BAR_TOP = 109.5; // lockout: the bar hangs at the hip from long arms — the standing core's own number
+  const BAR_TOP = 61.5 + ARM; // lockout: the bar hangs where the arm ends: derived from the standing shoulder (61.5) + ARM, not typed — the arm grew to 27/25 on 2026-09-07 and every typed 109.5 stretched the torso
   const BAR_BOT = FLOOR_Y - PLATE_R; // the plate's own radius stands the bar off the floor
   const poseAt = (rom: number) => pullFromFloorPose(rom, BAR_TOP, BAR_BOT, 87, 20, 8);
   const decorAt = (rom: number): Decor => {
@@ -248,8 +291,15 @@ export const bbDeadlift: Rig = (() => {
 })();
 
 // ═══ bb_rdl / db_rdl — the hip hinge with the load in the hands ════════════════════════════════
-const RDL_TOP = 111; // a shade below the dead-hang lockout: the hips sit BACK off the knee from rep one (soft knees)
-const RDL_BOT = 156; // just below the fixed knee (149.4) — "lower until just past the knee"
+const RDL_TOP = 61.5 + ARM + 1.5; // a shade below the dead-hang lockout: the hips sit BACK off the knee from rep one (soft knees); the bar hangs where the arm ends: derived from the standing shoulder (61.5) + ARM, not typed — the arm grew to 27/25 on 2026-09-07 and every typed 109.5 stretched the torso
+/**
+ * The bar stops ON the kneecap (knee at 149.4), not 7u below it. At 156 the 47.6u arm dragged the
+ * hip down to 17u above the knee and closed the knee to 119.7° — a half-squat at the bottom of the
+ * lift whose first cue is "soft knees". At 146 the knee holds 128.6°, the torso reaches 37° and the
+ * hip stays 22u above the knee; the arm is the ceiling on this (lengthening it is rejected
+ * catalogue-wide) (audit, 2026-09-03).
+ */
+const RDL_BOT = 144; // the bar reaches the knee cap (149) — a plate's rim below it; 146 with the plumb arm folded the knee to 132° (2026-09-07)
 
 function rdlFormspec(): FormSpec {
   return {
@@ -257,7 +307,11 @@ function rdlFormspec(): FormSpec {
     start: [
       { kind: 'jointAngle', joint: 'hip', neighbors: ['knee', 'shoulder'], min: 150, max: 179, label: 'stand tall' },
     ],
-    end: [{ kind: 'contactY', a: 'bar', y: RDL_BOT, tol: 1.5, label: 'the bar reaches just below the knee' }],
+    end: [
+      { kind: 'contactY', a: 'bar', y: RDL_BOT, tol: 1.5, label: 'the bar reaches the knee' },
+      // the line between a soft knee and a half-squat, now asserted (audit, 2026-09-03)
+      { kind: 'jointAngle', joint: 'knee', neighbors: ['ankle', 'hip'], min: 145, max: 179, label: 'knees SOFT at the bottom — a hinge, not a squat' }, // 145, not 125: the soft knee is now measured at 150 (2026-09-07)
+    ],
     path: { track: 'bar', kind: 'vertical', tol: 1.5 },
     invariants: [
       ...plantedFeet('hinge, not squat'),
@@ -295,9 +349,24 @@ export const goodMorning: Rig = (() => {
   // at 84 the leg came out at 179.0 degrees — inside the no-hyperextension cap by a twentieth of a
   // degree, which is not a soft knee, it is a locked one that happens to round down.
   const TAU_TOP = 80;
-  const TAU_BOT = 58; // the hips push back and sink as the chest sweeps down
+  /*
+   * Balance (audit, 2026-09-03). At TAU_BOT 58 / THETA_BOT 64 the bar travelled 30u forward while
+   * the hips gave back only 14u, and at the bottom the bar stood at x 198.3 — 5.3u PAST THE TOES
+   * (193). A loaded bar in front of the toes cannot be held; the athlete would fall forward, and the
+   * clip taught "bend over" rather than "push the hips back". At 38 / 50 the bar finishes at x 180.5
+   * — on BAR_X, the family's own mid-foot — with the hips 24.5u back, the torso 40° above the floor
+   * and the knee at 133°. The knee gives 42° for it: with the shin frozen, hips that go back far
+   * enough to counterweight the bar can only do so by sinking, which is what a good morning under
+   * load actually does.
+   */
+  /* 55 / 40, not 38 / 50 (execution pass, 2026-09-07): at 38 the knee closed to 133° — the good
+     morning had become a squat-hinge. At 55 the knee holds 150° (soft, not folded), the hips go
+     back 23u, and the chest comes down to 40° from vertical: at 42 the bar finished 9.3u inboard
+     of the toes and the mid-foot law asks for 10, so the chest stops one notch higher — the
+     balance rule this constant exists for, measured. */
+  const TAU_BOT = 55;
   const THETA_TOP = 4; // torso from vertical
-  const THETA_BOT = 64; // chest decisively DOWN — the silhouette must read hinge, not half-squat
+  const THETA_BOT = 40; // chest decisively DOWN — and not one degree past where the hips can balance it
 
   const poseAt = (rom: number): Pose => {
     const tau = lerp(TAU_TOP, TAU_BOT, rom) * DEG;
@@ -360,6 +429,9 @@ export const goodMorning: Rig = (() => {
     ],
     end: [
       { kind: 'jointAngle', joint: 'hip', neighbors: ['knee', 'shoulder'], min: 60, max: 108, label: 'deep hinge — chest swept down, hips pushed back' },
+      // the bar is furthest forward here, and it is still behind the toes — the balance the whole
+      // lift hangs on (audit, 2026-09-03)
+      { kind: 'jointRightOf', a: 'toe', b: 'bar', by: 10, label: 'the bar stays over the mid-foot, never past the toes' },
     ],
     path: { track: 'bar', kind: 'arc', tol: 2 },
     invariants: [
@@ -369,7 +441,16 @@ export const goodMorning: Rig = (() => {
     ],
   };
 
-  return { id: 'good_morning', chains: hingeChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 184, 30) };
+  return {
+    id: 'good_morning',
+    /* The bar-on-back hold folds the elbow to ~10°; in one ink that arm was a pin under the plate.
+       Upper arm in the trunk's ink, forearm in the near ink — two segments (audit, 2026-09-03). */
+    chains: { ...hingeChains, nearArmInk: { upper: 'ink1', fore: 'ink0' } },
+    formspec,
+    poseAt,
+    decorAt,
+    scene: floorScene(FLOOR_Y, 184, 30),
+  };
 })();
 
 // ═══ THE HINGE, COMPLETED (2026-08-25) — the four members the file was still owed ══════════════
@@ -394,7 +475,7 @@ export const goodMorning: Rig = (() => {
  */
 export const sumoDeadlift: Rig = (() => {
   const CX = 176;
-  const BAR_TOP = 113; // lockout: hands at arm's length under the (2u-lowered) wide-stance shoulders
+  const BAR_TOP = 65 + ARM; // lockout: hands at arm's length under the wide-stance shoulders, 3.5u below standing so the hip-ankle span (77.2 at 64.5, longer than thigh+shank) shortens and the knee stays soft (~170°); the bar hangs where the arm ends: derived from the standing shoulder (61.5) + ARM, not typed — the arm grew to 27/25 on 2026-09-07 and every typed 109.5 stretched the torso
   const BAR_BOT = FLOOR_Y - PLATE_R; // the plate's own radius: the plates rest on the floor
   const HAND_X = 11; // the grip, INSIDE the knees — the sumo word, stated as a constant
   const SH_X = 15.5; // canonical frontal shoulder joints
@@ -408,7 +489,10 @@ export const sumoDeadlift: Rig = (() => {
     /* The torso reaches its setup angle early (the family's own descent grammar): its frontal
      * projection shortens from the full 48 to 34.4 (≈46° above horizontal — the side sumo's own
      * ratified angle) as the chest inclines toward the camera. */
-    const torsoProj = lerp(TORSO, 34.4, TORSO_LEADS(rom));
+    /* 28, not 34.4 (audit, 2026-09-03): a sumo sets up MORE upright than the conventional pull, and
+       at 34.4 (46°) the hip sat so low that the 3D knee closed to 50° with the knee 28u toward the
+       camera — a deep squat. At 28 (36°) the hip rises 6.4u and the true knee opens to ~60°. */
+    const torsoProj = lerp(TORSO, 28, TORSO_LEADS(rom));
     const hipY = neckBase.y + torsoProj;
     /*
      * THE KNEE IS SOLVED, NOT PLACED. Both coordinates used to be authored — `kneeY` ran a plain
@@ -423,7 +507,10 @@ export const sumoDeadlift: Rig = (() => {
      */
     const hipJ: Vec3 = { x: CX + 9, y: hipY, z: 0 };
     const ankleJ: Vec3 = { x: CX + 26, y: 186, z: 0 };
-    const kneeSolved = twoBoneIK3(hipJ, ankleJ, ATHLETE.thigh, ATHLETE.shank, { x: 1, y: -0.15, z: 1.3 });
+    /* The hint is OUT, not toward the camera (audit, 2026-09-03): {1, −0.15, 1.3} sent the knee
+       28u into depth (a 40° shin, the squat look); {1.4, −0.15, 0.5} keeps it under 15u deep and
+       drives it wide past the toe — "knees out", the sumo cue, is where the bend goes. */
+    const kneeSolved = twoBoneIK3(hipJ, ankleJ, ATHLETE.thigh, ATHLETE.shank, { x: 1.4, y: -0.15, z: 0.5 });
     const kneeX = kneeSolved.x - CX;
     const kneeY = kneeSolved.y;
     const kneeZ = kneeSolved.z;
@@ -514,7 +601,7 @@ export const sumoDeadlift: Rig = (() => {
  * and the frame is drawn as the hexagon's side profile riding the grip.
  */
 export const trapBarDeadlift: Rig = (() => {
-  const BAR_TOP = 109.5;
+  const BAR_TOP = 61.5 + ARM; // the bar hangs where the arm ends: derived from the standing shoulder (61.5) + ARM, not typed — the arm grew to 27/25 on 2026-09-07 and every typed 109.5 stretched the torso
   /*
    * The handle rests 28u off the floor, not 16. A hex bar's grips are RAISED — that is the piece of
    * equipment's whole point, and it is what lets the lift be what people choose it for: a more
@@ -527,15 +614,27 @@ export const trapBarDeadlift: Rig = (() => {
   const poseAt = (rom: number) => pullFromFloorPose(rom, BAR_TOP, BAR_BOT, 88, 35);
   const decorAt = (rom: number): Decor => {
     const bar = poseAt(rom).j.bar;
-    /* The hex frame, side-on: the near strut arcs over the grip, sleeves fore and aft at bar height. */
+    /*
+     * The hex frame, side-on (audit, 2026-09-03). The sleeves of a trap bar are LOW — the frame's
+     * plane sits at plate-centre height, and the raised handles stand 12u above it — so the frame
+     * is drawn 12u under the grip, fore and aft of the feet, with the 45 cm plate end-on at the
+     * mid-foot exactly as the conventional pull draws it: at rom 1 the plate's centre is at 177 and
+     * its rim rests on the floor (193). It used to draw r5.5 rings at grip height, 22u off the
+     * floor at the "rest" — a 12 cm disc floating, against the plate that is this catalogue's
+     * scale reference. The near strut rises from the low frame to the handle: the raised grip,
+     * stated as geometry.
+     */
+    const frameY = bar.y + 12;
     const frame: Decor['front'] = [
-      { kind: 'quad', a: { x: bar.x - 26, y: bar.y }, c: { x: bar.x, y: bar.y - 14 }, b: { x: bar.x + 26, y: bar.y }, w: 3, color: 'ink0' },
-      { kind: 'circle', c: { x: bar.x - 26, y: bar.y }, r: 5.5, fill: 'ink4', fillOpacity: 0.25, stroke: 'ink3', w: 2 },
-      { kind: 'circle', c: { x: bar.x + 26, y: bar.y }, r: 5.5, fill: 'ink4', fillOpacity: 0.25, stroke: 'ink3', w: 2 },
+      ...plateGhost({ x: bar.x, y: frameY }),
+      { kind: 'line', a: { x: bar.x - 26, y: frameY }, b: { x: bar.x + 26, y: frameY }, w: 3, color: 'ink0', cap: 'round' },
+      { kind: 'quad', a: { x: bar.x - 9, y: frameY }, c: { x: bar.x - 4, y: bar.y - 1 }, b: { x: bar.x, y: bar.y }, w: 3, color: 'ink0' },
+      { kind: 'quad', a: { x: bar.x + 9, y: frameY }, c: { x: bar.x + 4, y: bar.y - 1 }, b: { x: bar.x, y: bar.y }, w: 3, color: 'ink0' },
+      { kind: 'circle', c: bar, r: 2.2, fill: 'ink0' }, // the handle, end-on, in the fist
     ];
-    // clear of the hex frame's front sleeve (bar.x + 26, r 5.5) — behind the athlete the column
-    // sat straight on his own glute at the setup
-    return { back: barPathTicks(BAR_X + 42, BAR_TOP, BAR_BOT), front: frame };
+    // clear of the frame's front corner (bar.x + 26) — behind the athlete the column sat straight
+    // on his own glute at the setup
+    return { back: barPathTicks(BAR_X + 34, BAR_TOP, BAR_BOT), front: frame };
   };
   const formspec: FormSpec = {
     tempo: { ...DEFAULT_TEMPO, startAt: 'bottom' },
@@ -562,17 +661,29 @@ export const trapBarDeadlift: Rig = (() => {
  * in the deep hinge where the machine honestly holds her, and the pull is the concentric.
  */
 export const cablePullThrough: Rig = (() => {
-  const PT_PULLEY: Vec2 = { x: 258, y: FLOOR_Y - 12 };
+  /*
+   * The stack stands BEHIND the athlete (audit, 2026-09-03). It stood at x 258 — in front of her
+   * face — so the rope ran from the front down through the thighs, the hands gripped 6u ahead of
+   * the hip line, and the cable SHORTENED 120 → 109u as she stood while the stack was drawn rising
+   * 18u: a cable RDL facing the machine, the opposite of the exercise, under a FormSpec whose own
+   * label said "facing away from the stack". At x 72 the pulley is 106u behind her heels, the
+   * tower (38–64) stands inside the left edge of the frame, and the cable lengthens as she stands.
+   */
+  const PT_PULLEY: Vec2 = { x: 72, y: FLOOR_Y - 12 };
   const poseAt = (rom: number): Pose => {
     /* rom 0 = deep hinge (rope long), rom 1 = stood tall — the RDL's rom, reversed. */
     const base = rdlPose(1 - rom, RDL_TOP, RDL_BOT);
     const hip = base.j.hip;
-    /* Hands at the hip line, holding the rope back between the legs; elbow re-solved to the grip. */
-    /* Clamped into the arm's reach first. Hips-back at the bottom of a pull-through puts the hip
-       58 units from the shoulder — a whole arm is 48 — and an out-of-reach IK target leaves the
-       forearm spanning the remainder, 33 against a canonical 23. The rope simply does not come all
-       the way back to the hip, which is also true of the exercise. */
-    const hand = withinReach(base.j.shoulder, { x: hip.x + 6, y: hip.y + 8 }, (ATHLETE.upperArm + ATHLETE.foreArm) * 0.99);
+    /*
+     * The hands hold the rope BETWEEN THE LEGS: at the hinge they reach back and down past the hip
+     * line (−10, +14 — the grip disappears behind the near thigh, which is the staging of a
+     * pull-through), and at the stand they finish 4u ahead of the hip with the arm angled back
+     * toward the pulley by the rope's own pull. Clamped into the arm's reach first: hips-back at the
+     * bottom puts the hip 58 units from the shoulder — a whole arm is 48 — and an out-of-reach IK
+     * target leaves the forearm spanning the remainder, 33 against a canonical 23. The rope simply
+     * does not come all the way back to the hip, which is also true of the exercise.
+     */
+    const hand = withinReach(base.j.shoulder, { x: hip.x + lerp(-10, 4, rom), y: hip.y + lerp(14, 6, rom) }, (ATHLETE.upperArm + ATHLETE.foreArm) * 0.99);
     const elbow = twoBoneIK(base.j.shoulder, hand, ATHLETE.upperArm, ATHLETE.foreArm, 1);
     /* The far arm offsets +6 like every other far joint `withFarSide` produces. It used to offset
        −6 while its own shoulder went +6, so the two ends of the far humerus were pushed 12 units
@@ -584,8 +695,11 @@ export const cablePullThrough: Rig = (() => {
   for (let i = 0; i <= 24; i++) handPath.push(poseAt(i / 24).j.hand);
   const decorAt = (rom: number): Decor => {
     const pose = poseAt(rom);
-    const risen = rom * 18;
-    const tower = stackTower({ x0: PT_PULLEY.x + 8, x1: PT_PULLEY.x + 34, capY: 64, stackTopY: FLOOR_Y - 34 }, risen);
+    /* The selected plate rises by exactly what the cable paid out — measured from the pulley to the
+       hand, not assumed from rom: 83u of rope at the hinge, 119u at the stand, so the plate climbs
+       36u (audit, 2026-09-03). */
+    const risen = dist(PT_PULLEY, pose.j.hand) - dist(PT_PULLEY, handPath[0]);
+    const tower = stackTower({ x0: PT_PULLEY.x - 34, x1: PT_PULLEY.x - 8, capY: 64, stackTopY: FLOOR_Y - 34 }, risen);
     return {
       /* The cable draws BEHIND the figure. It runs back and down BETWEEN the legs — that is the
          whole staging of a pull-through — so the near thigh has to cover it. Drawn in front it

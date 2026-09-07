@@ -10,10 +10,11 @@
  * to measure the heel against. The range statement ticks the heel's travel beside it. The motion is
  * small and the READING of it is not, and no proportion is exaggerated to get there.
  *
- * ── THE PIVOT IS THE TOE, WHICH IS WHY THE WHOLE BODY TRAVELS ───────────────────────────────────
- * Nothing here bends. The ankle plantarflexes and every joint above it — knee, hip, shoulder, head —
- * rides up the same distance, because that is what standing on your toes does. Authoring it as
- * "raise the body, keep the skeleton rigid" is both simpler and truer than posing an ankle: the
+ * ── THE PIVOT IS THE BALL OF THE FOOT, AND THE BODY RIDES THE ANKLE ────────────────────────────
+ * Nothing above the ankle bends. The foot turns as one rigid piece about the ball resting on the
+ * block's edge, the ankle rides on the foot, and every joint above it — knee, hip, shoulder, head —
+ * rises by the ankle's own rise, because that is what standing on your toes does. Authoring it as
+ * "turn the foot, carry the body on the ankle" is both simpler and truer than posing an ankle: the
  * skeleton is built once at the bottom and translated, so the segment lengths cannot drift.
  *
  * ── THE TWO CUES, BOTH MEASURABLE ───────────────────────────────────────────────────────────────
@@ -27,10 +28,15 @@
 //
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
-import { lerp } from '../geometry';
-import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
+import { lerp, twoBoneIKToward } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** A single-joint rig still has a sticking point — the last fifth, where the moment arm is longest;
+ *  the driver slows there and arrives (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06);
+import { CONCENTRIC_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { barPathTicks, dumbbellSide, floorScene, groundShadow, plateGhost } from '../kit';
+import { barPathTicks, dumbbellSide, floorScene, groundShadow } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, standingCore } from '../bodies';
 
@@ -39,17 +45,22 @@ const X = 178;
 /**
  * ⚠️ THE WHOLE SCENE SITS LOWER IN THE FRAME, AND IT HAS TO (geometry QC, 2026-08-25).
  *
- * This is the only rig whose athlete RISES as a rigid body, and the rise is real: 26 units. Authored
- * at the canonical standing height her head reached y≈19.5 at the peak against a viewbox that starts
- * at 26 — the crown clipped off the top of the media field on every rep, on all five members. The
- * FormSpec passed the whole time, and correctly: it asks whether the TECHNIQUE is right, and the
- * technique was. Nothing in it can see a frame.
+ * This is the only rig whose athlete RISES as a rigid body. Authored at the canonical standing
+ * height her head reached y≈19.5 at the peak against a viewbox that starts at 26 — the crown
+ * clipped off the top of the media field on every rep, on all five members. The FormSpec passed
+ * the whole time, and correctly: it asks whether the TECHNIQUE is right, and the technique was.
+ * Nothing in it can see a frame.
  *
  * The fix is not a smaller rep. The floor has ~20 units of unused frame beneath it, so the entire
  * scene — athlete, block, floor line, shadow — is drawn `DROP` units lower and the rise spends that
  * headroom instead of the crown. The range is untouched; only the camera moved.
+ *
+ * (audit, 2026-09-03) The rise was 26u — the heel's own travel — because the pivot sat at the TOE
+ * tip and the body was translated by the heel's rise. The pivot is the ball now and the body rides
+ * the ankle, whose true rise is ~8.5u; the frame is no longer tight, and DROP stays where the frame
+ * law put it.
  */
-const DROP = 16;
+const DROP = 19; // 16 left the crown's halo 1.7u past the top edge at the peak (audit, 2026-09-03)
 const SCENE_FLOOR = FLOOR_Y + DROP;
 const raw = standingCore(X);
 const base = {
@@ -68,9 +79,57 @@ const BLOCK_TOP = SCENE_FLOOR - 13;
 const BLOCK_X0 = X + 2;
 const BLOCK_X1 = X + 34;
 
-/** Heel travel: below the block at the stretch, above its top at the peak. A true ~26u range. */
-const HEEL_LOW = BLOCK_TOP + 11;
-const HEEL_HIGH = BLOCK_TOP - 15;
+/**
+ * THE PIVOT IS THE BALL OF THE FOOT, NOT THE TOE TIP (audit, 2026-09-03).
+ *
+ * The foot used to turn about its toe tip on a 25u radius, and the heel travelled 26u ≈ 29cm —
+ * twice what a calf raise does (an elite ankle, 20° dorsiflexion to 50° plantarflexion over a
+ * ~20cm heel-to-ball lever, moves the heel ~22cm ≈ 19.6u). A real foot bends at the metatarsal
+ * heads: the ball rests on the block's edge, the toes lie flat on the block past it, and the heel
+ * swings about the ball on a `HEEL_R` lever. 20u of heel travel is the honest number, and the
+ * block edge still makes it read.
+ */
+const TOE_PAST = 6; // the toes, flat on the block beyond the ball
+const HEEL_R = ATHLETE.foot - TOE_PAST; // heel → ball, the lever the calf actually works
+const BALL: Vec2 = { x: BLOCK_X1 - 8, y: BLOCK_TOP };
+/** The toes, flat on the block past the ball — the one point that never moves. */
+const TOE: Vec2 = { x: BALL.x + TOE_PAST, y: BLOCK_TOP };
+/** Heel travel: below the block at the stretch, above its top at the peak. A true 20u range. */
+const HEEL_LOW = BLOCK_TOP + 8;
+const HEEL_HIGH = BLOCK_TOP - 12;
+/** The ankle on the rigid foot: this far forward of the heel along the sole, `ankleH` up its normal. */
+const ANKLE_FWD = base.ankle.x - base.heel.x;
+
+/**
+ * THE FOOT IS ONE RIGID PIECE, turned about the ball (audit, 2026-09-03). The heel used to be
+ * solved on a circle about the toe tip while the ankle sat at a FIXED offset above it, so the
+ * ankle→toe distance grew from 13.0u to 24.2u inside a rep — a foot triangle that stretched. Now
+ * the sole's tilt is read off the heel's height, and the ankle is carried on the sole's own frame.
+ */
+function footAt(rom: number): { heel: Vec2; ankle: Vec2 } {
+  const heelY = lerp(HEEL_LOW, HEEL_HIGH, STICK(rom));
+  const s = (heelY - BALL.y) / HEEL_R; // sine of the sole's tilt: positive = heel below the block
+  const c = Math.sqrt(1 - s * s);
+  const heel: Vec2 = { x: BALL.x - HEEL_R * c, y: heelY };
+  return {
+    heel,
+    ankle: { x: heel.x + ANKLE_FWD * c - ATHLETE.ankleH * s, y: heel.y - ANKLE_FWD * s - ATHLETE.ankleH * c },
+  };
+}
+
+/**
+ * THE HIP STAYS OVER THE BALL (audit, 2026-09-03). Rotating the foot swings the ankle ~8.6u
+ * FORWARD across the rep (the ankle sits 7u above the sole, and the sole tilts 64°). A body
+ * translated by the ankle would drift its shoulders 8.6u forward — impossible under a Smith bar
+ * or a machine's pads, both of which travel a vertical rail, and untrue of a free lifter too:
+ * standing on the ball of one foot, the centre of mass stays over the ball, which is FIXED. So the
+ * hip's x is pinned where the leg is vertical midway through the ankle's swing (rom 0.62 — the
+ * sole's tilt is a sine, so the ankle's x is not linear in rom) and the rigid leg tilts ±~3.5°
+ * about the ankle as the ankle swings under it. The trunk stays plumb; the knee angle cannot change.
+ */
+const HIP_X = footAt(0.62).ankle.x + (base.hip.x - base.ankle.x);
+/** hip → ankle, the rigid leg as one link. */
+const LEG_LEN = Math.hypot(base.hip.x - base.ankle.x, base.hip.y - base.ankle.y);
 
 const calfChains = {
   torso: ['hip', 'shoulder'] as [string, string],
@@ -92,57 +151,71 @@ interface CalfParams {
   singleLeg?: boolean;
 }
 
-function calfRaise(p: CalfParams): Rig {
-  /** The toe is the pivot and it never moves — the one point everything else is measured from. */
-  const TOE: Vec2 = { x: BLOCK_X1 - 4, y: BLOCK_TOP };
+/**
+ * THE HIGH-BAR CARRY, seen from the side (audit, 2026-09-03). The Smith member used to borrow the
+ * back squat's constants — bar 3.5u above the shoulder joint, elbow 9 back and 18 down — which
+ * put the hand 3.5u from the shoulder on a 25+23 arm: a 3.9° elbow, and two fleshed limbs below
+ * ~55° are one dark wedge. The bar sits on the traps BEHIND the neck now, the elbow flares out
+ * toward the camera (z 21) as a squat elbow does, and the forearm comes back in to the bar (z 2):
+ * 25/23 in three dimensions, 52° as projected — and the two inks below keep the fold legible.
+ */
+const BAR_CARRY = { back: 9, above: 7, elbowBack: 11.7, elbowDown: 5.7, elbowZ: 21, handZ: 2 };
 
+function calfRaise(p: CalfParams): Rig {
   const poseAt = (rom: number): Pose => {
-    const heelY = lerp(HEEL_LOW, HEEL_HIGH, rom);
-    /* The body rises exactly as far as the heel does — rigid above the ankle, which is the lift. */
-    const rise = HEEL_LOW - heelY;
-    /*
-     * THE FOOT IS RIGID, so the heel travels an ARC about the pinned toe rather than a vertical
-     * line. The heel used to be authored as `{ x: base.heel.x + 6, y: heelY }` — a fixed x with a
-     * sweeping y — which makes heel→toe a hypotenuse that GROWS as the heel leaves the bottom.
-     * The auditor measured this foot at 34.1…37.2 units against a canonical 25: not merely a foot
-     * drawn too long, but one that changes length by 3 units inside a single rep. Nothing in the
-     * old code ever asked how far the heel was from the toe.
-     *
-     * Solving x from the circle instead keeps the length exactly `ATHLETE.foot` at every rom and
-     * preserves the authored heel HEIGHT, which is what the block, the range ticks and both
-     * `contactY` predicates are measured against.
-     */
-    const heelDY = heelY - TOE.y;
-    const heelDX = Math.sqrt(Math.max(1, ATHLETE.foot * ATHLETE.foot - heelDY * heelDY));
-    const heel: Vec2 = { x: TOE.x - heelDX, y: heelY };
-    /* The ankle sits its canonical height above the heel and rides WITH it, arc and all. */
-    const ankle: Vec2 = { x: heel.x + (base.ankle.x - base.heel.x), y: heelY - ATHLETE.ankleH };
-    /*
-     * The body rides the ANKLE, in both axes. It used to ride a pure vertical `rise`, which was
-     * consistent only while the ankle's x was pinned; now that the foot pivots, the ankle drifts
-     * forward over the toe and a body that rose straight up would leave its own shin behind — the
-     * validator caught it immediately as a knee bending to 161° against a declared 168° minimum.
-     * Translating by the ankle's full displacement keeps the leg rigid, and the small forward
-     * drift is what rising onto the toes actually does to a lifter's balance.
-     */
-    const drift = ankle.x - base.ankle.x;
-    const up = (v: Vec2, dy = rise): Vec2 => ({ x: v.x + drift, y: v.y - dy });
+    const { heel, ankle } = footAt(rom);
+    /* The rigid leg from the pinned hip x down to the swinging ankle; the knee rides the leg's tilt. */
+    const dx = HIP_X - ankle.x;
+    const hip: Vec2 = { x: HIP_X, y: ankle.y - Math.sqrt(LEG_LEN * LEG_LEN - dx * dx) };
+    const tilt = Math.atan2(dx, ankle.y - hip.y) - Math.atan2(base.hip.x - base.ankle.x, base.ankle.y - base.hip.y);
+    const ct = Math.cos(tilt);
+    const st = Math.sin(tilt);
+    const kx = base.knee.x - base.ankle.x;
+    const ky = base.knee.y - base.ankle.y;
+    const knee: Vec2 = { x: ankle.x + kx * ct - ky * st, y: ankle.y + kx * st + ky * ct };
+    /* Everything above the hip translates with it — the trunk stays plumb. */
+    const up = (v: Vec2): Vec2 => ({ x: v.x + hip.x - base.hip.x, y: v.y + hip.y - base.hip.y });
     const shoulder = up(base.shoulder);
-    /* Arms: hanging for the free members, hands on the load. The BAR member grips the bar on the
-       traps exactly as the back squat does — elbow trailing back, fist up at the bar. */
+    /*
+     * Arms: hanging for the free members; on the machine, gripping the handles at chest height in
+     * front (audit, 2026-09-03: they hung at the hips under a shoulder pad, which no machine asks);
+     * on the Smith, the high-bar carry above.
+     */
     const elbow: Vec2 =
       p.implement === 'bar'
-        ? { x: shoulder.x - 9, y: shoulder.y + 18 }
-        : { x: shoulder.x + 1.5, y: shoulder.y + ATHLETE.upperArm };
+        ? { x: shoulder.x - BAR_CARRY.elbowBack, y: shoulder.y + BAR_CARRY.elbowDown }
+        : p.implement === 'machine'
+          ? { x: shoulder.x + 10, y: shoulder.y + 22.9 } // |upper arm| 25, elbow 68° at the handle
+          : { x: shoulder.x + 1.5, y: shoulder.y + ATHLETE.upperArm };
     const hand: Vec2 =
-      p.implement === 'bar' ? { x: shoulder.x, y: shoulder.y - 3.5 } : { x: elbow.x, y: elbow.y + ATHLETE.foreArm };
+      p.implement === 'bar'
+        ? { x: shoulder.x - BAR_CARRY.back, y: shoulder.y - BAR_CARRY.above }
+        : p.implement === 'machine'
+          ? { x: shoulder.x + 26, y: shoulder.y + 6.4 } // |forearm| 23
+          : { x: elbow.x, y: elbow.y + ATHLETE.foreArm };
+    /*
+     * The free leg of the single-leg member hangs from the hip, knee bent ~115°, foot tucked back
+     * and clear of the floor (audit, 2026-09-03: it was a straight leg with its toe pinned in mid
+     * air, a foot that swung 74° about nothing and a heel 10u off the floor that read as a rear
+     * foot planted behind the block). The foot is one rigid piece on the free ankle.
+     */
+    const farHip = far(hip, -6, 1);
+    const freeAnkle: Vec2 = { x: hip.x - 30, y: hip.y + 55 }; // thigh ~vertical, shin ~23° below level: knee ≈100°, toe ≥20u off the floor
+    const freeKnee = p.singleLeg ? twoBoneIKToward(farHip, freeAnkle, ATHLETE.thigh, ATHLETE.shank, { x: hip.x + 5, y: hip.y + 40 }) : far(knee, -6, 1);
+    /* The free foot hangs off its shank at the standing foot's own offsets, rotated with the shank —
+       the toes point down, hooked behind the working calf, and the foot is 25u at every rom. */
+    const shank = { x: freeKnee.x - freeAnkle.x, y: freeKnee.y - freeAnkle.y };
+    const sl = Math.hypot(shank.x, shank.y) || 1;
+    const ux = shank.x / sl;
+    const uy = shank.y / sl;
+    const onShank = (fx: number, fy: number): Vec2 => ({ x: freeAnkle.x - uy * fx - ux * fy, y: freeAnkle.y + ux * fx - uy * fy });
     return {
       headR: ATHLETE.headR,
       j: {
         head: up(base.head),
         shoulder,
-        hip: up(base.hip),
-        knee: up(base.knee),
+        hip,
+        knee,
         ankle,
         heel,
         toe: TOE,
@@ -151,13 +224,15 @@ function calfRaise(p: CalfParams): Rig {
         farShoulder: far(shoulder, -6, 1),
         farElbow: far(elbow, -6, 1),
         farHand: far(hand, -6, 1),
-        farHip: far(up(base.hip), -6, 1),
-        farKnee: far(up(base.knee), -6, 1),
-        // The resting leg is tucked BACK and its foot never reaches the block.
-        farAnkle: p.singleLeg ? { x: ankle.x - 20, y: ankle.y - 6 } : far(ankle, -6, 1),
-        farHeel: p.singleLeg ? { x: heel.x - 16, y: heelY - 8 } : far(heel, -6, 0),
-        farToe: p.singleLeg ? { x: TOE.x - 20, y: TOE.y - 10 } : far(TOE, -6, 0),
+        farHip,
+        farKnee: freeKnee,
+        farAnkle: p.singleLeg ? freeAnkle : far(ankle, -6, 1),
+        farHeel: p.singleLeg ? onShank(base.heel.x - base.ankle.x, ATHLETE.ankleH) : far(heel, -6, 0),
+        farToe: p.singleLeg ? onShank(base.toe.x - base.ankle.x, ATHLETE.ankleH) : far(TOE, -6, 0),
       },
+      ...(p.implement === 'bar'
+        ? { z: { elbow: BAR_CARRY.elbowZ, hand: BAR_CARRY.handZ, farElbow: -BAR_CARRY.elbowZ, farHand: -BAR_CARRY.handZ } }
+        : {}),
     };
   };
 
@@ -165,12 +240,14 @@ function calfRaise(p: CalfParams): Rig {
     const pose = poseAt(rom);
     const hand = pose.j.hand;
     const farHand = pose.j.farHand;
+    /* The Smith's gate stands BEHIND the block, so the block hides the front rail's foot (audit,
+       2026-09-03: drawn after the block, the rail ran down through the block's face and the toe). */
+    const rails: Primitive[] = [];
     const block: Primitive[] = [
       { kind: 'rect', x: BLOCK_X0, y: BLOCK_TOP, width: BLOCK_X1 - BLOCK_X0, height: SCENE_FLOOR - BLOCK_TOP, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
       // The block's TOP EDGE, extended back as a hairline — the fixed line the heel is read against.
       { kind: 'dash', a: { x: BLOCK_X0 - 34, y: BLOCK_TOP }, b: { x: BLOCK_X0, y: BLOCK_TOP }, w: 1.5, color: 'ink3', dash: [3, 4], opacity: 0.7 },
     ];
-    const back: Primitive[] = [...block, ...barPathTicks(BLOCK_X0 - 30, HEEL_LOW, HEEL_HIGH)];
     let front: Primitive[] = [];
     const DOWN: Vec2 = { x: 1, y: 0 };
 
@@ -180,51 +257,65 @@ function calfRaise(p: CalfParams): Rig {
        * The SMITH member draws its machine (equipment QC 2026-08-25: it drew a floating plate and
        * no rails — a Smith calf raise without the Smith). The gate silhouette is the Smith's
        * reserved signature (§3.5 Amendment 5): both uprights full height, a faint crossbar riding
-       * at the bar's height, and the bar ON the traps at the back squat's own carry — rising with
-       * the body, which is the honest picture: on a Smith, the BAR is what travels the rail.
+       * at the bar's height, and the bar ON the traps at the high-bar carry — rising with the
+       * body, which is the honest picture: on a Smith, the BAR is what travels the rail.
        */
-      const bar: Vec2 = { x: pose.j.shoulder.x, y: pose.j.shoulder.y - 3.5 };
-      back.push(
-        /* The gate, END-ON — both rails on the bar's own x, separated by depth. At the front-view
-           spacing one upright ran through the athlete; see `pullRow.smithRow`. */
-        { kind: 'line', a: { x: bar.x - 9, y: 40 }, b: { x: bar.x - 9, y: SCENE_FLOOR - 2 }, w: 3, color: 'ink3', opacity: 0.55 },
-        { kind: 'line', a: { x: bar.x + 9, y: 40 }, b: { x: bar.x + 9, y: SCENE_FLOOR - 2 }, w: 3, color: 'ink3' },
+      const bar: Vec2 = hand;
+      /* The rails are FIXED — the hip is pinned in x, so the bar's x is the same at every rom.
+         Both stand just BEHIND the bar (audit, 2026-09-03: at bar.x ± 9 the front one rose out of
+         the crown like an antenna once the bar moved to the traps), the near one darker. */
+      const RAIL_FRONT = bar.x - 2;
+      const RAIL_BACK = bar.x - 12;
+      rails.push(
+        { kind: 'line', a: { x: RAIL_BACK, y: 40 }, b: { x: RAIL_BACK, y: SCENE_FLOOR - 2 }, w: 3, color: 'ink3', opacity: 0.55 },
+        { kind: 'line', a: { x: RAIL_FRONT, y: 40 }, b: { x: RAIL_FRONT, y: SCENE_FLOOR - 2 }, w: 3, color: 'ink3' },
         ...[0, 1, 2, 3].map((i) => ({
           kind: 'line' as const,
-          a: { x: bar.x + 9, y: 66 + i * 16 },
-          b: { x: bar.x + 16, y: 66 + i * 16 },
+          a: { x: RAIL_BACK, y: 66 + i * 16 },
+          b: { x: RAIL_BACK - 7, y: 66 + i * 16 },
           w: 2,
           color: 'ink3' as const,
         })),
+        // the crossbar the comment always promised: the carriage, riding the rails at the bar
+        { kind: 'dash', a: { x: RAIL_BACK - 4, y: bar.y }, b: { x: RAIL_FRONT + 4, y: bar.y }, w: 2, color: 'ink3', dash: [2, 3], opacity: 0.7 },
       );
-      front = [...plateGhost(bar), { kind: 'circle', c: pose.j.head, r: pose.headR, fill: 'ink1' }];
+      /*
+       * NO PLATE RING (audit, 2026-09-03). A `plateGhost` of r 20 at the bar spanned the whole
+       * skull — an astronaut's helmet in every frame, with the head redrawn on top to rescue it —
+       * and a lower-rim arc read as a bib across the chest. The rails, the catches and the
+       * carriage already say Smith; the bar's sleeve collar around the fist says the bar is held.
+       */
+      front = [{ kind: 'circle', c: bar, r: 5.5, stroke: 'ink3', w: 2.2 }];
     } else if (p.implement === 'machine') {
       /*
        * The shoulder pad rides the TRAPS — behind the neck, below the head (visual QC 2026-08-25:
        * drawn at head height it read as headgear, not as a machine). One pad bar across the
-       * shoulder line, its frame post rising BEHIND the figure to the machine's arm overhead.
+       * shoulder line, on a CARRIAGE that slides up the mast with her.
        */
       const sj = pose.j.shoulder;
       /*
-       * …and the frame that pad hangs from, which was missing. The post used to stop dead at y=34
-       * with a short arm and nothing under it: a shoulder pad floating in the air over a man on a
-       * block. `equipment: 'machine'` has to be a machine — so the mast is grounded behind him, the
-       * cantilever reaches forward over the traps, and the STACK it lifts stands behind the mast and
-       * rises with him. The pad itself still rides the traps, below the head (drawn at head height
-       * it reads as headgear, visual QC 2026-08-25).
+       * The frame: a mast grounded behind her, and the carriage — pad, arm and handles — riding it
+       * (audit, 2026-09-03: the arm used to be a FIXED beam at y=34 that the head rose into at the
+       * top of every rep, and the mast's x was read off the drifting shoulder, so the mast moved).
+       * The stack stands behind the mast and rises with her.
        */
       const MAST_X = sj.x - 42;
       const tower = stackTower({ x0: MAST_X - 30, x1: MAST_X - 6, capY: 46, stackTopY: SCENE_FLOOR - 34 }, (HEEL_LOW - pose.j.heel.y) * 0.8);
-      back.push(
+      rails.push(
         ...tower.prims,
         { kind: 'line', a: { x: MAST_X, y: 34 }, b: { x: MAST_X, y: SCENE_FLOOR - 2 }, w: 3.5, color: 'ink3' },
         { kind: 'line', a: { x: MAST_X - 10, y: SCENE_FLOOR - 2 }, b: { x: MAST_X + 12, y: SCENE_FLOOR - 2 }, w: 2.5, color: 'ink3', cap: 'round' },
         { kind: 'line', a: { x: MAST_X - 8, y: 46 }, b: { x: MAST_X, y: 46 }, w: 2.5, color: 'ink3' },
-        { kind: 'line', a: { x: MAST_X, y: 34 }, b: { x: sj.x + 4, y: 34 }, w: 3, color: 'ink3' },
-        { kind: 'line', a: { x: sj.x - 15, y: sj.y }, b: { x: sj.x - 15, y: 34 }, w: 2.5, color: 'ink3' },
+        // the carriage: a sleeve on the mast, the arm out to the pad at shoulder height
+        { kind: 'rect', x: MAST_X - 3.5, y: sj.y - 9, width: 7, height: 18, rx: 1.5, fill: 'paper3', stroke: 'ink3', w: 2 },
+        { kind: 'line', a: { x: MAST_X, y: sj.y }, b: { x: sj.x - 13, y: sj.y }, w: 3, color: 'ink3' },
         { kind: 'rect', x: sj.x - 13, y: sj.y - 4, width: 26, height: 8, rx: 4, fill: 'paper3', stroke: 'ink3', w: 2 },
+        // the handle bracket forward off the pad, and the handle itself in the implement's ink
+        { kind: 'line', a: { x: sj.x + 11, y: sj.y + 2 }, b: { x: hand.x, y: hand.y }, w: 2.5, color: 'ink3' },
+        { kind: 'line', a: { x: hand.x - 4, y: hand.y }, b: { x: hand.x + 4, y: hand.y }, w: 3.5, color: 'ink0', cap: 'round' },
       );
     }
+    const back: Primitive[] = [...rails, ...block, ...barPathTicks(BLOCK_X0 - 30, HEEL_LOW, HEEL_HIGH)];
     return { back, front };
   };
 
@@ -249,11 +340,11 @@ function calfRaise(p: CalfParams): Rig {
       { kind: 'contactY', a: 'heel', y: HEEL_HIGH, tol: 2, label: 'all the way up onto the toes' },
     ],
     /*
-     * An ARC, not a vertical. The heel is the far end of a rigid foot pivoting on its toe, so its
-     * path is a circle of radius `ATHLETE.foot` about that toe — and the constraint that makes it
-     * true is the pivot holding still, which is the `pointFixed` on the toe below. Declaring it
-     * `vertical` was only ever true of the old stretching foot, whose heel slid straight down
-     * because its length was free to change.
+     * An ARC, not a vertical. The heel is the far end of a rigid foot pivoting on the ball, so its
+     * path is a circle of radius `HEEL_R` about that ball — and the constraint that makes it true
+     * is the pivot holding still, which is the `pointFixed` on the toe below (the toes lie flat on
+     * the block past the ball and never move). Declaring it `vertical` was only ever true of the
+     * old stretching foot, whose heel slid straight down because its length was free to change.
      */
     path: { track: 'heel', kind: 'arc', tol: 1.5 },
     invariants: [
@@ -263,7 +354,14 @@ function calfRaise(p: CalfParams): Rig {
     ],
   };
 
-  return { id: p.id, chains: calfChains, formspec, poseAt, decorAt, scene: [...floorScene(SCENE_FLOOR, X, 26), groundShadow(X, 26, SCENE_FLOOR)] };
+  return {
+    id: p.id,
+    chains: p.implement === 'bar' ? { ...calfChains, nearArmInk: { upper: 'ink1' as const, fore: 'ink0' as const } } : calfChains,
+    formspec,
+    poseAt,
+    decorAt,
+    scene: [...floorScene(SCENE_FLOOR, HIP_X, 26), groundShadow(HIP_X, 26, SCENE_FLOOR)],
+  };
 }
 
 export const standingCalfRaise = calfRaise({ id: 'standing_calf_raise', implement: 'machine' });

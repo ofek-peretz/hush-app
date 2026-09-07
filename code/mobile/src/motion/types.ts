@@ -103,6 +103,13 @@ export interface FigureChains {
   /** 'front' renders the symmetric frontal trunk; limbs are then left/right, both near-ink. */
   view?: 'side' | 'front';
   nearArm?: string[]; // e.g. ['shoulder','elbow','hand']
+  /**
+   * Draw the near arm's UPPER segment again in its own ink (the trunk's, usually) so a folded arm —
+   * the bar-on-back hold of a good morning or a back squat, where the elbow closes to ~10° — reads
+   * as two segments instead of one lump. `fore` is recorded for the rig's intent; the forearm keeps
+   * the near-limb ink today. See `skin.ts` (execution pass, 2026-09-03).
+   */
+  nearArmInk?: { upper: ColorToken; fore: ColorToken };
   farArm?: string[];
   nearLeg?: string[]; // e.g. ['hip','knee','ankle']
   farLeg?: string[];

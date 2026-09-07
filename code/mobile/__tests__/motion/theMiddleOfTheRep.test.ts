@@ -19,6 +19,7 @@
 
 //
 
+import { ATHLETE } from '@/motion/anthro';
 import { EXERCISE_MOTION } from '@/motion/registry';
 import { FLAT, project } from '@/motion/camera';
 import type { Rig } from '@/motion/types';
@@ -132,10 +133,12 @@ describe('foreshortening means a depth, and says so', () => {
       const zh = pose.z?.hand ?? 0;
       const upper = Math.hypot(e.x - s.x, e.y - s.y, ze - zs);
       const fore = Math.hypot(h.x - e.x, h.y - e.y, zh - ze);
-      expect(upper).toBeGreaterThan(24.4);
-      expect(upper).toBeLessThan(25.6);
-      expect(fore).toBeGreaterThan(22.4);
-      expect(fore).toBeLessThan(23.6);
+      /* Against the skeleton, not typed numbers (2026-09-07): the arm grew from 25/23 to 27/25 and
+         a literal 25 here would have pinned the old anthro forever. */
+      expect(upper).toBeGreaterThan(ATHLETE.upperArm - 0.6);
+      expect(upper).toBeLessThan(ATHLETE.upperArm + 0.6);
+      expect(fore).toBeGreaterThan(ATHLETE.foreArm - 0.6);
+      expect(fore).toBeLessThan(ATHLETE.foreArm + 0.6);
     }
   });
 });

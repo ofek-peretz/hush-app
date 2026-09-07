@@ -28,6 +28,7 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, bendToward, twoBoneIK } from '../geometry';
+import { leads } from '../curves';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { cable, floorScene, padStroke, pulley, sampledPathTicks } from '../kit';
@@ -45,15 +46,41 @@ interface CrunchParams {
   angleTo: number;
   /** How hard the silhouette bows at full flexion (`Pose.trunkBow` units). */
   bowMax: number;
+  /**
+   * The share of the trunk, from the pelvis up, that does NOT rotate — it stays at `angleFrom`
+   * with the pelvis, and only the trunk above it sweeps to `angleTo`. 0 is a hinge at the hip.
+   *
+   * The cable and machine members shipped at 0, and a trunk that rotates whole about the hip is a
+   * HIP FLEXION: the hip closed 44–46° across the rep while the bow only decorated it — exactly
+   * the fault this file's header warns against. With the lower 45 % pinned the hip closes ~25°
+   * and the hip→shoulder chord SHORTENS through the curl (48 → 44), which is what spinal flexion
+   * is: the ribcage travelling toward the pelvis, not the whole trunk falling forward
+   * (audit, 2026-09-03). The sit-up keeps 0 — a sit-up IS a hip flexion, with the curl on top.
+   */
+  pivotUp?: number;
   /** The fixed legs, supplied whole by each posture. */
   legs: Record<string, Vec2>;
   furniture: (pose: Pose, rom: number) => { back: Primitive[]; front: Primitive[] };
 }
 
+/**
+ * The curl leads the sweep (iron rule 12): the chin tucks and the upper back rounds in the first
+ * three-quarters of the rep, and the trunk's line finishes on its own — a crunch is seen to start
+ * at the head, which is the thing a coach watches for (audit, 2026-09-03).
+ */
+const BOW_LEADS = leads(0.25);
+
 function crunch(p: CrunchParams): Rig {
-  const shoulderAt = (deg: number): Vec2 => {
+  const pivotUp = p.pivotUp ?? 0;
+  const dir = (deg: number): Vec2 => {
     const r = (deg * Math.PI) / 180;
-    return { x: p.hip.x + T * Math.sin(r), y: p.hip.y - T * Math.cos(r) };
+    return { x: Math.sin(r), y: -Math.cos(r) };
+  };
+  /** Where the sweep turns: `pivotUp` of the way up the trunk, at the pelvis's own angle. */
+  const PIVOT: Vec2 = { x: p.hip.x + dir(p.angleFrom).x * T * pivotUp, y: p.hip.y + dir(p.angleFrom).y * T * pivotUp };
+  const shoulderAt = (deg: number): Vec2 => {
+    const d = dir(deg);
+    return { x: PIVOT.x + d.x * T * (1 - pivotUp), y: PIVOT.y + d.y * T * (1 - pivotUp) };
   };
   const ARC = Array.from({ length: 17 }, (_, i) => shoulderAt(lerp(p.angleFrom, p.angleTo, i / 16)));
 
@@ -72,7 +99,7 @@ function crunch(p: CrunchParams): Rig {
     const shoulder = shoulderAt(deg);
     /* The head continues the trunk line — and bows WITH it: at full flexion the chin tucks. */
     const r = (deg * Math.PI) / 180;
-    const bow = p.bowMax * rom;
+    const bow = p.bowMax * BOW_LEADS(rom);
     const head: Vec2 = {
       x: shoulder.x + (ATHLETE.neck - bow * 0.4) * Math.sin(r + (bow * Math.PI) / 90),
       y: shoulder.y - (ATHLETE.neck - bow * 0.4) * Math.cos(r + (bow * Math.PI) / 90),
@@ -146,7 +173,9 @@ function crunch(p: CrunchParams): Rig {
 }
 
 /* ── sit_up: supine, knees bent, feet planted ─────────────────────────────────────────────────── */
-const SU_HIP: Vec2 = { x: 150, y: FLOOR_Y - 10 };
+/* x 176, from 150: lying flat the figure spans ~110u, and at 150 it sat in the left half of the
+   frame with 60u of paper on the right (audit, 2026-09-03). */
+const SU_HIP: Vec2 = { x: 176, y: FLOOR_Y - 10 };
 const SU_LEGS: Record<string, Vec2> = {
   knee: { x: SU_HIP.x + 30, y: FLOOR_Y - 34 },
   ankle: { x: SU_HIP.x + 46, y: FLOOR_Y - ATHLETE.ankleH },
@@ -161,8 +190,11 @@ const SU_LEGS: Record<string, Vec2> = {
 export const sitUpRig = crunch({
   id: 'sit_up',
   hip: SU_HIP,
-  /* Lying back (−78° from vertical: the trunk almost flat behind the hip) → sat up (−8°). */
-  angleFrom: -78,
+  /* Lying back (−88° from vertical: the trunk flat on the floor behind the hip) → sat up (−8°).
+     It was −78, which held the shoulders 10u (11 cm) off the floor at the bottom of every rep —
+     a sit-up that never lay down. At −88 the shoulder rests at y 181, the head 4u clear of the
+     floor line (audit, 2026-09-03). */
+  angleFrom: -88,
   angleTo: -8,
   bowMax: 5,
   legs: SU_LEGS,
@@ -189,7 +221,9 @@ export const cableCrunchRig = crunch({
   /* Tall on the knees, leaning slightly toward the stack (18°) → bowed down hard (62°). */
   angleFrom: 18,
   angleTo: 62,
-  bowMax: 7,
+  /* 10 (from 7) with the pivot up the trunk: the curl, not the hinge, carries the crunch now. */
+  bowMax: 10,
+  pivotUp: 0.45,
   legs: KN_LEGS,
   furniture: (pose, rom) => {
     const risen = rom * 20;
@@ -219,7 +253,10 @@ export const machineCrunchRig = crunch({
   hip: MC_HIP,
   angleFrom: 6,
   angleTo: 52,
-  bowMax: 7,
+  /* Same curl as the cable member: with the hinge at the hip the finish put the chest on the
+     thighs (hip 33°), a depth the seat and knee pads of a real crunch machine stop at ~55°. */
+  bowMax: 10,
+  pivotUp: 0.45,
   legs: MC_LEGS,
   furniture: (pose, rom) => {
     /* The seat, the chest pad riding the trunk, and the stack rising with the curl. */

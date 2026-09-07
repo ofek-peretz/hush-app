@@ -51,16 +51,32 @@ const abductionChains = {
 /* ── the seated pair ──────────────────────────────────────────────────────────────────────────── */
 
 const seated = seatedFrontCore(CX);
-/** Seated, the thigh projects short (toward the camera) and the shin hangs; the visible sweep is
- *  the KNEE's lateral travel. Thigh's projected length seated ≈ the core's own knee offset. */
-const SEATED_THIGH_PROJ = 26;
-const SEATED_SHIN = 34;
+/**
+ * THE SEATED LEG, IN THREE DIMENSIONS (audit, 2026-09-03). It used to be a 26u projected stub
+ * swung by θ, which moved the knee 12.7u across the whole rep — a clip that was nearly still, on
+ * a machine whose entire content is the knees travelling. The thigh is now the canonical bone:
+ * it points at the lens at θ=0 and swings out by θ, its depth solved so the 3D length holds; the
+ * knee's travel is `THIGH·(sin θ₁ − sin θ₀)`, 22.9u over the 4°→40° sweep, almost double.
+ *
+ * The knee sits a shade BELOW the hip (it was 4 above, which read as a camera under the knees),
+ * and the shin drops 28u to the floor while its depth carries the rest of the canonical 37 — the
+ * feet a little forward of the knees, which is how anyone sits at this machine.
+ */
+const THIGH = ATHLETE.thigh;
+const SHANK = ATHLETE.shank;
+/** Knees a hand apart at θ=0 — the offset was 6, which had the legs 15u from centre before the sweep began. */
+const KNEE_IN = 2;
+const KNEE_DROP = 2;
+const SHIN_PROJ = 28;
+const SHIN_Z = Math.sqrt(SHANK * SHANK - SHIN_PROJ * SHIN_PROJ - 3 * 3);
 
-function seatedLegAt(theta: number, side: 1 | -1): { knee: Vec2; ankle: Vec2 } {
+function seatedLegAt(theta: number, side: 1 | -1): { knee: Vec2; ankle: Vec2; kneeZ: number; ankleZ: number } {
   const r = (theta * Math.PI) / 180;
   const hip = side === 1 ? seated.hipR : seated.hipL;
-  const knee: Vec2 = { x: hip.x + side * SEATED_THIGH_PROJ * Math.sin(r) + side * 6, y: hip.y - 4 };
-  return { knee, ankle: { x: knee.x + side * 4, y: knee.y + SEATED_SHIN } };
+  const dx = KNEE_IN + THIGH * Math.sin(r);
+  const knee: Vec2 = { x: hip.x + side * dx, y: hip.y + KNEE_DROP };
+  const kneeZ = Math.sqrt(THIGH * THIGH - dx * dx - KNEE_DROP * KNEE_DROP);
+  return { knee, ankle: { x: knee.x + side * 3, y: knee.y + SHIN_PROJ }, kneeZ, ankleZ: kneeZ + SHIN_Z };
 }
 
 interface SeatedPairParams {
@@ -73,7 +89,12 @@ interface SeatedPairParams {
 }
 
 function seatedSweep(p: SeatedPairParams): Rig {
-  const ARC = Array.from({ length: 17 }, (_, i) => seatedLegAt(lerp(p.thetaFrom, p.thetaTo, i / 16), 1).knee);
+  /* The range statement rides ABOVE the knees' path: on the path itself its end ticks stood beside
+     the pads and read as two more of them (audit, 2026-09-03). */
+  const ARC = Array.from({ length: 17 }, (_, i) => {
+    const k = seatedLegAt(lerp(p.thetaFrom, p.thetaTo, i / 16), 1).knee;
+    return { x: k.x, y: k.y - 14 };
+  });
 
   const poseAt = (rom: number): Pose => {
     const theta = lerp(p.thetaFrom, p.thetaTo, rom);
@@ -99,6 +120,18 @@ function seatedSweep(p: SeatedPairParams): Rig {
         elbowL: { x: seated.shoulderL.x - 4, y: seated.shoulderL.y + 24 },
         handL: { x: seated.hipL.x - 10, y: seated.hipL.y - 2 },
       },
+      /* The legs' depth — toward the camera — so the bone law measures the thigh and shank at
+         their true length while the page shows them foreshortened. */
+      z: {
+        kneeR: R.kneeZ,
+        kneeL: L.kneeZ,
+        ankleR: R.ankleZ,
+        ankleL: L.ankleZ,
+        heelR: R.ankleZ,
+        toeR: R.ankleZ,
+        heelL: L.ankleZ,
+        toeL: L.ankleZ,
+      },
     };
   };
 
@@ -118,9 +151,10 @@ function seatedSweep(p: SeatedPairParams): Rig {
       ...tower.prims,
       { kind: 'line', a: { x: CX + 27, y: 96 }, b: { x: 250, y: 96 }, w: 2.5, color: 'ink3' },
       { kind: 'rect', x: CX - 27, y: 62, width: 54, height: 66, rx: 8, fill: 'paper3', stroke: 'ink3', w: 2 },
-      { kind: 'rect', x: CX - 30, y: 158, width: 60, height: 8, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
-      { kind: 'line', a: { x: CX - 20, y: 166 }, b: { x: CX - 20, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
-      { kind: 'line', a: { x: CX + 20, y: 166 }, b: { x: CX + 20, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
+      /* The seat top 5u under the knee line — a thigh's thickness — now that the knees sit at 158. */
+      { kind: 'rect', x: CX - 30, y: 163, width: 60, height: 8, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
+      { kind: 'line', a: { x: CX - 20, y: 171 }, b: { x: CX - 20, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
+      { kind: 'line', a: { x: CX + 20, y: 171 }, b: { x: CX + 20, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
       ...sampledPathTicks(ARC),
     ];
     /* The two pads ride the knees, on the working side of each. */
@@ -154,11 +188,15 @@ function seatedSweep(p: SeatedPairParams): Rig {
     ],
   };
 
-  return { id: p.id, chains: abductionChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, CX, 40) };
+  /* The raised camera (2026-09-07): the knees open along the lens's axis from a square-on seat and
+     travelled 12.7u on the page; from 22° above, the same opening is drawn as screen travel. */
+  return { id: p.id, chains: abductionChains, camera: { azimuth: 0, elevation: 22, pivotX: CX }, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, CX, 40) };
 }
 
-export const hipAbductionRig = seatedSweep({ id: 'hip_abduction', thetaFrom: 4, thetaTo: 34, padSide: 1 });
-export const hipAdductionRig = seatedSweep({ id: 'hip_adduction', thetaFrom: 34, thetaTo: 4, padSide: -1 });
+/* 40° of spread per side (from 34): with the true thigh the knee now travels 22.9u — the sweep a
+   beginner can see at 300px, where 12.7u at cubic ease moved 0.2px a frame (audit, 2026-09-03). */
+export const hipAbductionRig = seatedSweep({ id: 'hip_abduction', thetaFrom: 4, thetaTo: 40, padSide: 1 });
+export const hipAdductionRig = seatedSweep({ id: 'hip_adduction', thetaFrom: 40, thetaTo: 4, padSide: -1 });
 
 /* ── the standing cable pair: one leg sweeps, cuffed to the low pulley at the side ─────────────── */
 
@@ -181,13 +219,17 @@ function cableSweep(p: CablePairParams): Rig {
     return { x: hip.x + LEG * Math.sin(r), y: hip.y + LEG * Math.cos(r) };
   };
   const ARC = Array.from({ length: 17 }, (_, i) => legAt(lerp(p.thetaFrom, p.thetaTo, i / 16)));
-  const PULLEY: Vec2 = { x: p.pulleyX, y: FLOOR_Y - 10 };
+  /* 22u up the tower (from 10): at 10 the abduction's cable ran straight through the stance
+     ankle on its way across; at 22 it clears the planted foot (audit, 2026-09-03). */
+  const PULLEY: Vec2 = { x: p.pulleyX, y: FLOOR_Y - 22 };
+  /** The upright the free hand holds — it used to steady itself on empty air, 65u from any frame. */
+  const POST_X = standing.shoulderR.x + 23;
 
   const poseAt = (rom: number): Pose => {
     const ankle = legAt(lerp(p.thetaFrom, p.thetaTo, rom));
     const knee: Vec2 = { x: lerp(hip.x, ankle.x, T / (T + S)) + 2, y: lerp(hip.y, ankle.y, T / (T + S)) };
-    /* One hand steadies on the frame at the pulley's side. */
-    const handR: Vec2 = { x: standing.shoulderR.x + 20, y: standing.shoulderR.y + 30 };
+    /* One hand steadies on the post beside her. */
+    const handR: Vec2 = { x: POST_X - 3, y: standing.shoulderR.y + 30 };
     return {
       headR: ATHLETE.headR,
       j: {
@@ -210,7 +252,14 @@ function cableSweep(p: CablePairParams): Rig {
     const towerX0 = p.pulleyX > CX ? p.pulleyX + 6 : p.pulleyX - 32;
     const tower = stackTower({ x0: towerX0, x1: towerX0 + 26, capY: FLOOR_Y - 96, stackTopY: FLOOR_Y - 34 }, risen);
     return {
-      back: [...sampledPathTicks(ARC), ...tower.prims, ...pulley(PULLEY)],
+      back: [
+        ...sampledPathTicks(ARC),
+        ...tower.prims,
+        ...pulley(PULLEY),
+        /* the steadying post, footed on the floor, with the hand closed round it */
+        { kind: 'line', a: { x: POST_X, y: standing.shoulderR.y + 6 }, b: { x: POST_X, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
+        { kind: 'line', a: { x: POST_X - 6, y: FLOOR_Y - 2 }, b: { x: POST_X + 6, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3', cap: 'round' },
+      ],
       front: [cable(PULLEY, pose.j.ankleR)],
     };
   };
@@ -234,4 +283,6 @@ function cableSweep(p: CablePairParams): Rig {
 }
 
 export const cableHipAbduction = cableSweep({ id: 'cable_hip_abduction', thetaFrom: 5, thetaTo: 34, pulleyX: CX - 96 });
-export const cableHipAdduction = cableSweep({ id: 'cable_hip_adduction', thetaFrom: 30, thetaTo: 2, pulleyX: CX + 84 });
+/* −10° (from 2): the adduction finishes ACROSS the midline, the working foot passing in front of
+   the stance foot — at 2° it stopped beside it and read as "feet together" (audit, 2026-09-03). */
+export const cableHipAdduction = cableSweep({ id: 'cable_hip_adduction', thetaFrom: 30, thetaTo: -10, pulleyX: CX + 84 });

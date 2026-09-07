@@ -7,7 +7,7 @@
  * NOT registered in the catalog; kept as the review page's "before".
  */
 const path = require('path');
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const { buildFrame } = require(path.join(BUILD, 'frame.js'));
 const { seatedFrontCore, FLOOR_Y } = require(path.join(BUILD, 'bodies.js'));
 const { stackTower } = require(path.join(BUILD, 'machines.js'));

@@ -13,7 +13,7 @@
 //
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
-import { lerp, twoBoneIKToward } from '../geometry';
+import { bendToward, lerp, twoBoneIK } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { floorScene, padStroke, sampledPathTicks } from '../kit';
@@ -26,33 +26,52 @@ const ANKLE: Vec2 = { x: 218, y: 172 };
 
 /** Trunk angle from the leg line's CONTINUATION: 0 = one straight line, 90 = hanging straight down. */
 const THETA_TOP = 4; // finished: the body one line, a shade shy of dead straight
-const THETA_BOTTOM = 78; // the stretch over the pad
+/* 86, from 78: the hip closes to 94° at the stretch — a real 45° hyper hangs to about a right
+   angle at the hip, and 78 stopped 12° short of it (audit, 2026-09-03). */
+const THETA_BOTTOM = 86;
 
 /** The leg line's direction, hip → beyond (up-forward at the bench's angle). */
 const LEG_RAD = Math.atan2(ANKLE.y - HIP.y, ANKLE.x - HIP.x); // pointing down-back
 
-function trunkAt(theta: number): { shoulder: Vec2; head: Vec2 } {
-  /* The trunk continues the leg line when θ=0 and folds DOWN toward the floor as θ grows. */
-  const r = LEG_RAD + Math.PI + (theta * Math.PI) / 180;
+/**
+ * The trunk's direction at θ, and its ANTERIOR normal — the side the chest is on. The lifter is
+ * prone: face-down along the bench, so the front of the body faces the floor at the top and
+ * swings to face the bench's post as the trunk hangs. The crossed arms ride that side.
+ */
+function trunkAt(theta: number): { shoulder: Vec2; head: Vec2; front: Vec2 } {
+  /*
+   * The trunk continues the leg line when θ=0 and folds DOWN toward the floor as θ grows — which
+   * is MINUS θ from the continuation. It shipped as PLUS θ for months: the trunk then swung UP off
+   * the leg line, a 78° hyperextension arcing down to neutral, and the athlete read as leaning
+   * back off the bench. The hip-angle predicates could not see it, because an interior angle has
+   * no side (audit, 2026-09-03).
+   */
+  const r = LEG_RAD + Math.PI - (theta * Math.PI) / 180;
   const shoulder: Vec2 = { x: HIP.x + ATHLETE.torso * Math.cos(r), y: HIP.y + ATHLETE.torso * Math.sin(r) };
   const head: Vec2 = { x: shoulder.x + ATHLETE.neck * Math.cos(r), y: shoulder.y + ATHLETE.neck * Math.sin(r) };
-  return { shoulder, head };
+  return { shoulder, head, front: { x: Math.sin(r), y: -Math.cos(r) } };
 }
 
 export const backExtensionRig: Rig = (() => {
   const ARC = Array.from({ length: 17 }, (_, i) => trunkAt(lerp(THETA_BOTTOM, THETA_TOP, i / 16)).shoulder);
 
+  const ARM_BEND: 1 | -1 = (() => {
+    const t = trunkAt(THETA_BOTTOM);
+    const hand: Vec2 = { x: lerp(HIP.x, t.shoulder.x, 0.7) + t.front.x * 6, y: lerp(HIP.y, t.shoulder.y, 0.7) + t.front.y * 6 };
+    return bendToward(t.shoulder, hand, ATHLETE.upperArm, ATHLETE.foreArm, { x: lerp(HIP.x, t.shoulder.x, 0.55) + t.front.x * 9, y: lerp(HIP.y, t.shoulder.y, 0.55) + t.front.y * 9 });
+  })();
   const poseAt = (rom: number): Pose => {
     /* rom 0 = the stretch (hanging), rom 1 = the finish (one line) — the lift is the raise. */
-    const { shoulder, head } = trunkAt(lerp(THETA_BOTTOM, THETA_TOP, rom));
-    /* Arms crossed at the chest: hands ride the trunk two-thirds up it. */
+    const { shoulder, head, front } = trunkAt(lerp(THETA_BOTTOM, THETA_TOP, rom));
+    /* Arms crossed at the chest: hands ride the trunk two-thirds up it, on its FRONT — offset along
+       the anterior normal rather than straight down the page, so they stay on the chest through
+       the whole 82° sweep instead of drifting to the back as the trunk hangs (audit, 2026-09-03). */
     /* Hands crossed on the chest are the authored end; the elbow is solved, so the upper arm keeps
        its canonical 25 instead of being however far the two landed apart (30.6). */
-    const hand: Vec2 = { x: lerp(HIP.x, shoulder.x, 0.7) + 2, y: lerp(HIP.y, shoulder.y, 0.7) + 6 };
-    const elbow = twoBoneIKToward(shoulder, hand, ATHLETE.upperArm, ATHLETE.foreArm, {
-      x: lerp(HIP.x, shoulder.x, 0.55),
-      y: lerp(HIP.y, shoulder.y, 0.55) + 9,
-    });
+    const hand: Vec2 = { x: lerp(HIP.x, shoulder.x, 0.7) + front.x * 6, y: lerp(HIP.y, shoulder.y, 0.7) + front.y * 6 };
+    /* The side is resolved ONCE (bendToward at the hang) and held: solved per frame, the crossed
+       arm's branch flipped mid-sweep and the elbow teleported 49.7u (2026-09-07). */
+    const elbow = twoBoneIK(shoulder, hand, ATHLETE.upperArm, ATHLETE.foreArm, ARM_BEND);
     return {
       headR: ATHLETE.headR,
       j: {
@@ -94,6 +113,9 @@ export const backExtensionRig: Rig = (() => {
     tempo: CONCENTRIC_TEMPO,
     start: [
       { kind: 'jointAngle', joint: 'hip', neighbors: ['knee', 'shoulder'], min: 88, max: 120, label: 'the stretch — trunk hanging over the pad' },
+      /* The angle above has no side: it was 101° while the trunk pointed at the ceiling. This one
+         has — the shoulder hangs BELOW the hip at the stretch, or it is not a stretch (audit, 2026-09-03). */
+      { kind: 'jointBelow', a: 'shoulder', b: 'hip', by: 20, label: 'hanging — the shoulders below the hips, toward the floor' },
     ],
     end: [
       /* One line, and NOT past it: the finish window's ceiling IS the anti-hyperextension cue. */

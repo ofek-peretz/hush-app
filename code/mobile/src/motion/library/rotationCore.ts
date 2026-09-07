@@ -80,6 +80,17 @@ const claspedArms = (
 /** A shade under full extension, so the elbows keep a visible bend at the ends of the sweep. */
 const REACH = (ATHLETE.upperArm + ATHLETE.foreArm) * 0.94;
 
+/** `withinReachOfBoth` in three dimensions: the clasp drawn toward whichever shoulder is farther
+ *  until that arm can hold it — a lifter who cannot reach stops short, he does not grow. */
+const withinReachOfBoth3 = (a: Vec3, b: Vec3, target: Vec3, reach: number): Vec3 => {
+  const d3 = (p: Vec3, q: Vec3) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+  const root = d3(a, target) >= d3(b, target) ? a : b;
+  const d = d3(root, target);
+  if (d <= reach) return target;
+  const k = reach / d;
+  return { x: root.x + (target.x - root.x) * k, y: root.y + (target.y - root.y) * k, z: root.z + (target.z - root.z) * k };
+};
+
 /* ── russian_twist ─────────────────────────────────────────────────────────────────────────────── */
 
 /*
@@ -113,7 +124,10 @@ const REACH = (ATHLETE.upperArm + ATHLETE.foreArm) * 0.94;
 export const russianTwist: Rig = (() => {
   /* Seated ON THE FLOOR: the hip joint about 10 cm up. */
   const HIP_Y = 184;
-  const LEAN = 33; // degrees the trunk is leaned back from vertical
+  /* 30, not 33 (audit, 2026-09-03): the three degrees buy the hands 4u more depth at the hip — at
+     33 the far shoulder sat 35u behind the hip plane at full turn and the clasp could not get
+     below y 174 without the clamp biting. */
+  const LEAN = 30; // degrees the trunk is leaned back from vertical
   const lr = (LEAN * Math.PI) / 180;
   /** Up the trunk, hip → neck: back and up. The orbit axis, and the axis the ribs turn about. */
   const UP: Vec3 = { x: 0, y: -Math.cos(lr), z: -Math.sin(lr) };
@@ -151,18 +165,36 @@ export const russianTwist: Rig = (() => {
 
   const LATERAL: Vec3 = { x: 1, y: 0, z: 0 };
   const SH_HALF = 15.5;
-  /** The clasp rides on the chest: 18u down the trunk from the neck, 22u out in front of it. */
-  const CLASP_DOWN = 18;
+  /**
+   * THE HANDS DROP TO THE HIP AT EACH END (audit, 2026-09-03). Rigid to the chest, the clasp rode
+   * at chest height for the whole sweep — hand y 147–150, 35u above the pelvis — so "touch the
+   * floor each side" was a hand waving in front of the sternum. The clasp is on the chest only at
+   * the MIDDLE of the sweep (24u down the trunk, 22u out in front) and blends, with |phi|, toward
+   * a point beside the hip on the side of the turn: 18u lateral, y 170, 4u behind the hip plane.
+   * That is 14u above the pelvis and 23u above the floor, and it is the lowest the two arms can
+   * hold: at full turn the far shoulder is 33u behind the hip plane, and the floor beside the hip
+   * is 51u from it against a 45u two-handed reach — so the target is clamped into the farther
+   * shoulder's reach in 3D rather than drawn with a stretched forearm. Measured: hand y at the
+   * ends 150.4 → 170.0, sweep 25.5 → 29.5u, both elbows ≥ 90° in 3D and ≥ 33° projected.
+   */
+  const CLASP_DOWN = 24;
   const CLASP_OUT = 22;
+  const END_LATERAL = 18;
+  const END_Y = 170;
+  const END_Z = -4;
 
   const bodyAt = (rom: number) => {
     const phi = lerp(-PHI_MAX, PHI_MAX, rom);
     const lat = turn(LATERAL, phi);
     const out = turn(OUT, phi);
-    const chest = along(NECK, UP, -CLASP_DOWN);
-    const clasp = along(chest, out, CLASP_OUT);
     const shoulderR = along(NECK, lat, SH_HALF);
     const shoulderL = along(NECK, lat, -SH_HALF);
+    const chest = along(NECK, UP, -CLASP_DOWN);
+    const mid = along(chest, out, CLASP_OUT);
+    const f = Math.abs(phi) / PHI_MAX;
+    const end: Vec3 = { x: CX + (phi < 0 ? -END_LATERAL : END_LATERAL), y: END_Y, z: END_Z };
+    const raw: Vec3 = { x: lerp(mid.x, end.x, f), y: lerp(mid.y, end.y, f), z: lerp(mid.z, end.z, f) };
+    const clasp = withinReachOfBoth3(shoulderR, shoulderL, raw, REACH);
     return { clasp, shoulderR, shoulderL };
   };
 
@@ -189,8 +221,11 @@ export const russianTwist: Rig = (() => {
 
   const poseAt = (rom: number): Pose => {
     const { clasp, shoulderR, shoulderL } = bodyAt(rom);
-    const elbowR = twoBoneIK3(shoulderR, clasp, ATHLETE.upperArm, ATHLETE.foreArm, { x: 1, y: 0.9, z: 0.2 });
-    const elbowL = twoBoneIK3(shoulderL, clasp, ATHLETE.upperArm, ATHLETE.foreArm, { x: -1, y: 0.9, z: 0.2 });
+    /* Elbows out to the sides and a little forward (audit, 2026-09-03): with the hands dropping to
+       the hip, the old down-and-in hint (y 0.9) folded the near upper arm onto the view axis —
+       2.5° projected at rom 0.88; out-and-forward keeps every projected bone ≥ 7.7u. */
+    const elbowR = twoBoneIK3(shoulderR, clasp, ATHLETE.upperArm, ATHLETE.foreArm, { x: 1, y: 0.2, z: 0.6 });
+    const elbowL = twoBoneIK3(shoulderL, clasp, ATHLETE.upperArm, ATHLETE.foreArm, { x: -1, y: 0.2, z: 0.6 });
     const flat = (q: Vec3): Vec2 => ({ x: q.x, y: q.y });
     return {
       headR: ATHLETE.headR,
@@ -244,10 +279,14 @@ export const russianTwist: Rig = (() => {
   const END_X = bodyAt(1).clasp.x;
 
   const formspec: FormSpec = {
-    tempo: CONCENTRIC_TEMPO,
+    /* A twist has no loaded direction: left→right and right→left are the same movement, so the
+       two phases share the 3.1 s equally instead of one side "fast" (1.1 s) and the other "slow"
+       (2.0 s). The cycle stays 4.0 s (audit, 2026-09-03). */
+    tempo: { ...CONCENTRIC_TEMPO, eccentricMs: 1550, concentricMs: 1550 },
     start: [{ kind: 'contactX', a: 'handR', x: START_X, tol: 2, label: 'turned to the left' }],
     end: [{ kind: 'contactX', a: 'handR', x: END_X, tol: 2, label: 'and to the right — rotate from the ribs' }],
-    path: { track: 'handR', kind: 'horizontal', tol: 9 },
+    /* An arc now, not a horizontal: the hands rise 18u over the chest between the two hip touches. */
+    path: { track: 'handR', kind: 'arc', tol: 3 },
     invariants: [
       { kind: 'pointFixed', point: 'hipC', tol: 0.5, label: 'the pelvis stays square — the ribs do the turning' },
       { kind: 'pointFixed', point: 'hipR', tol: 0.5, label: 'seated and planted' },
@@ -266,121 +305,141 @@ export const russianTwist: Rig = (() => {
 
 /* ── cable_woodchop ────────────────────────────────────────────────────────────────────────────── */
 
+/*
+ * cable_woodchop — REBUILT IN THREE DIMENSIONS AND RESTAGED (audit, 2026-09-03).
+ *
+ * The flat diagonal broke its own headline. "Arms LONG" was authored as a straight line 22u in
+ * front of a trunk that never turned, and the measurement said what that costs: elbowR 47° and
+ * elbowL 6.5° mid-chop (rom 0.4–0.6), the arms knotted into an X on the chest — a cross-body
+ * press-down, not a chop. That is geometry, not a constant: a hand passing 22u in front of a
+ * SQUARE chest is 28u from the near shoulder, and a 48u arm has to fold to hold it.
+ *
+ * Three things fix it, and only together:
+ *
+ *   1. THE RIBS TURN. The shoulder line rotates ±40° about the trunk's vertical axis — from facing
+ *      the pulley to facing away from it. Pelvis and legs stay square, which is the card's cue.
+ *   2. THE HANDS RIDE A SPHERE ABOUT THE GIRDLE. The clasp sits 45u from the centre of the shoulder
+ *      line, straight out of the TURNED chest, and only its elevation changes: +28° (beside the
+ *      head) → −50° (past the far hip). Both shoulders are then 47.6u from the clasp at every rom,
+ *      so both elbows hold ~160° by construction — the arms are long because they cannot be
+ *      anything else. The lateral travel is the trunk's, exactly as the cue says.
+ *   3. THE CAMERA STEPS ROUND TO −50°. A sphere of straight arms is the fly's problem: at azimuth 0
+ *      the arms point at the lens mid-chop and vanish (projected upper arm 0.6u). −50° keeps the
+ *      view axis outside the ±40° the arms sweep, so the shortest projected bone is 9.5u and the
+ *      chop reads as one diagonal: high beside the pulley (137, 43) → low past the far hip
+ *      (171, 97). The machine stands in the athlete's lateral plane and is projected with him, so
+ *      the pulley lands on his far side and the cable runs from behind him into his hands.
+ *
+ * WHY THE ORBIT IS ALLOWED: the twist's rule, above — a rotation is antisymmetric, there is no
+ * mirror symmetry for an orbit to spend.
+ */
 export const cableWoodchop: Rig = (() => {
   const core = standingFrontCore(CX);
-  const PULLEY: Vec2 = { x: CX - 92, y: 44 };
-  /*
-   * The clasp sweeps an ARC AT ARM'S LENGTH about the chest — up beside one shoulder, down past the
-   * opposite hip — rather than a straight diagonal between two authored points.
-   *
-   * The diagonal was authored where a chop should finish, and that finish sits 85 units from the far
-   * shoulder against a two-handed reach of 45: the trunk has to TURN to get there, and a frontal
-   * trunk cannot. Clamping the diagonal into reach fixed the arm lengths and cost the exercise its
-   * movement — the hands were dragged in against the chest and the chop read as a hug.
-   *
-   * An arc keeps the hands OUT, at a radius both shoulders can hold, and spends the whole sweep
-   * where the clamp never bites. The travel is smaller than the authored diagonal because a chop
-   * drawn without trunk rotation genuinely is smaller; what it is not is a body pulling itself
-   * apart to cover the difference.
-   */
-  /*
-   * THE CHOP RUNS AWAY FROM THE MACHINE, and it used to run toward it.
-   *
-   * The sweep started up on the athlete's RIGHT — the far side from a pulley standing at x 84 — and
-   * finished down toward the middle. Two things follow from that, and both were being drawn:
-   *
-   *   · the cable got SHORTER through the rep, 112u to 92u, while the stack was drawn rising on a
-   *     bare `rom * 20`. A cable that shortens is a stack coming DOWN. The clip showed a weight
-   *     being lifted by a rope that was feeding slack, which is the one thing a cable machine
-   *     cannot do;
-   *   · the athlete reached AWAY from the handle to start, so the near arm was folded to 40° at the
-   *     moment the card says "arms long", and the far arm was the extended one. Reaching up across
-   *     your body extends the arm on the FAR side from the reach — that is the whole shape of a
-   *     chop, and it was mirrored.
-   *
-   * Started up beside the pulley and finished down past the opposite hip, the cable lengthens by
-   * 31u, the stack rise is that length rather than a guess, and the leading arm is the long one.
-   */
-  /*
-   * A DIAGONAL, not an arc. Swept as a circle about the chest, the hands went up-left, over the top
-   * of the head, and only then down — because 144° to −36° passes through vertical. A chop does not
-   * rise; it is a straight line from high on one side to low on the other, and that is what these
-   * two points are.
-   *
-   * The reason the arc existed was that the ORIGINAL authored diagonal finished 85u from the far
-   * shoulder, past a 48u arm, and had to be clamped. These endpoints are chosen against that
-   * constraint instead of colliding with it: the far shoulder is 44.5u from the finish and the near
-   * one 43.6u from the start, both inside a real arm, so the clamp never bites anywhere on the line
-   * and the hands travel a full 64u.
-   */
-  const CHOP_FROM: Vec2 = { x: CX - 24, y: 45 }; // up beside the head, toward the high pulley
-  const CHOP_TO: Vec2 = { x: CX + 16, y: 95 }; // down past the opposite hip
-  /*
-   * THE HANDS ARE OUT IN FRONT, 22u of it, and that is not decoration — it is what stops the far
-   * arm from tearing itself apart halfway down.
-   *
-   * Drawn flat, the chop line passes 4.9u from the athlete's own left shoulder JOINT. A two-bone
-   * solve at that distance is nearly degenerate: the elbow angle collapses to 14° and the solution
-   * swings right round the shoulder between one frame and the next — the auditor caught it as a
-   * 7.6u teleport against a median step of 0.45. In life the hands never go near that joint; they
-   * pass in FRONT of it, which is a fact about depth and cannot be said in the plane. Said in three
-   * dimensions the same drawn line leaves the far shoulder 22.7u away and the elbow opens to 56°.
-   */
-  const CHOP_Z = 22;
-  const claspAt = (rom: number): Vec2 => ({
-    x: lerp(CHOP_FROM.x, CHOP_TO.x, rom),
-    y: lerp(CHOP_FROM.y, CHOP_TO.y, rom),
-  });
+  const SH_HALF = 15.5;
+  const SH_Y = core.shoulderR.y;
+  const PHI_MAX = 35;
+  /** 45u from the girdle's centre: √(45² + 15.5²) = 47.6u from each shoulder, an elbow of ~160°. */
+  /* 46.5, not 45 (execution pass, 2026-09-03): at 45 the arms held ~160° and the far elbow's
+     drawn bend flipped sign as the arm crossed the camera axis (the auditor's 4th law, frame 60);
+     at 46.5 the elbows sit inside the straight deadband — which is the cue: arms LONG, the chop is
+     a turn of the trunk, not a press-down. */
+  const RADIUS = 46.5;
+  const ELEV_FROM = 28; // degrees above the shoulder line — beside the head, toward the pulley
+  const ELEV_TO = -50; // below it — past the far hip
+  const CAM: Camera = { azimuth: -45, pivotX: CX };
+  const P3 = (q: Vec3): Vec2 => {
+    const r = project({ x: q.x, y: q.y }, q.z, CAM);
+    return { x: r.x, y: r.y };
+  };
+  const d3 = (p: Vec3, q: Vec3) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+  /** The high pulley, in the athlete's lateral plane on his left; the stack hangs beyond it. */
+  const PULLEY3: Vec3 = { x: CX - 92, y: 44, z: 0 };
+  const PULLEY = P3(PULLEY3);
+  const px = (x: number) => P3({ x, y: 0, z: 0 }).x;
 
-  const ARC = Array.from({ length: 17 }, (_, i) => claspAt(i / 16));
-
-  const armsAt = (rom: number) => {
-    const c = claspAt(rom);
-    const handR: Vec3 = { x: c.x + 3, y: c.y, z: CHOP_Z };
-    const handL: Vec3 = { x: c.x - 3, y: c.y, z: CHOP_Z };
-    const shR: Vec3 = { x: core.shoulderR.x, y: core.shoulderR.y, z: 0 };
-    const shL: Vec3 = { x: core.shoulderL.x, y: core.shoulderL.y, z: 0 };
-    return {
-      handR,
-      handL,
-      elbowR: twoBoneIK3(shR, handR, ATHLETE.upperArm, ATHLETE.foreArm, { x: 1, y: 0.7, z: -0.35 }),
-      elbowL: twoBoneIK3(shL, handL, ATHLETE.upperArm, ATHLETE.foreArm, { x: -1, y: 0.7, z: -0.35 }),
+  const girdleAt = (rom: number) => {
+    /* +PHI_MAX at rom 0: the chest turned toward the pulley (−x), the right shoulder forward. */
+    const phi = (lerp(PHI_MAX, -PHI_MAX, rom) * Math.PI) / 180;
+    const lat: Vec3 = { x: Math.cos(phi), y: 0, z: Math.sin(phi) };
+    const fwd: Vec3 = { x: -Math.sin(phi), y: 0, z: Math.cos(phi) };
+    const shoulderR: Vec3 = { x: CX + lat.x * SH_HALF, y: SH_Y, z: lat.z * SH_HALF };
+    const shoulderL: Vec3 = { x: CX - lat.x * SH_HALF, y: SH_Y, z: -lat.z * SH_HALF };
+    const elev = (lerp(ELEV_FROM, ELEV_TO, rom) * Math.PI) / 180;
+    const clasp: Vec3 = {
+      x: CX + fwd.x * Math.cos(elev) * RADIUS,
+      y: SH_Y - Math.sin(elev) * RADIUS,
+      z: fwd.z * Math.cos(elev) * RADIUS,
     };
+    /* Each hand a knuckle to its own side of the clasp, along the turned shoulder line. */
+    const handR: Vec3 = { x: clasp.x + lat.x * 3, y: clasp.y, z: clasp.z + lat.z * 3 };
+    const handL: Vec3 = { x: clasp.x - lat.x * 3, y: clasp.y, z: clasp.z - lat.z * 3 };
+    /* Elbows OUT along the turned shoulder line, and a little down. The hint only picks a point on
+       the IK circle (with ~155° elbows it moves them ~5u), but it has to be chosen with care twice
+       over: a hint along the arm's own axis (the arm points forward at rom 0.5) left the side to
+       rounding and the elbow jumped 8.7u between frames; a plain 'down' hint kept the elbow under
+       an arm that swings from pointing left to pointing right, which is a bend that inverts in the
+       authored plane (the auditor's 4th law). Out-to-its-own-side never does either. */
+    const elbowR = twoBoneIK3(shoulderR, handR, ATHLETE.upperArm, ATHLETE.foreArm, { x: lat.x, y: 0.3, z: lat.z });
+    const elbowL = twoBoneIK3(shoulderL, handL, ATHLETE.upperArm, ATHLETE.foreArm, { x: -lat.x, y: 0.3, z: -lat.z });
+    return { clasp, shoulderR, shoulderL, elbowR, elbowL, handR, handL };
   };
 
+  const ARC = Array.from({ length: 17 }, (_, i) => P3(girdleAt(i / 16).clasp));
+
+  /* The feet point forward in depth, so the orbit foreshortens them instead of squeezing them. */
+  const TOE_Z = 9;
+  const HEEL_Z = -2;
+
   const poseAt = (rom: number): Pose => {
-    const a = armsAt(rom);
+    const g = girdleAt(rom);
     const flat = (q: Vec3): Vec2 => ({ x: q.x, y: q.y });
     return {
       headR: ATHLETE.headR,
-      j: { ...core, elbowR: flat(a.elbowR), elbowL: flat(a.elbowL), handR: flat(a.handR), handL: flat(a.handL) },
-      z: { elbowR: a.elbowR.z, elbowL: a.elbowL.z, handR: CHOP_Z, handL: CHOP_Z },
+      j: {
+        ...core,
+        shoulderR: flat(g.shoulderR),
+        shoulderL: flat(g.shoulderL),
+        elbowR: flat(g.elbowR),
+        elbowL: flat(g.elbowL),
+        handR: flat(g.handR),
+        handL: flat(g.handL),
+      },
+      z: {
+        shoulderR: g.shoulderR.z,
+        shoulderL: g.shoulderL.z,
+        elbowR: g.elbowR.z,
+        elbowL: g.elbowL.z,
+        handR: g.handR.z,
+        handL: g.handL.z,
+        toeR: TOE_Z,
+        toeL: TOE_Z,
+        heelR: HEEL_Z,
+        heelL: HEEL_Z,
+      },
     };
   };
 
   /** Cable paid out since the rep started — which IS how far the selected plate has come up. */
-  const REST_RUN = Math.hypot(claspAt(0).x - 3 - PULLEY.x, claspAt(0).y - PULLEY.y);
+  const REST_RUN = d3(girdleAt(0).handL, PULLEY3);
 
   const decorAt = (rom: number): Decor => {
-    const pose = poseAt(rom);
-    // measured, not assumed: the plate rises by exactly the cable the chop has drawn past the pulley
-    const risen = Math.max(0, Math.hypot(pose.j.handL.x - PULLEY.x, pose.j.handL.y - PULLEY.y) - REST_RUN);
-    const tower = stackTower({ x0: PULLEY.x - 32, x1: PULLEY.x - 6, capY: 36, stackTopY: FLOOR_Y - 34 }, risen);
+    const g = girdleAt(rom);
+    // measured in the room, not on the page: the plate rises by the cable the chop has drawn out
+    const risen = Math.max(0, d3(g.handL, PULLEY3) - REST_RUN);
+    const tower = stackTower({ x0: px(PULLEY3.x - 32), x1: px(PULLEY3.x - 6), capY: 36, stackTopY: FLOOR_Y - 34 }, risen);
     return {
       back: [...sampledPathTicks(ARC), ...tower.prims, ...pulley(PULLEY)],
-      front: [cable(PULLEY, pose.j.handL)],
+      front: [cable(PULLEY, P3(g.handL))],
     };
   };
 
+  const START_Y = girdleAt(0).handR.y;
+  const END_Y = girdleAt(1).handR.y;
+
   const formspec: FormSpec = {
     tempo: CONCENTRIC_TEMPO,
-    /* Read off the CLAMPED chop. `TO` was 85 units from the far shoulder — an end position no arm
-       reaches — so the declared contact was asserting a place the athlete could only get to by
-       growing. The rail is an ARC now for the same reason: clamping into reach bends the diagonal
-       into a circle about whichever shoulder is furthest, which is what a real chop does when the
-       trunk stops turning. */
-    start: [{ kind: 'contactY', a: 'handR', y: ARC[0].y, tol: 2.5, label: 'reached up toward the pulley, arms long' }],
-    end: [{ kind: 'contactY', a: 'handR', y: ARC[ARC.length - 1].y, tol: 2.5, label: 'chopped down past the far hip' }],
+    start: [{ kind: 'contactY', a: 'handR', y: START_Y, tol: 2.5, label: 'reached up toward the pulley, arms long' }],
+    end: [{ kind: 'contactY', a: 'handR', y: END_Y, tol: 2.5, label: 'chopped down past the far hip' }],
     path: { track: 'handR', kind: 'arc', tol: 2.5 },
     invariants: [
       { kind: 'pointFixed', point: 'hipC', tol: 0.5, label: 'hips square — the rotation is the ribs' },
@@ -390,5 +449,5 @@ export const cableWoodchop: Rig = (() => {
     ],
   };
 
-  return { id: 'cable_woodchop', chains: rotationChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, CX, 40) };
+  return { id: 'cable_woodchop', camera: CAM, chains: rotationChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, CX, 40) };
 })();

@@ -68,6 +68,17 @@ export const grindsIn =
     Math.pow(clamp01(rom), k);
 
 /** Slow off the start, then quick — a joint that has to be unstuck before it will move. */
+/**
+ * The joint WAITS, then closes — smooth at both ends, unlike `lags`, which has a corner where it
+ * starts. `waits(1.5)` is a knee that holds its angle through the first part of a deadlift's descent
+ * and folds as the bar reaches the shin (hinge.ts, execution pass 2026-09-03). k > 1; k = 1 is
+ * `together`.
+ */
+export const waits =
+  (k: number): Curve =>
+  (rom) =>
+    Math.pow(clamp01(rom), k);
+
 export const easesOut =
   (k: number): Curve =>
   (rom) =>

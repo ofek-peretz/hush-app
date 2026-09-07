@@ -29,6 +29,11 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** The sticking point of an extension is at ~60 % of the arc — the arm nearly long, leverage gone.
+ *  The hand slows to a dwell there and runs on (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.6, 0.08);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { cable, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
@@ -50,7 +55,10 @@ const U = ATHLETE.upperArm;
 const F = ATHLETE.foreArm;
 
 /** Same hanging elbow as the curl family — one athlete, one anatomy, two lifts. */
-const elbowOf = (body: { shoulder: Vec2 }): Vec2 => ({ x: body.shoulder.x + 1.5, y: body.shoulder.y + U });
+const elbowOf = (body: { shoulder: Vec2 }, forwardDeg = 3.5): Vec2 => {
+  const r = (forwardDeg * Math.PI) / 180;
+  return { x: body.shoulder.x + U * Math.sin(r), y: body.shoulder.y + U * Math.cos(r) };
+};
 const ELBOW: Vec2 = elbowOf(core);
 
 /** φ = the forearm's sweep from straight-down; interior elbow angle ≈ 180° − φ (+3.4° of offset). */
@@ -97,17 +105,23 @@ interface PushdownParams {
 function pushdown(p: PushdownParams): Rig {
   const phiBottom = p.phiBottom ?? PHI_BOTTOM;
   const body = p.implement === 'machine' ? seatedBody : core;
-  const elbow0 = elbowOf(body);
+  /* On the machine the upper arm LIES ON THE PAD, ~21° forward of plumb — a vertical upper arm
+     was a pushdown with furniture (execution pass, 2026-09-07). */
+  const elbow0 = elbowOf(body, p.implement === 'machine' ? 10 : 3.5);
   const hand0 = (phi: number) => handAtE(phi, elbow0);
   /** rom 0 → rom 1 is TOP → BOTTOM: the arc is sampled in that order for its range statement. */
   const ARC = Array.from({ length: 17 }, (_, i) => hand0(lerp(PHI_TOP, phiBottom, i / 16)));
   /** The high pulley, above and slightly in front — the line of pull down the whole arc. */
-  const PULLEY: Vec2 = { x: X + 46, y: 34 };
+  /* X+30, y 42 (execution pass, 2026-09-07): at X+46 the cable at lockout ran 27.7° off plumb —
+     half the pull dragging the hands forward; at 34 the tower's cap sat ON the frame's top edge. */
+  const PULLEY: Vec2 = { x: X + 30, y: 42 };
 
   const poseAt = (rom: number): Pose => {
-    const phi = lerp(PHI_TOP, phiBottom, rom);
+    const phi = lerp(PHI_TOP, phiBottom, STICK(rom));
     const hand = hand0(phi);
-    const farHand = hand0(p.singleArm ? PHI_TOP : phi);
+    /* The single-arm member's other arm HANGS at the side (execution pass, 2026-09-07): parked at
+       the top of the arc it read as a second working arm, and the clip was the two-arm clip. */
+    const farHand = p.singleArm ? { x: elbow0.x, y: elbow0.y + F } : hand0(phi);
     return {
       headR: ATHLETE.headR,
       j: {
@@ -136,7 +150,7 @@ function pushdown(p: PushdownParams): Rig {
     const pose = poseAt(rom);
     const hand = pose.j.hand;
     const farHand = pose.j.farHand;
-    const phi = lerp(PHI_TOP, phiBottom, rom);
+    const phi = lerp(PHI_TOP, phiBottom, STICK(rom));
     /** The bar/handle lies across the fist, square to the forearm. */
     const dir: Vec2 = { x: Math.cos((phi * Math.PI) / 180), y: -Math.sin((phi * Math.PI) / 180) };
 
@@ -147,8 +161,12 @@ function pushdown(p: PushdownParams): Rig {
      * that would make this read as the wrong machine.
      */
     const risen = (hand0(PHI_TOP).y - hand.y) * -0.55;
+    /* The machine's stack stands BEHIND its own back pad, fused to the seat — not 50u of air away
+       on the far side of the frame (execution pass, 2026-09-07). */
     const tower = stackTower(
-      { x0: PULLEY.x + 8, x1: PULLEY.x + 34, capY: 26, stackTopY: FLOOR_Y - 34 },
+      p.implement === 'machine'
+        ? { x0: body.hip.x - 62, x1: body.hip.x - 38, capY: body.shoulder.y - 30, stackTopY: FLOOR_Y - 34 }
+        : { x0: PULLEY.x + 8, x1: PULLEY.x + 34, capY: 34, stackTopY: FLOOR_Y - 34 },
       risen,
     );
     back.push(...tower.prims);
@@ -175,11 +193,10 @@ function pushdown(p: PushdownParams): Rig {
         ...tail(-1, hand),
         { kind: 'circle', c: hand, r: 2.6, fill: 'ink0' }, // the swivel the tails hang from
       ];
-      if (!p.singleArm) front = [cable(PULLEY, farHand), ...front];
+      /* One attachment, one cable: the far hand's second strand read as a doubled cable (2026-09-07). */
     } else if (p.implement === 'cable') {
       back.push(...pulley(PULLEY));
       front = [cable(PULLEY, hand), ...dumbbellSide(hand, dir, p.singleArm ? 3 : 9, 2.5)];
-      if (!p.singleArm) front = [cable(PULLEY, farHand), ...front];
     } else {
       /*
        * The MACHINE member is a LEVER, not a rope (equipment QC 2026-08-25: it drew the cable
@@ -268,7 +285,7 @@ export const tricepsPushdown = pushdown({ id: 'triceps_pushdown', implement: 'ca
  *  range than the bar's stop allows — see `implement` for why a comment was not enough. */
 export const ropePushdown = pushdown({ id: 'rope_pushdown', implement: 'rope', phiBottom: 7 });
 export const singleArmPushdown = pushdown({ id: 'single_arm_pushdown', implement: 'cable', singleArm: true });
-export const machineTricepsExt = pushdown({ id: 'machine_triceps_ext', implement: 'machine' });
+export const machineTricepsExt = pushdown({ id: 'machine_triceps_ext', implement: 'machine', phiBottom: 17 }); // the pad tilts the upper arm 10° forward, so the lockout arrives 8° earlier on the arc (2026-09-07)
 
 /**
  * triceps_kickback (2026-08-25) — the member this file's header sent away for its own authoring,
@@ -282,7 +299,7 @@ export const tricepsKickback: Rig = (() => {
   const KB_HIP: Vec2 = { x: 150, y: 130 };
   const KB_SHOULDER: Vec2 = { x: KB_HIP.x + ATHLETE.torso * 0.9, y: KB_HIP.y - ATHLETE.torso * 0.42 };
   const KB_HEAD: Vec2 = { x: KB_SHOULDER.x + 14, y: KB_SHOULDER.y - 7 };
-  const KB_KNEE: Vec2 = { x: 155, y: 157 };
+  const KB_KNEE: Vec2 = { x: 157.5, y: 157 }; // 155 drew the knee locked at 179°; 'knees soft' is ~170° (2026-09-07)
   const KB_ANKLE: Vec2 = { x: 160, y: 186 };
   /*
    * The pinned upper arm: straight BACK from the shoulder, level with the floor — and back means
@@ -307,7 +324,7 @@ export const tricepsKickback: Rig = (() => {
   const ARC = Array.from({ length: 17 }, (_, i) => handAtK(lerp(PHI_FROM, PHI_TO, i / 16)));
 
   const poseAt = (rom: number): Pose => {
-    const hand = handAtK(lerp(PHI_FROM, PHI_TO, rom));
+    const hand = handAtK(lerp(PHI_FROM, PHI_TO, STICK(rom)));
     const offElbow: Vec2 = { x: KB_SHOULDER.x + 10, y: KB_SHOULDER.y + 18 };
     const offHand: Vec2 = { x: KB_SHOULDER.x + 16, y: KB_SHOULDER.y + 38 };
     return {
@@ -336,16 +353,17 @@ export const tricepsKickback: Rig = (() => {
 
   const decorAt = (rom: number): Decor => {
     const pose = poseAt(rom);
-    const phi = lerp(PHI_FROM, PHI_TO, rom);
+    const phi = lerp(PHI_FROM, PHI_TO, STICK(rom));
     const dir: Vec2 = { x: Math.cos((phi * Math.PI) / 180), y: -Math.sin((phi * Math.PI) / 180) };
     return {
       back: [
         /* the bench her off-hand braces on */
         { kind: 'rect', x: KB_SHOULDER.x - 2, y: KB_SHOULDER.y + 40, width: 40, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
         { kind: 'line', a: { x: KB_SHOULDER.x + 18, y: KB_SHOULDER.y + 47 }, b: { x: KB_SHOULDER.x + 18, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
-        ...sampledPathTicks(ARC),
       ],
-      front: dumbbellSide(pose.j.hand, dir),
+      /* The range statement rides in FRONT, offset below-behind the arc — in the back layer it ran
+         5–7u from the thigh and was never seen (hasTicks was false; 2026-09-07). */
+      front: [...sampledPathTicks(ARC.map((q) => ({ x: q.x - 9, y: q.y + 8 }))), ...dumbbellSide(pose.j.hand, dir)],
     };
   };
 

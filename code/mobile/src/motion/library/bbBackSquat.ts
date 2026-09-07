@@ -72,7 +72,12 @@ const ELBOW_DOWN = 18;
 
 /** The shin finishes its forward travel with a fifth of the descent left; the hip keeps going. */
 const SHIN_LEADS = leads(0.2);
-const ELBOW_BACK = 9;
+/* 9 → 12: the elbow now clears the trunk's back line, so the forearm's ink0 rise to the bar is a
+   stroke of its own rather than a lump behind the neck. The elbow ANGLE stays ~16° whatever the
+   elbow does — the hand is 4.5u behind and 3.5u above the shoulder, and two vectors from one point
+   to two points that close cannot open; a wider grip is depth from this camera. The read comes
+   from the two-ink split (`nearArmInk`) instead (audit, 2026-09-03). */
+const ELBOW_BACK = 12;
 
 /**
  * The squat SKELETON, exported for the variant family (front · goblet · smith, 2026-08-25).
@@ -84,7 +89,7 @@ const ELBOW_BACK = 9;
  * torso a front squat actually has, from the same equation rather than from a tuned lean. The leg
  * drive, the planted foot and the balance line are shared verbatim: one squat, four bars.
  */
-export function squatCore(rom: number, carryDX = 0) {
+export function squatCore(rom: number, carryDX = 0, footDX = 0) {
   /*
    * THE KNEE TRAVELS FIRST, AND THEN THE HIP DROPS BETWEEN THE KNEES.
    *
@@ -99,7 +104,9 @@ export function squatCore(rom: number, carryDX = 0) {
   const shank = lerp(SHANK_TOP, SHANK_BOT, SHIN_LEADS(rom)) * DEG;
   const thigh = lerp(THIGH_TOP, THIGH_BOT, rom) * DEG;
 
-  const knee: Vec2 = { x: ANKLE.x + L_SHANK * Math.sin(shank), y: ANKLE.y - L_SHANK * Math.cos(shank) };
+  /* `footDX` slides the planted foot along the floor while the balance line stays put — the Smith
+     squat stands its feet in front of the bar, because the machine holds it (audit, 2026-09-03). */
+  const knee: Vec2 = { x: ANKLE.x + footDX + L_SHANK * Math.sin(shank), y: ANKLE.y - L_SHANK * Math.cos(shank) };
   const hip: Vec2 = { x: knee.x - L_THIGH * Math.cos(thigh), y: knee.y - L_THIGH * Math.sin(thigh) };
 
   // solve the torso lean so the CARRY (shoulder + carryDX) sits over the mid-foot line
@@ -193,6 +200,9 @@ export const bbBackSquat: Rig = {
     neck: ['shoulder', 'head'],
     head: 'head',
     nearArm: ['shoulder', 'elbow', 'hand'],
+    /* The folded grip arm in two inks — upper arm in the trunk's, forearm in the near limb's —
+       so a 16° elbow reads as a bent arm holding the bar, not as one lump (audit, 2026-09-03). */
+    nearArmInk: { upper: 'ink1', fore: 'ink0' },
     farArm: ['farShoulder', 'farElbow', 'farHand'],
     nearLeg: ['hip', 'knee', 'ankle'],
     nearFoot: ['heel', 'toe'],

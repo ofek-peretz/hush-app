@@ -39,17 +39,40 @@ const LY_KNEE: Vec2 = { x: LY_HIP.x + ATHLETE.thigh * 0.98, y: BENCH_TOP - 6 };
 const LY_FROM = 6;
 const LY_TO = 108;
 
-function lyingAnkleAt(theta: number): Vec2 {
+/** An offset in the SHIN'S frame at θ=0 (x on along the shin, y across it), turned with the shin. */
+function lyingShinFrame(v: Vec2, theta: number): Vec2 {
   const r = (theta * Math.PI) / 180;
-  /* θ=0 points on along the body line (+x); the curl folds the heel up and over the knee. */
-  return { x: LY_KNEE.x + S * Math.cos(r), y: LY_KNEE.y - S * Math.sin(r) };
+  return { x: v.x * Math.cos(r) + v.y * Math.sin(r), y: -v.x * Math.sin(r) + v.y * Math.cos(r) };
 }
+
+function lyingAnkleAt(theta: number): Vec2 {
+  /* θ=0 points on along the body line (+x); the curl folds the heel up and over the knee. */
+  const d = lyingShinFrame({ x: S, y: 0 }, theta);
+  return { x: LY_KNEE.x + d.x, y: LY_KNEE.y + d.y };
+}
+
+/*
+ * The foot and the roller, in the shin's frame. Both used to be fixed page offsets from the ankle,
+ * so while the shin turned 102° the foot stayed pointing down the bench — knee-ankle-toe ran
+ * 129° → 27°, a foot folded onto its own shin at the top — and the roller stayed a vertical bar
+ * that ended up lying ALONG the raised shin instead of across its back (audit, 2026-09-03).
+ * Heel behind-and-up, toe forward-and-down: a prone foot, plantar-flexed a little, all the way round.
+ */
+const LY_HEEL: Vec2 = { x: -1, y: -6 };
+const LY_TOE: Vec2 = { x: 6, y: 6 };
+/** The roller's centre: on the calf's back (up, when prone), just behind the ankle. */
+const LY_ROLLER: Vec2 = { x: -1, y: -7 };
 
 export const legCurlLying: Rig = (() => {
   const ARC = Array.from({ length: 17 }, (_, i) => lyingAnkleAt(lerp(LY_FROM, LY_TO, i / 16)));
 
   const poseAt = (rom: number): Pose => {
-    const ankle = lyingAnkleAt(lerp(LY_FROM, LY_TO, rom));
+    const theta = lerp(LY_FROM, LY_TO, rom);
+    const ankle = lyingAnkleAt(theta);
+    const h = lyingShinFrame(LY_HEEL, theta);
+    const t = lyingShinFrame(LY_TOE, theta);
+    const heel: Vec2 = { x: ankle.x + h.x, y: ankle.y + h.y };
+    const toe: Vec2 = { x: ankle.x + t.x, y: ankle.y + t.y };
     const head: Vec2 = { x: LY_SHOULDER.x - 15, y: LY_SHOULDER.y - 1 };
     /* Arms folded forward under the chest, gripping the bench's handles. */
     const elbow: Vec2 = { x: LY_SHOULDER.x - 4, y: BENCH_TOP + 6 };
@@ -62,8 +85,8 @@ export const legCurlLying: Rig = (() => {
         hip: LY_HIP,
         knee: LY_KNEE,
         ankle,
-        heel: { x: ankle.x + 3, y: ankle.y - 6 },
-        toe: { x: ankle.x + 6, y: ankle.y + 6 },
+        heel,
+        toe,
         elbow,
         hand,
         farShoulder: far(LY_SHOULDER, -6, 1),
@@ -72,16 +95,23 @@ export const legCurlLying: Rig = (() => {
         farHip: far(LY_HIP, -6, 1),
         farKnee: far(LY_KNEE, -6, 1),
         farAnkle: far(ankle, -6, 1),
-        farHeel: far({ x: ankle.x + 3, y: ankle.y - 6 }, -6, 0),
-        farToe: far({ x: ankle.x + 6, y: ankle.y + 6 }, -6, 0),
+        farHeel: far(heel, -6, 0),
+        farToe: far(toe, -6, 0),
       },
     };
   };
 
   const decorAt = (rom: number): Decor => {
     const pose = poseAt(rom);
+    const theta = lerp(LY_FROM, LY_TO, rom);
     const risen = rom * 16;
     const tower = stackTower({ x0: 268, x1: 294, capY: 74, stackTopY: FLOOR_Y - 34 }, risen);
+    /* The roller rides the calf's back, square to the shin; its lever runs from the machine's axle
+       at the knee — the same pivot the shin turns about, so the link keeps one length all rep. */
+    const rc = lyingShinFrame(LY_ROLLER, theta);
+    const roller: Vec2 = { x: pose.j.ankle.x + rc.x, y: pose.j.ankle.y + rc.y };
+    const ra = lyingShinFrame({ x: LY_ROLLER.x - 3.5, y: LY_ROLLER.y }, theta);
+    const rb = lyingShinFrame({ x: LY_ROLLER.x + 3.5, y: LY_ROLLER.y }, theta);
     return {
       back: [
         /* the bench with its hip hump, its legs, and the machine's stack behind the foot end */
@@ -89,11 +119,22 @@ export const legCurlLying: Rig = (() => {
         ...padStroke({ x: LY_HIP.x - 10, y: BENCH_TOP - 2 }, { x: LY_HIP.x + 10, y: BENCH_TOP - 2 }, 6),
         { kind: 'line', a: { x: LY_SHOULDER.x - 18, y: BENCH_TOP + 7 }, b: { x: LY_SHOULDER.x - 18, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
         { kind: 'line', a: { x: LY_KNEE.x - 12, y: BENCH_TOP + 7 }, b: { x: LY_KNEE.x - 12, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
+        /*
+         * The machine, which the roller used to float without: the lever from the knee axle to
+         * the roller, and the base rail that ties the bench to the stack — one station, not a
+         * bench beside a tower (audit, 2026-09-03).
+         */
+        { kind: 'line', a: LY_KNEE, b: roller, w: 3, color: 'ink3', cap: 'round' },
+        { kind: 'line', a: { x: LY_KNEE.x - 12, y: FLOOR_Y - 2 }, b: { x: 268, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3', cap: 'round' },
         ...tower.prims,
         ...sampledPathTicks(ARC),
       ],
-      /* the roller pad on the BACK of the ankle, riding the curl */
-      front: padStroke({ x: pose.j.ankle.x + 2, y: pose.j.ankle.y - 7 }, { x: pose.j.ankle.x + 2, y: pose.j.ankle.y + 7 }, 7),
+      front: [
+        /* the roller pad on the BACK of the ankle, riding the curl */
+        ...padStroke({ x: pose.j.ankle.x + ra.x, y: pose.j.ankle.y + ra.y }, { x: pose.j.ankle.x + rb.x, y: pose.j.ankle.y + rb.y }, 7),
+        /* the axle's hub, outboard of the knee — the one mark that says the lever turns HERE */
+        { kind: 'circle', c: LY_KNEE, r: 2.6, fill: 'paper2', stroke: 'ink3', w: 1.5 },
+      ],
     };
   };
 
@@ -148,17 +189,34 @@ const ST_KNEE: Vec2 = (() => {
 const ST_FROM = 8; // hanging near-straight beside the stance leg
 const ST_TO = 116; // the heel driven up toward the glute
 
-function standingAnkleAt(theta: number): Vec2 {
+/** An offset in the hanging SHIN'S frame at θ=0 (x forward, y down the shin), turned with the shin. */
+function standingShinFrame(v: Vec2, theta: number): Vec2 {
   const r = (theta * Math.PI) / 180;
-  /* θ=0 hangs straight down; the curl folds the heel BACK (−x) and up. */
-  return { x: ST_KNEE.x - S * Math.sin(r) + 2 * Math.cos(r), y: ST_KNEE.y + S * Math.cos(r) + 2 * Math.sin(r) };
+  return { x: v.x * Math.cos(r) - v.y * Math.sin(r), y: v.x * Math.sin(r) + v.y * Math.cos(r) };
 }
+
+function standingAnkleAt(theta: number): Vec2 {
+  /* θ=0 hangs straight down; the curl folds the heel BACK (−x) and up. */
+  const d = standingShinFrame({ x: 2, y: S }, theta);
+  return { x: ST_KNEE.x + d.x, y: ST_KNEE.y + d.y };
+}
+
+/* The foot and the roller in the shin's frame — the lying member's fix, standing: the toes used to
+   point at the knee at the top (knee-ankle-toe 126° → 18°) because the foot never turned with the
+   shin (audit, 2026-09-03). Heel behind-below, toe forward-below: a relaxed hanging foot. */
+const ST_HEEL: Vec2 = { x: -3, y: 5 };
+const ST_TOE: Vec2 = { x: 7, y: 6 };
+/** The roller's centre: behind the ankle, on the calf. */
+const ST_ROLLER: Vec2 = { x: -7, y: 0 };
 
 export const standingLegCurl: Rig = (() => {
   const ARC = Array.from({ length: 17 }, (_, i) => standingAnkleAt(lerp(ST_FROM, ST_TO, i / 16)));
 
   const poseAt = (rom: number): Pose => {
-    const ankle = standingAnkleAt(lerp(ST_FROM, ST_TO, rom));
+    const theta = lerp(ST_FROM, ST_TO, rom);
+    const ankle = standingAnkleAt(theta);
+    const h = standingShinFrame(ST_HEEL, theta);
+    const t = standingShinFrame(ST_TOE, theta);
     /* Hands forward on the station's rest, steadying — the trunk leans a whisper into the pad. */
     const elbow: Vec2 = { x: ST.shoulder.x + 12, y: ST.shoulder.y + 18 };
     const hand: Vec2 = { x: ST.shoulder.x + 26, y: ST.shoulder.y + 26 };
@@ -171,8 +229,8 @@ export const standingLegCurl: Rig = (() => {
         /* The WORKING leg is the near side; the stance leg is the far side, planted. */
         knee: ST_KNEE,
         ankle,
-        heel: { x: ankle.x - 3, y: ankle.y + 5 },
-        toe: { x: ankle.x + 7, y: ankle.y + 6 },
+        heel: { x: ankle.x + h.x, y: ankle.y + h.y },
+        toe: { x: ankle.x + t.x, y: ankle.y + t.y },
         elbow,
         hand,
         farShoulder: far(ST.shoulder, -6, 1),
@@ -189,18 +247,34 @@ export const standingLegCurl: Rig = (() => {
 
   const decorAt = (rom: number): Decor => {
     const pose = poseAt(rom);
+    const theta = lerp(ST_FROM, ST_TO, rom);
     const risen = rom * 14;
     const tower = stackTower({ x0: 244, x1: 270, capY: 70, stackTopY: FLOOR_Y - 34 }, risen);
+    /* The roller square to the shin on the calf's back, and its lever from the axle at the knee —
+       the pivot the shin itself turns about, so the link never changes length. */
+    const rc = standingShinFrame(ST_ROLLER, theta);
+    const roller: Vec2 = { x: pose.j.ankle.x + rc.x, y: pose.j.ankle.y + rc.y };
+    const ra = standingShinFrame({ x: ST_ROLLER.x, y: ST_ROLLER.y - 3.5 }, theta);
+    const rb = standingShinFrame({ x: ST_ROLLER.x, y: ST_ROLLER.y + 3.5 }, theta);
     return {
       back: [
         /* the thigh pad she presses into, and the arm rest her hands hold */
         ...padStroke({ x: ST_KNEE.x + 9, y: ST_KNEE.y - 14 }, { x: ST_KNEE.x + 9, y: ST_KNEE.y + 2 }, 7),
         ...padStroke({ x: ST.shoulder.x + 22, y: ST.shoulder.y + 28 }, { x: ST.shoulder.x + 34, y: ST.shoulder.y + 28 }, 6),
         { kind: 'line', a: { x: ST.shoulder.x + 28, y: ST.shoulder.y + 31 }, b: { x: ST.shoulder.x + 28, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
+        /* The machine the roller used to float without: the lever from the knee axle, the post the
+           thigh pad mounts on, and the base rail to the stack (audit, 2026-09-03). */
+        { kind: 'line', a: ST_KNEE, b: roller, w: 3, color: 'ink3', cap: 'round' },
+        { kind: 'line', a: { x: ST_KNEE.x + 9, y: ST_KNEE.y + 2 }, b: { x: ST_KNEE.x + 9, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
+        { kind: 'line', a: { x: ST_KNEE.x + 9, y: FLOOR_Y - 2 }, b: { x: 244, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3', cap: 'round' },
         ...tower.prims,
         ...sampledPathTicks(ARC),
       ],
-      front: padStroke({ x: pose.j.ankle.x - 2, y: pose.j.ankle.y - 6 }, { x: pose.j.ankle.x - 2, y: pose.j.ankle.y + 6 }, 7),
+      front: [
+        ...padStroke({ x: pose.j.ankle.x + ra.x, y: pose.j.ankle.y + ra.y }, { x: pose.j.ankle.x + rb.x, y: pose.j.ankle.y + rb.y }, 7),
+        /* the axle's hub at the knee, outboard of the leg */
+        { kind: 'circle', c: ST_KNEE, r: 2.6, fill: 'paper2', stroke: 'ink3', w: 1.5 },
+      ],
     };
   };
 

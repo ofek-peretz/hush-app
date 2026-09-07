@@ -33,6 +33,8 @@
 import type { FigureChains, FigureSex, Pose, Primitive, Rig } from './types';
 import { skinFigure } from './skin';
 import { FLAT, meanDepth, projectJoints, type Camera, type Projected } from './camera';
+import { ATHLETE } from './anthro';
+import { twoBoneIK, twoBoneIK3 } from './geometry';
 
 /** The media frame's viewBox: a gentle uniform crop of the 352×220 authoring space (16:10). */
 export const VIEWBOX = { x: 30, y: 26, w: 300, h: 187.5 } as const;
@@ -76,13 +78,145 @@ export function projectPose(pose: Pose, cam: Camera): { pose: Pose; j: Record<st
   return { pose: { ...pose, j: flat, z: undefined }, j };
 }
 
+/** The four layers of a frame, kept apart — the auditor's frame law judges the athlete and the
+ *  equipment by different rules (a crown needs air; a tower may run to the edge). */
+export interface FrameParts {
+  scene: Primitive[];
+  back: Primitive[];
+  figure: Primitive[];
+  front: Primitive[];
+}
+
 export function buildFrame(rig: Rig, rom: number, sex: FigureSex = 'male'): Primitive[] {
-  const pose = rig.poseAt(rom);
+  const p = frameParts(rig, rom, sex);
+  return [...p.scene, ...p.back, ...p.figure, ...p.front];
+}
+
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE SHOULDER GIRDLE, DERIVED (execution pass, 2026-09-07)
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * 102 of 136 rigs use ONE joint for the top of the spine and the root of the arm, so the girdle
+ * could not move: a row finished with no retraction, a press locked out with no protraction, an
+ * overhead reach had no elevation — and the audit named that the second of four structural gaps.
+ * Authoring a girdle into 136 files is a month; the rhythm itself is a law of the body, so it is
+ * DERIVED here for every rig, on the drawn pose only:
+ *
+ *   · scapulohumeral rhythm — as the arm reaches up the trunk's axis, the girdle rises (≤ 3u ≈ 3 cm
+ *     at full overhead reach), and settles as the arm comes down;
+ *   · protraction / retraction — as the hand reaches out along the trunk's FRONT normal the girdle
+ *     follows it forward (≤ 3u), and as it pulls behind the trunk line the girdle draws back.
+ *
+ * The arm's root is moved to a VIRTUAL joint (`shoulder~g`), so the neck and the trunk keep their
+ * own top; the elbow is RE-SOLVED between the moved root and the unmoved hand on the side it was
+ * authored on, so both arm bones stay canonical — nothing stretches. `poseAt` is untouched: every
+ * FormSpec predicate, the auditor and the harness measure the authored skeleton, and the drawing
+ * carries the rhythm. Front views take the elevation only — protraction is depth from there.
+ */
+const GIRDLE_ELEVATION = 3;
+const GIRDLE_PROTRACTION = 3;
+
+export function withGirdle(pose: Pose, chains: FigureChains): { pose: Pose; chains: FigureChains } {
+  const hip = pose.j[chains.torso[0]];
+  const top = pose.j[chains.torso[1]];
+  if (!hip || !top) return { pose, chains };
+  const sl = Math.hypot(top.x - hip.x, top.y - hip.y);
+  if (sl < 1) return { pose, chains };
+  const spine = { x: (top.x - hip.x) / sl, y: (top.y - hip.y) / sl };
+  const facing = chains.facing ?? 1;
+  const front = { x: -spine.y * facing, y: spine.x * facing }; // skin.ts's rot90, the athlete's front
+  const isFront = chains.view === 'front';
+  const REACH = ATHLETE.upperArm + ATHLETE.foreArm;
+  const j: Record<string, { x: number; y: number }> = { ...pose.j };
+  const z: Record<string, number> | undefined = pose.z ? { ...pose.z } : undefined;
+  const next: FigureChains = { ...chains };
+
+  const arm = (key: 'nearArm' | 'farArm') => {
+    const names = chains[key];
+    if (!names || names.length !== 3) return;
+    const [rn, en, hn] = names;
+    const R = pose.j[rn];
+    const E = pose.j[en];
+    const H = pose.j[hn];
+    if (!R || !E || !H) return;
+    /* Only an arm that LIVES IN THE DRAWING PLANE takes the rhythm. Nineteen flat rigs mime depth
+       by authoring a short arm (a goblet's forearm pointing at the lens is 9u long on the page);
+       re-solving that with canonical bones would un-mime it. A bone more than 1.5u off canonical
+       is a mimed bone, and the arm is left exactly as its author drew it. */
+    const zr0 = pose.z?.[rn] ?? 0;
+    const ze0 = pose.z?.[en] ?? 0;
+    const zh0 = pose.z?.[hn] ?? 0;
+    const u0 = Math.hypot(E.x - R.x, E.y - R.y, ze0 - zr0);
+    const f0 = Math.hypot(H.x - E.x, H.y - E.y, zh0 - ze0);
+    if (Math.abs(u0 - ATHLETE.upperArm) > 1.5 || Math.abs(f0 - ATHLETE.foreArm) > 1.5) return;
+    const rx = H.x - R.x;
+    const ry = H.y - R.y;
+    const along = Math.max(0, Math.min(1, (rx * spine.x + ry * spine.y) / REACH));
+    const fwd = isFront ? 0 : Math.max(-1, Math.min(1, (rx * front.x + ry * front.y) / REACH));
+    const dx = spine.x * along * GIRDLE_ELEVATION + front.x * fwd * GIRDLE_PROTRACTION;
+    const dy = spine.y * along * GIRDLE_ELEVATION + front.y * fwd * GIRDLE_PROTRACTION;
+    if (Math.abs(dx) + Math.abs(dy) < 0.05) return;
+    const root = { x: R.x + dx, y: R.y + dy };
+    const gr = `${rn}~g`;
+    const ge = `${en}~g`;
+    j[gr] = root;
+    if (z && (z[rn] !== undefined || z[en] !== undefined || z[hn] !== undefined)) {
+      const zr = z[rn] ?? 0;
+      const ze = z[en] ?? 0;
+      const zh = z[hn] ?? 0;
+      const root3 = { x: root.x, y: root.y, z: zr };
+      const hand3 = { x: H.x, y: H.y, z: zh };
+      const mid = { x: (R.x + H.x) / 2, y: (R.y + H.y) / 2, z: (zr + zh) / 2 };
+      const el = twoBoneIK3(root3, hand3, ATHLETE.upperArm, ATHLETE.foreArm, { x: E.x - mid.x, y: E.y - mid.y, z: ze - mid.z });
+      j[ge] = { x: el.x, y: el.y };
+      z[gr] = zr;
+      z[ge] = el.z;
+    } else {
+      const a = twoBoneIK(root, H, ATHLETE.upperArm, ATHLETE.foreArm, 1);
+      const b = twoBoneIK(root, H, ATHLETE.upperArm, ATHLETE.foreArm, -1);
+      const da = Math.hypot(a.x - E.x, a.y - E.y);
+      const db = Math.hypot(b.x - E.x, b.y - E.y);
+      j[ge] = da <= db ? a : b;
+    }
+    next[key] = [gr, ge, hn];
+  };
+  arm('nearArm');
+  arm('farArm');
+  if (next.nearArm === chains.nearArm && next.farArm === chains.farArm) return { pose, chains };
+  return { pose: { ...pose, j, z }, chains: next };
+}
+
+/*
+ * THE GROUND SHADOW FOLLOWS THE BODY (execution pass, 2026-09-07). `kit.groundShadow` is a fixed
+ * ellipse in the scene; a figure that leaves the floor — a pull-up rising, a dip, a hanging raise —
+ * kept casting the same shadow, and the eye reads that as a figure glued to the ground. The
+ * shadow now shrinks and fades with the lowest joint's clearance, which is the cheapest honest
+ * statement of weight this drawing can make.
+ */
+function shadowFor(scene: Primitive[], pose: Pose): Primitive[] {
+  let floorY = -Infinity;
+  for (const p of scene) if (p.kind === 'line' && Math.abs(p.a.y - p.b.y) < 0.01 && Math.abs(p.a.x - p.b.x) > 200) floorY = Math.max(floorY, p.a.y);
+  if (floorY === -Infinity) return scene;
+  let lowest = -Infinity;
+  for (const q of Object.values(pose.j)) if (q.y > lowest) lowest = q.y;
+  const clearance = floorY - lowest;
+  if (clearance < 3) return scene;
+  const k = Math.max(0.35, 1 - clearance / 60);
+  return scene.map((p) => (p.kind === 'ellipse' && p.ry <= 3 ? { ...p, rx: p.rx * k, opacity: (p.opacity ?? 1) * k } : p));
+}
+
+export function frameParts(rig: Rig, rom: number, sex: FigureSex = 'male'): FrameParts {
+  const g = withGirdle(rig.poseAt(rom), rig.chains);
+  const pose = g.pose;
+  const chainsG = g.chains;
   const cam: Camera = rig.camera ?? FLAT;
+  const scene = shadowFor(rig.scene, pose);
   // the overwhelmingly common case: a flat rig, drawn exactly as it always was
-  if (cam.azimuth === 0 && !pose.z) {
+  if (cam.azimuth === 0 && !cam.elevation && !pose.z) {
     const decor = rig.decorAt(rom);
-    return [...rig.scene, ...decor.back, ...skinFigure(pose, rig.chains, sex), ...decor.front];
+    const figure = skinFigure(pose, chainsG, sex);
+    return { scene, back: decor.back, figure, front: headOver(decor.front, figure, pose, chainsG) };
   }
   /*
    * The orbit axis is READ OFF THE ATHLETE, not declared: it is the direction of his own spine in
@@ -109,7 +243,31 @@ export function buildFrame(rig: Rig, rom: number, sex: FigureSex = 'male'): Prim
   // measured from the athlete's SIDE: a face-on rig starts at 90, a side rig at 0, and the orbit
   // adds to whichever it was authored in
   const viewDeg = (rig.chains.view === 'front' ? 90 : 0) + cam.azimuth;
-  return [...rig.scene, ...decor.back, ...skinFigure(flatPose, chains, sex, viewDeg), ...decor.front];
+  const figure = skinFigure(flatPose, chains, sex, viewDeg);
+  return { scene, back: decor.back, figure, front: headOver(decor.front, figure, flatPose, chains) };
+}
+
+/*
+ * THE HEAD IS NEVER UNDER THE EQUIPMENT (execution pass, 2026-09-07). A plate ghost on a bar held
+ * across the back or on the chest rings the face on every squat, good morning, calf raise and
+ * lying press; two rigs re-drew their head over it by hand and the rest did not. It is one rule,
+ * so it lives here: when a translucent ring or disc in the front layer overlaps the head, the
+ * head's own primitives are laid again on top of it. Nothing else in the drawing moves.
+ */
+export function headOver(front: Primitive[], figure: Primitive[], pose: Pose, chains: FigureChains): Primitive[] {
+  const head = pose.j[chains.head];
+  if (!head || !front.length) return front;
+  const r = pose.headR;
+  const covered = front.some((p) => p.kind === 'circle' && (p.fillOpacity ?? 1) < 0.5 && p.r >= 8 && Math.hypot(p.c.x - head.x, p.c.y - head.y) < p.r + r * 0.6);
+  if (!covered) return front;
+  const near = (q: { x: number; y: number }) => Math.hypot(q.x - head.x, q.y - head.y) <= r * 1.6;
+  const headPrims = figure.filter((p) => {
+    if (p.kind === 'circle') return p.fill === 'ink1' && near(p.c);
+    if (p.kind === 'ellipse') return p.fill === 'ink1' && near(p.c);
+    if (p.kind === 'path') return p.fill === 'ink1' && near(p.start);
+    return false;
+  });
+  return headPrims.length ? [...front, ...headPrims] : front;
 }
 
 /**

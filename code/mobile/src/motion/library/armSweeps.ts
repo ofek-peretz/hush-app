@@ -21,9 +21,14 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** A single-joint rig still has a sticking point — the last fifth, where the moment arm is longest;
+ *  the driver slows there and arrives (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { cable, dumbbellSide, flatBench, floorScene, plateGhost, pulley, sampledPathTicks } from '../kit';
+import { cable, dumbbellEdgeOn, dumbbellSide, flatBench, floorScene, plateGhost, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, standingCore } from '../bodies';
 
@@ -58,7 +63,7 @@ export const straightArmPulldown: Rig = (() => {
   const ARC = Array.from({ length: 17 }, (_, i) => armAt(lerp(THETA_FROM, THETA_TO, i / 16)).hand);
 
   const poseAt = (rom: number): Pose => {
-    const { elbow, hand } = armAt(lerp(THETA_FROM, THETA_TO, rom));
+    const { elbow, hand } = armAt(lerp(THETA_FROM, THETA_TO, STICK(rom)));
     return {
       headR: ATHLETE.headR,
       j: {
@@ -152,7 +157,21 @@ export const landminePress: Rig = (() => {
    * floor-anchored bar, her distance from the anchor is what decides whether the rack sits before
    * or after the arc's turning point — see `TURN_A` — and therefore whether the press presses.
    */
-  const X = 168;
+  /*
+   * X 200, not 168 (execution pass, 2026-09-07). The lockout was LOW — the hand at head height,
+   * the arm only 21° above horizontal — and the reason is the arc: the sleeve rides a circle about
+   * the anchor, and the press is the arm opening along that circle's tangent. From 168 the anchor
+   * ray climbed at 45°, so the tangent ran up-and-forward at only 45° and the hand reached its
+   * length a shade above the shoulder. Standing 32u further back the ray drops to 39° — the bar
+   * is a true 2.2 m (189u) — and the same press ends with the hand at the crown (y 37.9 against a
+   * crown of 37.5), the arm 27° above horizontal, the elbow pressed long at 168°. Measured, not
+   * the 45° of the photographs: that angle belongs to a press that LEANS into the bar, and this
+   * rig's own law (`segmentAngleFixed` hip–shoulder 3°, "stand tall, brace") forbids the lean on
+   * purpose. Moving the ANCHOR closer (80) had done the opposite, and the note that said so was
+   * right for the wrong reason: it is not the arm's reach that caps the lockout, it is the anchor
+   * ray's angle.
+   */
+  const X = 200;
   const core = standingCore(X);
   /** The floor anchor, well out in front of her and down at the plate. */
   const ANCHOR: Vec2 = { x: 42, y: FLOOR_Y - 4 };
@@ -265,7 +284,7 @@ export const landminePress: Rig = (() => {
   };
 
   const formspec: FormSpec = {
-    tempo: DEFAULT_TEMPO,
+    tempo: CONCENTRIC_TEMPO, // rom 1 is the lockout — the press is the 1.1s phase (2026-09-07)
     start: [
       { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 30, max: 65, label: 'the bar racked at the shoulder' },
     ],
@@ -343,7 +362,7 @@ export const dbPullover: Rig = (() => {
   const ARC = Array.from({ length: 17 }, (_, i) => armAt(lerp(THETA_FROM, THETA_TO, i / 16)).hand);
 
   const poseAt = (rom: number): Pose => {
-    const { elbow, hand } = armAt(lerp(THETA_FROM, THETA_TO, rom));
+    const { elbow, hand } = armAt(lerp(THETA_FROM, THETA_TO, STICK(rom)));
     return {
       headR: ATHLETE.headR,
       j: {
@@ -369,13 +388,13 @@ export const dbPullover: Rig = (() => {
   };
 
   const decorAt = (rom: number): Decor => {
-    const { elbow, hand } = armAt(lerp(THETA_FROM, THETA_TO, rom));
+    const { elbow, hand } = armAt(lerp(THETA_FROM, THETA_TO, STICK(rom)));
     const along = Math.hypot(hand.x - elbow.x, hand.y - elbow.y) || 1;
     const dir: Vec2 = { x: (hand.x - elbow.x) / along, y: (hand.y - elbow.y) / along };
     return {
       back: [...flatBench(138, 234, 158, FLOOR_Y), ...sampledPathTicks(ARC)],
       /* One bell, cupped end-on beyond the fists, its axis riding the forearm's line. */
-      front: dumbbellSide(hand, dir, 6.5, 4.5),
+      front: dumbbellEdgeOn(hand, dir, 6.5, 6), // the bell held by its top plate: plates edge-on (2026-09-07)
     };
   };
 

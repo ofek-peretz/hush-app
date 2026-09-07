@@ -28,6 +28,7 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
+import { lags } from '../curves';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { floorScene, padStroke, sampledPathTicks } from '../kit';
@@ -53,36 +54,72 @@ interface BarDipParams {
   id: string;
   /** The fixed grip on the bar. */
   hand: Vec2;
-  /** Torso lean forward of vertical, degrees — the chest dip's deliberate angle. */
-  leanDeg: number;
-  /** Shoulder height RELATIVE TO THE HAND at top and bottom (negative = above the grip). */
-  topDrop: number;
-  bottomDrop: number;
+  /** Torso lean forward of vertical, degrees, at lockout and at the bottom — the chest dip's
+   *  deliberate angle, and it GROWS through the descent (audit, 2026-09-03: held at one angle the
+   *  shoulder could only drop plumb, and the bottom drew the upper arm 50° below horizontal). */
+  leanTop: number;
+  leanBottom: number;
+  /** The elbow's interior angle at lockout and at the bottom — the heights are solved from them. */
+  topAngle: number;
+  bottomAngle: number;
+  /** How far the shoulder drifts FORWARD of its lockout station by the bottom: the lean's own
+   *  travel. A chest dip's shoulders go well past the grip; a machine-assisted one less. */
+  forwardShift: number;
   assisted?: boolean;
   furniture: Primitive[];
   /** Drawn OVER the athlete — the near rail of a station he stands inside. */
   nearRail?: Primitive[];
 }
 
+/*
+ * THE ELBOW LEADS ON THE WAY UP (audit, 2026-09-03 — iron rule 12). Two drivers, two clocks: the
+ * elbow angle and the shoulder's forward drift. On the eccentric the lean goes first — "lean
+ * slightly forward" IS the first thing that happens — and the elbow starts bending a fifth of the
+ * rep later; on the concentric the elbow is locked out by rom 0.2 while the body is still coming
+ * back over the bars. One clock drew a hinge; this draws a dip.
+ */
+const ELBOW_CLOCK = lags(0.2);
+
 function barDip(p: BarDipParams): Rig {
-  const leanRad = (p.leanDeg * Math.PI) / 180;
-  const ARC = Array.from({ length: 17 }, (_, i) => ({
-    x: p.hand.x - 4,
-    y: p.hand.y + lerp(p.topDrop, p.bottomDrop, i / 16),
-  }));
+  const leanAt = (rom: number) => (lerp(p.leanTop, p.leanBottom, rom) * Math.PI) / 180;
+  /** The shoulder sits 4u behind the grip at lockout: the elbow-back branch needs the shoulder
+   *  BEHIND the hand, or the forearm leans forward (audit, 2026-09-03). */
+  const DX_TOP = -4;
+  const shoulderAt = (rom: number): Vec2 => {
+    const dx = lerp(DX_TOP, DX_TOP + p.forwardShift, rom);
+    const deg = lerp(p.topAngle, p.bottomAngle, ELBOW_CLOCK(rom));
+    return { x: p.hand.x + dx, y: p.hand.y - vGapFor(deg, dx) };
+  };
+  /* The range statement stands 28u behind the grip — off the trunk's silhouette. Under the
+     shoulder it was drawn and never seen (hasTicks=false; audit, 2026-09-03). */
+  const ARC = Array.from({ length: 17 }, (_, i) => ({ x: p.hand.x - 28, y: shoulderAt(i / 16).y }));
 
   const poseAt = (rom: number): Pose => {
-    const shoulder: Vec2 = { x: p.hand.x - 4, y: p.hand.y + lerp(p.topDrop, p.bottomDrop, rom) };
-    /* The trunk hangs at its authored lean; hips back-and-down of the shoulder. */
+    const shoulder = shoulderAt(rom);
+    const leanRad = leanAt(rom);
+    /* The trunk hangs at its lean; hips back-and-down of the shoulder. */
     const hip: Vec2 = {
       x: shoulder.x - ATHLETE.torso * Math.sin(leanRad) - 2,
       y: shoulder.y + ATHLETE.torso * Math.cos(leanRad),
     };
-    /* Legs folded back — constant carriage, the pull-up's own. */
-    const knee: Vec2 = { x: hip.x - 6, y: hip.y + ATHLETE.thigh * 0.6 };
-    const ankle: Vec2 = { x: knee.x - 15, y: knee.y + ATHLETE.shank * 0.48 };
-    const head: Vec2 = { x: shoulder.x + 3 + ATHLETE.neck * Math.sin(leanRad), y: shoulder.y - ATHLETE.neck * Math.cos(leanRad) };
-    const elbow = twoBoneIK(shoulder, p.hand, U, F, -1); // the elbow drives BACK
+    /*
+     * The legs are FOLDED, not hung (audit, 2026-09-03: a 153.9° knee read as a man hanging from a
+     * bar). On the bars the knees bend to ~110° with the shins swept back; on the assisted station
+     * the shins lie flat along the knee pad — a kneel, the one thing that says "assisted".
+     */
+    const knee: Vec2 = p.assisted
+      ? { x: hip.x - 2, y: hip.y + ATHLETE.thigh * 0.95 }
+      : { x: hip.x - 4, y: hip.y + ATHLETE.thigh * 0.9 };
+    const ankle: Vec2 = p.assisted ? { x: knee.x - 36, y: knee.y + 2 } : { x: knee.x - 30, y: knee.y + 8 };
+    /* The foot hangs plantar-flexed off the swept-back shin — toes down and back. */
+    const heel: Vec2 = { x: ankle.x - 2, y: ankle.y + 4 };
+    const toe: Vec2 = { x: ankle.x - 5, y: ankle.y + 13 };
+    /* The head carries the lean plus 10° of its own — eyes ahead, not down the chest — at exactly a
+       neck's length (the old +3u offset stretched it to 17.6 once the lean grew; audit, 2026-09-03). */
+    const head: Vec2 = { x: shoulder.x + ATHLETE.neck * Math.sin(leanRad + 0.17), y: shoulder.y - ATHLETE.neck * Math.cos(leanRad + 0.17) };
+    /* +1 sends the elbow BACK (−x; the athlete faces +x). −1 folded it forward of the shoulder —
+       20u ahead at the bottom, a press on a bar in front, not a dip (audit, 2026-09-03). */
+    const elbow = twoBoneIK(shoulder, p.hand, U, F, 1);
     return {
       headR: ATHLETE.headR,
       j: {
@@ -91,8 +128,8 @@ function barDip(p: BarDipParams): Rig {
         hip,
         knee,
         ankle,
-        heel: { x: ankle.x - 5, y: ankle.y + 5 },
-        toe: { x: ankle.x + 6, y: ankle.y + 8 },
+        heel,
+        toe,
         elbow,
         hand: p.hand,
         farShoulder: far(shoulder, -6, 1),
@@ -101,8 +138,8 @@ function barDip(p: BarDipParams): Rig {
         farHip: far(hip, -6, 1),
         farKnee: far(knee, -6, 1),
         farAnkle: far(ankle, -6, 1),
-        farHeel: far({ x: ankle.x - 5, y: ankle.y + 5 }, -6, 0),
-        farToe: far({ x: ankle.x + 6, y: ankle.y + 8 }, -6, 0),
+        farHeel: far(heel, -6, 0),
+        farToe: far(toe, -6, 0),
       },
     };
   };
@@ -112,11 +149,16 @@ function barDip(p: BarDipParams): Rig {
     const back: Primitive[] = [...p.furniture, ...sampledPathTicks(ARC)];
     if (p.assisted) {
       const knee = pose.j.knee;
+      /* The knee pad lies UNDER the shin, ankle to just past the knee, so the shin (knee.y+2) rests
+         on its top face. It used to sit 8u ahead of the shin and touched nothing (audit,
+         2026-09-03). Its arm runs forward to the tower it hangs from. */
       back.push(
-        ...padStroke({ x: knee.x - 4, y: knee.y + 8 }, { x: knee.x + 16, y: knee.y + 8 }, 8),
-        { kind: 'line', a: { x: knee.x + 18, y: knee.y + 8 }, b: { x: p.hand.x + 34, y: knee.y + 8 }, w: 2.5, color: 'ink3' },
+        ...padStroke({ x: knee.x - 34, y: knee.y + 7 }, { x: knee.x + 5, y: knee.y + 7 }, 8),
+        { kind: 'line', a: { x: knee.x + 7, y: knee.y + 7 }, b: { x: p.hand.x + 34, y: knee.y + 7 }, w: 2.5, color: 'ink3' },
       );
-      const risen = (p.bottomDrop - lerp(p.topDrop, p.bottomDrop, rom)) * 0.4;
+      /* The counterweight RISES as the platform — and the athlete on it — goes down: the pad
+         hangs from the stack. It used to rise at the top and rest at the bottom (audit, 2026-09-03). */
+      const risen = (pose.j.shoulder.y - shoulderAt(0).y) * 0.4;
       const tower = stackTower({ x0: p.hand.x + 36, x1: p.hand.x + 62, capY: 34, stackTopY: FLOOR_Y - 34 }, risen);
       back.push(...tower.prims);
     }
@@ -131,13 +173,17 @@ function barDip(p: BarDipParams): Rig {
     end: [
       { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 60, max: 100, label: 'the deep stretch — shoulders past the grip' },
     ],
-    path: { track: 'shoulder', kind: 'vertical', tol: 1.5 },
+    /* An arc, not a vertical: the shoulder drifts `forwardShift` forward as it drops — the lean's
+       own travel, which a vertical rail forbade (audit, 2026-09-03). */
+    path: { track: 'shoulder', kind: 'arc', tol: 2 },
     invariants: [
       { kind: 'pointFixed', point: 'hand', tol: 0.5, label: 'the grip does not move — the body does' },
-      { kind: 'segmentAngleFixed', a: 'hip', b: 'shoulder', tolDeg: 3, label: 'the lean is set once and held — no swinging through it' },
       { kind: 'angleNever', joint: 'elbow', neighbors: ['shoulder', 'hand'], aboveDeg: 179, label: 'no elbow hyperextension at lockout' },
     ],
   };
+  /* The lean GROWS into the bottom — the shoulders end forward of the grip. `segmentAngleFixed`
+     (±3°) asserted the opposite and pinned the plumb drop (audit, 2026-09-03). */
+  formspec.end.push({ kind: 'jointRightOf', a: 'shoulder', b: 'hand', by: p.forwardShift - 5, label: 'shoulders forward of the grip — the lean, arrived' });
 
   return {
     id: p.id,
@@ -162,7 +208,7 @@ function barDip(p: BarDipParams): Rig {
 /* The bar sits at 100, not 78: at lockout the shoulder rises a solved 47.5u above the grip and
    the head rides another neck above that — at 78 the crown left the frame (the calf's lesson:
    the FormSpec cannot see a frame, but the framing law can, and did). */
-const DIP_BAR: Vec2 = { x: 176, y: 100 };
+const DIP_BAR: Vec2 = { x: 176, y: 105 }; // 100 put the crown 0.5u past the top edge at the lockout (audit, 2026-09-03); 105 once the arm grew to 27/25 (2026-09-07)
 /*
  * The FAR rail and its posts. Parallel bars run fore-and-aft, so from the side they stack one
  * behind the other — and the athlete is BETWEEN them, which is the one thing that makes this a dip
@@ -185,9 +231,11 @@ const DIP_NEAR_RAIL: Primitive[] = [
 export const chestDipRig = barDip({
   id: 'chest_dip',
   hand: DIP_BAR,
-  leanDeg: 18, // "lean slightly forward" — authored, not accidental
-  topDrop: -vGapFor(168, 4), // lockout: interior 168° by construction
-  bottomDrop: -vGapFor(82, 4), // the stretch: elbows square, shoulders sunk toward the grip
+  leanTop: 12, // "lean slightly forward" — authored, not accidental…
+  leanBottom: 28, // …and deepening into the stretch (audit, 2026-09-03)
+  topAngle: 168, // lockout: interior 168° by construction
+  bottomAngle: 82, // the stretch: elbows square, shoulders sunk toward the grip
+  forwardShift: 18, // shoulders 14u past the grip at the bottom: upper arm ~17° below level, forearm ~25° off plumb (audit, 2026-09-03)
   furniture: DIP_FURNITURE,
   nearRail: DIP_NEAR_RAIL,
 });
@@ -195,9 +243,11 @@ export const chestDipRig = barDip({
 export const assistedDipRig = barDip({
   id: 'assisted_dip',
   hand: DIP_BAR,
-  leanDeg: 10,
-  topDrop: -vGapFor(168, 4),
-  bottomDrop: -vGapFor(82, 4),
+  leanTop: 6,
+  leanBottom: 16, // kneeling on the platform the body travels nearer to plumb (audit, 2026-09-03)
+  topAngle: 168,
+  bottomAngle: 82,
+  forwardShift: 12,
   assisted: true,
   furniture: DIP_FURNITURE,
   nearRail: DIP_NEAR_RAIL,
@@ -251,7 +301,9 @@ export const benchDipRig: Rig = (() => {
 
   const decorAt = (): Decor => ({
     back: [
-      { kind: 'rect', x: BD_HAND.x - 12, y: BD_BENCH_TOP, width: 52, height: 7, rx: 3, fill: 'paper3', stroke: 'ink3', w: 2 },
+      /* The bench's edge 4u in front of the hands — "hands on the bench EDGE" drawn, not 12u in
+         from it (audit, 2026-09-03). */
+      { kind: 'rect', x: BD_HAND.x - 4, y: BD_BENCH_TOP, width: 44, height: 7, rx: 3, fill: 'paper3', stroke: 'ink3', w: 2 },
       { kind: 'line', a: { x: BD_HAND.x - 4, y: BD_BENCH_TOP + 7 }, b: { x: BD_HAND.x - 4, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
       { kind: 'line', a: { x: BD_HAND.x + 32, y: BD_BENCH_TOP + 7 }, b: { x: BD_HAND.x + 32, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
       ...sampledPathTicks(ARC),
@@ -300,12 +352,43 @@ export const machineDipRig: Rig = (() => {
   const HIP: Vec2 = { x: 158, y: 155 };
   const SHOULDER: Vec2 = { x: 158, y: 155 - ATHLETE.torso };
   const HEAD: Vec2 = { x: 159, y: SHOULDER.y - ATHLETE.neck };
-  const handAt = (rom: number): Vec2 => ({ x: SHOULDER.x + 14, y: lerp(SHOULDER.y + vGapFor(82, 14), SHOULDER.y + vGapFor(168, 14), rom) });
-  const ARC = Array.from({ length: 17 }, (_, i) => handAt(i / 16));
+  /*
+   * THE LEVER IS RIGID (the T-bar's law; audit, 2026-09-03: on a straight vertical rail it grew
+   * 45→62u across the rep). The pivot stands in front of the chest, the arm reaches back to the
+   * handle beside the ribs, and the handle rides the circle about that pivot — down and a little
+   * forward, the way a seated-dip arm swings. Both endpoint elbow angles are solved ON the circle.
+   */
+  const PIVOT: Vec2 = { x: SHOULDER.x + 70, y: SHOULDER.y + 10 }; // its post stands clear of the toes (222) at 228
+  /* The start: the handle 4u forward of the shoulder, beside the ribs — not 14u out in front,
+     which drew a pushdown with the upper arm level (audit, 2026-09-03). */
+  const START_HAND: Vec2 = { x: SHOULDER.x + 4, y: SHOULDER.y + vGapFor(82, 4) };
+  const LEVER = Math.hypot(START_HAND.x - PIVOT.x, START_HAND.y - PIVOT.y);
+  const handOn = (theta: number): Vec2 => ({ x: PIVOT.x + LEVER * Math.cos(theta), y: PIVOT.y + LEVER * Math.sin(theta) });
+  const THETA_TOP = Math.atan2(START_HAND.y - PIVOT.y, START_HAND.x - PIVOT.x);
+  /** Where on the circle the arm reaches 168° — bisected between the start and the circle's
+   *  lowest point (θ = 90°), along which the shoulder→handle distance grows monotonically. */
+  const THETA_BOT = (() => {
+    const target = reachAt(168);
+    let lo = Math.PI / 2;
+    let hi = THETA_TOP;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      const h = handOn(mid);
+      if (Math.hypot(h.x - SHOULDER.x, h.y - SHOULDER.y) > target) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
+  })();
+  const handAt = (rom: number): Vec2 => handOn(lerp(THETA_TOP, THETA_BOT, rom));
+  /* The range statement 32u behind the handle path: under the hand it lay across the trunk and
+     the near thigh and was never seen (audit, 2026-09-03). */
+  const ARC = Array.from({ length: 17 }, (_, i) => ({ x: handAt(i / 16).x - 32, y: handAt(i / 16).y }));
 
   const poseAt = (rom: number): Pose => {
     const hand = handAt(rom);
-    const elbow = twoBoneIK(SHOULDER, hand, U, F, -1);
+    /* +1: the elbow drives BACK behind the ribs — a dip. −1 put it 24u in front of the shoulder
+       at the start, a chest press (audit, 2026-09-03). */
+    const elbow = twoBoneIK(SHOULDER, hand, U, F, 1);
     return {
       headR: ATHLETE.headR,
       j: {
@@ -340,8 +423,10 @@ export const machineDipRig: Rig = (() => {
         { kind: 'rect', x: HIP.x - 20, y: HIP.y + 5, width: 40, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
         { kind: 'line', a: { x: HIP.x, y: HIP.y + 12 }, b: { x: HIP.x, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
         ...padStroke({ x: SHOULDER.x - 9, y: SHOULDER.y - 4 }, { x: SHOULDER.x - 9, y: HIP.y - 2 }, 7),
-        { kind: 'circle', c: { x: SHOULDER.x + 34, y: SHOULDER.y - 14 }, r: 3.4, fill: 'paper2', stroke: 'ink3', w: 2 },
-        { kind: 'line', a: { x: SHOULDER.x + 34, y: SHOULDER.y - 14 }, b: { x: pose.j.hand.x + 4, y: pose.j.hand.y }, w: 2.5, color: 'ink3' },
+        /* the pivot on its post, and the rigid arm to the handle */
+        { kind: 'line', a: PIVOT, b: { x: PIVOT.x, y: FLOOR_Y - 2 }, w: 2.5, color: 'ink3' },
+        { kind: 'circle', c: PIVOT, r: 3.4, fill: 'paper2', stroke: 'ink3', w: 2 },
+        { kind: 'line', a: PIVOT, b: pose.j.hand, w: 2.5, color: 'ink3' },
         ...tower.prims,
         ...sampledPathTicks(ARC),
       ],
@@ -359,7 +444,7 @@ export const machineDipRig: Rig = (() => {
     end: [
       { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 155, max: 179, label: 'pressed long — never snapped' },
     ],
-    path: { track: 'hand', kind: 'vertical', tol: 1.5 },
+    path: { track: 'hand', kind: 'arc', tol: 1.5 },
     invariants: [
       { kind: 'pointFixed', point: 'shoulder', tol: 0.5, label: 'the back stays on the pad' },
       { kind: 'pointFixed', point: 'hip', tol: 0.5, label: 'seated — the body is anchored, the handles travel' },

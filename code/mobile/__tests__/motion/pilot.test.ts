@@ -102,7 +102,9 @@ describe('barbell row — the hinge is frozen', () => {
   it('starts at a dead hang and finishes with the bar at the lower ribs', () => {
     const hang = bbRow.poseAt(0);
     const top = bbRow.poseAt(1);
-    expect(angleAt(hang.j.shoulder, hang.j.elbow, hang.j.hand)).toBeGreaterThanOrEqual(165);
+    /* 155, not 165: the hang is solved at elbow 160° (bbRow.ts) because near a straight arm the
+       IK elbow jumps between frames — arms-long is a range, not 170° (execution pass, 2026-09-03). */
+    expect(angleAt(hang.j.shoulder, hang.j.elbow, hang.j.hand)).toBeGreaterThanOrEqual(155);
     const rib = bbRow.formspec.end.find((p) => p.kind === 'contactY');
     expect(rib && rib.kind === 'contactY' ? Math.abs(top.j.bar.y - rib.y) : 99).toBeLessThanOrEqual(2);
     // the bar actually travels a meaningful distance
@@ -129,7 +131,9 @@ describe('lat pulldown — seated, torso frozen, bar to the collarbone', () => {
   it('stretches overhead at the top and pulls to the collarbone, never lower', () => {
     const stretch = latPulldown.poseAt(0);
     const bottom = latPulldown.poseAt(1);
-    expect(angleAt(stretch.j.shoulder, stretch.j.elbow, stretch.j.hand)).toBeGreaterThanOrEqual(165);
+    /* 158, not 165: the stretch is solved at elbow 164° (latPulldown.ts) for the same continuity
+       reason as the row's hang (execution pass, 2026-09-03). */
+    expect(angleAt(stretch.j.shoulder, stretch.j.elbow, stretch.j.hand)).toBeGreaterThanOrEqual(158);
     const collar = latPulldown.formspec.end.find((p) => p.kind === 'contactY');
     const collarY = collar && collar.kind === 'contactY' ? collar.y : 0;
     expect(Math.abs(bottom.j.bar.y - collarY)).toBeLessThanOrEqual(2);

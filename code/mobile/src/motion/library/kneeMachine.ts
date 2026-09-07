@@ -27,6 +27,11 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** A single-joint rig still has a sticking point — the last fifth, where the moment arm is longest;
+ *  the driver slows there and arrives (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { floorScene, machineSeat, padStroke, sampledPathTicks } from '../kit';
@@ -77,7 +82,7 @@ function kneeMachine(p: KneeParams): Rig {
   const ARC = Array.from({ length: 17 }, (_, i) => ankleAt(lerp(p.thetaStart, p.thetaEnd, i / 16)));
 
   const poseAt = (rom: number): Pose => {
-    const theta = lerp(p.thetaStart, p.thetaEnd, rom);
+    const theta = lerp(p.thetaStart, p.thetaEnd, STICK(rom));
     const ankle = ankleAt(theta);
     /* The foot keeps its own line off the shin — toes lead, heel trails, whatever the shin does. */
     const r = (theta * Math.PI) / 180;
@@ -115,7 +120,7 @@ function kneeMachine(p: KneeParams): Rig {
   const decorAt = (rom: number): Decor => {
     const pose = poseAt(rom);
     const ankle = pose.j.ankle;
-    const theta = lerp(p.thetaStart, p.thetaEnd, rom);
+    const theta = lerp(p.thetaStart, p.thetaEnd, STICK(rom));
     const r = (theta * Math.PI) / 180;
     /* The pad's normal — perpendicular to the shin, on whichever face takes the load. */
     const sign = p.padOn === 'front' ? 1 : -1;
@@ -131,6 +136,8 @@ function kneeMachine(p: KneeParams): Rig {
 
     const back: Primitive[] = [
       ...tower.prims,
+      /* One machine, not a chair beside a tower: the base rail ties the seat to the stack (2026-09-07). */
+      { kind: 'line', a: { x: core.hip.x - 30, y: FLOOR_Y - 3 }, b: { x: 272, y: FLOOR_Y - 3 }, w: 2.5, color: 'ink3', cap: 'round' },
       ...machineSeat(core.hip.x + 4, core.hip.y + 6, FLOOR_Y, { x: core.shoulder.x - 9, y0: core.shoulder.y - 6, y1: core.hip.y }),
       // The THIGH PAD — the bar across the top of the leg that makes the machine a machine.
       ...padStroke({ x: KNEE.x - 26, y: KNEE.y - 11 }, { x: KNEE.x - 6, y: KNEE.y - 11 }, 7),

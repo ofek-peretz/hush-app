@@ -17,10 +17,18 @@ import { ExerciseVideoPlayer } from '@/components/ExerciseVideoPlayer';
 import { exerciseVideoSource } from '@/platform/media/exerciseVideo';
 import { exerciseMotion } from '@/motion/registry';
 import { MotionFigure } from '@/motion/render/MotionFigure';
+import { STAGE_FRAME_ASPECT } from '@/motion/frame';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { color, paper, radius, up, font, tracking, trackingPx } from '@/design/tokens';
 import { legendVoice } from '@/design/monoVoice';
+
+/**
+ * 30, not uncapped: a rig loops in ~2 s through poses that change slowly, and the SVG
+ * reconciliation of 45–95 nodes at 60 Hz was the one measurable cost of the form door
+ * (execution pass, 2026-09-07). The eye reads the movement, not the frame rate.
+ */
+const FORM_DOOR_FPS = 30;
 
 interface Props {
   exerciseId?: string | null;
@@ -37,8 +45,18 @@ export function FormMedia({ exerciseId, title }: Props) {
   const hasVideo = !!video;
   const looping = !!motion || hasVideo; // both read as a live, muted, looping demonstration
 
+  /*
+   * ════ THE FORM DOOR GETS THE STAGE'S FRAME (audit, 2026-09-03) ════
+   *
+   * The shared 16:10 crop reserves the top of the frame for the rigs that stand up, so a lying
+   * press or a push-up filled 19 % of it — a thin band with a 73-point athlete on a 338-point
+   * stage. `stageFrame` is the answer the set stage already uses: a fixed 264×202 box slid over
+   * each rig's own content, ONE scale for the whole catalogue, so the athlete never changes size
+   * between exercises and the letter-box goes to the drawing instead. The aspect must follow the
+   * box, or the letter-boxing comes straight back; the video seam keeps its own 16:10.
+   */
   return (
-    <View style={styles.frame}>
+    <View style={[styles.frame, motion ? { aspectRatio: STAGE_FRAME_ASPECT } : null]}>
       {/*
         ════════════════════════════════════════════════════════════════════════════════════════
         ⛔ THE DIAGONAL STRIPES ARE DELETED (2026-08-27).
@@ -64,7 +82,7 @@ export function FormMedia({ exerciseId, title }: Props) {
       */}
 
       {motion ? (
-        <MotionFigure rig={motion} figure={figure} style={StyleSheet.absoluteFill as object} />
+        <MotionFigure rig={motion} figure={figure} fit fps={FORM_DOOR_FPS} style={StyleSheet.absoluteFill as object} />
       ) : video ? (
         <ExerciseVideoPlayer source={video} accessibilityLabel={title ?? ''} style={StyleSheet.absoluteFill as object} />
       ) : (

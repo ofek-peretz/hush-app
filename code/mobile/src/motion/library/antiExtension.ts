@@ -21,6 +21,11 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** The roll-out's hard part is the far end — the lever longest; both drivers share the one clock so
+ *  the body stays one line (iron rule 12, 2026-09-07). */
+const STICK = sticksAt(0.85, 0.06);
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { floorScene, sampledPathTicks } from '../kit';
@@ -47,17 +52,17 @@ export const abWheel: Rig = (() => {
    * actually looks like: hips over knees, hands below the chest on the wheel.
    */
   const TAU_IN = 60;
-  const TAU_OUT = 28;
+  const TAU_OUT = 16; // 28 started the roll already rolled: 26° of hip and 26u of travel. Long now (2026-09-07)
   const ARM = (U + F) * 0.97; // near-straight on the wheel, by the long-arm rule
 
   const jointsAt = (rom: number) => {
-    const tau = (lerp(TAU_IN, TAU_OUT, rom) * Math.PI) / 180;
+    const tau = (lerp(TAU_IN, TAU_OUT, STICK(rom)) * Math.PI) / 180;
     const hip: Vec2 = { x: KNEE.x + T * Math.cos(tau), y: KNEE.y - T * Math.sin(tau) };
     /*
      * The trunk continues the unfold: its angle above the floor eases from upright toward the
      * hip's own line as she reaches — a single smooth curve from kneel to long body.
      */
-    const trunkDeg = lerp(12, 6, rom); // low enough that the 46.6u arm truly reaches the wheel
+    const trunkDeg = lerp(12, 2, STICK(rom)); // low enough that the 46.6u arm truly reaches the wheel; 2° at the end — nearly flat (2026-09-07)
     const tr = (trunkDeg * Math.PI) / 180;
     const shoulder: Vec2 = { x: hip.x + ATHLETE.torso * Math.cos(tr), y: hip.y - ATHLETE.torso * Math.sin(tr) };
     /* The wheel is where the straight arms meet the floor — solved, not pushed. */
@@ -186,7 +191,15 @@ export const deadBug: Rig = (() => {
   const FAR_LEG = legAt(0);
 
   const poseAt = (rom: number): Pose => {
-    const { elbow, hand } = armAt(rom);
+    /*
+     * CONTRALATERAL, as the name says (execution pass, 2026-09-07). The moving pair was the near
+     * arm and the near leg — the same side, which is the variation nobody calls a dead bug. The
+     * FAR arm now reaches while the near arm holds vertical; the near leg still reaches, so the
+     * two moving limbs are on opposite sides and the still pair reads as the anchor.
+     */
+    const moving = armAt(rom);
+    const elbow = FAR_ARM.elbow;
+    const hand = FAR_ARM.hand;
     const { knee, ankle } = legAt(rom);
     return {
       headR: ATHLETE.headR,
@@ -201,8 +214,8 @@ export const deadBug: Rig = (() => {
         elbow,
         hand,
         farShoulder: far(SHOULDER, -6, 1),
-        farElbow: far(FAR_ARM.elbow, -6, 1),
-        farHand: far(FAR_ARM.hand, -6, 1),
+        farElbow: far(moving.elbow, -6, 1),
+        farHand: far(moving.hand, -6, 1),
         farHip: far(HIP, -6, 1),
         farKnee: far(FAR_LEG.knee, -6, 1),
         farAnkle: far(FAR_LEG.ankle, -6, 1),
@@ -226,7 +239,7 @@ export const deadBug: Rig = (() => {
     invariants: [
       { kind: 'pointFixed', point: 'hip', tol: 0.5, label: 'the lower back stays pressed — the pelvis does not tilt' },
       { kind: 'pointFixed', point: 'shoulder', tol: 0.5, label: 'shoulders down on the floor' },
-      { kind: 'pointFixed', point: 'farHand', tol: 0.5, label: 'the other arm holds — dead still' },
+      { kind: 'pointFixed', point: 'hand', tol: 0.5, label: 'the other arm holds — dead still' },
       { kind: 'pointFixed', point: 'farKnee', tol: 0.5, label: 'the other leg holds its table-top' },
     ],
   };

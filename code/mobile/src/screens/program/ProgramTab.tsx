@@ -45,6 +45,9 @@ import { coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { color, font, textScale, tracking } from '@/design/tokens';
 import { Icon } from '@/components/Icon';
+import { DayInMotion } from '@/components/DayInMotion';
+import { exerciseMotion } from '@/motion/registry';
+import type { FigureSex } from '@/motion/types';
 import { bidi } from '@/i18n/bidi';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 
@@ -103,14 +106,39 @@ export interface ProgramTabViewProps {
   units: 'kg' | 'lb';
   /** True once the read settled — an empty settled week says so; an unsettled one says nothing. */
   settled: boolean;
+  /** Which athlete demonstrates — the same `figure` switch every other motion surface takes. */
+  figure?: FigureSex;
+  /** True while this tab is not the visible one — every card's body holds its pose, no clock runs. */
+  motionPaused?: boolean;
   onDay: (workoutId: string) => void;
   onLibrary: () => void;
   onBuild: () => void;
 }
 
-export function ProgramTabView({ workouts, units, settled, onDay, onLibrary, onBuild }: ProgramTabViewProps) {
+export function ProgramTabView({ workouts, units, settled, figure, motionPaused, onDay, onLibrary, onBuild }: ProgramTabViewProps) {
   const { t } = useCopy();
   const insets = useSafeAreaInsets();
+  /*
+   * ⛔ ONE CLOCK ON THIS TAB TOO (founder 2026-09-02 + `DayInMotion`'s own law).
+   *
+   * The founder's ask, verbatim: *"במסך תוכנית האימון... התוכנית צריכה להופיע כסרטון של תוכניות
+   * האימון כמו במסך הToday ולא רשימת תרגילים כמו מכולת."* So every workout card carries a body now,
+   * exactly as Today's card does — and the temptation is to let all four of them move.
+   *
+   * `DayInMotion`'s header already did that arithmetic: every moving figure is a
+   * `requestAnimationFrame` loop rebuilding a whole rig per frame, and the 24fps cap exists because
+   * ONE uncapped figure froze Chrome's renderer (measured 2026-08-31). Four moving at once is 96
+   * rig-builds a second on a scrolling screen. So the grammar is the week's own: the NEXT workout —
+   * the first one not behind her — performs its lifts in full motion; every other day stands ready,
+   * mid-rep, still. One clock, and the stillness itself says "not yet".
+   *
+   * A day whose lifts have no rigs cannot perform (the hero draws nothing there), so the stage
+   * passes over it to the first day that can — otherwise one unrigged day would silence the tab.
+   */
+  const performingId = useMemo(
+    () => workouts.find((w) => !w.done && w.rows.some((r) => !!exerciseMotion(r.exerciseId)))?.id ?? null,
+    [workouts],
+  );
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }} showsVerticalScrollIndicator={false}>
@@ -158,6 +186,19 @@ export function ProgramTabView({ workouts, units, settled, onDay, onLibrary, onB
                 <Icon name="chevronRight" size={18} color={color.textMuted} />
               )}
             </View>
+            {/*
+              THE DAY, PERFORMED — the same hero Today carries, one per card (founder 2026-09-02).
+              Only the next workout's clock runs (see `performingId`); the rest hold a mid-rep pose.
+              ⚠️ ABOVE THE ROWS, NOT INSTEAD OF THEM — the ruling that placed Today's hero holds
+              here word for word: this tab is the one screen that lists every load of her week
+              (2026-08-26), and the figure says what a day IS while the rows say what it costs.
+            */}
+            <DayInMotion
+              exerciseIds={w.rows.map((r) => r.exerciseId)}
+              figure={figure}
+              paused={motionPaused || w.id !== performingId}
+              style={styles.dayMotion}
+            />
             {w.rows.map((r) => (
               <View key={`${w.id}:${r.exerciseId}`} style={styles.liftRow}>
                 {/* Two lines, not an ellipsis — "הרמת עקבים בישיבה עם מ…" cut the word that told
@@ -274,6 +315,10 @@ export function ProgramTab({ navigation }: Props) {
       workouts={viewWorkouts}
       units={units}
       settled={settled}
+      figure={app.profile?.sex === 'female' ? 'female' : 'male'}
+      /* This tab lives in the tab navigator and stays MOUNTED behind the others — the same
+         `useIsFocused` answer Today passes down, for the same rAF-does-not-care reason. */
+      motionPaused={!isFocused}
       onDay={(workoutId) => navigation.navigate('PreWorkout', { workoutId })}
       onLibrary={() => navigation.navigate('ExerciseLibrary')}
       onBuild={() => navigation.navigate('PlanBuilder')}
@@ -325,6 +370,8 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface,
   },
   cardPressed: { backgroundColor: color.surface2 },
+  // Today's `todayMotion` box, on a card: the parent owns the height or the Svg collapses to zero.
+  dayMotion: { height: 132, marginTop: 4, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   cardHeadText: { flex: 1, gap: 3 },
   dayName: { fontFamily: font.serif, fontSize: 24, lineHeight: 28, color: color.textPrimary, textAlign: 'left' },

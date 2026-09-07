@@ -32,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const { EXERCISE_MOTION } = require(path.join(BUILD, 'registry.js'));
 const { buildFrame, VIEWBOX } = require(path.join(BUILD, 'frame.js'));
 const { romAt, DEFAULT_TEMPO } = require(path.join(BUILD, 'timeline.js'));

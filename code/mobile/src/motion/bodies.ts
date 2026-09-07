@@ -55,8 +55,11 @@ export function seatedFrontCore(cx: number) {
     shoulderL: { x: cx - 15.5, y: 110 },
     hipR: { x: cx + 9, y: 156 },
     hipL: { x: cx - 9, y: 156 },
-    kneeR: { x: cx + 17, y: 152 },
-    kneeL: { x: cx - 17, y: 152 },
+    /* 164, not 152 (2026-09-07): knees 4u ABOVE the hips drew every seated front figure with
+       8.9u thighs — stubs. A seated thigh slopes down to the knee; 8u below is what a camera at
+       chest height sees, and the shank foreshortens to the floor honestly. */
+    kneeR: { x: cx + 17, y: 164 },
+    kneeL: { x: cx - 17, y: 164 },
     ankleR: { x: cx + 19, y: 186 },
     ankleL: { x: cx - 19, y: 186 },
     heelR: { x: cx + 14, y: FLOOR_Y },
@@ -164,8 +167,10 @@ export function supineFrontCore(cx: number, raise = 0) {
     shoulderL: { x: cx - 15.5, y: 147 - raise },
     hipR: { x: cx + 10, y: 158 },
     hipL: { x: cx - 10, y: 158 },
-    kneeR: { x: cx + 21, y: 148 },
-    kneeL: { x: cx - 21, y: 148 },
+    /* 156, not 148 (2026-09-07): knees 10u ABOVE the hips read as a bench 39 cm high; a real bench
+       (48 cm) puts the knee level with the hip and the projected thigh stops bulging over it. */
+    kneeR: { x: cx + 21, y: 156 },
+    kneeL: { x: cx - 21, y: 156 },
     ankleR: { x: cx + 27, y: 186 },
     ankleL: { x: cx - 27, y: 186 },
     heelR: { x: cx + 21, y: FLOOR_Y },

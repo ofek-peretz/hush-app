@@ -23,6 +23,7 @@
 
 //
 
+import { ATHLETE } from '@/motion/anthro';
 import { bbBenchPress } from '@/motion/library/bbBenchPress';
 import { validate } from '@/motion/formspec';
 import { angleAt } from '@/motion/geometry';
@@ -105,8 +106,8 @@ describe('bench press — FormSpec validation', () => {
       const p = bbBenchPress.poseAt(i / 40);
       const d3 = (a: string, b: string) =>
         Math.hypot(p.j[a].x - p.j[b].x, p.j[a].y - p.j[b].y, (p.z?.[a] ?? 0) - (p.z?.[b] ?? 0));
-      expect(d3('shoulder', 'elbow')).toBeCloseTo(25, 1);
-      expect(d3('elbow', 'hand')).toBeCloseTo(23, 1);
+      expect(d3('shoulder', 'elbow')).toBeCloseTo(ATHLETE.upperArm, 1); // the skeleton's own number, not a literal (arm grew to 27/25, 2026-09-07)
+      expect(d3('elbow', 'hand')).toBeCloseTo(ATHLETE.foreArm, 1);
     }
   });
 });

@@ -15,24 +15,28 @@ export const ATHLETE = {
   headR: 8,
   neck: 16, // shoulder joint → head center (long enough that the head clears a plate on the bar)
   torso: 48, // hip joint → shoulder joint
-  upperArm: 25,
+  upperArm: 27,
   /*
-   * 23 is elbow → WRIST, not elbow → knuckle: at this figure's scale (1u ≈ 1.13 cm) it is 25.9 cm,
-   * which is a real forearm, while the grip axis of a real hand sits ~4 cm further out. The whole
-   * arm is likewise about 14 % shorter than a 175 cm man's — 48u shoulder-to-grip against a true
-   * 56u. That is deliberate, and it was TESTED before being kept (2026-08-29).
+   * 27 / 25 (execution pass, 2026-09-07), from 25 / 23. The arm is now 52u shoulder-to-grip against
+   * a 175 cm man's 56u — 7 % short, where it was 14 %. It was 25/23 on purpose (tested 2026-08-29)
+   * and the argument for keeping it short was sound as far as it went: hands in this library are
+   * AUTHORED on bars and handles, so a longer bone does not move the hand, it only folds the elbow
+   * tighter into the same span. That is still true. What the argument missed is where the short
+   * arm was the CAP: the deadlift's lockout hung the bar at the hip crease, the RDL folded its
+   * knee to 132° to get the bar to the knee, the pulldown could not bring the bar to the chest,
+   * the push-up's forearm leaned 25° — a whole class of findings (seven clips at 7–8) whose fix
+   * was the same four units. So the arm grew, and every rig that authored its own reach was
+   * re-derived from ATHLETE rather than typed (hinge tops, hang bars, dip bars, the OHP's plate):
+   * 0 FormSpec / 0 auditor failures at 27/25 with those in place. 29/27 (anatomical) was NOT
+   * taken: measured across the library it closes 54 elbows under the 55° readability floor.
    *
-   * Lengthening it does not help the drawing, it hurts it, and the reason is worth stating: hands
-   * in this library are AUTHORED — on a bar, on a handle, on a machine's grip — so a longer arm
-   * does not move the hand anywhere. It only gives the limb more bone to fold into the same span,
-   * and the elbow closes. Measured across all 136 rigs: at 25/23, thirty-nine clips close an elbow
-   * below 55° somewhere in the rep; at 25/27 that becomes forty-eight, with 9 FormSpec and 12
-   * auditor failures on top; at a fully anatomical 29/27, fifty-four.
+   * 25 is still elbow → WRIST, not elbow → knuckle: the fist is drawn at the wrist and the bar
+   * sits in it.
    *
-   * The lever that opens an elbow is how far the hand finishes from its own SHOULDER. Grip width
-   * and endpoint are that lever. Bone length is not.
+   * The lever that opens an elbow is still how far the hand finishes from its own SHOULDER. Grip
+   * width and endpoint are that lever; the bone is the floor under it.
    */
-  foreArm: 23,
+  foreArm: 25,
   thigh: 40,
   shank: 37,
   foot: 25, // heel → toe on the floor

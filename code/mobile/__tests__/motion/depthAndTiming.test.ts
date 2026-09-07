@@ -16,7 +16,7 @@
 //
 
 import { EXERCISE_MOTION } from '@/motion/registry';
-import { buildFrame } from '@/motion/frame';
+import { buildFrame, headOver, withGirdle } from '@/motion/frame';
 import { skinFigure } from '@/motion/skin';
 import { FLAT, project } from '@/motion/camera';
 import * as curves from '@/motion/curves';
@@ -43,10 +43,16 @@ describe('the camera', () => {
         const pose = rig.poseAt(rom);
         if (pose.z) continue; // so does one that carries depth
         const decor = rig.decorAt(rom);
-        expect({ id, rom, prims: buildFrame(rig, rom) }).toEqual({
+        /* The drawn pose carries the derived shoulder girdle and the shadow follows the body
+           (frame.ts, 2026-09-07); the identity under test is the PROJECTION, so both are applied
+           on this side of the comparison exactly as `frameParts` applies them. */
+        const g = withGirdle(pose, rig.chains);
+        const figure = skinFigure(g.pose, g.chains, 'male');
+        const drawn = buildFrame(rig, rom);
+        expect({ id, rom, prims: drawn.slice(rig.scene.length) }).toEqual({
           id,
           rom,
-          prims: [...rig.scene, ...decor.back, ...skinFigure(pose, rig.chains, 'male'), ...decor.front],
+          prims: [...decor.back, ...figure, ...headOver(decor.front, figure, g.pose, g.chains)],
         });
       }
     }

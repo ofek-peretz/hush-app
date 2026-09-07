@@ -245,10 +245,14 @@ describe('the day is performed on the first screen she opens', () => {
 
   it('the figure is drawn at a capped rate — sixty a second is not free, and not needed', () => {
     /* Measured in Chrome on 2026-08-31: uncapped, Today repeatedly timed out the renderer's own
-       screenshot while the set screen, which draws no figure, answered instantly. The FORM door is
-       deliberately NOT capped — there the clip is the screen. */
+       screenshot while the set screen, which draws no figure, answered instantly.
+       ── AMENDED 2026-09-07. The form door was exempt on the reasoning that "there the clip is the
+       screen", and that reasoning did not survive being measured: the door's own rig reconciles
+       45–95 SVG nodes a frame, and at 60 Hz that was the one measurable cost of opening it. A rep
+       loops in ~2 s through poses that change slowly, so 30 reads identically and costs half. The
+       cap now applies to BOTH surfaces; what stays forbidden is an uncapped figure anywhere. */
     expect(motion).toContain('fps={HERO_FPS}');
-    expect(read('src/components/FormMedia.tsx')).not.toContain('fps=');
+    expect(read('src/components/FormMedia.tsx')).toContain('fps={FORM_DOOR_FPS}');
   });
 
   it('a lift with no rig draws nothing rather than an empty frame', () => {

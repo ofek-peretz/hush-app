@@ -17,7 +17,8 @@
 // 
 
 import type { Decor, FormSpec, Pose, PosePredicate, Primitive, Rig, Vec2 } from '../types';
-import { lerp, twoBoneIK } from '../geometry';
+import { lerp, twoBoneIK, twoBoneIK3 } from '../geometry';
+import { leads } from '../curves';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { barbellFront, barPathTicks, dumbbellFront, floorScene, sampledPathTicks } from '../kit';
@@ -30,6 +31,21 @@ const U = ATHLETE.upperArm;
 const F = ATHLETE.foreArm;
 const LOCKOUT_ANGLE = 172;
 const REACH = Math.sqrt(U * U + F * F - 2 * U * F * Math.cos((LOCKOUT_ANGLE * Math.PI) / 180));
+
+/**
+ * THE GIRDLE RISES WITH THE ARM, ON ITS OWN CLOCK (audit, 2026-09-03).
+ *
+ * Scapulohumeral rhythm: as the humerus goes overhead the scapula rotates up under it and the
+ * shoulder joint itself climbs — the "reach up" every press is cued with. These members have a
+ * `neckBase` separate from the shoulder joints, so the girdle CAN move here, and it did not: both
+ * shoulders sat at travel 0 through the whole rep. 2.5u ≈ 3 cm; neckBase stays, so the torso bone
+ * is untouched. The rise runs on `leads(0.2)` — done by rom 0.8 and held while the elbow finishes
+ * the lockout, which is the sequence a press has (the shoulder rises before the elbow finishes)
+ * and the one thing that separates a body from a mechanism bolted to one clock (iron rule 12).
+ * The hand rides the girdle, so the 172° lockout still holds by construction.
+ */
+const GIRDLE_RISE = 2.5;
+const GIRDLE_LEADS = leads(0.2);
 
 /** The seat + back pad, front-on: pad edges show as slivers past the trunk. */
 const frontSeat: Primitive[] = [
@@ -48,9 +64,10 @@ interface VerticalPressParams {
    * is strictly vertical, which is right for anything on a bar or a rail.
    *
    * Two dumbbells are not on a bar. They start at the ears, a full upper-arm out from the shoulder,
-   * and they finish nearly touching over the crown — that convergence is the arc, it is how a
-   * dumbbell press differs from a barbell one, and the members were drawing both bells riding
-   * straight up parallel rails 40.5u apart for the whole rep.
+   * and they converge over the crown — 65u apart at lockout for `topDX: 17`, a hand's width each
+   * side of the head, not touching (a clang at the top is the thing coaches cue OUT). That
+   * convergence is the arc, it is how a dumbbell press differs from a barbell one, and the members
+   * were drawing both bells riding straight up parallel rails 40.5u apart for the whole rep.
    */
   topDX?: number;
   /**
@@ -64,6 +81,17 @@ interface VerticalPressParams {
    * of what the exercise IS.
    */
   midDX?: number;
+  /**
+   * The Arnold's rack, in DEPTH (audit, 2026-09-03). The bells start IN FRONT of the shoulders at
+   * the chin, palms in, with the elbows hanging below and in front of them — the humerus points at
+   * the camera. A flat IK cannot draw that: with the hand a chin's height above the shoulder, a 48u
+   * arm has nowhere to fold but sideways, and the member opened as a front-double-biceps (elbow 25u
+   * out at shoulder height, bells at eye level, elbow 50.6° under the 55° merge law). `tuckZ` is
+   * how far in front of the shoulder line the hands start; the arm is solved in 3D and the tuck
+   * unwinds to the page by rom 0.5, the same window the sweep (`midDX`) carries the bells out
+   * through the goalpost — so the far end of the rep is the plain dumbbell press it should be.
+   */
+  tuckZ?: number;
   startY: number;
   start: PosePredicate[];
   implement: 'bar' | 'db' | 'machine';
@@ -75,7 +103,8 @@ function verticalPress(p: VerticalPressParams): Rig {
   const topDX = p.topDX ?? p.gripDX;
   const gripX = 15.5 + p.gripDX; // from the center line at the rack
   const topX = 15.5 + topDX; // …and at lockout
-  const lockY = core.shoulderR.y - Math.sqrt(REACH * REACH - topDX * topDX);
+  // the lockout is measured from where the shoulder IS at lockout — one girdle-rise up
+  const lockY = core.shoulderR.y - GIRDLE_RISE - Math.sqrt(REACH * REACH - topDX * topDX);
   const midX = p.midDX == null ? null : 15.5 + p.midDX;
   const handXAt = (rom: number) =>
     midX == null
@@ -83,20 +112,58 @@ function verticalPress(p: VerticalPressParams): Rig {
       : (1 - rom) * (1 - rom) * gripX + 2 * (1 - rom) * rom * midX + rom * rom * topX;
 
   const poseAt = (rom: number): Pose => {
+    const rise = GIRDLE_RISE * GIRDLE_LEADS(rom);
+    const shoulderR: Vec2 = { x: core.shoulderR.x, y: core.shoulderR.y - rise };
+    const shoulderL: Vec2 = { x: core.shoulderL.x, y: core.shoulderL.y - rise };
     const handY = lerp(p.startY, lockY, rom);
     const hx = handXAt(rom);
     const handR: Vec2 = { x: CX + hx, y: handY };
     const handL: Vec2 = { x: CX - hx, y: handY };
+    if (p.tuckZ == null) {
+      return {
+        headR: ATHLETE.headR,
+        j: {
+          ...core,
+          shoulderR,
+          shoulderL,
+          handR,
+          handL,
+          elbowR: twoBoneIK(shoulderR, handR, U, F, 1),
+          elbowL: twoBoneIK(shoulderL, handL, U, F, -1),
+          bar: { x: CX, y: handY },
+        },
+      };
+    }
+    // the tuck unwinds over the first half: smoothstep so the elbow neither snaps off the rack nor
+    // arrives at the goalpost with a kink
+    const t = Math.min(1, rom / 0.5);
+    const s = t * t * (3 - 2 * t);
+    const handZ = p.tuckZ * (1 - s);
+    // the hint walks from "down and forward" (the elbow hanging under the bell, in front of the
+    // ribs) to "out" (the goalpost's flat, outboard elbow — the 2D solver's own answer)
+    const elbow3 = (side: 1 | -1, shoulder: Vec2, hand: Vec2) =>
+      twoBoneIK3(
+        { x: shoulder.x, y: shoulder.y, z: 0 },
+        { x: hand.x, y: hand.y, z: handZ },
+        U,
+        F,
+        { x: side * lerp(0.3, 1, s), y: lerp(1, 0.15, s), z: lerp(0.6, 0, s) },
+      );
+    const eR = elbow3(1, shoulderR, handR);
+    const eL = elbow3(-1, shoulderL, handL);
     return {
       headR: ATHLETE.headR,
       j: {
         ...core,
+        shoulderR,
+        shoulderL,
         handR,
         handL,
-        elbowR: twoBoneIK(core.shoulderR, handR, U, F, 1),
-        elbowL: twoBoneIK(core.shoulderL, handL, U, F, -1),
+        elbowR: { x: eR.x, y: eR.y },
+        elbowL: { x: eL.x, y: eL.y },
         bar: { x: CX, y: handY },
       },
+      z: { handR: handZ, handL: handZ, elbowR: eR.z, elbowL: eL.z },
     };
   };
 
@@ -203,15 +270,22 @@ export const dbShoulderPress = verticalPress({
  * Both halves are drawn — the wrist spin (`spin`) and the sweep (`midDX`) — because either one
  * alone leaves the clip indistinguishable from `db_shoulder_press`.
  */
+/** The chin: head centre 92 + radius 8. A bell at 92 was at the EYES (audit, 2026-09-03). */
+const ARNOLD_RACK_Y = 100;
 export const arnoldPress = verticalPress({
   id: 'arnold_press',
-  gripDX: 10, // bells in front of the chest, close to the midline — not the goalpost
+  gripDX: 5, // 10 → 5: bells straight in front of the shoulders, not out past them (audit, 2026-09-03)
   midDX: 26, // out through the goalpost as they rise
   topDX: 17, // and converging over the crown
-  startY: 92,
+  startY: ARNOLD_RACK_Y,
+  tuckZ: 16, // hands a forearm's thickness in front of the chest wall; elbow lands 13u under the shoulder (audit, 2026-09-03)
   start: [
-    { kind: 'jointAngle', joint: 'elbowR', neighbors: ['shoulderR', 'handR'], min: 42, max: 62, label: 'elbows tucked in front — the palms-in start' },
-    { kind: 'contactY', a: 'handR', y: 92, tol: 2, label: 'bells at the chin, in front of the chest' },
+    { kind: 'contactY', a: 'handR', y: ARNOLD_RACK_Y, tol: 2, label: 'bells at the chin, in front of the shoulders' },
+    /* The rack's projected elbow angle is ~27° — the humerus points at the lens, so the flat angle
+       says nothing; what a viewer must see is the elbow HANGING, under the shoulder and under the
+       bell, not out beside the shoulder as in a goalpost. (audit, 2026-09-03) */
+    { kind: 'jointBelow', a: 'elbowR', b: 'shoulderR', by: 8, label: 'elbows hanging below the shoulders — the palms-in rack, not a goalpost' },
+    { kind: 'jointBelow', a: 'elbowR', b: 'handR', by: 15, label: 'elbows under the bells' },
   ],
   implement: 'db',
   spin: { from: 0, to: 1 }, // palms-in at the start → palms-forward at lockout
@@ -232,32 +306,41 @@ export const machineShoulderPress = verticalPress({
  * wrapping the barbell rig's decor rather than re-authoring the press.
  */
 export const smithOverheadPress: Rig = (() => {
-  const RAIL_X = 80;
+  /*
+   * THE PLATES LIVE OUTSIDE THE UPRIGHTS (audit, 2026-09-03). The rails stood at ±80 with the
+   * plates at ±62 INSIDE them and the bar ending on the plates — drawn like that the bar read as a
+   * cross-beam of the frame. A smith bar rides the uprights on a carriage and its sleeves, with
+   * the plates, stick out past them. So: uprights at ±58 (≈131 cm apart, a real frame), plates at
+   * ±72 outboard of them, the bar to ±78, and a carriage tab on each upright at bar height that
+   * travels with it.
+   */
+  const RAIL_X = 58;
+  const PLATE_X = 72;
   const RACK_Y = 106; // the lug the bar rotates onto, just under the front-rack line
   const RAILS: Primitive[] = ([1, -1] as const).flatMap((side) => [
     { kind: 'line', a: { x: CX + side * RAIL_X, y: 30 }, b: { x: CX + side * RAIL_X, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
     { kind: 'line', a: { x: CX + side * RAIL_X, y: RACK_Y }, b: { x: CX + side * (RAIL_X - 7), y: RACK_Y }, w: 2.5, color: 'ink3' },
   ]);
+  const carriageAt = (y: number): Primitive[] =>
+    ([1, -1] as const).map((side) => ({ kind: 'rect', x: CX + side * RAIL_X - 3, y: y - 4, width: 6, height: 8, rx: 1.5, fill: 'ink3', stroke: 'ink3', w: 1 }));
+  const SMITH_RACK_Y = 98; // 100 → 98: the elbow opens 55.3° → ~58°, off the 55° merge threshold (audit, 2026-09-03)
   const base = verticalPress({
     id: 'smith_overhead_press',
     gripDX: 20,
-    startY: 100,
+    startY: SMITH_RACK_Y,
     start: [
-      { kind: 'contactY', a: 'bar', y: 100, tol: 2, label: 'bar at the chin — the front-rack' },
+      { kind: 'contactY', a: 'bar', y: SMITH_RACK_Y, tol: 2, label: 'bar at the chin — the front-rack' },
       { kind: 'jointAngle', joint: 'elbowR', neighbors: ['shoulderR', 'handR'], min: 45, max: 75, label: 'elbows bent under the bar' },
     ],
     implement: 'bar',
   });
   const decorAt = (rom: number): Decor => {
     const d = base.decorAt(rom);
+    const barY = base.poseAt(rom).j.bar.y;
     return {
-      back: [
-        // the rails stand at 80, OUTBOARD of the plates (62 + a 16 radius reaches 78): at 66 the
-        // plate ellipse ran straight into the upright and the bar read as jammed against the frame
-        ...RAILS,
-        ...d.back,
-      ],
-      front: d.front,
+      back: [...RAILS, ...carriageAt(barY), ...d.back],
+      // the base draws the free barbell (plates at ±62); the smith's plates sit outboard of the rails
+      front: barbellFront(CX, barY, 78, PLATE_X),
     };
   };
   return { ...base, decorAt };

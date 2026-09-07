@@ -42,11 +42,24 @@ const HEAD_R = 8;
 
 const UPPER = ATHLETE.upperArm; // full canonical arm — this is what makes the hang honest
 const FORE = ATHLETE.foreArm;
-const BAR_X = SHOULDER.x; // the bar hangs and travels directly under the shoulder (vertical path)
+/*
+ * THE BAR HANGS 6u BEHIND THE SHOULDER, NOT UNDER IT (audit, 2026-09-03).
+ *
+ * On the shoulder's own vertical the bar met the trunk at y 97 — 12.4u along the spine from the
+ * shoulder, which is the sternum, while the card says "lower ribs" (~20u down the trunk). Six
+ * units back the same vertical meets the trunk 20.9u along the spine at y 103: the lower-rib line
+ * the cue names, with the elbow finishing further past the torso for it. The hang tilts 7° off
+ * vertical, the shape of a barbell held under a hinged chest.
+ */
+const BAR_X = SHOULDER.x - 6;
 
 // endpoints on the vertical bar line
-const HANG_Y = SHOULDER.y + (UPPER + FORE) * 0.995; // arms long (elbow ~170°) — bar at mid-thigh
-const RIB_Y = 97; // where the vertical bar line meets the trunk's front surface (the lower-rib line)
+/* The dead hang is solved at elbow 160°, not 170°: from a near-straight arm the IK elbow jumped
+   7.2u in x over the first 13 % of the rep (maxStep 1.74) — the fold "popped" open. Ten degrees
+   of standing bend let it leave the line gradually, and 160° is still arms-long (audit, 2026-09-03). */
+const HANG_REACH = Math.sqrt(UPPER * UPPER + FORE * FORE - 2 * UPPER * FORE * Math.cos((160 * Math.PI) / 180));
+const HANG_Y = SHOULDER.y + Math.sqrt(HANG_REACH * HANG_REACH - (SHOULDER.x - BAR_X) ** 2); // bar at mid-thigh
+const RIB_Y = 103; // where the bar's vertical meets the trunk's front surface at the lower-rib line
 
 function poseAt(rom: number): Pose {
   const barY = lerp(HANG_Y, RIB_Y, rom);
@@ -93,7 +106,7 @@ const scene = floorScene(FLOOR_Y, 164, 26);
 const formspec: FormSpec = {
   tempo: CONCENTRIC_TEMPO,
   start: [
-    { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 165, max: 179, label: 'dead hang — arms long (elbow ~170°)' },
+    { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 155, max: 179, label: 'dead hang — arms long (elbow ~160°)' },
   ],
   end: [
     { kind: 'contactY', a: 'bar', y: RIB_Y, tol: 2, label: 'bar to the lower ribs' },

@@ -6,7 +6,7 @@
  *   node tools/motion-harness/joints.js <exerciseId> [n]
  */
 const path = require('path');
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const { EXERCISE_MOTION } = require(path.join(BUILD, 'registry.js'));
 const EX = process.argv[2];
 const N = Number(process.argv[3] || 9);

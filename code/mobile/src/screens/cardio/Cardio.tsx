@@ -723,14 +723,33 @@ export function CardioLiveView(props: {
                 <Legend size={RUN_SMALL_PT} track={0.16} tone="onStage" style={styles.kmRowOrdinal}>
                   {t('cardio.kmOrdinal', { n: sp.km })}
                 </Legend>
-                {/* …and each finished kilometre's own burn, when a bodyweight priced one (2026-08-24) */}
-                {sp.kcal != null ? (
-                  <View style={styles.kmRowKcalWrap} accessible accessibilityLabel={`${sp.kcal} ${t('cardio.kcal')}`}>
-                    <Text style={styles.kmRowKcal}>{sp.kcal}</Text>
-                    {/* the WORD rides sans beside the mono figure (monoCarriesNoWords) */}
-                    <Text style={styles.kmRowKcalUnit}>{t('cardio.kcal')}</Text>
-                  </View>
-                ) : null}
+                {/*
+                  ════════════════════════════════════════════════════════════════════════════════
+                  ⛔ THE PER-KILOMETRE BURN IS DELETED — IT WAS A CONSTANT COLUMN (founder,
+                  2026-09-02, after walking a real route with the phone):
+
+                    *"כרגע זה נראה מטופש שרשום זמן לכל סיבוב וכל פעם כתוב אותו קלוריות — זה אותו
+                    מידע שמופיע אינספור פעמים על המסך."*
+
+                  He is right, and it is not a rendering accident — it is what the model guarantees.
+                  `cardioRun` stamps each split as `kcalForSegment(1, sec, weight)`, and
+                  `cardioMath.kcalPerKgKm` is FLAT at 0.55 for every pace slower than 6.4 km/h and
+                  FLAT at 1.03 for every pace faster than 8. So on any ordinary walk — and on any
+                  ordinary run — every row of this column prints the identical rounded integer, by
+                  construction. It can only vary inside the 6.4–8 km/h interpolation band, which is
+                  the one speed nobody sustains. A column that is a constant is not a measurement;
+                  it is the bodyweight, restated once per kilometre.
+
+                  ⚠️ AND THE FACT IS NOT LOST — IT IS ALREADY ON THIS SCREEN, ONCE. The live row
+                  below carries the run's TOTAL burn (`LiveStat … cardio.kcal`), which is the only
+                  reading of it that moves. The row keeps the ordinal and the TIME, which is exactly
+                  what the 2026-08-23 ruling asked a kilometre row to say: *"להראות כמה זמן זה ארך"*.
+
+                  ⚠️ `CardioSplit.kcal` STAYS IN THE MODEL and stays stamped. It is honest per-split
+                  data, it costs nothing, and a future surface that prices kilometres differently
+                  (a grade term would) will want it. This deletes the DRAWING, not the record.
+                  ════════════════════════════════════════════════════════════════════════════════
+                */}
                 <Text style={styles.kmRowTime}>{fmtPace(sp.durationSec)}</Text>
               </View>
             ))}
@@ -1463,9 +1482,6 @@ const styles = StyleSheet.create({
   },
   kmRowOrdinal: { flex: 1 },
   kmRowTime: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 30, letterSpacing: trackingPx(30, tracking.figure), lineHeight: 34, color: stageC.ink0, includeFontPadding: false, textAlign: 'left' },
-  kmRowKcal: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, color: stageC.ink2, textAlign: 'left' },
-  kmRowKcalWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  kmRowKcalUnit: { fontFamily: font.sans, fontSize: 17, color: stageC.ink2, textAlign: 'left' },
   /* the kilometre underway — the moss says LIVE, exactly once on the page */
   kmRowLive: { borderTopWidth: 0, paddingTop: 4 },
   kmLiveMetres: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },

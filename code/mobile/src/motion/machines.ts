@@ -175,7 +175,9 @@ export function machineRowStation(hand: Vec2, lift: number): Primitive[] {
     ...pad({ x: 159, y: 106 }, { x: 159, y: 142 }, 8),
     { kind: 'line', a: { x: 161, y: 145 }, b: { x: 210, y: 145 }, w: 2.5, color: 'ink3' },
     // transmission: the pull arm folds from the pivot to the handle
-    ...machineArm(PIVOT, hand, 38, 38, -1),
+    /* 42, not 38: a 76u reach could not deliver the handle to a row's finish — the elbow behind the
+       trunk needs the handle at ≤160/126, 79.6u from the pivot (execution pass, 2026-09-03). */
+    ...machineArm(PIVOT, hand, 42, 42, -1),
   ];
 }
 
@@ -273,7 +275,7 @@ export function chestPressStation(hand: Vec2, lift: number, spec: PressStationSp
 // exact vertical path and the linkage tracks them by the same IK every folding arm uses.
 
 export function shoulderPressStation(cx: number, gripX: number, handY: number, lift: number): Primitive[] {
-  const TOWER: TowerSpec = { x0: 254, x1: 276, capY: 88, stackTopY: 142 };
+  const TOWER: TowerSpec = { x0: 242, x1: 264, capY: 88, stackTopY: 142 }; // 12u inboard (2026-09-07): at 254–276 the stack reached x 281 and the composition sat 30u heavy to the right
   const PILLAR_TOP = 118;
   const L = cx - gripX - 13.5; // pillars stand outboard of the grips, chest height — never a gate
   const R = cx + gripX + 13.5;
@@ -286,7 +288,7 @@ export function shoulderPressStation(cx: number, gripX: number, handY: number, l
     { kind: 'line', a: { x: L - 7, y: FLOOR }, b: { x: L + 7, y: FLOOR }, w: 2.5, color: 'ink3', cap: 'round' },
     { kind: 'line', a: { x: R - 7, y: FLOOR }, b: { x: R + 7, y: FLOOR }, w: 2.5, color: 'ink3', cap: 'round' },
     // the fusing beam: near pillar into the tower upright — one machine, not parts
-    { kind: 'line', a: { x: R, y: 122 }, b: { x: 254, y: 122 }, w: 2.5, color: 'ink3' },
+    { kind: 'line', a: { x: R, y: 122 }, b: { x: 242, y: 122 }, w: 2.5, color: 'ink3' },
     // the signature: twin press arms folding OUTWARD from the pillar-top pivots to the handles
     ...machineArm({ x: L, y: PILLAR_TOP }, { x: cx - gripX, y: handY }, 26, 26, -1),
     ...machineArm({ x: R, y: PILLAR_TOP }, { x: cx + gripX, y: handY }, 26, 26, 1),

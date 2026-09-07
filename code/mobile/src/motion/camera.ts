@@ -55,6 +55,19 @@ export interface Camera {
    * standing, seated, supine, hinged and hanging alike.
    */
   axis?: Vec2;
+  /**
+   * ELEVATION — the camera raised above the athlete, in degrees (execution pass, 2026-09-07).
+   *
+   * The audit named it the first structural gap: a fly's closing arm points straight down a
+   * square-on lens and projects to nothing, and a seated abduction opens its knees along the same
+   * axis. Raising the camera turns that depth into screen height — a point nearer the lens is
+   * drawn LOWER along the athlete's axis — and gives the closing arm the length it lacked. It is a
+   * rotation about the in-image axis perpendicular to the spine, applied after the orbit, and it
+   * projects through the identity at 0 exactly as the orbit does. Still orthographic: the plate
+   * is still a measuring stick. Equipment authored in page space does not tilt with it, which is
+   * why members opt in with a small angle (≤25°) and why their pads ride projected joints.
+   */
+  elevation?: number;
 }
 
 /** The authored view: no orbit at all. Every pre-existing rig is drawn through this. */
@@ -70,7 +83,7 @@ export interface Projected extends Vec2 {
  * the rotated depth back out so the caller can sort and ink by it.
  */
 export function project(p: Vec2, z: number, cam: Camera): Projected {
-  if (cam.azimuth === 0) return { x: p.x, y: p.y, depth: z };
+  if (cam.azimuth === 0 && !cam.elevation) return { x: p.x, y: p.y, depth: z };
   const rad = (cam.azimuth * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
@@ -86,10 +99,24 @@ export function project(p: Vec2, z: number, cam: Camera): Projected {
   const across = dx * b.x + dy * b.y;
   const dz = z - z0;
   const across2 = across * cos + dz * sin;
+  const depth1 = z0 - across * sin + dz * cos;
+  if (!cam.elevation) {
+    return {
+      x: cam.pivotX + a.x * along + b.x * across2,
+      y: (cam.pivotY ?? p.y) + a.y * along + b.y * across2,
+      depth: depth1,
+    };
+  }
+  // the raised camera: height along the spine trades with depth
+  const er = (cam.elevation * Math.PI) / 180;
+  const ce = Math.cos(er);
+  const se = Math.sin(er);
+  const along2 = along * ce - (depth1 - z0) * se;
+  const depth2 = z0 + along * se + (depth1 - z0) * ce;
   return {
-    x: cam.pivotX + a.x * along + b.x * across2,
-    y: (cam.pivotY ?? p.y) + a.y * along + b.y * across2,
-    depth: z0 - across * sin + dz * cos,
+    x: cam.pivotX + a.x * along2 + b.x * across2,
+    y: (cam.pivotY ?? p.y) + a.y * along2 + b.y * across2,
+    depth: depth2,
   };
 }
 

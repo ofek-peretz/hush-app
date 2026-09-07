@@ -20,7 +20,7 @@ import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { cable, floorScene, leverBar, padStroke, pulley, sampledPathTicks } from '../kit';
+import { cable, floorScene, padStroke, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far } from '../bodies';
 
@@ -54,9 +54,38 @@ const SUPPORT_FRAME: Primitive[] = [
 
 /** The working leg's reach from the hip (soft knee: a shade under thigh+shank). */
 const LEG_REACH = (T + S) * 0.94;
-/** θ from straight-down, opening BACKWARD (−x): 6° tucked under → 52° driven back and up. */
+/** θ from straight-down, opening BACKWARD (−x): 6° tucked under → 44° driven back and up. */
 const THETA_FROM = 6;
-const THETA_TO = 52;
+/* 52 finished the leg 18° past the hinged trunk's line (shoulder-hip-knee through 180° at rom 0.63,
+   161.7° at rom 1) — pure hip hyperextension, which a real body only reaches by arching the low
+   back, the one fault this rig exists to forbid. 44 ends ~10° past the line (audit, 2026-09-03). */
+const THETA_TO = 44;
+
+/**
+ * THE WORKING FOOT RIDES THE SHANK (audit, 2026-09-03). It was two fixed offsets from the ankle —
+ * heel (−4,+6), toe (−12,+9): an 8.5u foot pointing BACKWARD while she faces right, and, because
+ * the shank swung 102°→145° under it, an ankle that went from 139° to a 178° ballet point. The
+ * canonical foot (heel 10 behind and 7 under the ankle, toe 15 ahead — 25u) is placed in the
+ * shank's own frame and dorsiflexed 10°, so the heel leads the drive and the ankle angle holds.
+ */
+const DORSI = (10 * Math.PI) / 180; // toes lifted toward the shin: knee-ankle-toe 105° (a neutral foot is 115°)
+const inFoot = (x: number, y: number): Vec2 => ({ x: x * Math.cos(DORSI) + y * Math.sin(DORSI), y: -x * Math.sin(DORSI) + y * Math.cos(DORSI) });
+const FOOT_HEEL = inFoot(-10, ATHLETE.ankleH);
+const FOOT_TOE = inFoot(ATHLETE.foot - 10, ATHLETE.ankleH);
+/** A point of the foot's frame (x along the standing foot, y down from the ankle) on a shank whose
+ *  knee→ankle direction is (ux, uy) — the standing shank points (0, 1). */
+function onShank(ankle: Vec2, ux: number, uy: number, fx: number, fy: number): Vec2 {
+  return { x: ankle.x + uy * fx + ux * fy, y: ankle.y - ux * fx + uy * fy };
+}
+/** The platform under the sole, 3u below it in the foot's frame, its two ends. */
+const SOLE_N = (() => {
+  const dx = FOOT_TOE.x - FOOT_HEEL.x;
+  const dy = FOOT_TOE.y - FOOT_HEEL.y;
+  const l = Math.hypot(dx, dy);
+  return { x: -dy / l, y: dx / l };
+})();
+const PAD_A: Vec2 = { x: FOOT_HEEL.x + 3 * SOLE_N.x - 2, y: FOOT_HEEL.y + 3 * SOLE_N.y };
+const PAD_B: Vec2 = { x: FOOT_TOE.x + 3 * SOLE_N.x + 2, y: FOOT_TOE.y + 3 * SOLE_N.y };
 
 /** The working ankle at sweep θ, with the soft knee riding just behind the hip→ankle line. */
 function legAt(theta: number): { knee: Vec2; ankle: Vec2 } {
@@ -80,8 +109,15 @@ function kickback(p: KickbackParams): Rig {
   const ARC = Array.from({ length: 17 }, (_, i) => legAt(lerp(THETA_FROM, THETA_TO, i / 16)).ankle);
   const PULLEY: Vec2 = { x: 236, y: FLOOR_Y - 10 }; // low, in FRONT of her hinge
 
-  const poseAt = (rom: number): Pose => {
+  /** The working shank's direction, knee → ankle, as a unit vector. */
+  const shankAt = (rom: number): { knee: Vec2; ankle: Vec2; ux: number; uy: number } => {
     const { knee, ankle } = legAt(lerp(THETA_FROM, THETA_TO, rom));
+    const l = Math.hypot(ankle.x - knee.x, ankle.y - knee.y);
+    return { knee, ankle, ux: (ankle.x - knee.x) / l, uy: (ankle.y - knee.y) / l };
+  };
+
+  const poseAt = (rom: number): Pose => {
+    const { knee, ankle, ux, uy } = shankAt(rom);
     /* Arms braced forward on the frame — still, like the trunk they steady. */
     const elbow: Vec2 = { x: SHOULDER.x + 14, y: SHOULDER.y + 12 };
     const hand: Vec2 = GRIP;
@@ -94,8 +130,8 @@ function kickback(p: KickbackParams): Rig {
         /* The WORKING leg is the near leg — it is the lift. The stance leg is the far side. */
         knee,
         ankle,
-        heel: { x: ankle.x - 4, y: ankle.y + 6 },
-        toe: { x: ankle.x - 12, y: ankle.y + 9 },
+        heel: onShank(ankle, ux, uy, FOOT_HEEL.x, FOOT_HEEL.y),
+        toe: onShank(ankle, ux, uy, FOOT_TOE.x, FOOT_TOE.y),
         elbow,
         hand,
         farShoulder: far(SHOULDER, -6, 1),
@@ -121,19 +157,32 @@ function kickback(p: KickbackParams): Rig {
       front = [cable(PULLEY, pose.j.ankle)];
     } else {
       /*
-       * The hip pad she leans into, the platform lever under her foot from its floor pivot, and the
-       * STACK — a selectorized machine whose resistance never appeared was naming nothing. The pad
-       * runs down the front of the hip where she actually meets it, wide enough to read past her.
+       * The hip pad she leans into, the platform lever under her foot, and the STACK — a
+       * selectorized machine whose resistance never appeared was naming nothing. The pad runs down
+       * the front of the hip where she actually meets it, wide enough to read past her.
+       *
+       * THE LEVER PIVOTS ON THE HIP'S AXIS (audit, 2026-09-03). From a floor pivot at (122, 187)
+       * to an ankle orbiting the hip it measured 24.6u at rom 0 and 34.9u at rom 1 — a bar that
+       * grew 42 % inside one rep. A hip-axis kickback machine's arm turns about the hip, so the
+       * platform under the sole stays one fixed radius from it: the shaft runs down behind the
+       * working leg (the far side of the machine) from a pin at the hip, and the platform under
+       * the sole turns with the shank. The pin and most of the shaft sit behind the athlete.
        */
-      const pivot: Vec2 = { x: 122, y: FLOOR_Y - 6 };
+      const { ankle, ux, uy } = shankAt(rom);
+      const padA = onShank(ankle, ux, uy, PAD_A.x, PAD_A.y);
+      const padB = onShank(ankle, ux, uy, PAD_B.x, PAD_B.y);
+      const padMid: Vec2 = { x: (padA.x + padB.x) / 2, y: (padA.y + padB.y) / 2 };
       const tower = stackTower({ x0: GRIP.x + 14, x1: GRIP.x + 38, capY: 62, stackTopY: FLOOR_Y - 34 }, rom * 20);
       back.push(
         ...tower.prims,
         { kind: 'line', a: { x: GRIP.x + 7, y: 74 }, b: { x: GRIP.x + 14, y: 74 }, w: 2.5, color: 'ink3' },
+        // the hip pad's arm back to the post — it hung in the air
+        { kind: 'line', a: { x: HIP.x + 15, y: HIP.y + 5 }, b: { x: GRIP.x + 7, y: HIP.y + 5 }, w: 2.5, color: 'ink3' },
         ...padStroke({ x: HIP.x + 10, y: HIP.y - 8 }, { x: HIP.x + 10, y: HIP.y + 18 }, 11),
-        ...leverBar(pivot, { x: pose.j.ankle.x + 2, y: pose.j.ankle.y + 6 }),
+        { kind: 'line', a: HIP, b: padMid, w: 3, color: 'ink1', cap: 'round' }, // the shaft, hip axis → platform
+        { kind: 'circle', c: HIP, r: 3.5, fill: 'paper1', stroke: 'ink3', w: 2 }, // the axle
       );
-      front = padStroke({ x: pose.j.ankle.x - 6, y: pose.j.ankle.y + 6 }, { x: pose.j.ankle.x + 8, y: pose.j.ankle.y + 6 }, 7);
+      front = padStroke(padA, padB, 7);
     }
     return { back, front };
   };
@@ -209,8 +258,14 @@ export const donkeyKick: Rig = (() => {
   const FAR_ANKLE: Vec2 = { x: 135, y: 189 };
 
   /** Thigh sweep from straight-down, opening BACKWARD (−x) and up: tucked → driven to the top. */
-  const THETA_FROM = 18;
-  const THETA_TO = 105;
+  /* 18 started the working knee 15u behind the support knee — a kick already begun; 14 is as far
+     as the tuck can go with the shin flat and the toes still above the mat (audit, 2026-09-03). */
+  const THETA_FROM = 14;
+  /* 105 carried the thigh 15° past the flat back: shoulder-hip-knee peaked at 180° near rom 0.8
+     and came back to 162° — the last fifth of the rep was the arch the card forbids. At 87 the
+     thigh ends ON the trunk line (the back runs 3° uphill to the shoulders), and the angle rises
+     monotonically to 180° at rom 1 (audit, 2026-09-03). */
+  const THETA_TO = 87;
 
   /** The L-shaped working leg at sweep θ: thigh from the hip, shank held perpendicular. */
   function legAt(theta: number): { knee: Vec2; ankle: Vec2; u: Vec2; s: Vec2 } {

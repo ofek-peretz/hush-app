@@ -76,7 +76,24 @@ export function romAt(msElapsed: number, t: Tempo): number {
   const rom = romInRep(into % rep, t);
   if (!t.repRanges || t.repRanges.length === 0) return rom;
   /* A partial-rep protocol: this rep travels only its own slice of the range. See `Tempo.repRanges`. */
-  const [lo, hi] = t.repRanges[Math.min(t.repRanges.length - 1, Math.floor(into / rep))];
+  const k = Math.min(t.repRanges.length - 1, Math.floor(into / rep));
+  const [lo, hi] = t.repRanges[k];
+  /*
+   * THE HAND-OFF BETWEEN TWO RANGES IS A MOVE, NOT A CUT (audit, 2026-09-03).
+   *
+   * Each rep opens at its own `lo` and returns to it. When the next rep's `lo` is a different
+   * place — `bb_curl_21` goes [0,0.5] → [0.5,1] — the figure used to teleport there at the rep
+   * boundary: 25 units of hand travel in one frame, twice per loop, and nothing could see it,
+   * because every validator samples inside a rep. So the rep's opening hold (`topHoldMs`, the
+   * still moment before the first move) now carries an eased glide from where the previous rep
+   * finished to where this one begins. The endpoints of every rep are untouched.
+   */
+  const prevK = (k - 1 + t.repRanges.length) % t.repRanges.length;
+  const prevLo = t.repRanges[prevK][0];
+  const intoRep = into % rep;
+  if (prevLo !== lo && intoRep < t.topHoldMs && t.topHoldMs > 0) {
+    return prevLo + (lo - prevLo) * easeInOut(intoRep / t.topHoldMs);
+  }
   return lo + (hi - lo) * rom;
 }
 

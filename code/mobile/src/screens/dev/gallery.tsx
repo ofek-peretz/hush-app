@@ -1048,6 +1048,48 @@ const cardioRecord = () => mount(CardioDetail, {
   },
 });
 
+/**
+ * 3.3e · CARDIO RECORD — MIXED GAIT. The one shape `cardioRecord` above cannot show.
+ * (`3.3d` was taken — the free-workout composer. The law that caught the collision is
+ * `everyGalleryScreenIsListed`, which refuses a duplicate id rather than letting the index quietly
+ * link it as `i2` and hide it.)
+ *
+ * ⛔ THE HARNESS DREW THE UNIFORM CASE AND ONLY THE UNIFORM CASE, which is how the defect the
+ * founder walked into on 2026-09-02 stayed invisible here: every fixture split was `gait: 'run'`
+ * with no `kcal`, so the gallery never rendered the repeated-constant columns that a real phone
+ * rendered on every row. The columns are gone now (see `CardioDetail`), and the branch that
+ * REPLACED one of them — the gait tag, which draws only when the activity actually changed gait —
+ * had no address in the harness at all.
+ *
+ * ⚠️ THE SPLIT KCAL IS PRESENT AND DELIBERATELY IDENTICAL on the three walking kilometres (a 74 kg
+ * athlete at the flat walking rate: 1 × 0.55 × 74 ≈ 41). It is stamped by `cardioRun` on every real
+ * activity and it must keep reaching this screen; the point is that the screen no longer DRAWS it.
+ * A fixture that omits the field cannot prove that.
+ *
+ * Six kilometres: run, run, walk, walk, run, walk — an interval session, or a run that got tired.
+ */
+const cardioRecordMixed = () => mount(CardioDetail, {
+  activity: {
+    id: 'c2',
+    kind: 'cardio',
+    gait: 'run',
+    startedAt: new Date(daysAgo(3)).toISOString(),
+    durationSec: 45 * 60 + 8,
+    distanceKm: 6.0,
+    calories: 401,
+    avgHr: 133,
+    avgPaceSec: 451,
+    splits: [
+      { km: 1, durationSec: 358, paceSec: 358, gait: 'run', kcal: 76 },
+      { km: 2, durationSec: 366, paceSec: 366, gait: 'run', kcal: 76 },
+      { km: 3, durationSec: 702, paceSec: 702, gait: 'walk', kcal: 41 },
+      { km: 4, durationSec: 688, paceSec: 688, gait: 'walk', kcal: 41 },
+      { km: 5, durationSec: 371, paceSec: 371, gait: 'run', kcal: 76 },
+      { km: 6, durationSec: 723, paceSec: 723, gait: 'walk', kcal: 41 },
+    ],
+  },
+});
+
 
 /* ── 3.1 · THE SATURDAY LETTER ────────────────────────────────────────────────────────────────
  * The letter's rows are a WEEK OF ENGINE DECISIONS, so with no engine behind it the harness could
@@ -2700,6 +2742,7 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '3.3c', label: 'a cardio record', of: '3.3', status: 'live', render: cardioRecord },
+  { id: '3.3e', label: 'a cardio record — mixed gait', of: '3.3', status: 'live', note: 'the only shape that draws the gait tag: it marks the EXCEPTION, so on a pure walk or a pure run (#3.3c) the column is absent entirely rather than repeating one word down the page', render: cardioRecordMixed },
   { id: '3.4', label: 'Cardio — live', status: 'live', note: "the clock is frozen — the harness has no GPS; the coach’s line is ON the stage again (the speech disc it hid behind was deleted 2026-08-12 and nothing replaced it until 2026-08-26)", render: () => (
     <InApp>
       <CardioLiveView
@@ -2975,7 +3018,7 @@ export const GALLERY: GalleryEntry[] = [
    */
   { id: '4.4', label: 'The week — every day, every lift', status: 'live', note: 'the only chooser now — the "אימון אחר" door left Home, and a row here opens the same pre-workout card it opened', render: () => (
     <InApp><UnderTabs active={1}>
-      <ProgramTabView workouts={programWeek()} units="kg" settled onDay={noop} onLibrary={noop} onBuild={noop} />
+      <ProgramTabView workouts={programWeek()} units="kg" settled figure="female" onDay={noop} onLibrary={noop} onBuild={noop} />
     </UnderTabs></InApp>
   ) },
   { id: '4.5', label: 'Who writes the week — intake step 3/3', status: 'live', note: 'three doors: the MODEL writes it (2026-08-29, and it lands in the editor below), a blank sheet, or a proven shelf. Eleven shelves now, covering 3-4-5 days', render: () => (

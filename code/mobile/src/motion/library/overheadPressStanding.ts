@@ -38,6 +38,7 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2, Vec3 } from '../types';
 import { lerp, twoBoneIK3 } from '../geometry';
+import { leads } from '../curves';
 import { CONCENTRIC_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { floorScene, plateGhost, sampledPathTicks } from '../kit';
@@ -51,7 +52,7 @@ const F = ATHLETE.foreArm;
  * the whole plate at the top: at 205 the lockout plate lost a third of itself to the frame edge, at
  * 209 it clips by under 3u.
  */
-const FLOOR_Y = 209;
+const FLOOR_Y = 212; // 209 left the plate’s crown 3u past the top edge at lockout; 213 put the sole 0.5u past the bottom (frame law, 2026-09-07)
 const DROP = FLOOR_Y - 193;
 
 const X = 176; // centred: the figure is narrow from the side and the bar path is the subject
@@ -67,11 +68,21 @@ const MID_FOOT = (HEEL.x + TOE.x) / 2;
 /** Half the grip, in depth: 35.5u ≈ 80 cm between the hands, a shade outside shoulder width. */
 const GRIP_Z = 35.5;
 const SH_Z = 15.5;
-const REACH = Math.sqrt(U * U + F * F - 2 * U * F * Math.cos((172 * Math.PI) / 180));
+const REACH = Math.sqrt(U * U + F * F - 2 * U * F * Math.cos((168 * Math.PI) / 180)); // 168°: locked out, not snapped — and 0.6u lower than 172° (2026-09-07)
 /** What is left of the reach after 20u of it has gone sideways to the grip. */
 const LIFT = Math.sqrt(REACH * REACH - (GRIP_Z - SH_Z) * (GRIP_Z - SH_Z));
 
-const RACK: Vec2 = { x: SHOULDER.x + 11, y: SHOULDER.y - 3 }; // on the front delts
+/*
+ * The rack, measured for legibility (audit, 2026-09-03). At (+11, −3) the folded arm projected to
+ * a 30° elbow — the forearm lay on top of the upper arm and the rack, the one pose a beginner has
+ * to read, was a lump under the plate. 20u of the 47.6u arm goes sideways into the grip from this
+ * camera, so the fold can never project wide; the scan of rack offsets × IK hints put the widest
+ * honest rack at (+13, −6): the bar on the clavicles at the base of the neck, the elbow straight
+ * under it. Projected elbow 30° → 39° at rom 0, 43° → 53° at rom 0.25; true angle 57° → 61°.
+ * The reviewer's (+9, −6) was measured too and came out WORSE (29°): raising the bar without
+ * bringing it forward only shortens the shoulder→hand line.
+ */
+const RACK: Vec2 = { x: SHOULDER.x + 13, y: SHOULDER.y - 6 };
 const LOCK: Vec2 = { x: MID_FOOT, y: SHOULDER.y - LIFT };
 
 const barAt = (rom: number): Vec2 => ({ x: lerp(RACK.x, LOCK.x, rom), y: lerp(RACK.y, LOCK.y, rom) });
@@ -87,9 +98,19 @@ const BAR_PATH: Vec2[] = Array.from({ length: 13 }, (_, i) => barAt(i / 12));
  * have shown it. Every other rig in the library pins the head still; this one is the exception, and
  * its FormSpec says so out loud rather than leaving the movement to look like drift.
  */
+/**
+ * The retreat runs on its own clock (audit, 2026-09-03 — iron rule 12). The bar passes the face
+ * between rom 0.05 and 0.48, so the head must be furthest back while the bar is AT the face, not
+ * at mid-rep, and it comes through the window as soon as the bar has cleared — `leads(0.35)` puts
+ * the retreat's peak at rom 0.33 and has the head back on its line by 0.65, while the arm is still
+ * pressing. On one clock the head was still 5.5u back at rom 0.5 with the bar already at the brow.
+ */
+const HEAD_LEADS = leads(0.35);
+
 function headAt(rom: number): Vec2 {
-  // back through the first half, forward through the second — a quadratic through three points
-  const back = 4 * rom * (1 - rom); // 0 → 1 at mid → 0
+  // back while the bar passes the face, forward through the rest — a quadratic through three points
+  const r = HEAD_LEADS(rom);
+  const back = 4 * r * (1 - r); // 0 → 1 at the retreat's peak → 0
   const x = SHOULDER.x + 0.5 - 5.5 * back + 2.5 * rom;
   const dx = x - SHOULDER.x;
   // the neck is a bone, so its length sets the height rather than a second authored number
@@ -100,9 +121,10 @@ function armAt(rom: number, side: 1 | -1): { elbow: Vec3; hand: Vec3 } {
   const bar = barAt(rom);
   const hand: Vec3 = { x: bar.x, y: bar.y, z: side * GRIP_Z };
   const shoulder: Vec3 = { x: SHOULDER.x, y: SHOULDER.y, z: side * SH_Z };
-  /* Down and a little forward: the front-rack elbow rides under the bar, and it swings out and up
-     as the bar clears the head. */
-  const elbow = twoBoneIK3(shoulder, hand, U, F, { x: 0.5, y: 1, z: side * 0.1 });
+  /* Down, and only a little forward: the front-rack elbow rides UNDER the bar (x 0.5 → 0.2 put it
+     at 190 against a bar at 190.5, audit 2026-09-03), and it swings out and up as the bar clears
+     the head. */
+  const elbow = twoBoneIK3(shoulder, hand, U, F, { x: 0.2, y: 1, z: side * 0.1 });
   return { elbow, hand };
 }
 
@@ -155,7 +177,7 @@ function decorAt(rom: number): Decor {
     ],
     /* A 5 kg iron plate — 25 cm across, which is what 30 kg on a 20 kg bar is. The big 45 cm ghost
        would not clear the top of the frame at lockout, and would be the wrong plate besides. */
-    front: plateGhost(bar, 11),
+    front: plateGhost(bar, 6.6), // 7.5 crossed the frame's top by 0.7u once the floor came down to clear the sole (frame law, 2026-09-07)
   };
 }
 

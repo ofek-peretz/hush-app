@@ -36,6 +36,11 @@
 
 import type { Decor, FormSpec, Pose, PosePredicate, Primitive, Rig, Vec2 } from '../types';
 import { lerp, twoBoneIK } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** The sticking point (iron rule 12, 2026-09-07): the driver slows to a dwell where leverage is
+ *  worst and runs on. Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06); // the squeeze — met for the chest, opened for the rear delt
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { project, type Camera } from '../camera';
@@ -169,6 +174,8 @@ interface FlyParams {
    * and there was never anything left for a camera move to rescue.
    */
   azimuth?: number;
+  /** The raised camera (`Camera.elevation`) — the fly family's answer to the arm that points at the lens. */
+  elevation?: number;
   /**
    * THE SUPINE MEMBERS SWEEP IN THE DRAWING PLANE, and they were being swept into depth.
    *
@@ -206,10 +213,20 @@ function fly(p: FlyParams): Rig {
    * free choice instead of a constraint. That is the whole reason the family now sits at
    * `FLY_AZIMUTH` -- see the note on it.
    */
-  const wideReach = p.rise ? p.rise.wideDX : (p.reach ?? REACH_H);
+  /*
+   * THE HAND STAYS ON THE SPHERE (execution pass, 2026-09-07). `metDrop` and `rise` used to be
+   * ADDED to the hand's y while x and z kept the full circle, so the shoulder→hand chord grew with
+   * the drop and the arm bones — placed along the chord — stretched with it (rear_delt_fly at
+   * metDrop 32: upper arm 28.1 against 25). Now the drop is a rotation: the in-plane radius shrinks
+   * by √(1 − (dy/R)²) so the chord is R at every phi, the elbow angle is CONSTANT, and a member may
+   * drop or rise its hands as far as the movement needs.
+   */
+  const wideReach = p.reach ?? REACH_H;
   const metDrop = p.metDrop ?? 9;
+  const dropAt = (phi: number) => -1.5 + lerp(0, metDrop, phi / MET_PHI) + (p.rise ? lerp(p.rise.fromDY, p.rise.toDY, phi / MET_PHI) : 0);
+  const planeK = (phi: number) => (p.supine ? 1 : Math.sqrt(Math.max(0.05, 1 - (dropAt(phi) / wideReach) ** 2)));
   /** Depth of the hand at `phi`: 0 out to the side, +reach when the arm points at the camera. */
-  const handZ = (phi: number) => (p.supine ? 0 : wideReach * Math.sin((phi * Math.PI) / 180));
+  const handZ = (phi: number) => (p.supine ? 0 : wideReach * planeK(phi) * Math.sin((phi * Math.PI) / 180));
   const handAt = (phi: number, side: 1 | -1): Vec2 => {
     const shoulder = side === 1 ? p.core.shoulderR : p.core.shoulderL;
     const rad = (phi * Math.PI) / 180;
@@ -219,8 +236,8 @@ function fly(p: FlyParams): Rig {
       return { x: shoulder.x + side * wideReach * cos, y: shoulder.y - wideReach * Math.sin(rad) };
     }
     return {
-      x: shoulder.x + side * wideReach * cos,
-      y: shoulder.y - 1.5 + lerp(0, metDrop, phi / MET_PHI) + (p.rise ? lerp(p.rise.fromDY, p.rise.toDY, phi / MET_PHI) : 0),
+      x: shoulder.x + side * wideReach * planeK(phi) * cos,
+      y: shoulder.y + dropAt(phi),
     };
   };
   /* The two ends of THIS member's own sweep — not of the family constant. The supine members run
@@ -300,6 +317,7 @@ function fly(p: FlyParams): Rig {
    */
   const CAM: Camera = {
     azimuth: p.azimuth ?? FLY_AZIMUTH,
+    elevation: p.elevation,
     pivotX: CX,
     pivotY: (p.core.hipC.y + p.core.neckBase.y) / 2,
     axis: { x: p.core.neckBase.x - p.core.hipC.x, y: p.core.neckBase.y - p.core.hipC.y },
@@ -314,7 +332,7 @@ function fly(p: FlyParams): Rig {
   const shZ = p.coreZ?.shoulderR ?? 0;
 
   const poseAt = (rom: number): Pose => {
-    const phi = lerp(p.thetaFrom, p.thetaTo, rom);
+    const phi = lerp(p.thetaFrom, p.thetaTo, STICK(rom));
     return {
       headR: ATHLETE.headR,
       j: {
@@ -382,6 +400,14 @@ function fly(p: FlyParams): Rig {
       const c = P3(CX, 66, -14);
       back.push({ kind: 'rect', x: c.x - 21, y: c.y, width: 42, height: 58, rx: 8, fill: 'paper3', stroke: 'ink3', w: 2 });
     }
+    if (p.reversed && p.implement === 'machine') {
+      /* THE CHEST PAD (execution pass, 2026-09-07): a reverse pec deck is done FACING the machine,
+         chest against the pad, and without it the clip was the pec deck run backwards — the same
+         backrest, the same seat. The pad sits in front of the sternum, between her and the lens,
+         so the one fact that names the member is the first thing drawn over her. */
+      const c = P3(CX, 74, 12);
+      front.push({ kind: 'rect', x: c.x - 15, y: c.y, width: 30, height: 40, rx: 6, fill: 'paper3', stroke: 'ink3', w: 2 });
+    }
     if (p.implement === 'db') {
       front = [...dumbbellFront(handL, 1), ...dumbbellFront(handR, 1)];
     } else if (p.implement === 'cable') {
@@ -391,7 +417,7 @@ function fly(p: FlyParams): Rig {
       const pulleyY = p.rise ? FLOOR_Y - 12 : 84;
       const PR: Vec2 = P3(CX + 92, pulleyY, -30);
       const PL: Vec2 = P3(CX - 92, pulleyY, -30);
-      const travelled = Math.abs(lerp(p.thetaFrom, p.thetaTo, rom) - p.thetaFrom) / 90;
+      const travelled = Math.abs(lerp(p.thetaFrom, p.thetaTo, STICK(rom)) - p.thetaFrom) / 90;
       const towerR = stackTower({ x0: PR.x + 4, x1: PR.x + 26, capY: 60, stackTopY: FLOOR_Y - 34 }, travelled * 22);
       const towerL = stackTower({ x0: PL.x - 26, x1: PL.x - 4, capY: 60, stackTopY: FLOOR_Y - 34 }, travelled * 22);
       back.push(...towerR.prims, ...towerL.prims, ...pulley(PR), ...pulley(PL));
@@ -475,8 +501,10 @@ const standing = standingFrontCore(CX);
 const supine = supineFrontCore(CX, 10); // the ~30° incline: shoulders raised toward the camera
 const flatSupine = supineFrontCore(CX, 0); // the flat bench — the db_bench_press's own camera
 
-export const pecDeckRig = fly({ id: 'pec_deck', core: seated, thetaFrom: 0, thetaTo: MET_PHI, implement: 'machine', seatBack: true });
-export const cableFlyRig = fly({ id: 'cable_fly', core: standing, thetaFrom: 0, thetaTo: MET_PHI, implement: 'cable' });
+/* elevation 20 (2026-09-07): the raised camera is what gives the closing arm its length — square-on it
+   pointed down the lens and projected to a 3.5° stub; from above, depth becomes screen height. */
+export const pecDeckRig = fly({ id: 'pec_deck', core: seated, thetaFrom: 0, thetaTo: MET_PHI, implement: 'machine', seatBack: true, elevation: 20 });
+export const cableFlyRig = fly({ id: 'cable_fly', core: standing, thetaFrom: 0, thetaTo: MET_PHI, implement: 'cable', metDrop: 22, elevation: 20 }); // met at the lower chest: the closed arm projects DOWN as well as in (2026-09-07)
 export const inclineDbFlyRig = fly({ id: 'incline_db_fly', core: supine, supine: true, thetaFrom: -14, thetaTo: 100, implement: 'db', azimuth: 0 });
 /* batch 2 (2026-08-26): the FLAT fly — the incline member's sweep on the flat supine camera — and
  * the LOW-TO-HIGH cable fly: the crossover's floor pulleys, hands rising hip line → chest line.
@@ -484,7 +512,8 @@ export const inclineDbFlyRig = fly({ id: 'incline_db_fly', core: supine, supine:
  * soft-elbowed reach — projection may fold the met end into depth, but the stretch end is drawn
  * at true length. */
 export const dbFlyRig = fly({ id: 'db_fly', core: flatSupine, supine: true, thetaFrom: -14, thetaTo: 100, implement: 'db', azimuth: 0 });
-export const lowCableFlyRig = fly({ id: 'low_cable_fly', core: standing, thetaFrom: 0, thetaTo: MET_PHI, implement: 'cable', rise: { fromDY: 30, toDY: -4, wideDX: 36 } });
+/* fromDY 44 / wideDX 27, not 30 / 36 (execution pass, 2026-09-07): 'low' starts at the HIP line (shoulder + 46 = hip 109.5), not mid-trunk; the wide arm stays on the sphere at √(27²+44²) ≈ 51.6 = the canonical reach. */
+export const lowCableFlyRig = fly({ id: 'low_cable_fly', core: standing, thetaFrom: 0, thetaTo: MET_PHI, implement: 'cable', rise: { fromDY: 44, toDY: -4, wideDX: 27 }, elevation: 20 });
 /*
  * rear_delt_fly — FOLDED FORWARD (2026-08-29), which is the exercise.
  *
@@ -499,5 +528,6 @@ export const lowCableFlyRig = fly({ id: 'low_cable_fly', core: standing, thetaFr
  * only the torso pays, and the torso is the point.
  */
 const rearDeltCore = hingedSeatedCore(CX, 50);
-export const rearDeltFlyRig = fly({ id: 'rear_delt_fly', core: rearDeltCore.j, coreZ: rearDeltCore.z, thetaFrom: MET_PHI, thetaTo: 0, implement: 'db', reversed: true, bench: true });
-export const reversePecDeckRig = fly({ id: 'reverse_pec_deck', core: seated, thetaFrom: MET_PHI, thetaTo: 0, implement: 'machine', reversed: true, seatBack: true });
+/* metDrop 32: the met hands hang at the knee line, so the sweep RISES 30u as it opens — the hinge reads and the arc is 45u, not 9 (2026-09-07). */
+export const rearDeltFlyRig = fly({ id: 'rear_delt_fly', core: rearDeltCore.j, coreZ: rearDeltCore.z, thetaFrom: MET_PHI, thetaTo: 0, implement: 'db', reversed: true, bench: true, metDrop: 24 });
+export const reversePecDeckRig = fly({ id: 'reverse_pec_deck', core: seated, thetaFrom: MET_PHI, thetaTo: 0, implement: 'machine', reversed: true, seatBack: true, metDrop: 20, elevation: 20 });

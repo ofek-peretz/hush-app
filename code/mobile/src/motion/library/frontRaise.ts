@@ -15,9 +15,13 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** Same law as the lateral raise: the struggle is the last fifth, level with the shoulder (2026-09-07). */
+const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { cable, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
+import { cable, dumbbellEnd, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, standingCore } from '../bodies';
 
@@ -59,7 +63,7 @@ function frontRaise(p: FrontRaiseParams): Rig {
   const PULLEY: Vec2 = { x: X - 44, y: FLOOR_Y - 12 }; // low and BEHIND — the card's own cue
 
   const poseAt = (rom: number): Pose => {
-    const { elbow, hand } = armAt(lerp(THETA_BOTTOM, THETA_TOP, rom));
+    const { elbow, hand } = armAt(lerp(THETA_BOTTOM, THETA_TOP, STICK(rom)));
     return {
       headR: ATHLETE.headR,
       j: {
@@ -86,18 +90,23 @@ function frontRaise(p: FrontRaiseParams): Rig {
 
   const decorAt = (rom: number): Decor => {
     const pose = poseAt(rom);
-    const theta = lerp(THETA_BOTTOM, THETA_TOP, rom);
+    const theta = lerp(THETA_BOTTOM, THETA_TOP, STICK(rom));
     const r = (theta * Math.PI) / 180;
     const dir: Vec2 = { x: Math.cos(r), y: -Math.sin(r) };
     const back: Primitive[] = [...sampledPathTicks(ARC)];
     let front: Primitive[];
     if (p.implement === 'db') {
-      front = [...dumbbellSide(pose.j.farHand, dir), ...dumbbellSide(pose.j.hand, dir)];
+      /* A front raise is PRONATED (palms down): from the side that is a plate end-on, and one —
+         the far bell hides behind the near one. dumbbellSide was the hammer grip (2026-09-07). */
+      front = [...dumbbellEnd(pose.j.hand, 6)];
     } else {
       const risen = (armAt(THETA_BOTTOM).hand.y - pose.j.hand.y) * 0.5;
       const tower = stackTower({ x0: PULLEY.x - 34, x1: PULLEY.x - 8, capY: FLOOR_Y - 98, stackTopY: FLOOR_Y - 34 }, risen);
       back.push(...tower.prims, ...pulley(PULLEY));
-      front = [cable(PULLEY, pose.j.hand), ...dumbbellSide(pose.j.hand, dir, 3, 2.5)];
+      /* The cable runs BEHIND the near leg from a low pulley behind her — so it draws in back and
+         disappears into the fist, instead of lying across the thigh in front (2026-09-07). */
+      back.push(cable(PULLEY, pose.j.hand));
+      front = [...dumbbellSide(pose.j.hand, dir, 3, 2.5)];
     }
     return { back, front };
   };

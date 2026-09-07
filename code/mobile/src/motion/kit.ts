@@ -15,7 +15,9 @@ import { BAR_R, PLATE_R } from './anthro';
  *  `r` defaults to the 45cm competition plate; lighter implements (curl bars) pass a smaller disc. */
 export function plateGhost(bar: Vec2, r = PLATE_R): Primitive[] {
   return [
-    { kind: 'circle', c: bar, r, fill: 'ink4', fillOpacity: 0.2, stroke: 'ink3', w: 2.2 },
+    /* `ink3` at 0.14, not `ink4` at 0.2: the far-limb token darkened for legibility (palette.ts,
+       2026-09-03) and the ghost's tint must not darken with it — this pair reproduces the old tint. */
+    { kind: 'circle', c: bar, r, fill: 'ink3', fillOpacity: 0.14, stroke: 'ink3', w: 2.2 },
     /*
      * The sleeve collar — a RING, not a filled disc.
      *
@@ -129,7 +131,8 @@ export function sampledPathTicks(pts: Vec2[], tick = 4.5): Primitive[] {
 
 /** A soft grounding shadow under the support — mass meets the floor. */
 export function groundShadow(cx: number, rx: number, floorY: number): Primitive {
-  return { kind: 'ellipse', c: { x: cx, y: floorY + 1.5 }, rx, ry: 2.4, fill: 'ink4', opacity: 0.55 };
+  // `ink3` at 0.38 reproduces the tint `ink4` at 0.55 gave before the far-limb token darkened (2026-09-03)
+  return { kind: 'ellipse', c: { x: cx, y: floorY + 1.5 }, rx, ry: 2.4, fill: 'ink3', opacity: 0.38 };
 }
 
 /** A dumbbell seen END-ON (plate face toward the camera) — the "held load" statement, in the
@@ -138,13 +141,15 @@ export function groundShadow(cx: number, rx: number, floorY: number): Primitive 
  *  hierarchy alone says barbell vs dumbbell. The solid center is the handle, end-on. */
 export function dumbbellEnd(hand: Vec2, r = 8): Primitive[] {
   return [
-    { kind: 'circle', c: hand, r, fill: 'ink4', fillOpacity: 0.2, stroke: 'ink3', w: 2 },
+    { kind: 'circle', c: hand, r, fill: 'ink3', fillOpacity: 0.14, stroke: 'ink3', w: 2 }, // same tint as `plateGhost`
     { kind: 'circle', c: hand, r: 2.2, fill: 'ink0' },
   ];
 }
 
 /** A dumbbell seen SIDE-ON along direction `dir` (hammer grips, goblet holds): handle + two plates. */
-export function dumbbellSide(hand: Vec2, dir: Vec2, half = 6.5, plateR = 4): Primitive[] {
+/* half 7.5 / plateR 6, not 6.5 / 4 (2026-09-07): a 10–15 kg bell's plates are ~14 cm ≈ 6u; at r4 every
+   lunge, calf raise and kickback carried a toy. Callers that pass their own numbers are unchanged. */
+export function dumbbellSide(hand: Vec2, dir: Vec2, half = 7.5, plateR = 6): Primitive[] {
   const len = Math.hypot(dir.x, dir.y) || 1;
   const u = { x: dir.x / len, y: dir.y / len };
   const a = { x: hand.x - u.x * half, y: hand.y - u.y * half };
@@ -154,6 +159,18 @@ export function dumbbellSide(hand: Vec2, dir: Vec2, half = 6.5, plateR = 4): Pri
     { kind: 'circle', c: a, r: plateR, fill: 'ink1' },
     { kind: 'circle', c: b, r: plateR, fill: 'ink1' },
   ];
+}
+
+/** A dumbbell held by one end with the axis along `dir` — the pullover's hold — so the camera sees the
+ *  plates EDGE-ON: a handle with two thin bars across it, not two discs (2026-09-07). */
+export function dumbbellEdgeOn(hand: Vec2, dir: Vec2, half = 6.5, plateR = 6): Primitive[] {
+  const len = Math.hypot(dir.x, dir.y) || 1;
+  const u = { x: dir.x / len, y: dir.y / len };
+  const n = { x: -u.y, y: u.x };
+  const a = { x: hand.x - u.x * half, y: hand.y - u.y * half };
+  const b = { x: hand.x + u.x * half, y: hand.y + u.y * half };
+  const plate = (c: Vec2): Primitive => ({ kind: 'line', a: { x: c.x - n.x * plateR, y: c.y - n.y * plateR }, b: { x: c.x + n.x * plateR, y: c.y + n.y * plateR }, w: 3.2, color: 'ink1', cap: 'butt' });
+  return [{ kind: 'line', a, b, w: 2.5, color: 'ink0', cap: 'round' }, plate(a), plate(b)];
 }
 
 /** A dumbbell in FRONT view, honest rotation projection. `spin` 0 = palms-in (axis toward the
@@ -233,8 +250,16 @@ export function benchEndOn(cx: number, top: number, floorY: number, halfW = 24):
 
 /** The incline back pad, face-on: the reclined rest rising behind the chest dome — its top edge
  *  and side slivers read past the trunk (the reclined-body statement of the incline members). */
-export function inclineBackPadFront(cx: number, topY: number, bottomY: number, halfW = 20): Primitive[] {
-  return [{ kind: 'rect', x: cx - halfW, y: topY, width: halfW * 2, height: bottomY - topY, rx: 6, fill: 'paper3', stroke: 'ink3', w: 2 }];
+export function inclineBackPadFront(cx: number, topY: number, bottomY: number, halfW = 20, floorY = 193): Primitive[] {
+  /* An incline bench seen from its head end SAYS incline only if it stands on legs that splay
+     back to the floor behind the pad (2026-09-07); a pad alone read as a seat back. */
+  const leg = (s: 1 | -1): Primitive => ({ kind: 'line', a: { x: cx + s * (halfW - 4), y: bottomY - 2 }, b: { x: cx + s * (halfW + 6), y: floorY - 1 }, w: 3, color: 'ink3' });
+  return [
+    leg(1),
+    leg(-1),
+    { kind: 'line', a: { x: cx - halfW - 6, y: floorY - 1 }, b: { x: cx + halfW + 6, y: floorY - 1 }, w: 2.5, color: 'ink3', cap: 'round' },
+    { kind: 'rect', x: cx - halfW, y: topY, width: halfW * 2, height: bottomY - topY, rx: 6, fill: 'paper3', stroke: 'ink3', w: 2 },
+  ];
 }
 
 /** The bench-press rack, face-on: two uprights either side of the athlete with J-hooks toward

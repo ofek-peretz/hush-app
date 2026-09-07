@@ -26,10 +26,11 @@
 //
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
-import { lerp, twoBoneIK } from '../geometry';
+import { lerp, twoBoneIK, withinReach } from '../geometry';
+import { lags } from '../curves';
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { floorScene, padStroke, sampledPathTicks } from '../kit';
+import { dumbbellSide, floorScene, padStroke, sampledPathTicks } from '../kit';
 import { FLOOR_Y, far } from '../bodies';
 
 const U = ATHLETE.upperArm;
@@ -413,18 +414,33 @@ export const stepUpRig: Rig = (() => {
    * has ~20u of unused room beneath it. The floor drops, the box rides it, the crown clears the
    * top edge by its radius, and no proportion is touched.
    */
-  const SU_FLOOR = FLOOR_Y + 18;
+  /* +15, not +18 (audit, 2026-09-03): at +18 the floor line sat 2.5u from the frame's bottom edge
+     and the ground strip was cut; at +15 it shows, and the crown still clears the top edge by 5u. */
+  const SU_FLOOR = FLOOR_Y + 15;
   /* 22, not 28. At 28 the front ankle sits so high that the trailing foot's landing is 78 units
      below the hip at any readable depth — one more than a whole leg — so the only geometry that let
      the rear toe touch was a hip dropped into a near-pistol squat. A shorter box is a step-up that
      still looks like one. */
   const BOX_TOP = SU_FLOOR - 22;
   const FRONT_ANKLE: Vec2 = { x: 196, y: BOX_TOP - ATHLETE.ankleH };
-  const HIP_X = FRONT_ANKLE.x - 10;
+  /**
+   * THE HIP SITS BACK AND THE KNEE TRACKS FORWARD (audit, 2026-09-03). The hip used to be pinned at
+   * one x with the front knee solved on the BACKWARD branch: at the bottom the knee sat 34u behind
+   * the ankle with the shank lying 23° above horizontal on a flat foot — 65° of plantar-flexion
+   * past neutral, a body sitting back into a chair that is not there. The only frame that taught
+   * the movement taught it backwards. Now the knee takes the forward branch (over the toes, as a
+   * step-up's does), the hip travels 20u back as it lowers so the standing foot stays under the
+   * mass, and the trunk inclines ~22° to balance it. Measured at the bottom: knee 14u ahead of the
+   * ankle, shank 22° forward of vertical, knee 85°.
+   */
+  const HIP_X_TOP = FRONT_ANKLE.x - 4;
+  const HIP_BACK = 20;
+  const hipXAt = (rom: number) => HIP_X_TOP - HIP_BACK * rom;
   /** Hip travel: tall on the box → lowered until the rear toe meets the floor. */
   const HIP_TOP = FRONT_ANKLE.y - (S + T) * 0.98;
-  /** The rear foot: from trailing beside the box (up, at rom 0) to its floor touch (rom 1). */
-  const REAR_UP: Vec2 = { x: FRONT_ANKLE.x - 34, y: BOX_TOP - 10 };
+  /** The rear foot: from trailing over the box's edge (up, at rom 0) to its floor touch (rom 1).
+   *  Over the edge, not 34u behind it: a foot hanging behind the box read as one left dangling. */
+  const REAR_UP: Vec2 = { x: FRONT_ANKLE.x - 22, y: BOX_TOP - 6 };
   const REAR_DOWN: Vec2 = { x: FRONT_ANKLE.x - 40, y: SU_FLOOR - ATHLETE.ankleH };
   /**
    * THE BOTTOM IS WHERE THE REAR LEG CAN ACTUALLY REACH THE FLOOR, not a fraction picked in
@@ -439,16 +455,37 @@ export const stepUpRig: Rig = (() => {
     /* the readable depth: about two-thirds of the front leg */
     FRONT_ANKLE.y - (S + T) * 0.68,
     /* never higher than the trailing leg can reach its landing from */
-    REAR_DOWN.y - Math.sqrt(Math.max(1, Math.pow((S + T) * 0.97, 2) - Math.pow(HIP_X - REAR_DOWN.x, 2))),
+    REAR_DOWN.y - Math.sqrt(Math.max(1, Math.pow((S + T) * 0.97, 2) - Math.pow(hipXAt(1) - REAR_DOWN.x, 2))),
   );
+  const HIP_PATH = Array.from({ length: 17 }, (_, i) => ({ x: hipXAt(i / 16), y: lerp(HIP_TOP, HIP_BOTTOM, i / 16) }));
+  const HIP_DIR: Vec2 = (() => {
+    const d = Math.hypot(HIP_PATH[16].x - HIP_PATH[0].x, HIP_PATH[16].y - HIP_PATH[0].y);
+    return { x: (HIP_PATH[16].x - HIP_PATH[0].x) / d, y: (HIP_PATH[16].y - HIP_PATH[0].y) / d };
+  })();
+  /** Trunk incline at the bottom, as the shoulder's lead over the hip: ~22° from vertical. */
+  const LEAN_X = 20;
+  /* The trunk lags the legs (iron rule 12): it stays tall through the first fifth of the descent
+     and is the first thing home on the drive — a lifter who leans at the bottom, not from the top. */
+  const LEAN_LAGS = lags(0.2);
 
   const poseAt = (rom: number): Pose => {
-    const hip: Vec2 = { x: HIP_X, y: lerp(HIP_TOP, HIP_BOTTOM, rom) };
-    const frontKnee = twoBoneIK(hip, FRONT_ANKLE, T, S, 1);
-    const rearAnkle: Vec2 = { x: lerp(REAR_UP.x, REAR_DOWN.x, rom), y: lerp(REAR_UP.y, REAR_DOWN.y, rom) };
+    const hip: Vec2 = { x: hipXAt(rom), y: lerp(HIP_TOP, HIP_BOTTOM, rom) };
+    /* −1: the knee's forward branch, over the toes. */
+    const frontKnee = twoBoneIK(hip, FRONT_ANKLE, T, S, -1);
+    /* The trailing foot is CLAMPED into the leg's reach (execution pass, 2026-09-03): trailing
+       over the box's edge at the top, the raw target sat 78.6u from the hip against a 77u leg and
+       the shank stretched to 38.6. A foot that cannot reach hangs a unit higher; it does not grow. */
+    const rearAnkle = withinReach(hip, { x: lerp(REAR_UP.x, REAR_DOWN.x, rom), y: lerp(REAR_UP.y, REAR_DOWN.y, rom) }, (T + S) * 0.985);
     const rearKnee = twoBoneIK(hip, rearAnkle, T, S, -1);
-    const shoulder: Vec2 = { x: hip.x + 2, y: hip.y - ATHLETE.torso };
-    const head: Vec2 = { x: shoulder.x + 1, y: shoulder.y - ATHLETE.neck };
+    const lean = 2 + LEAN_X * LEAN_LAGS(rom);
+    /* The trunk is a BONE: the shoulder sits on the circle of `ATHLETE.torso` about the hip, the
+       lean spent as x and the rest as height — authored as (+lean, −torso) it measured 52.8u at
+       the bottom (execution pass, 2026-09-03). */
+    const shoulder: Vec2 = { x: hip.x + lean, y: hip.y - Math.sqrt(ATHLETE.torso * ATHLETE.torso - lean * lean) };
+    const trunkLen = ATHLETE.torso;
+    /* The head continues the trunk's line. */
+    const head: Vec2 = { x: shoulder.x + (lean / trunkLen) * ATHLETE.neck, y: shoulder.y - ((hip.y - shoulder.y) / trunkLen) * ATHLETE.neck };
+    /* The dumbbells hang plumb from the shoulders whatever the trunk does. */
     const elbow: Vec2 = { x: shoulder.x + 3, y: shoulder.y + ATHLETE.upperArm };
     const hand: Vec2 = { x: elbow.x + 1, y: elbow.y + ATHLETE.foreArm };
     return {
@@ -475,13 +512,20 @@ export const stepUpRig: Rig = (() => {
     };
   };
 
-  const decorAt = (): Decor => ({
-    back: [
-      { kind: 'rect', x: 176, y: BOX_TOP, width: 48, height: SU_FLOOR - BOX_TOP, rx: 3, fill: 'paper3', stroke: 'ink3', w: 2 },
-      ...sampledPathTicks(Array.from({ length: 17 }, (_, i) => ({ x: HIP_X - 24, y: lerp(HIP_TOP, HIP_BOTTOM, i / 16) }))),
-    ],
-    front: [],
-  });
+  const decorAt = (rom: number): Decor => {
+    const pose = poseAt(rom);
+    return {
+      back: [
+        { kind: 'rect', x: 176, y: BOX_TOP, width: 48, height: SU_FLOOR - BOX_TOP, rx: 3, fill: 'paper3', stroke: 'ink3', w: 2 },
+        /* The hip's own path, drawn 26u to its left — outside the figure in every frame. */
+        ...sampledPathTicks(HIP_PATH.map((p) => ({ x: p.x - 26, y: p.y }))),
+        /* The card says dumbbell (audit, 2026-09-03): the hands used to hang empty, so a 2×10 kg
+           step-up read as bodyweight. Side-on, handle along x, the far one behind the figure. */
+        ...dumbbellSide(pose.j.farHand, { x: 1, y: 0 }),
+      ],
+      front: [...dumbbellSide(pose.j.hand, { x: 1, y: 0 })],
+    };
+  };
 
   const formspec: FormSpec = {
     tempo: DEFAULT_TEMPO,
@@ -491,11 +535,14 @@ export const stepUpRig: Rig = (() => {
     ],
     end: [
       { kind: 'contactY', a: 'farAnkle', y: REAR_DOWN.y, tol: 2, label: 'lowered under control to the floor touch' },
+      /* THE KNEE OVER THE TOES at the bottom — the fact the backward branch got wrong. */
+      { kind: 'jointRightOf', a: 'knee', b: 'ankle', by: 8, label: 'the top knee tracks forward over the foot' },
+      { kind: 'jointAngle', joint: 'knee', neighbors: ['hip', 'ankle'], min: 70, max: 105, label: 'the top knee bent to a step-up depth' },
     ],
-    path: { track: 'hip', kind: 'vertical', tol: 1.5 },
+    /* The hip drops AND sits back: a line, not a vertical. */
+    path: { track: 'hip', kind: 'line', tol: 1.5, dir: HIP_DIR },
     invariants: [
       { kind: 'pointFixed', point: 'ankle', tol: 0.5, label: 'the top foot never leaves the box' },
-      { kind: 'segmentAngleFixed', a: 'hip', b: 'shoulder', tolDeg: 4, label: 'torso tall — no diving forward' },
       { kind: 'angleNever', joint: 'knee', neighbors: ['hip', 'ankle'], aboveDeg: 179, label: 'no knee snap at the top' },
     ],
   };

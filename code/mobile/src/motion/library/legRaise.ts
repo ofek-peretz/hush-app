@@ -22,6 +22,11 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { lerp } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** A single-joint rig still has a sticking point — the last fifth, where the moment arm is longest;
+ *  the driver slows there and arrives (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { floorScene, padStroke, sampledPathTicks } from '../kit';
@@ -46,6 +51,9 @@ interface LegRaiseParams {
    *  lying one — measured as "the legs' direction from the hip", 0 = hanging plumb. */
   thetaFrom: number;
   thetaTo: number;
+  /** A KNEE raise: the thigh rides the ray and the shin hangs plumb from the knee, so the knee
+   *  folds from ~172° to ~85° as the thigh passes horizontal (captain's chair, 2026-09-07). */
+  kneeRaise?: boolean;
   /** Which way the legs point at θ=0: down (hanging) or along the floor (+x, lying). */
   zero: 'down' | 'forward';
   furniture: Primitive[];
@@ -58,6 +66,10 @@ function legRaise(p: LegRaiseParams): Rig {
     /* zero 'down': θ sweeps forward-up from plumb. zero 'forward': θ sweeps up from the floor. */
     const ux = p.zero === 'down' ? Math.sin(r) : Math.cos(r);
     const uy = p.zero === 'down' ? Math.cos(r) : -Math.sin(r);
+    if (p.kneeRaise) {
+      const knee: Vec2 = { x: hip.x + ATHLETE.thigh * ux, y: hip.y + ATHLETE.thigh * uy };
+      return { knee, ankle: { x: knee.x, y: knee.y + ATHLETE.shank } };
+    }
     const ankle: Vec2 = { x: hip.x + LEG * ux, y: hip.y + LEG * uy };
     /* The knee rides the chord, pushed a constant sagitta toward the ceiling of the fold. */
     const px = -uy;
@@ -70,7 +82,7 @@ function legRaise(p: LegRaiseParams): Rig {
   const ARC = Array.from({ length: 17 }, (_, i) => legAt(lerp(p.thetaFrom, p.thetaTo, i / 16)).ankle);
 
   const poseAt = (rom: number): Pose => {
-    const { knee, ankle } = legAt(lerp(p.thetaFrom, p.thetaTo, rom));
+    const { knee, ankle } = legAt(lerp(p.thetaFrom, p.thetaTo, STICK(rom)));
     return {
       headR: ATHLETE.headR,
       j: {
@@ -109,7 +121,9 @@ function legRaise(p: LegRaiseParams): Rig {
       { kind: 'contactY', a: 'ankle', y: legAt(p.thetaFrom).ankle.y, tol: 2.5, label: 'the honest bottom — no half start' },
     ],
     end: [
-      softKnee('and the same soft knee at the top — a raise, not a kick'),
+      p.kneeRaise
+        ? { kind: 'jointAngle' as const, joint: 'knee', neighbors: ['hip', 'ankle'] as [string, string], min: 78, max: 100, label: 'knees to the chest — the shin hangs, the thigh past level' }
+        : softKnee('and the same soft knee at the top — a raise, not a kick'),
       { kind: 'contactY', a: 'ankle', y: legAt(p.thetaTo).ankle.y, tol: 2.5, label: 'raised with control' },
     ],
     path: { track: 'ankle', kind: 'arc', tol: 2 },
@@ -141,7 +155,7 @@ function legRaise(p: LegRaiseParams): Rig {
 }
 
 /* ── hanging: the pull-up's bar and hanging trunk, arms long overhead ─────────────────────────── */
-const HANG_BAR: Vec2 = { x: 168, y: 40 };
+const HANG_BAR: Vec2 = { x: 168, y: 35 }; // 40 hung the toes 5u through the floor once the arm grew to 27/25 (2026-09-07)
 const HANG_SHOULDER: Vec2 = { x: HANG_BAR.x - 2, y: HANG_BAR.y + (ATHLETE.upperArm + ATHLETE.foreArm) * 0.98 };
 const HANG_BODY = {
   head: { x: HANG_SHOULDER.x + 2, y: HANG_SHOULDER.y - ATHLETE.neck },
@@ -179,8 +193,9 @@ export const captainsChairRaise = legRaise({
   id: 'captains_chair_raise',
   floorY: FLOOR_Y + 18,
   body: CH_BODY,
-  thetaFrom: 6,
-  thetaTo: 86,
+  thetaFrom: 8,
+  thetaTo: 96, // the thigh past horizontal — a KNEE raise, as the card says; it was the hanging raise with furniture (2026-09-07)
+  kneeRaise: true,
   zero: 'down',
   furniture: [
     /* the chair: back pad, the forearm pads either side, and the frame down to the floor */
@@ -205,7 +220,7 @@ export const lyingLegRaise = legRaise({
   id: 'lying_leg_raise',
   floorY: FLOOR_Y,
   body: LY_BODY,
-  thetaFrom: 4, // heels a breath off the floor — the honest bottom, never resting
+  thetaFrom: 10, // heels ~12u off the floor — at 4° they lay ON it every rep (2026-09-07)
   thetaTo: 78, // up toward vertical
   zero: 'forward',
   furniture: [],

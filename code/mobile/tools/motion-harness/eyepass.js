@@ -20,7 +20,7 @@ const ROWS = Number(process.argv[4] || 4);
 const FIG = process.argv[5] === 'female' ? 'female' : 'male';
 const N = COLS * ROWS;
 
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const { EXERCISE_MOTION } = require(path.join(BUILD, 'registry.js'));
 const { buildFrame, VIEWBOX } = require(path.join(BUILD, 'frame.js'));
 const { MOTION_PALETTE } = require(path.join(BUILD, 'palette.js'));
@@ -53,7 +53,7 @@ const html = `<!doctype html><meta charset=utf8><title>${EX} eye-pass</title>
  h1{font-size:15px;margin:0 0 8px}
  .grid{display:grid;grid-template-columns:repeat(${COLS},1fr);gap:6px}
  .pan{aspect-ratio:${(VB.w / VB.h).toFixed(4)};border:1px solid #dcdad8;border-radius:6px;overflow:hidden;
-   background:repeating-linear-gradient(45deg,#e4e3de 0 9px,#eeede9 9px 18px)}
+   background:#e3ded0}
  .pan svg{display:block;width:100%;height:100%}
  .cap{font-size:11px;color:#726f6c;text-align:center;margin-top:2px}
 </style>

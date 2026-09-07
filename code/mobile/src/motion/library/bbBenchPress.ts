@@ -101,7 +101,8 @@ function armAt(rom: number, side: 1 | -1): { elbow: Vec3; hand: Vec3 } {
      actually produces: 0.2 puts the humerus at 56° to the torso, which is the competition tuck.
      Watching that elbow drop below the bench line is the single most useful thing this camera can
      show and the other could not — end-on it was a foreshortening and nothing else. */
-  const elbow = twoBoneIK3(shoulder, hand, U, F, { x: 0.2, y: 1, z: side * 0.12 });
+  /* y 0.7, not 1 (2026-09-07): at 1 the upper arm projected 11.4u mid-rep and sat on the trunk line. */
+  const elbow = twoBoneIK3(shoulder, hand, U, F, { x: 0.2, y: 0.7, z: side * 0.12 });
   return { elbow, hand };
 }
 

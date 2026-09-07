@@ -1,32 +1,31 @@
 /**
- * press_horizontal — the five members beyond the bb_bench_press benchmark, ALL FRONT-VIEW per
- * §3.4 Amendment 7 (founder directive 2026-07-08: the chest family is a frontal identity family —
- * its recognition lives in upper-body symmetry, and the frontal presentation is a product
- * decision, not a per-rig trade).
+ * press_horizontal — the members beyond the bb_bench_press benchmark, ALL SHOT FROM THE SIDE.
  *
- * Two frontal stagings implement the whole family:
+ * The family spent a year at the head end under §3.4 Amendment 7 ("the chest family is a frontal
+ * identity family"). That ruling was about recognition; the clip is the whole instruction, and the
+ * side is the only camera the bar path, the touch point, the elbow tuck and the bench itself all
+ * live in. The full reasoning is on `bb_bench_press`. Two side-on stagings implement the family:
  *
- * 1. LYING MEMBERS — the head-end camera (the spotter's frame). A lying press's stroke is
- *    world-vertical, so face-on it lives fully in the drawing plane: lockout arms are canonical
- *    25/23 in-plane, and the one projected fold (rule 3) is at the chest — the humerus tucks
- *    toward the feet as the implement descends (25 → uProj across the rep), stacking the
- *    forearms vertically under the grip. The camera also states what the side view never could:
- *    both arms, both plates/dumbbells, the straddle over the end-on bench, and (barbell members)
- *    the RACK goalpost. Incline members raise the shoulder line (`raise`) and rest against a
- *    visible reclined back pad; dumbbell members converge slightly to the top — the honest arc —
- *    and carry NO rack.
+ * 1. LYING MEMBERS (`lyingPress`) — the bench in profile, head to the left, the grip entirely in
+ *    DEPTH (`gripZ`), so the arm is a real diagonal solved by `twoBoneIK3` and its drawn length is a
+ *    projection rather than a decision. Incline and decline members are the same bench rotated;
+ *    dumbbell members converge to the top and dip under the chest line; Smith members ride a
+ *    vertical rail drawn through the bar's own path. The elbow tuck is a lagged driver (`curves.ts`):
+ *    set early on the way down, held through the sticking point, released only at lockout.
  *
- * 2. THE SEATED MACHINE — the perspective license (§3.4 Am. 7). Its stroke runs along the camera
- *    axis, where orthographic projection leaves no pixels (proven 2026-07-07); depth is therefore
- *    drawn as SCALE: fists, handles, and press-arm struts grow as they near the viewer, the
- *    elbow flare sweeps from wide to gone-behind-the-fists, and the stack rides 1:1 with the true
- *    3D stroke. Rep anchor per §3.6: the machine opens at the chest and PRESSES first.
+ * 2. THE SEATED MACHINE (`seatedMachinePress`) — side-on since 2026-08-29 (the old head-end
+ *    "perspective license" is retired; see `machines.ts`). The handles are wider than the shoulders,
+ *    so the arm is solved in 3D: at the loaded stretch the elbow is flared OUT, behind and level
+ *    with the shoulder, and from the side the upper arm is a short stub that grows into the plane
+ *    as the press extends (audit, 2026-09-03 — the planar solve used to lift the elbow 14u ABOVE
+ *    the shoulder, which is a pushdown, not a press).
  */
 
 // 
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2, Vec3 } from '../types';
 import { lerp, lerpV, twoBoneIK, twoBoneIK3, twoBoneIKToward } from '../geometry';
+import { lags, leads } from '../curves';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import {
@@ -75,19 +74,49 @@ interface LyingPressParams {
    * hand rides 19.5u nearer the viewer than its own shoulder joint.
    */
   gripZ: number;
+  /**
+   * Half the grip at LOCKOUT, in depth. A bar cannot change its grip mid-rep, so barbell members
+   * leave it undefined; two dumbbells converge on the way up, and that convergence is the one
+   * thing a dumbbell press does that a barbell press cannot (audit, 2026-09-03).
+   */
+  gripZTop?: number;
   /** What the bar was lifted off. Dumbbells get neither. */
   rack: 'uprights' | 'rails' | 'none';
   /**
-   * How far toward the FEET the elbow is driven — the tuck, as the hint that picks the elbow off
-   * its circle. Bigger is a tighter tuck; `close_grip_bench` is the member that is about this.
+   * How far toward the FEET the elbow is driven AT THE BOTTOM — the tuck, as the hint that picks
+   * the elbow off its circle. Bigger is a tighter tuck; `close_grip_bench` is the member that is
+   * about this. `flare` is the same hint at lockout, where the elbows are allowed out.
    */
   tuck: number;
+  /** Omitted = a third of the tuck: the elbows open at lockout but never past the bar line. */
+  flare?: number;
+  /**
+   * How far down the trunk from the shoulder joint the implement touches: 13 is the sternum, the
+   * default. The decline touches the LOWER chest (its own label says so) and sets 17, which is also
+   * what keeps its plate off the athlete's face at the bottom (audit, 2026-09-03).
+   */
+  touchAlong?: number;
+  /**
+   * How far BELOW the chest line the implement finishes. A bar stops on the chest (0); a dumbbell
+   * has no bar to stop it and travels past the line for the stretch — the second thing a dumbbell
+   * press does that a barbell press cannot (audit, 2026-09-03).
+   */
+  dipBelow?: number;
   contactLabel: string;
 }
 
 const SH_Z = 15.5;
 /** Arms 99 % extended at the top: locked out, not snapped. */
 const LOCK_REACH = (U + F) * 0.99;
+/**
+ * THE TUCK IS SET EARLY AND RELEASED LATE (curves.ts, audit 2026-09-03). The elbow hint runs from
+ * `flare` at lockout to `tuck` at the chest, and it gets there by rom 0.7 and stays: on the way
+ * down the elbows tuck under the bar before the bar is low; on the way up (the same curve read
+ * backwards) they stay tucked through the sticking point and flare only as the arm locks out.
+ * That ordering — tuck, press, THEN flare — is the cue every bench press is coached on, and a
+ * hint bolted to the bar's clock could not draw it.
+ */
+const TUCK_LEADS = leads(0.3);
 
 /** The bench, in profile: a seat, and a back pad lying under the athlete along his own trunk. */
 function benchSide(hip: Vec2, u: Vec2, headEnd: Vec2): Primitive[] {
@@ -114,11 +143,18 @@ function benchSide(hip: Vec2, u: Vec2, headEnd: Vec2): Primitive[] {
  * The far one is drawn behind and a shade offset, in the far ink. It has to be: both hands are at
  * the same height on the same path, so a single disc would say "barbell" — and the one thing a
  * viewer must take from this clip rather than the flat-bench one is that there are TWO of them.
+ *
+ * Each bell also shows its SECOND HEAD, a shade behind and below the first in the far ink: dead
+ * end-on the two heads are concentric and one disc with a dot in it read as a small plate, not a
+ * dumbbell (audit, 2026-09-03). The 2u offset is the licence a hand takes when it is not held
+ * perfectly square to the camera, and it is what makes the object a dumbbell.
  */
 function dumbbellsEndOn(c: Vec2): Primitive[] {
   const far = { x: c.x - 5, y: c.y + 3 };
   return [
+    { kind: 'circle', c: { x: far.x + 2, y: far.y + 1.5 }, r: 7.5, fill: 'ink4' },
     { kind: 'circle', c: far, r: 8, fill: 'ink3' },
+    { kind: 'circle', c: { x: c.x + 2, y: c.y + 1.5 }, r: 8, fill: 'ink4' },
     { kind: 'circle', c, r: 8.5, fill: 'ink1', stroke: 'ink0', w: 1.5 },
     { kind: 'circle', c, r: 2.6, fill: 'ink0' }, // the handle, end-on
   ];
@@ -135,15 +171,20 @@ function rackSide(x: number, hookY: number): Primitive[] {
 
 /**
  * A Smith machine's gate, in profile: the single rail the bar is captive on, running the full
- * height beside the lifter, with the hook lug at the rack height. One rail, not two — from the side
- * the far rail stands exactly behind the near one, and drawing both put a second post through the
- * athlete's chest.
+ * height THROUGH THE BAR'S OWN PATH, with the hook lug at the rack height. One rail, not two — from
+ * the side the far rail stands exactly behind the near one, and drawing both put a second post
+ * through the athlete's chest.
+ *
+ * It stands at the bar's x, not beside the head (audit, 2026-09-03): drawn 16u past the head it
+ * was a wall post with a hook, 30–47u from a bar that travelled a free J past it. A Smith is the
+ * one press whose path is the machine's, and the rail is where the bar is or it is not a Smith.
  */
 function smithRailSide(x: number, lockY: number): Primitive[] {
   return [
     { kind: 'line', a: { x, y: 32 }, b: { x, y: FLOOR_Y }, w: 3, color: 'ink3' },
     { kind: 'line', a: { x: x - 10, y: FLOOR_Y }, b: { x: x + 10, y: FLOOR_Y }, w: 2.5, color: 'ink3', cap: 'round' },
-    { kind: 'line', a: { x, y: lockY + 6 }, b: { x: x + 7, y: lockY + 6 }, w: 2.5, color: 'ink3' },
+    // the hook lug, just under the bar at lockout — where it was rotated off the rail
+    { kind: 'line', a: { x, y: lockY + 5 }, b: { x: x + 7, y: lockY + 5 }, w: 2.5, color: 'ink3' },
   ];
 }
 
@@ -157,19 +198,34 @@ function lyingPress(p: LyingPressParams): Rig {
   const HIP: Vec2 = { x: 198, y: 147 };
   const SHOULDER: Vec2 = { x: HIP.x + u.x * TORSO, y: HIP.y + u.y * TORSO };
   const HEAD: Vec2 = { x: SHOULDER.x + u.x * ATHLETE.neck, y: SHOULDER.y + u.y * ATHLETE.neck };
-  /* Where the implement touches: 13u back down the trunk from the shoulder joint, and 12u out of
-     the chest, because a lying chest stands proud of the joint it is measured from. On an incline
-     that same offset walks the touch point up toward the collarbone, which is where an incline
-     press touches — and it does so because the CHEST turned, not because anyone typed a number. */
+  /* Where the implement touches: `touchAlong` back down the trunk from the shoulder joint (13 is
+     the sternum), and 12u out of the chest, because a lying chest stands proud of the joint it is
+     measured from — less `dipBelow` for the members that travel past the line. On an incline that
+     same offset walks the touch point up toward the collarbone, which is where an incline press
+     touches — and it does so because the CHEST turned, not because anyone typed a number. */
+  const along = p.touchAlong ?? 13;
+  const proud = 12 - (p.dipBelow ?? 0);
   const CHEST: Vec2 = {
-    x: SHOULDER.x - u.x * 13 + n.x * 12,
-    y: SHOULDER.y - u.y * 13 + n.y * 12,
+    x: SHOULDER.x - u.x * along + n.x * proud,
+    y: SHOULDER.y - u.y * along + n.y * proud,
   };
 
-  const dz = p.gripZ - SH_Z;
-  const LOCK: Vec2 = { x: SHOULDER.x, y: SHOULDER.y - Math.sqrt(LOCK_REACH * LOCK_REACH - dz * dz) };
+  const gripZTop = p.gripZTop ?? p.gripZ;
+  const dz = gripZTop - SH_Z;
+  /* A free bar locks out over the shoulder. A SMITH bar is captive on a vertical rail, so its
+     lockout is straight above the touch point and the arm at the top leans toward the feet by
+     exactly the sternum offset — which is what a Smith bench looks like, because the lifter sets
+     the bench under the rail so the bar lands on the chest (audit, 2026-09-03: the rails members
+     used to travel the free J, 13–17u sideways off a rail drawn somewhere else). */
+  const lockDX = p.rack === 'rails' ? CHEST.x - SHOULDER.x : 0;
+  const LOCK: Vec2 = {
+    x: SHOULDER.x + lockDX,
+    y: SHOULDER.y - Math.sqrt(LOCK_REACH * LOCK_REACH - dz * dz - lockDX * lockDX),
+  };
 
   const barAt = (rom: number): Vec2 => lerpV(LOCK, CHEST, rom);
+  /** Half the grip in depth at this rom — constant on a bar, converging to the top for dumbbells. */
+  const gripZAt = (rom: number): number => lerp(gripZTop, p.gripZ, rom);
   const BAR_PATH: Vec2[] = Array.from({ length: 13 }, (_, i) => barAt(i / 12));
 
   /* The legs: hips on the pad, knee bent, foot planted BACK under the knee — the setup that lets a
@@ -181,9 +237,10 @@ function lyingPress(p: LyingPressParams): Rig {
 
   const armAt = (rom: number, side: 1 | -1): { elbow: Vec3; hand: Vec3 } => {
     const bar = barAt(rom);
-    const hand: Vec3 = { x: bar.x, y: bar.y, z: side * p.gripZ };
+    const hand: Vec3 = { x: bar.x, y: bar.y, z: side * gripZAt(rom) };
     const shoulder: Vec3 = { x: SHOULDER.x, y: SHOULDER.y, z: side * SH_Z };
-    const elbow = twoBoneIK3(shoulder, hand, U, F, { x: p.tuck, y: 1, z: side * 0.12 });
+    const tuck = lerp(p.flare ?? p.tuck * 0.35, p.tuck, TUCK_LEADS(rom));
+    const elbow = twoBoneIK3(shoulder, hand, U, F, { x: tuck, y: 1, z: side * 0.12 });
     return { elbow, hand };
   };
 
@@ -223,9 +280,9 @@ function lyingPress(p: LyingPressParams): Rig {
          every bone true and leaves the spine on the line it is drawn on. */
       z: {
         elbow: near.elbow.z - SH_Z,
-        hand: p.gripZ - SH_Z,
+        hand: near.hand.z - SH_Z,
         farElbow: far.elbow.z + SH_Z,
-        farHand: -p.gripZ + SH_Z,
+        farHand: far.hand.z + SH_Z,
       },
     };
   };
@@ -234,7 +291,8 @@ function lyingPress(p: LyingPressParams): Rig {
     const bar = barAt(rom);
     const back: Primitive[] = [...benchSide(HIP, u, HEAD), ...sampledPathTicks(BAR_PATH)];
     if (p.rack === 'uprights') back.unshift(...rackSide(HEAD.x - 16, LOCK.y + 6));
-    if (p.rack === 'rails') back.unshift(...smithRailSide(HEAD.x - 16, LOCK.y));
+    // the rail stands on the bar path itself, behind the bench and the athlete
+    if (p.rack === 'rails') back.unshift(...smithRailSide(LOCK.x, LOCK.y));
     /* The plate is a GHOST and has to be: end-on it is a 32u disc sitting exactly where the chest
        is, and drawn solid it would erase the half of the rep this camera exists to show. */
     const front: Primitive[] = p.implement === 'bar' ? plateGhost(bar) : dumbbellsEndOn(bar);

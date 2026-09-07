@@ -31,6 +31,11 @@
 
 import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2, Vec3 } from '../types';
 import { lerp, twoBoneIK, twoBoneIK3 } from '../geometry';
+import { sticksAt } from '../curves';
+
+/** A raise is won at the top: the moment arm is longest as the arm nears level, so the hand slows
+ *  through the last fifth and arrives (iron rule 12, 2026-09-07). Endpoints untouched. */
+const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { cable, dumbbellFront, floorScene, pulley, sampledPathTicks } from '../kit';
@@ -46,7 +51,7 @@ const F = ATHLETE.foreArm;
 
 /** The arm's straight-line reach with a soft elbow — a shade under U + F, which IS the softness. */
 const REACH_E = U * 0.97; // shoulder → elbow along the ray
-const REACH_H = (U + F) * 0.965; // shoulder → hand along the ray
+const REACH_H = (U + F) * 0.985; // shoulder → hand along the ray: elbow ≈160°, 'soft' — 0.965 held a 30° bend, a bent-arm raise (2026-09-07)
 /** How far the elbow rides off the ray. Small, and constant: the bend never opens or closes. */
 const BEND = 3.4;
 
@@ -110,7 +115,7 @@ function lateralRaise(p: LateralParams): Rig {
   const PULLEY_L: Vec2 = { x: CX - 74, y: FLOOR_Y - 12 };
 
   const poseAt = (rom: number): Pose => {
-    const theta = lerp(THETA_BOTTOM, THETA_TOP, rom);
+    const theta = lerp(THETA_BOTTOM, THETA_TOP, STICK(rom));
     const R = armAt(theta, 1, body);
     const L = armAt(theta, -1, body);
     return {
@@ -159,7 +164,13 @@ function lateralRaise(p: LateralParams): Rig {
       const elbowR = pose.j.elbowR;
       const elbowL = pose.j.elbowL;
       const PIVOT_Y = body.shoulderR.y + 6;
-      const pad = (e: Vec2, side: 1 | -1): Primitive[] => [
+      const handR2 = pose.j.handR;
+      const handL2 = pose.j.handL;
+      /* The pad arm runs on to a HANDLE at the fist (2026-09-07): the forearm rested under a pad
+         with an empty hand; on the machine the hand holds the handle at the end of the pad arm. */
+      const pad = (e: Vec2, side: 1 | -1, hand: Vec2): Primitive[] => [
+        { kind: 'line', a: { x: e.x + side * 6, y: e.y }, b: hand, w: 2.5, color: 'ink3' },
+        { kind: 'line', a: { x: hand.x - side * 3.5, y: hand.y }, b: { x: hand.x + side * 3.5, y: hand.y }, w: 3.5, color: 'ink0', cap: 'round' },
         {
           kind: 'rect',
           x: e.x + side * 4 - (side === 1 ? 0 : 11),
@@ -190,8 +201,8 @@ function lateralRaise(p: LateralParams): Rig {
         { kind: 'rect', x: CX - 30, y: 162, width: 60, height: 8, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
         { kind: 'line', a: { x: CX - 20, y: 170 }, b: { x: CX - 20, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
         { kind: 'line', a: { x: CX + 20, y: 170 }, b: { x: CX + 20, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
-        ...pad(elbowL, -1),
-        ...pad(elbowR, 1),
+        ...pad(elbowL, -1, handL2),
+        ...pad(elbowR, 1, handR2),
       );
     }
     return { back, front };
@@ -206,8 +217,8 @@ function lateralRaise(p: LateralParams): Rig {
        rotates as a rigid unit. The band was 150..170, written when the elbow was placed by hand and
        the bones stretched to suit; a two-degree window round the true value is a far stronger claim
        and the one the cue "keep them soft" actually makes. */
-    min: 147.5,
-    max: 152,
+    min: 158,
+    max: 163,
     label,
   });
 

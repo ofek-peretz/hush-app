@@ -7,7 +7,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const BUILD = path.resolve(__dirname, '../../.motion-build');
+const BUILD = (process.env.MOTION_BUILD ? path.resolve(process.env.MOTION_BUILD) : path.resolve(__dirname, '../../.motion-build'));
 const [EX, LIB, CONST, VALS, ROMS] = process.argv.slice(2);
 const vals = VALS.split(',');
 const roms = ROMS.split(',').map(Number);
