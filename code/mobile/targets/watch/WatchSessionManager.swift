@@ -36,7 +36,13 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
   }
 
   /// One quiet line for the idle screen: activation · frames seen (· error).
-  var diagLine: String { "\(activationDiag) · rx:\(framesIngested)" }
+  /// …and WHICH watch app is saying it (founder 2026-09-08, third photograph: the line had build
+  /// 68's shape on a phone running 69 — TestFlight updates the watch app lazily, and a stale wrist
+  /// is indistinguishable from a broken wire without its build number on the screen).
+  var diagLine: String {
+    let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+    return "\(activationDiag) · rx:\(framesIngested) · w\(build)"
+  }
 
   var isReachable: Bool {
     WCSession.isSupported() ? WCSession.default.isReachable : false
@@ -116,9 +122,22 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
         let heard = (reply["listening"] as? Bool) ?? true
         DispatchQueue.main.async { completion(heard) }
       },
-      errorHandler: { _ in
+      errorHandler: { error in
         DispatchQueue.main.async {
-          guard session.isReachable else { completion(false); return }
+          /*
+           * ⛔ ONLY THE SKEW CASE FALLS BACK (code review 2026-09-09). Every error used to take
+           * this branch — including `messageReplyTimedOut`, which is precisely the jettisoned
+           * phone app that was woken by the tap and never answered. Re-sending on the plain
+           * channel and reporting `true` there confirmed a set to nobody, which is the exact
+           * lie W3 was written to end. `messageReplyFailed` is the counterpart having no reply
+           * handler at all — an older phone build — and that one keeps yesterday's behaviour.
+           * Anything else is "not heard": the honest viewer, and the draft is kept for her.
+           */
+          let code = (error as NSError).code
+          guard code == WCError.messageReplyFailed.rawValue, session.isReachable else {
+            completion(false)
+            return
+          }
           session.sendMessage(["intent": json], replyHandler: nil, errorHandler: nil)
           completion(true) // the pre-reply contract: accepted by the OS, as it always was
         }
@@ -181,7 +200,9 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
       return
     }
     guard let envelope = WatchWire.decodeEnvelope(json) else {
-      let why = WatchWire.decodeFailureReason(json)
+      // `len` rides with every frame since 2026-09-08: the byte count the phone sent, so a string
+      // cut in transit is told apart from one that left the phone broken.
+      let why = WatchWire.decodeFailureReason(json, sentLen: payload["len"] as? Int)
       DispatchQueue.main.async { [weak self] in
         guard let self else { return }
         self.activationDiag = "wc:badframe:" + why
@@ -198,8 +219,10 @@ final class WatchSessionManager: NSObject, WCSessionDelegate {
        * on the screen for the rest of the app's life, over a pipe that had since started working.
        * A diagnosis that cannot go back to healthy is a diagnosis nobody can act on.
        */
-      if self.activationDiag.hasPrefix("wc:badframe") || self.activationDiag.hasPrefix("wc:nokey") {
-        self.activationDiag = "wc:on"
+      if self.activationDiag.hasPrefix("wc:badframe") || self.activationDiag.hasPrefix("wc:nokey") || self.activationDiag.hasPrefix("wc:on") {
+        // A frame the scanner refused and the older parser rescued says so beside the healthy word
+        // (`WatchWire.lastRepair`): the wire works, AND the reason it did not is on the screen.
+        self.activationDiag = WatchWire.lastRepair.map { "wc:on · fix:" + $0 } ?? "wc:on"
       }
       self.model?.diagChanged()
       self.model?.apply(envelope)

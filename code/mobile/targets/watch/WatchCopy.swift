@@ -111,11 +111,19 @@ enum WatchCopy {
   // WT1 (today): the name sits under an "Up next" legend; the meta line reads "6 LIFTS · ~55 MIN";
   // the button row splits into "Another" (re-choose) and "Cardio" (run/walk).
   static var another: String { L("another", "Another") }
+  /// The 3 · 2 · 1 into a free workout can be cancelled on its own floor (design pass 2026-09-09).
+  static var cancel: String { L("cancel", "Cancel") }
+  /// The chooser's DONE row, in a word that means "trained" — `done` is the Done BUTTON ("סיום"),
+  /// and it stood in for this legend on a Hebrew wrist (2026-09-09).
+  static var doneLegend: String { L("doneLegend", "Done") }
   static var cardio: String { L("cardio", "Cardio") }
   static var liftsWord: String { L("liftsWord", "LIFTS") }
   // Calendar-primary cadence: the week rolls SATURDAY 20:30 local (founder 2026-07-13 — an update
   // nobody is awake for is not an update). Keep in step with en.json `watch.recovery`.
   static var recovery: String { L("recovery", "Recovery — your next week opens Saturday") }
+  /// The resting week's HEADLINE — the one word over the sentence above. It was the English literal
+  /// "Recovery" in the Start screen's serif, on a wrist that had already turned Hebrew (2026-09-09).
+  static var recoveryTitle: String { L("recoveryTitle", "Recovery") }
   // Paywall: training is gated on the phone; the wrist never starts (or bypasses) it.
   static var membershipNeeded: String { L("membershipNeeded", "Continue on iPhone — your membership needs attention") }
   static func lifts(_ n: Int) -> String { L("lifts", "\(n) lifts", ["n": "\(n)"]) }
@@ -320,6 +328,9 @@ enum WatchCopy {
   static var pause: String { L("pause", "Pause") }
   static var metricElapsed: String { L("metricElapsed", "Elapsed") }
   static var metricHeart: String { L("metricHeart", "Heart") }
+  /// The pace column's legend. It was the unit ("/km") standing in for a name, which on a Hebrew
+  /// wrist rendered as a cipher (design pass 2026-09-09); the figure keeps min/km, the legend says pace.
+  static var metricPace: String { L("metricPace", "Pace") }
   static var metricKcal: String { L("metricKcal", "Kcal") }
   static var bpm: String { L("bpm", "bpm") }
 

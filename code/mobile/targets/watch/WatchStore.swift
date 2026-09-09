@@ -73,6 +73,37 @@ final class WatchStore {
     write(stored, to: planURL)
   }
 
+  // MARK: The watch face (design pass 2026-09-09)
+  //
+  // What the complication draws — the Home screen's first fact, written into the App Group
+  // container the widget extension can read. The extension has no wire and no copy runtime; the
+  // strings arrive here already in her language. Mirror of `HushComplication.WristFaceSnapshot`.
+
+  struct WristFaceSnapshot: Codable {
+    var v: Int
+    var workoutName: String
+    var legend: String
+    var weekCount: Int
+    var weekDone: Int
+    var queuedIndex: Int?
+    var resting: Bool
+    var rtl: Bool
+    var updatedAt: Double
+  }
+
+  /// The face's own file lives in the App Group container, not under Application Support: the
+  /// widget runs as its own process and can read nothing else of ours. Nil when the group is not
+  /// provisioned — the face then keeps its launcher and nothing here fails.
+  private var faceURL: URL? {
+    FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.hushfitness.app")?
+      .appendingPathComponent("wrist-face.json")
+  }
+
+  func saveFaceSnapshot(_ face: WristFaceSnapshot) {
+    guard let url = faceURL else { return }
+    write(face, to: url)
+  }
+
   // MARK: Her copy (the phone's resolved strings)
   //
   // Stored for the same reason the plan is: the standalone runtime exists so she can train with the

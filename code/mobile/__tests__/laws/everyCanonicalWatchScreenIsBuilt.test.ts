@@ -34,6 +34,10 @@ const RULED_OUT: Record<string, string> = {
   // chooser is declined, because choosing between three lifts mid-rest is the deliberation the
   // one-tap swap exists to remove.
   WT11b: 'founder 2026-07-28 — one-tap swap + Undo stands; the chooser is declined',
+  // Design pass 2026-09-09 (founder: free hand on every wrist screen): a face whose whole content
+  // is one button is a confirmation nobody asked for. Its two jobs — a breath for the sensors and
+  // a way out of a mis-tap — are done by a cancellable 3 · 2 · 1 count on the Start screen itself.
+  CR1: 'design pass 2026-09-09 — replaced by the cancellable count-in on the Start screen',
 };
 
 /** Every screen id §05 names, in the order it draws them. */

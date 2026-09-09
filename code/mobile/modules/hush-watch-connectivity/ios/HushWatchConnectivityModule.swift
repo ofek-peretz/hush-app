@@ -20,6 +20,28 @@ import WatchConnectivity
 //    absent) → emitted as `onSessionRecord` for reconciliation.
 //  - phone → watch: userInfo ["recordAck": <recordId>] — durable acknowledgment;
 //    the watch clears the record from its outbox on receipt.
+
+/// Any JSON, decoded by Swift's scanner — the phone's stand-in for the wrist's `WireEnvelope`, so
+/// the pre-send self-check exercises the SAME decoder the wrist uses, over the whole document.
+enum HushJSONValue: Decodable {
+  case null
+  case bool(Bool)
+  case number(Double)
+  case string(String)
+  case array([HushJSONValue])
+  case object([String: HushJSONValue])
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.singleValueContainer()
+    if c.decodeNil() { self = .null; return }
+    if let b = try? c.decode(Bool.self) { self = .bool(b); return }
+    if let n = try? c.decode(Double.self) { self = .number(n); return }
+    if let s = try? c.decode(String.self) { self = .string(s); return }
+    if let a = try? c.decode([HushJSONValue].self) { self = .array(a); return }
+    self = .object(try c.decode([String: HushJSONValue].self))
+  }
+}
+
 public final class HushWatchConnectivityModule: Module {
   private var sessionDelegate: PhoneSessionDelegate?
 
@@ -128,16 +150,64 @@ public final class HushWatchConnectivityModule: Module {
        */
       // The live channel's own refusals stopped being silent too (same day): `errorHandler: nil`
       // was the second swallow, and a workout mirrors over THIS channel many times a minute.
+      /*
+       * ⛔ THE PHONE CHECKS ITS OWN FRAME FIRST (founder 2026-09-08, second photograph of the wrist:
+       * `wc:badframe:json:The given data was not valid`). The wrist and the phone parse JSON with
+       * the same Foundation; if the wrist will refuse this string, so will the phone — HERE, where
+       * the refusal can be sent to telemetry (`onSendError` → `statePublishFailed`) with the parser's
+       * own account of the byte that broke it. A photograph stops being the only instrument.
+       * The frame is still sent (the wrist's diagnosis names the same byte), with its length
+       * beside it, so a string cut in transit is told apart from one that left the phone broken.
+       */
+      let byteCount = json.utf8.count
+      var outgoing = json
+      if let data = json.data(using: .utf8) {
+        // Two parsers, because the wrist decodes with the second: `JSONSerialization` (Apple's
+        // older parser) and Swift's own `JSONDecoder` scanner, which refuses some documents the
+        // first accepts (founder 2026-09-08, fourth photograph: the wrist said yes, then no).
+        // Whichever refuses, its OWN account — the underlying error, with its location — goes to
+        // telemetry and to the Profile sheet's watch row.
+        var refusal: String? = nil
+        var parsed: Any? = nil
+        do {
+          parsed = try JSONSerialization.jsonObject(with: data)
+        } catch {
+          refusal = "invalid_json: " + ((error as NSError).userInfo[NSDebugDescriptionErrorKey] as? String ?? error.localizedDescription)
+        }
+        if refusal == nil {
+          do {
+            _ = try JSONDecoder().decode(HushJSONValue.self, from: data)
+          } catch DecodingError.dataCorrupted(let ctx) {
+            refusal = "invalid_json_decoder: " + (ctx.underlyingError.map { String(describing: $0) } ?? ctx.debugDescription)
+            // The older parser read it: send ITS serialisation, which the scanner accepts — the
+            // wrist gets a clean frame whatever the scanner disliked, and the reason is reported.
+            if let obj = parsed, JSONSerialization.isValidJSONObject(obj),
+               let clean = try? JSONSerialization.data(withJSONObject: obj),
+               let text = String(data: clean, encoding: .utf8) {
+              outgoing = text
+            }
+          } catch {
+            refusal = "invalid_json_decoder: \(error)"
+          }
+        }
+        if let why = refusal {
+          let head = String(json.prefix(24)).replacingOccurrences(of: "\n", with: "⏎")
+          DispatchQueue.main.async { [weak self] in
+            self?.sendEvent("onSendError", ["reason": "\(why.prefix(220)) · len \(byteCount) · head \(head)"])
+          }
+        }
+      }
+      let frame: [String: Any] = ["envelope": outgoing, "len": outgoing.utf8.count]
       let live: () -> Void = { [weak self] in
         guard session.isReachable else { return }
-        session.sendMessage(["envelope": json], replyHandler: nil, errorHandler: { err in
+        session.sendMessage(frame, replyHandler: nil, errorHandler: { err in
           DispatchQueue.main.async {
             self?.sendEvent("onSendError", ["reason": "sendMessage: \(err.localizedDescription)"])
           }
         })
       }
       do {
-        try session.updateApplicationContext(["envelope": json])
+        try session.updateApplicationContext(frame)
       } catch {
         live()
         throw error

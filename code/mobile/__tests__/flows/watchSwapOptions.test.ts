@@ -54,10 +54,11 @@ describe('the watch never offers a lift already in the session', () => {
     }
   });
 
-  it('attaches options at the START of an exercise only (never mid-run)', () => {
-    for (const step of buildMirrorSteps(plan)) {
-      if (step.setIndexInExercise !== 0) expect(step.swapOptions ?? []).toEqual([]);
-    }
+  it('attaches options on EVERY set (2026-09-07 — the board): a machine taken mid-lift is the ordinary case', () => {
+    const steps = buildMirrorSteps(plan);
+    const first = steps.find((s) => s.setIndexInExercise === 0)!;
+    const later = steps.find((s) => s.setIndexInExercise > 0 && s.exerciseName === first.exerciseName)!;
+    expect(later.swapOptions ?? []).toEqual(first.swapOptions ?? []);
   });
 
   it('hands the wrist a short list — a watch is not a catalog', () => {

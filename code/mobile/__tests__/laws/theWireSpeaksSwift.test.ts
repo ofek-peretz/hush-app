@@ -66,7 +66,20 @@ const STRUCTS = parseStructs(SWIFT);
 function check(value, type, where) {
   if (type.endsWith('?')) type = type.slice(0, -1); // inner optionals ([Double?] elements)
   if (type === 'Int') {
-    return typeof value === 'number' && Number.isInteger(value) ? null : `${where}: Int got ${JSON.stringify(value)}`;
+    if (typeof value !== 'number' || !Number.isInteger(value)) return `${where}: Int got ${JSON.stringify(value)}`;
+    /*
+     * ⛔ APPLE WATCH `Int` IS 32-BIT (founder 2026-09-08, build 70: `Number 1788898463… is not
+     * representable in Swift`). The wrist runs arm64_32, so a Swift `Int` tops out at 2,147,483,647
+     * and a millisecond epoch declared `Int?` killed every envelope for six builds. A 64-bit phone
+     * can never reproduce it, so the law has to: anything wider is `Int64` (or `Double`) on the wire.
+     */
+    if (Math.abs(value) > 2147483647) return `${where}: Int is 32-bit on Apple Watch — ${value} does not fit; declare Int64`;
+    return null;
+  }
+  if (type === 'Int64') {
+    return typeof value === 'number' && Number.isInteger(value) && Number.isSafeInteger(value)
+      ? null
+      : `${where}: Int64 got ${JSON.stringify(value)}`;
   }
   if (type === 'Double') {
     return typeof value === 'number' && Number.isFinite(value) ? null : `${where}: Double got ${JSON.stringify(value)}`;

@@ -105,18 +105,8 @@ export interface MirrorSummaryLift {
   name: string;
   /** The lift's best set, formatted the way the phone prints it: "60 × 8", "BW × 12". */
   best: string;
-  /**
-   * DEPRECATED — a compatibility shim, to be deleted one release after Build 30.
-   *
-   * The watch app installs asynchronously from the phone app, so THIS phone will spend a while
-   * talking to the PREVIOUS watch binary, and that binary decodes `done` as a non-optional Bool.
-   * A missing key throws inside its decoder, and since `summary` is a nested optional the throw
-   * takes the whole complete frame with it — the wrist would miss its closing screen altogether
-   * rather than miss one line of it. So the old field keeps being sent, with its old meaning
-   * (every prescribed set of this lift is logged), until no old binary can still be out there.
-   * Nothing in this build reads it.
-   */
-  done: boolean;
+  // (`done` — the pre-Build-30 compatibility shim — left on 2026-09-09, forty builds after the last
+  // binary that decoded it as non-optional; `WireSummaryLift` on the wrist carries `best` alone.)
 }
 
 /** One logged set, in step order — the actuals behind the read-back's numbers. */
@@ -400,24 +390,15 @@ export function summaryLifts(
     vol(a) !== vol(b) ? vol(a) > vol(b) : a.reps > b.reps;
   const order: string[] = [];
   const best = new Map<string, MirrorLoggedSet>();
-  // Prescribed vs logged, per lift — only for the deprecated `done` shim (see MirrorSummaryLift).
-  const tally = new Map<string, { total: number; done: number }>();
   steps.forEach((s, i) => {
     if (s.warmup) return; // a bridge is neither prescribed work nor a best set — same line as tonnage
-    const t = tally.get(s.exerciseName) ?? { total: 0, done: 0 };
-    t.total += 1;
-    if (i < completedSets) t.done += 1;
-    tally.set(s.exerciseName, t);
     if (i >= completedSets) return; // never reached — it is not part of this workout
     const set = logged?.[i] ?? { weight: s.targetWeight, reps: s.targetReps };
     const cur = best.get(s.exerciseName);
     if (!cur) order.push(s.exerciseName);
     if (!cur || better(set, cur)) best.set(s.exerciseName, set);
   });
-  return order.map((name) => {
-    const t = tally.get(name)!;
-    return { name, best: bestSetLabel(best.get(name)!), done: t.done >= t.total };
-  });
+  return order.map((name) => ({ name, best: bestSetLabel(best.get(name)!) }));
 }
 
 /** The current step's lift ordinal (1-based) among contiguous same-exercise runs,
@@ -441,8 +422,9 @@ function liftPosition(steps: MirrorStep[], idx: number): { index: number; count:
  *
  * Returns `null` ONLY when there is no session at all (empty plan) — that is the
  * signal for a host to tear its surface down. A finished session projects a
- * `complete` mirror first (so the watch can show "Workout Complete" and the Live
- * Activity can render a final frame) and the host ends on the next null.
+ * `complete` mirror first — the watch shows "Workout Complete" from it; the store ENDS the
+ * Live Activity on that frame rather than drawing it (the lock screen has no closing beat) —
+ * and the host ends on the next null.
  *
  * Pure and total: never throws, never reads a clock other than `nowMs`.
  */
@@ -628,9 +610,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   // Exercise Busy is offered at the start of an exercise — its first warm-up bridge when it has a
   // ramp, else set 1 — that still has a later, different exercise to defer to (mirrors the phone's
   // canMarkOccupied).
+  // …at ANY set since 2026-09-07 (the board): the lift's remainder goes one run later (phone parity —
+  // `canMarkOccupied` / `markEquipmentOccupied`).
   const canMarkBusy =
     phase === 'active_set' &&
-    (cur.warmup ? cur.warmup.index === 0 : cur.setIndexInExercise === 0) &&
     steps.slice(idx + 1).some((s) => s.exerciseName !== cur.exerciseName);
 
   return {

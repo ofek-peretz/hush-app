@@ -816,7 +816,7 @@ export function decideWatchIntent(
 
   // Phase gating — the proposed action must make sense for the current phase.
   const resting = mirror.phase === 'rest_inter' || mirror.phase === 'rest_transition';
-  // A set completion (with or without adjusted reps) acts on the presented set.
+  // A set completion (with or without adjusted reps) acts on the presented set, and only there.
   if (intent.type === 'complete_set') {
     if (mirror.phase !== 'active_set') return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
     // Optimistic concurrency: the watch must be acting on the set the phone shows.
@@ -861,8 +861,85 @@ export function decideWatchIntent(
 // These are the canonical (de)serializers; they are total and defensive so a
 // malformed or wrong-version payload is a clean null, never a throw.
 
+/**
+ * ⛔ THE ONE CHARACTER THAT KILLS THE WHOLE WRIST (founder 2026-09-08, photographing
+ * `wc:badframe:json · rx:0` under "Open on iPhone").
+ *
+ * `json` is the decoder's word for "this is not JSON at all" — a parse-level refusal, before any
+ * field is looked at. `JSON.stringify` output can earn that from Foundation in exactly one way: a
+ * string holding HALF a character. JavaScript strings are UTF-16, an emoji is a surrogate PAIR, and
+ * anything that cuts a string by index — a `.slice`, a `[0]`, a length cap, a `JSON.parse` of a
+ * file that already carried a lone `\uD83D` escape — leaves an unpaired surrogate behind.
+ * `JSON.stringify` then writes it out as that escape (the well-formed-stringify rule), and Apple's
+ * parser refuses the document outright: "Unable to convert data to string". Not the field. The
+ * WHOLE envelope — mirror, lobby, plan and copy pack — and every frame after it that carries the
+ * same name.
+ *
+ * So the wire repairs it: the lone half becomes U+FFFD, the frame decodes, and the place it was
+ * found is reported (`WATCH_EVENTS.wireRepaired`, a path like `lobby.workouts[1].name`) so the
+ * source can be fixed in the data rather than guessed at from a photograph of a wrist.
+ *
+ * Copy-on-write: an envelope with nothing to repair is returned as the same object, untouched.
+ */
+export function repairWireStrings<T>(value: T): { value: T; repaired: string[] } {
+  const repaired: string[] = [];
+  const walk = (v: unknown, at: string): unknown => {
+    if (typeof v === 'string') {
+      const fixed = replaceUnpairedSurrogates(v);
+      if (fixed !== v) repaired.push(at || '$');
+      return fixed;
+    }
+    if (Array.isArray(v)) {
+      let out: unknown[] | null = null;
+      for (let i = 0; i < v.length; i++) {
+        const w = walk(v[i], `${at}[${i}]`);
+        if (w !== v[i] && !out) out = v.slice();
+        if (out) out[i] = w;
+      }
+      return out ?? v;
+    }
+    if (v && typeof v === 'object') {
+      const rec = v as Record<string, unknown>;
+      let out: Record<string, unknown> | null = null;
+      for (const k of Object.keys(rec)) {
+        const w = walk(rec[k], at ? `${at}.${k}` : k);
+        if (w !== rec[k] && !out) out = { ...rec };
+        if (out) out[k] = w;
+      }
+      return out ?? v;
+    }
+    return v;
+  };
+  return { value: walk(value, '') as T, repaired };
+}
+
+/** A high surrogate not followed by a low one, or a low one not preceded by a high one → U+FFFD. */
+function replaceUnpairedSurrogates(s: string): string {
+  let out: string | null = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const d = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+      if (d >= 0xdc00 && d <= 0xdfff) {
+        if (out !== null) out += s[i] + s[i + 1];
+        i++;
+        continue;
+      }
+    } else if (!(c >= 0xdc00 && c <= 0xdfff)) {
+      if (out !== null) out += s[i];
+      continue;
+    }
+    // an unpaired half, of either kind
+    if (out === null) out = s.slice(0, i);
+    out += '�';
+  }
+  return out ?? s;
+}
+
 export function serializeEnvelope(env: WatchStateEnvelope): string {
-  return JSON.stringify(env);
+  // The bridge repairs and reports before it gets here; this pass is the last line, for any caller
+  // that did not (a second walk over an already-clean envelope finds nothing and copies nothing).
+  return JSON.stringify(repairWireStrings(env).value);
 }
 
 export function parseEnvelope(raw: unknown): WatchStateEnvelope | null {

@@ -95,8 +95,22 @@ describe('W3 · a set is confirmed by an answer, not an address', () => {
   it('⛔ the skew fallback keeps an older phone at yesterday\'s behaviour, never worse', () => {
     // An old phone has no reply delegate → iOS errors the delivery → the wrist re-sends plain.
     const send = manager.slice(manager.indexOf('func sendExpectingReply'));
-    expect(send).toContain('errorHandler: { _ in');
+    expect(send).toContain('errorHandler: { error in');
     expect(send.replace(/\s+/g, ' ')).toContain('session.sendMessage(["intent": json], replyHandler: nil, errorHandler: nil) completion(true)');
+  });
+
+  it('⛔ …and ONLY the skew case falls back — a reply that timed out is a set logged nowhere', () => {
+    /*
+     * Code review 2026-09-09: every error took the fallback, including `messageReplyTimedOut` — the
+     * jettisoned phone app that was woken by the tap and never answered — so the wrist re-sent plain
+     * and confirmed a set to nobody, which is the exact lie W3 exists to end. The fallback is gated on
+     * `messageReplyFailed` (no reply handler on the counterpart = an older phone); everything else
+     * answers `false` and the wrist shows the honest viewer with the draft kept.
+     */
+    const send = manager.slice(manager.indexOf('func sendExpectingReply'));
+    const flat = send.replace(/\s+/g, ' ');
+    expect(flat).toContain('guard code == WCError.messageReplyFailed.rawValue, session.isReachable else { completion(false) return }');
+    expect(flat.indexOf('WCError.messageReplyFailed')).toBeLessThan(flat.indexOf('replyHandler: nil, errorHandler: nil) completion(true)'));
   });
 
   it('⚠️ the draft survives a failed completion — her dialled weight and reps are not thrown away', () => {

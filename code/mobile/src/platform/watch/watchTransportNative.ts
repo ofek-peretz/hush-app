@@ -97,6 +97,42 @@ let recordSubs = 0;
 /** Listeners for LATE (async) OS refusals of sendState — see the sendState note. */
 const sendFailureCbs = new Set<(reason: string) => void>();
 let sendErrorSubAttached = false;
+
+/**
+ * ⛔ THE PHONE'S OWN ACCOUNT OF THE LAST FRAME (founder 2026-09-08, two photographs of a wrist
+ * saying `badframe` and nothing on the phone to hold against it). Every frame that leaves —
+ * when, how many bytes, which sequence — and the first refusal after it: the OS's
+ * (`updateApplicationContext` threw), or the phone's own parser's (`invalid_json: …`, the module
+ * checks the string before sending). Read by the Profile sheet's watch row, so the phone says
+ * what it sent without Sentry, PostHog or a cable.
+ */
+export interface WatchPublishRecord {
+  atMs: number;
+  bytes: number;
+  seq: number;
+  ok: boolean;
+  reason: string | null;
+}
+let lastPublish: WatchPublishRecord | null = null;
+function noteFailure(reason: string): void {
+  if (lastPublish) lastPublish = { ...lastPublish, ok: false, reason: reason.slice(0, 160) };
+  else lastPublish = { atMs: Date.now(), bytes: 0, seq: -1, ok: false, reason: reason.slice(0, 160) };
+}
+function utf8Bytes(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+/** The last frame the phone tried to send to the wrist, and what became of it. */
+export function lastWatchPublish(): WatchPublishRecord | null {
+  return lastPublish;
+}
 function maybeFlushPending(): void {
   if (intentSubs > 0 && recordSubs > 0) {
     try {
@@ -127,15 +163,19 @@ export const watchTransportNative: WatchTransport | null = native
          * unnoticed. Refusals now flow to `onSendFailure`, and the promise is always handled.
          */
         try {
-          const r = native.sendState(serializeEnvelope(env)) as unknown;
+          const json = serializeEnvelope(env);
+          lastPublish = { atMs: Date.now(), bytes: utf8Bytes(json), seq: env.authoritySeq, ok: true, reason: null };
+          const r = native.sendState(json) as unknown;
           if (r && typeof (r as Promise<void>).catch === 'function') {
             (r as Promise<void>).catch((err) => {
               const reason = err instanceof Error ? err.message : String(err);
+              noteFailure(reason);
               for (const cb of sendFailureCbs) cb(reason);
             });
           }
           return true;
-        } catch {
+        } catch (err) {
+          noteFailure(err instanceof Error ? err.message : String(err));
           return false; // synchronous refusal (serialization) — the bridge counts it inline
         }
       },
@@ -146,6 +186,7 @@ export const watchTransportNative: WatchTransport | null = native
           sendErrorSubAttached = true;
           try {
             native.addListener('onSendError', (e) => {
+              noteFailure(e.reason);
               for (const f of sendFailureCbs) f(e.reason);
             });
           } catch {

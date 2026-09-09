@@ -26,6 +26,7 @@ import {
   decideWatchIntent,
   makeStateEnvelope,
   parseWatchLocalSession,
+  repairWireStrings,
   type WatchLocalSession,
   type WatchLobby,
   type WatchPlanSnapshot,
@@ -255,7 +256,7 @@ export class WatchSession {
       watchCopyPack(),
       this.authorityEpoch,
     );
-    const okLobby = this.d.transport.sendState(env) !== false;
+    const okLobby = this.send(env);
     this.d.track(okLobby ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
       phase: 'lobby',
       seq: this.authoritySeq,
@@ -289,7 +290,7 @@ export class WatchSession {
       this.authorityEpoch,
       this.adoptedRecordId,
     );
-    const ok = this.d.transport.sendState(env) !== false;
+    const ok = this.send(env);
     this.d.track(ok ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
       phase: mirror ? mirror.phase : 'none',
       seq: this.authoritySeq,
@@ -394,12 +395,30 @@ export class WatchSession {
           watchCopyPack(),
           this.authorityEpoch,
         );
-    const okResync = this.d.transport.sendState(env) !== false;
+    const okResync = this.send(env);
     this.d.track(okResync ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
       phase: this.lastMirror ? this.lastMirror.phase : 'lobby',
       seq: this.authoritySeq,
       resync: true,
     });
+  }
+
+  /**
+   * Every envelope leaves through here. A string holding half a character (an unpaired UTF-16
+   * surrogate) makes the ENTIRE frame undecodable on the wrist — Apple's parser refuses the
+   * document, not the field (founder 2026-09-08, `wc:badframe:json`) — so it is repaired first,
+   * and the place it was found is reported. See `repairWireStrings`. Returns the transport's
+   * synchronous verdict, as `sendState` always did.
+   */
+  private send(env: WatchStateEnvelope): boolean {
+    const { value, repaired } = repairWireStrings(env);
+    if (repaired.length > 0) {
+      this.d.track(WATCH_EVENTS.wireRepaired, {
+        paths: repaired.slice(0, 8).join(','),
+        seq: env.authoritySeq,
+      });
+    }
+    return this.d.transport.sendState(value) !== false;
   }
 
   private handleIntent(raw: unknown): void {

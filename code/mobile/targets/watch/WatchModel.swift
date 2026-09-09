@@ -2,6 +2,7 @@ import Combine
 import Foundation
 import HealthKit
 import SwiftUI
+import WidgetKit
 
 // The watch's single source of *presentation* state. It holds the latest phone
 // mirror (advancing only on a higher authoritySeq), the pre-session lobby, the
@@ -110,7 +111,7 @@ final class WatchModel: ObservableObject {
   private var highestSeq = Int.min
   /// The phone process `highestSeq` belongs to — see `apply(_:)`. `Int.min` = none seen yet, so the
   /// first epoch-bearing envelope always wins and the sequence starts clean under it.
-  private var lastEpoch = Int.min
+  private var lastEpoch = Int64.min // Int64: a millisecond epoch overflows the watch's 32-bit Int
 
   // Local UI (presentation only — never workout state).
   private var editDraft: EditDraft?
@@ -168,6 +169,32 @@ final class WatchModel: ObservableObject {
   private var completeKcal: Int?
   /// Read by the Complete screen (the workout's energy replaced its set count).
   var completedKcal: Int? { completeKcal }
+
+  /// The watch face reads the Home screen's first fact (design pass 2026-09-09): what is next,
+  /// and how far into the week she is. Written on every lobby the phone publishes, then WidgetKit
+  /// is asked to redraw. Nothing live rides here — see the note in `HushComplication.swift`.
+  private func publishFace(_ l: WireLobby) {
+    let resting = l.resting == true
+    let face = WatchStore.WristFaceSnapshot(
+      v: 1,
+      workoutName: resting ? WatchCopy.recoveryTitle : l.workoutName,
+      legend: WatchCopy.upNext,
+      weekCount: l.workouts.count,
+      weekDone: l.workouts.filter { $0.done == true }.count,
+      queuedIndex: l.workouts.firstIndex { $0.id == l.workoutId },
+      resting: resting,
+      rtl: WatchCopyStore.isRTL,
+      updatedAt: Date().timeIntervalSince1970
+    )
+    store.saveFaceSnapshot(face)
+    WidgetCenter.shared.reloadAllTimelines()
+  }
+  /// WT10's one figure about the workout: the lift just closed, of how many. On the transition
+  /// frame that carries `completedExerciseName`, `liftIndex` is still the lift she just left.
+  var liftProgress: (done: Int, count: Int)? {
+    guard let m = effectiveMirror, let i = m.liftIndex, let n = m.liftCount, n > 0 else { return nil }
+    return (done: min(i, n), count: n)
+  }
 
   // Begin fallback (founder 2026-07-10, "it froze — wouldn't let me start"): a
   // reachable phone whose app never answers the start intent must not strand the
@@ -345,6 +372,7 @@ final class WatchModel: ObservableObject {
     mirror = envelope.mirror
     lobby = envelope.lobby
     if let l = envelope.lobby {
+      publishFace(l)
       lastKnownGated = l.gated == true
       // What Today offers, kept for the next time the phone is not here.
       store.saveQueuedWorkoutId(l.workoutId)
@@ -1067,7 +1095,10 @@ final class WatchModel: ObservableObject {
     bestSplitS = nil
     kmSplit = nil
     workoutRuntime.trackLive(paused: false, activity: gait == "run" ? .running : .walking, indoor: false)
-    onEntryHaptic.send(.readyTapped)
+    // The GO after the 3 · 2 · 1 (design pass 2026-09-09) — the rest ring's own ascending double,
+    // so "go" feels the same whether a rest ended or a run began. It was a plain click, the ack of
+    // a tap; the tap is now three seconds behind her.
+    onEntryHaptic.send(.restElapsed)
     recompute()
   }
 

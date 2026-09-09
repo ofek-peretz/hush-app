@@ -197,16 +197,16 @@ describe('projectSessionMirror', () => {
       ],
     })!;
     expect(m!.summary!.lifts).toEqual([
-      { name: 'Bench Press', best: '60 × 5', done: true },
-      { name: 'Squat', best: 'BW × 12', done: true },
+      { name: 'Bench Press', best: '60 × 5' },
+      { name: 'Squat', best: 'BW × 12' },
     ]);
   });
 
   it('with no logged sets supplied, the prescription stands in (pure-projection back-compat)', () => {
     const m = project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }) })!;
     expect(m!.summary!.lifts).toEqual([
-      { name: 'Bench Press', best: '60 × 5', done: true },
-      { name: 'Squat', best: '100 × 5', done: true },
+      { name: 'Bench Press', best: '60 × 5' },
+      { name: 'Squat', best: '100 × 5' },
     ]);
   });
 
@@ -238,7 +238,7 @@ describe('projectSessionMirror', () => {
       completedSets: 1, // one of Bench's two sets — performed, but NOT finished
       loggedSets: [{ weight: 60, reps: 5 }],
     })!;
-    expect(m!.summary!.lifts).toEqual([{ name: 'Bench Press', best: '60 × 5', done: false }]);
+    expect(m!.summary!.lifts).toEqual([{ name: 'Bench Press', best: '60 × 5' }]);
   });
 
   it('Complete summary falls back to the planned total when no live count is supplied', () => {
@@ -256,11 +256,11 @@ describe('projectSessionMirror', () => {
     expect(project({ machine: machine({ phase: 'SESSION_SAVED', setIndex: 3 }), toLoad: true })!.toLoad).toBe(false);
   });
 
-  it('offers Exercise Busy only at the start of an exercise with a later one', () => {
+  it('offers Exercise Busy at ANY set of an exercise with a later one (2026-09-07 — the board)', () => {
     // idx 0 = Bench set 1 of 2, with Squat later → offerable
     expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 0 }) })!.canMarkBusy).toBe(true);
-    // idx 1 = Bench set 2 of 2 (not the start) → not offerable
-    expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 1 }) })!.canMarkBusy).toBe(false);
+    // idx 1 = Bench set 2 of 2 — a station is taken when it is taken; the remainder defers → offerable
+    expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 1 }) })!.canMarkBusy).toBe(true);
     // idx 2 = Squat set 1 of 1 (no later exercise) → not offerable
     expect(project({ machine: machine({ phase: 'SET_PRESENTED', setIndex: 2 }) })!.canMarkBusy).toBe(false);
   });

@@ -65,7 +65,11 @@ function accepts(type: string, value: unknown): boolean {
   if (value === null || value === undefined) return type.endsWith('?');
   if (base === 'String') return typeof value === 'string';
   // ⛔ THE ONE THAT BITES: Swift refuses 4.5 into an Int, silently killing the whole envelope.
-  if (base === 'Int') return typeof value === 'number' && Number.isInteger(value);
+  // ⛔ APPLE WATCH IS 32-BIT (arm64_32): a Swift `Int` there tops out at 2,147,483,647. A millisecond
+  // epoch declared `Int` refused the whole envelope from build ~64 to 70 (founder 2026-09-08, the
+  // wrist's own words: "Number 1788898463… is not representable in Swift"). `Int64` for those.
+  if (base === 'Int') return typeof value === 'number' && Number.isInteger(value) && Math.abs(value) <= 2147483647;
+  if (base === 'Int64') return typeof value === 'number' && Number.isInteger(value);
   if (base === 'Double') return typeof value === 'number' && Number.isFinite(value);
   if (base === 'Bool') return typeof value === 'boolean';
   if (base.startsWith('[') && base.endsWith(']')) return Array.isArray(value);
@@ -116,7 +120,7 @@ describe('⛔ every envelope the phone builds survives Swift’s decoder', () =>
 
   it('⛔ the LOBBY envelope — the first frame, and the one in the photograph', () => {
     const faults: string[] = [];
-    check('WireEnvelope', onTheWire(makeStateEnvelope(null, 1, Date.now(), lobby)), 'envelope', faults);
+    check('WireEnvelope', onTheWire(makeStateEnvelope(null, 1, Date.now(), lobby, null, null, Date.now())), 'envelope', faults);
     expect(faults).toEqual([]);
   });
 
@@ -129,7 +133,7 @@ describe('⛔ every envelope the phone builds survives Swift’s decoder', () =>
      */
     const bare = { workoutId: null, workoutName: '', muscles: '', workouts: [] };
     const faults: string[] = [];
-    check('WireEnvelope', onTheWire(makeStateEnvelope(null, 1, Date.now(), bare)), 'envelope', faults);
+    check('WireEnvelope', onTheWire(makeStateEnvelope(null, 1, Date.now(), bare, null, null, Date.now())), 'envelope', faults);
     expect(faults).toEqual([]);
   });
 
@@ -137,7 +141,7 @@ describe('⛔ every envelope the phone builds survives Swift’s decoder', () =>
     // What the phone sends between screens. `v`, `type`, `authoritySeq` and `sentAt` are the four
     // Swift will not do without.
     const faults: string[] = [];
-    check('WireEnvelope', onTheWire(makeStateEnvelope(null, 1, Date.now())), 'envelope', faults);
+    check('WireEnvelope', onTheWire(makeStateEnvelope(null, 1, Date.now(), null, null, null, Date.now())), 'envelope', faults);
     expect(faults).toEqual([]);
   });
 

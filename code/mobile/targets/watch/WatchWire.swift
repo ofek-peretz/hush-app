@@ -245,7 +245,14 @@ struct WireEnvelope: Codable {
   /// Optional, like every post-v1 field: a phone one build behind sends none, and `nil` must mean
   /// "keep the seq-only rule", never "epoch zero" — reading it as zero would reject that phone
   /// forever, which is the same bug wearing the other hat.
-  var authorityEpoch: Int?
+  ///
+  /// ⛔ `Int64`, NEVER `Int` (founder 2026-09-08, the fourth wrist photograph, build 70:
+  /// `Number 1788898463… is not representable in Swift · rx:0`). Apple Watch runs arm64_32, where
+  /// `Int` is THIRTY-TWO bits and tops out at 2,147,483,647 — a millisecond epoch is thirteen
+  /// digits. `JSONDecoder` refused the WHOLE envelope for this one field, from the build that added
+  /// it (~64) until now, and the phone — a 64-bit iPhone — could never reproduce it: the same
+  /// `Int` fits there. Any other epoch-in-milliseconds this file ever carries must be `Int64` too.
+  var authorityEpoch: Int64?
   /// The live handover this phone is holding — mirror of protocol.ts `adoptedRecordId`.
   ///
   /// A wrist that has handed a running workout to the phone may only let go once the phone HAS it,
@@ -428,10 +435,40 @@ struct WireLocalSession: Codable {
 }
 
 enum WatchWire {
+  /**
+   ⛔ TWO PARSERS, AND THE FRAME GOES THROUGH WHICHEVER ACCEPTS IT (founder 2026-09-08, build 69 on
+   the wrist: `wc:on` on install, `badframe` the moment the phone published — with `JSONSerialization`
+   accepting the very bytes `JSONDecoder` refused, on both devices).
+
+   `JSONDecoder` runs Swift's own scanner; `JSONSerialization` is Apple's older parser; they do not
+   agree on every document. The wrist used to trust only the first, so a frame the second read
+   perfectly was thrown away whole — for a reason nobody could see. Now, when the scanner refuses, the
+   frame is read by the older parser, SERIALISED AGAIN by it (which normalises every escape and
+   number to a form the scanner accepts), and decoded — and the scanner's own account of what it
+   refused is kept (`lastRepair`) so the diag line can say what was wrong even while the wire works.
+   */
   static func decodeEnvelope(_ json: String) -> WireEnvelope? {
     guard let data = json.data(using: .utf8) else { return nil }
-    return try? JSONDecoder().decode(WireEnvelope.self, from: data)
+    do {
+      let env = try JSONDecoder().decode(WireEnvelope.self, from: data)
+      lastRepair = nil
+      return env
+    } catch DecodingError.dataCorrupted(let ctx) where ctx.codingPath.isEmpty {
+      let why = ctx.underlyingError.map { String(describing: $0) } ?? ctx.debugDescription
+      guard let obj = try? JSONSerialization.jsonObject(with: data),
+            JSONSerialization.isValidJSONObject(obj),
+            let clean = try? JSONSerialization.data(withJSONObject: obj),
+            let env = try? JSONDecoder().decode(WireEnvelope.self, from: clean) else { return nil }
+      lastRepair = String(why.prefix(90))
+      return env
+    } catch {
+      return nil
+    }
   }
+
+  /// The scanner's account of the last frame it refused and the older parser rescued — nil once a
+  /// frame decodes cleanly. Shown on the wrist beside `wc:on`, so the fix and its reason travel together.
+  static var lastRepair: String? = nil
 
   /**
    ⛔ WHY IT FAILED, NOT MERELY THAT IT DID (founder 2026-08-30, photographing `wc:badframe · rx:0`).
@@ -449,8 +486,27 @@ enum WatchWire {
 
    Returns a short path like `lobby.muscles` or `authoritySeq`, sized for a 12-point mono line.
    */
-  static func decodeFailureReason(_ json: String) -> String {
+  static func decodeFailureReason(_ json: String, sentLen: Int? = nil) -> String {
     guard let data = json.data(using: .utf8) else { return "utf8" }
+    /*
+     * ⛔ THE OFFSET WAS ONE LEVEL DEEPER (founder 2026-09-08, second photograph:
+     * `wc:badframe:json:The given data was not valid`). `JSONDecoder` wraps the parser's refusal
+     * in a generic sentence and keeps the real one — "Unable to convert data to string around
+     * character 245", "Unexpected character 'x' around line 1, column 245" — in `underlyingError`.
+     * So the parser is asked DIRECTLY first: `JSONSerialization` throws the NSError whose
+     * `NSDebugDescription` names the byte. Beside it: the string's own length against the length
+     * the phone said it sent (`len`), and its first characters — a frame cut in transit, a frame
+     * that is not JSON at all, and a frame with one bad escape all read differently here.
+     */
+    do {
+      _ = try JSONSerialization.jsonObject(with: data)
+    } catch {
+      let why = (error as NSError).userInfo[NSDebugDescriptionErrorKey] as? String ?? error.localizedDescription
+      let have = json.utf8.count
+      let len = sentLen.map { $0 == have ? "len \(have)" : "len \(have)/\(String(describing: $0)) CUT" } ?? "len \(have)"
+      let head = String(json.prefix(14)).replacingOccurrences(of: "\n", with: "⏎")
+      return "json" + parseFailureSite(why, in: json) + " · \(len) · «\(head)»"
+    }
     do {
       _ = try JSONDecoder().decode(WireEnvelope.self, from: data)
       return "none"
@@ -461,10 +517,64 @@ enum WatchWire {
     } catch DecodingError.valueNotFound(_, let ctx) {
       return "null:" + path(ctx.codingPath)
     } catch DecodingError.dataCorrupted(let ctx) {
-      return ctx.codingPath.isEmpty ? "json" : "bad:" + path(ctx.codingPath)
+      /*
+       * ⛔ `json` ALONE WAS THE NEXT FOUR LETTERS (founder 2026-09-08, photographing
+       * `wc:badframe:json · rx:0`). An empty coding path means the parser refused the DOCUMENT —
+       * before any field — and "json" said only that, over a payload no developer machine can see.
+       * Foundation's own account names the spot ("… around line 1, column 245." on the current
+       * parser, "… around character 245." on the older one); the wrist now shows that offset and
+       * the text either side of it, which is the difference between a photograph that says "it
+       * broke" and one that says WHERE. The one cause `JSON.stringify` output can have — a lone
+       * surrogate escape, `\uD83D` with no partner — shows up here as exactly that text.
+       */
+      guard ctx.codingPath.isEmpty else { return "bad:" + path(ctx.codingPath) }
+      /*
+       * ⛔ THE PARSER SAID YES AND THE DECODER SAID NO (founder 2026-09-08, fourth photograph, on
+       * build 69: `wc:on` on install, then `badframe:json:The given data was not valid` the moment
+       * the phone published). `JSONSerialization` accepted the same bytes a line above, so this is
+       * not a parse error in the ordinary sense — it is Swift's own scanner refusing what Apple's
+       * older parser allows, and its reason is in `underlyingError`, never in the generic sentence
+       * `JSONDecoder` wraps around it. So the underlying error is what the wrist shows, with its
+       * own location words ("index", "column") and the text around that byte.
+       */
+      let under = ctx.underlyingError.map { String(describing: $0) } ?? ctx.debugDescription
+      let have = json.utf8.count
+      let len = sentLen.map { $0 == have ? "len \(have)" : "len \(have)/\(String(describing: $0)) CUT" } ?? "len \(have)"
+      return "json" + parseFailureSite(under, in: json) + " · \(len) · «\(String(json.prefix(14)))»"
     } catch {
       return "err"
     }
+  }
+
+  /// `@245«…rkout \uD83D","lifts…»` — the offset Foundation named, and the text around it, with
+  /// the JSON's own escapes left as written so a broken escape is visible as one. Empty when the
+  /// description carries no offset (then the description's first words stand in).
+  private static func parseFailureSite(_ description: String, in json: String) -> String {
+    // The current parser counts its column in BYTES of the UTF-8 it scanned; a Hebrew envelope
+    // is mostly two-byte characters, so the window is cut in bytes too and decoded lossily (a
+    // multi-byte character split at the edge becomes U+FFFD rather than a crash).
+    let bytes = Array(json.utf8)
+    guard let offset = firstInteger(after: ["column", "character", "offset", "index"], in: description) else {
+      let head = description.prefix(60).trimmingCharacters(in: .whitespaces)
+      return head.isEmpty ? "" : ":" + head
+    }
+    let at = max(0, min(bytes.count, offset))
+    let lo = max(0, at - 14), hi = min(bytes.count, at + 14)
+    let window = String(decoding: bytes[lo..<hi], as: UTF8.self)
+      .replacingOccurrences(of: "\n", with: "⏎")
+    return "@\(offset)«\(lo > 0 ? "…" : "")\(window)\(hi < bytes.count ? "…" : "")»"
+  }
+
+  /// The first integer that follows any of `words` in `text` — "column 245." → 245.
+  private static func firstInteger(after words: [String], in text: String) -> Int? {
+    let lower = text.lowercased()
+    for word in words {
+      guard let r = lower.range(of: word) else { continue }
+      let tail = lower[r.upperBound...].drop(while: { !$0.isNumber })
+      let digits = tail.prefix(while: { $0.isNumber })
+      if let n = Int(digits) { return n }
+    }
+    return nil
   }
 
   /// `lobby.workouts[2].name` — array indices kept, because "one of the workouts" is not an answer.
