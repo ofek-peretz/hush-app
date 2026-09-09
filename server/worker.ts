@@ -69,7 +69,7 @@ export interface Env {
    * bearer-sending build is the fleet. The flag is the migration, not a setting.
    */
   REQUIRE_AUTH?: string;
-  /** Per-account calls per UTC day. Default 40 — a real athlete's heaviest day is under ten. */
+  /** Per-account calls per UTC day. Code default 40, deployed 200 (wrangler.toml, 2026-09-09) — a real athlete's heaviest day is under ten. */
   DAILY_ACCOUNT_CALLS?: string;
   /**
    * All accounts together, per UTC day — the kill switch that bounds the worst possible bill no
@@ -649,6 +649,13 @@ export default {
      * ⚠️ REDUCED, NOT ELIMINATED: one v15 run still hit 125s. That is what the retry below and
      * `retryWaitingUpdate()` in the app are for. Anything that grows this prompt again spends the
      * margin that keeps her week arriving.
+     */
+    /*
+     * ⛔ THE MODEL ID IS IN THE URL, AND ON 2026-09-09 IT WAS NOT. The working tree carried
+     * `models/:streamGenerateContent` — an uncommitted edit that had never been deployed — and the
+     * quota deploy shipped it: every call answered 502 (`upstream 404`) until the redeploy minutes
+     * later. The name is interpolated here and stamped on the reply from the same constant, so the
+     * two cannot drift again.
      */
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
     /*

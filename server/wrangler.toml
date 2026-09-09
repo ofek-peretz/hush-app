@@ -48,7 +48,12 @@ id = "14a55c2d60944fdfb81d9895cf6b7a66"
 # '0' until the first bearer-sending build IS the fleet, then the founder flips it to '1' and a
 # session becomes the price of a coach call. The flag is the migration, not a setting.
 REQUIRE_AUTH = "0"
-DAILY_ACCOUNT_CALLS = "40"
+# ⛔ 40 → 200 on 2026-09-09. The founder walked the intake repeatedly on a testing day, crossed 40,
+# and every build after it fell through to the local assembler — a week his own sentence never
+# touched, reported as "the AI ignores my prompt". A real athlete's heaviest honest day is still
+# under ten; 200 keeps the wall against a script (the 30/60 s limiter above is the real one) and
+# stops the wall from landing on the most important call in the product.
+DAILY_ACCOUNT_CALLS = "200"
 DAILY_GLOBAL_CALLS = "2000"
 
 # ⚠️ `GEMINI_API_KEY` AND `HUSH_TOKEN` ARE NOT HERE, AND MUST NEVER BE. They live in the Worker's
