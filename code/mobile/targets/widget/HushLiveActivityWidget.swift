@@ -10,13 +10,15 @@ import WidgetKit
 // JetBrains Mono is not bundled in this extension, so measured numbers use the
 // sanctioned fallback: monospaced system digits.
 //
-// The widget extension's deployment target is iOS 16.2 (expo-target.config.js), so
-// ActivityKit + Live Activities are unconditionally available here — no `@available`
-// guards / `if #available` (those were a result-builder hazard and are unnecessary).
+// The widget extension's deployment target is iOS 17.0 (expo-target.config.js), so
+// ActivityKit, Live Activities and interactive intents are unconditionally available here — no
+// `@available` guards / `if #available` (those were a result-builder hazard and are unnecessary).
 //
-// Hard contract (spec §8.5): READ-ONLY — no completion / pause / skip controls from
-// the Live Activity (the mockup's buttons are overridden by the ratified contract,
-// and iOS 16.2 has no Live Activity App Intents anyway). During rest the TIMER is
+// ════ THE LOCK SCREEN IS A CONTROL (founder, 2026-09-08) ════ The §8.5 read-only contract is
+// retired by his hand: the card and the island carry the three verbs a thumb has on the stage —
+// log the set as written, +15 s, start the next set — as App Intents (`HushLockIntents.swift`),
+// so a set is logged and a rest is shortened or stretched WITHOUT opening the phone. The
+// extension is iOS 17 now (`Button(intent:)`). During rest the TIMER is
 // the hero, driven by the absolute `restEndDate` via `Text(timerInterval:)`; during
 // an active set the exercise name is the hero. Strength never shows heart rate /
 // calories / progress ring / streak; cardio legitimately shows pace / HR / calories
@@ -55,11 +57,19 @@ private struct RangeMark: View {
   }
 }
 
-/// The rest countdown as a fraction still to run — the moss line that DRAINS (6.1).
-private func restFraction(_ s: HushSessionAttributes.ContentState) -> Double? {
-  guard s.isResting, let end = s.restEndDate, let total = s.restTotalS, total > 0 else { return nil }
-  let left = end.timeIntervalSinceNow
-  return min(1, max(0, left / total))
+/// The running rest as the interval the moss line drains over — from the instant it began to the
+/// instant it ends. Nil unless resting with an end still ahead.
+///
+/// ⛔ THE LINE THAT NEVER MOVED (founder 2026-09-08, photographing the card at 1:58 with the bar
+/// still full). The old drain took `end.timeIntervalSinceNow` at RENDER time and drew that
+/// fraction as a fixed width — and a Live Activity renders exactly once per content update, not
+/// once per second. The clock beside it ticked because `Text(timerInterval:)` is driven by the
+/// system; the bar beside the clock was a photograph of the rest's first instant. The same
+/// system-driven primitive exists for progress — `ProgressView(timerInterval:countsDown:)` —
+/// and that is what draws it now, so the line drains on its own with no update from the phone.
+private func restInterval(_ s: HushSessionAttributes.ContentState) -> ClosedRange<Date>? {
+  guard s.isResting, let end = s.restEndDate, let total = s.restTotalS, total > 0, end > Date() else { return nil }
+  return end.addingTimeInterval(-total)...end
 }
 
 private func legend(_ s: String) -> some View {
@@ -101,7 +111,7 @@ struct HushStrengthLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: HushSessionAttributes.self) { context in
       StrengthLockView(state: context.state)
-        .padding(16)
+        .padding(14) // the 160-point budget — see StrengthLockView
         .activityBackgroundTint(HX.stage)
         .activitySystemActionForegroundColor(HX.ink0)
     } dynamicIsland: { context in
@@ -131,19 +141,20 @@ struct HushStrengthLiveActivity: Widget {
               .foregroundColor(HX.ink0)
               .frame(maxWidth: 96)
           } else if s.phase != "paused" {
-            StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17)
+            StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17, unit: s.unitLabel)
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
           VStack(alignment: .leading, spacing: 10) {
             // THE MOSS LINE DRAINS as the rest runs out (6.1). Only during a rest — outside one
             // there is nothing running, and a full bar that never moves is a lie about time.
-            if let f = restFraction(s) {
-              RestDrain(fraction: f)
+            if let interval = restInterval(s) {
+              RestDrain(interval: interval)
             }
             Text(strengthFooter(s))
               .font(.system(size: 12))
               .foregroundColor(HX.ink2)
+            StrengthActions(state: s, compact: true)
           }
         }
       } compactLeading: {
@@ -172,17 +183,16 @@ struct HushStrengthLiveActivity: Widget {
   }
 }
 
-/// The draining moss line (6.1) — a track at 14% cream with the remaining rest laid over it.
+/// The draining moss line (6.1), driven by the system clock — see `restInterval`. `countsDown`
+/// makes the filled part the rest STILL TO RUN, so the line empties as the countdown beside it
+/// reaches zero (founder 2026-09-08: *"הקו הירוק… צריך להתרוקן ככל שהמנוחה מסתיימת"*).
 private struct RestDrain: View {
-  let fraction: Double
+  let interval: ClosedRange<Date>
   var body: some View {
-    GeometryReader { geo in
-      ZStack(alignment: .leading) {
-        Capsule().fill(HX.ink0.opacity(0.14))
-        Capsule().fill(HX.accent).frame(width: max(0, geo.size.width * fraction))
-      }
-    }
-    .frame(height: 5)
+    ProgressView(timerInterval: interval, countsDown: true, label: { EmptyView() }, currentValueLabel: { EmptyView() })
+      .progressViewStyle(.linear)
+      .tint(HX.accent)
+      .frame(height: 5)
   }
 }
 
@@ -209,9 +219,10 @@ private struct SetDots: View {
 /// The one plain word above the subject in the expanded island: "Rest" / "Next up" / "Paused".
 private func strengthMode(_ s: HushSessionAttributes.ContentState) -> String {
   switch s.phase {
-  case "paused": return "Paused"
-  case "transition": return "Next up"
-  case "rest": return "Rest"
+  case "paused": return s.wordPaused
+  case "transition": return s.wordNext
+  case "rest": return s.wordRest
+  case "logged": return s.wordLogged
   default: return s.workoutName
   }
 }
@@ -229,9 +240,10 @@ private func strengthIcon(_ s: HushSessionAttributes.ContentState) -> String {
 private func strengthLegend(_ s: HushSessionAttributes.ContentState) -> String {
   let mode: String
   switch s.phase {
-  case "paused": mode = "paused"
-  case "transition": mode = "next up"
-  case "rest": mode = "rest"
+  case "paused": mode = s.wordPaused
+  case "transition": mode = s.wordNext
+  case "rest": mode = s.wordRest
+  case "logged": mode = s.wordLogged
   default: mode = "live"
   }
   return "\(s.workoutName) · \(mode)"
@@ -239,7 +251,8 @@ private func strengthLegend(_ s: HushSessionAttributes.ContentState) -> String {
 
 /// Hero line: the (upcoming) exercise; "Workout paused" while held.
 private func strengthTitle(_ s: HushSessionAttributes.ContentState) -> String {
-  if s.phase == "paused" { return "Workout paused" }
+  if s.phase == "paused" { return s.wordPaused }
+  if s.phase == "logged" { return s.exerciseName }
   if s.phase == "transition" { return s.nextExerciseName ?? s.exerciseName }
   return s.exerciseName
 }
@@ -247,13 +260,14 @@ private func strengthTitle(_ s: HushSessionAttributes.ContentState) -> String {
 /// Footer: the set label; during a transition the upcoming load; while paused the
 /// lift position ("Lift 3 of 6 · nothing lost").
 private func strengthFooter(_ s: HushSessionAttributes.ContentState) -> String {
-  if s.phase == "paused" { return "Lift \(s.liftIndex) of \(s.liftCount) · nothing lost" }
+  if s.phase == "paused" { return "\(s.wordPaused) · \(s.liftIndex) / \(s.liftCount)" }
+  if s.phase == "logged" { return s.wordLogged }
   if s.phase == "transition" {
-    if let w = s.nextTargetWeight, let r = s.nextTargetReps { return "Up next · \(fmtWeight(w)) kg × \(r)" }
-    if let r = s.nextTargetReps { return "Up next · BW × \(r)" }
-    return "Up next"
+    if let w = s.nextTargetWeight, let r = s.nextTargetReps { return "\(s.wordNext) · \(fmtWeight(w)) \(s.unitLabel) × \(r)" }
+    if let r = s.nextTargetReps { return "\(s.wordNext) · BW × \(r)" }
+    return s.wordNext
   }
-  if s.phase == "rest" { return "Up next · \(s.setLabel)" }
+  if s.phase == "rest" { return "\(s.wordNext) · \(s.setLabel)" }
   return s.setLabel
 }
 
@@ -266,6 +280,8 @@ private struct StrengthLoadText: View {
   let weight: Double?
   let reps: Int
   let size: CGFloat
+  /// The unit word from the phone ("kg" / "lb") — never assumed (2026-09-08).
+  var unit: String = "kg"
   private var tail: CGFloat { max(11, size * 0.38) }
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 5) {
@@ -273,7 +289,7 @@ private struct StrengthLoadText: View {
         Text(fmtWeight(w))
           .font(.system(size: size, design: .monospaced)).monospacedDigit()
           .foregroundColor(HX.ink0)
-        Text("kg × \(reps)")
+        Text("\(unit) × \(reps)")
           .font(.system(size: tail, design: .monospaced)).monospacedDigit()
           .foregroundColor(HX.ink2)
       } else {
@@ -286,48 +302,224 @@ private struct StrengthLoadText: View {
   }
 }
 
-// Lock Screen / banner presentation (6.2).
+// Lock Screen / banner presentation (6.2), re-cut on 2026-09-08.
 //
-// The handoff's composition, top to bottom: the brand mark beside a mono legend that names the set;
-// then the lift in the coach's serif with its LOAD as the biggest thing on the card; and the set
-// count drawn a second time, as dots, where the thumb can read it without reading.
+// ════ THE CARD WAS CUT OFF TOP AND BOTTOM (founder, mid-workout, photographing it) ════
+//
+// iOS gives a Lock Screen Live Activity 160 points and clips whatever exceeds them, centred — so
+// the header row vanished under the top edge and the buttons under the bottom one. The old card
+// added up to ~192: 16 of padding twice, a brand row, a 14-spacing three times, a 14-point name
+// over a 40-point figure, the drain, and a 46-point action row. Every one of those was drawn for
+// a card with no height limit. The budget is the composition now:
+//
+//   14  padding
+//   18  the lift in the coach's serif, the set legend at the far end          (was two rows)
+//    8
+//   40  the one big thing: the countdown / the load with its steppers, dots  (figure 34, was 40)
+//    8   (+14 on a set — see below)
+//    5  the moss line, resting only, +8 below it
+//   40  the action row                                                        (was 46)
+//   14  padding
+//   ──
+//  156  on a set, 155 on a rest — both under 160, nothing clipped, nothing squeezed to fit.
+//
+// ════ THE STEPPERS SAT ON TOP OF DONE (founder, 2026-09-09) ════
+//   > *"הכפתורי מינוס פלוס קרובים מאוד להתחלת התרגיל וקל מאוד לפספס."*
+// On a set the round keys (34 pt) stood 8 pt above the Done capsule (40 pt, full width): a thumb
+// that landed low on "−" logged the set. The set card had 18 pt of the 160 unspent — it spends 14
+// of them as air between the figures and the act. A rest keeps its 8: the countdown has no keys.
+//
+// The brand mark rides the name row; "hush" as a word is gone from the card (the mark IS the
+// brand, and the row it had was the row the card could not afford).
 private struct StrengthLockView: View {
   let state: HushSessionAttributes.ContentState
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack(spacing: 9) {
-        RangeMark(width: 18, height: 9)
-        legend("hush · \(state.setLabel)")
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .center, spacing: 8) {
+        RangeMark(width: 15, height: 8)
+        Text(strengthTitle(state))
+          .font(.system(size: 15, design: .serif))
+          .foregroundColor(HX.ink1)
+          .lineLimit(1)
         Spacer(minLength: 8)
+        legend(state.setLabel)
       }
+      .frame(height: 18)
 
       HStack(alignment: .center, spacing: 12) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text(strengthTitle(state))
-            .font(.system(size: 14, design: .serif))
-            .foregroundColor(HX.ink1)
-            .lineLimit(1)
-          if let range = countdownRange(endDate: state.restEndDate, isResting: state.isResting) {
-            // Resting: the countdown takes the load's place as the card's one big figure.
-            Text(timerInterval: range, countsDown: true)
-              .font(.system(size: 40, design: .monospaced))
-              .monospacedDigit()
-              .foregroundColor(HX.ink0)
-              .frame(maxWidth: 150, alignment: .leading)
-          } else if state.phase == "paused" {
-            Image(systemName: "pause.fill").font(.system(size: 26)).foregroundColor(HX.ink2)
-          } else {
-            StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 40)
-          }
+        if let range = countdownRange(endDate: state.restEndDate, isResting: state.isResting) {
+          // Resting: the countdown is the card's one big figure.
+          Text(timerInterval: range, countsDown: true)
+            .font(.system(size: 34, design: .monospaced))
+            .monospacedDigit()
+            .foregroundColor(HX.ink0)
+            .frame(maxWidth: 130, alignment: .leading)
+          Spacer(minLength: 8)
+          SetDots(index: state.setIndex, count: state.setCount)
+        } else if state.phase == "paused" {
+          Image(systemName: "pause.fill").font(.system(size: 24)).foregroundColor(HX.ink2)
+          Spacer(minLength: 8)
+          SetDots(index: state.setIndex, count: state.setCount)
+        } else if state.phase == "set" {
+          // On a set: HER FIGURES, with the two steppers that let her type them from here.
+          StrengthSetEntry(state: state)
+        } else {
+          StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 34, unit: state.unitLabel)
+          Spacer(minLength: 8)
+          SetDots(index: state.setIndex, count: state.setCount)
         }
-        Spacer(minLength: 8)
-        SetDots(index: state.setIndex, count: state.setCount)
+      }
+      .frame(height: 40)
+
+      // During a rest the moss line drains under the figure, exactly as it does in the island.
+      if let interval = restInterval(state) {
+        RestDrain(interval: interval)
       }
 
-      // During a rest the moss line drains under the card, exactly as it does in the island.
-      if let f = restFraction(state) {
-        RestDrain(fraction: f)
+      // ════ THE ACTION ROW (founder, 2026-09-08) ════ — on a set, one act (log it, as written
+      // or with the figures above); on a rest, two (+15 s, start the next set). On a set the row
+      // stands 14 pt further from the steppers (see the budget above).
+      StrengthActions(state: state, compact: false)
+        .padding(.top, state.phase == "set" ? 14 : 0)
+    }
+  }
+}
+
+/// ════ HER FIGURES, TYPED FROM THE LOCKED PHONE (founder 2026-09-08, mid-workout) ════
+///
+///   > *"אפשרות להזין ישירות מהלייב אקטיביטי את המשקל והחזרות."*
+///
+/// Two steppers on the set row — the load by this lift's own detent (`weightStep`, baked on the
+/// phone), the reps by one — and the figures between them are what "Done" will write. Each turn
+/// is an intent (`HushAdjustFigureIntent`) that parks the value in the App Group and redraws the
+/// card at once; nothing reaches the phone until the set is logged, so the phone sees one event
+/// per set carrying her numbers, exactly as a typed set on the stage does. Bodyweight has no load
+/// to turn: its stepper is drawn dead, the way the keypad draws a key that does not apply.
+///
+/// − left, + right in every language — a stepper is a number line, not prose (the same rule the
+/// keypad keeps), so the row is pinned left-to-right under a Hebrew system.
+private struct StrengthSetEntry: View {
+  let state: HushSessionAttributes.ContentState
+
+  var body: some View {
+    HStack(spacing: 10) {
+      FigureStepper(
+        field: "weight",
+        figure: state.targetWeight.map(fmtWeight) ?? "BW",
+        tail: state.targetWeight == nil ? "" : state.unitLabel,
+        enabled: state.targetWeight != nil
+      )
+      Spacer(minLength: 4)
+      FigureStepper(field: "reps", figure: "\(state.targetReps)", tail: state.wordReps, enabled: true)
+    }
+    .environment(\.layoutDirection, .leftToRight)
+  }
+}
+
+/// `[−]  40 kg  [+]` — a mono figure with its muted unit between two round keys.
+private struct FigureStepper: View {
+  let field: String
+  let figure: String
+  let tail: String
+  let enabled: Bool
+
+  var body: some View {
+    HStack(spacing: 6) {
+      StepKey(field: field, delta: -1, glyph: "minus", enabled: enabled)
+      HStack(alignment: .firstTextBaseline, spacing: 4) {
+        Text(figure)
+          .font(.system(size: 22, design: .monospaced)).monospacedDigit()
+          .foregroundColor(HX.ink0)
+          .lineLimit(1)
+        if !tail.isEmpty {
+          Text(tail)
+            .font(.system(size: 11))
+            .foregroundColor(HX.ink2)
+            .lineLimit(1)
+        }
+      }
+      .frame(minWidth: 58)
+      StepKey(field: field, delta: 1, glyph: "plus", enabled: enabled)
+    }
+  }
+}
+
+/// One round key of a stepper. 34 points — the row's whole budget less its breathing room.
+private struct StepKey: View {
+  let field: String
+  let delta: Int
+  let glyph: String
+  let enabled: Bool
+
+  var body: some View {
+    Button(intent: HushAdjustFigureIntent(field: field, delta: delta)) {
+      Image(systemName: glyph)
+        .font(.system(size: 13, weight: .bold))
+        .frame(width: 34, height: 34)
+    }
+    .buttonStyle(.plain)
+    .foregroundColor(enabled ? HX.ink0 : HX.ink2.opacity(0.5))
+    .background(HX.ink0.opacity(enabled ? 0.12 : 0.05), in: Circle())
+    .disabled(!enabled)
+  }
+}
+
+/// The three verbs of the lock screen, as intents — see `HushLockIntents.swift`. Exactly the acts
+/// the stage's footer has, so nothing can be done from here that the thumb could not do in-app:
+///   · set     → "Done" (log it — as written, or with the figures the steppers hold; the rest starts)
+///   · rest    → "+15 s" and "Next set"
+///   · paused / logged → nothing (the phone owns a pause and the finish)
+private struct StrengthActions: View {
+  let state: HushSessionAttributes.ContentState
+  /// Island bottom region (tight) vs the lock card (the 40 pt row the height budget allows).
+  let compact: Bool
+
+  private var height: CGFloat { compact ? 34 : 40 }
+
+  var body: some View {
+    if state.phase == "set" {
+      HStack(spacing: 10) {
+        // The voice's loading dialogue is open (spec §3.2): Ready beside Done, a tap being the
+        // set's start. Absent otherwise — the row is Done alone, exactly as before.
+        if state.awaitingReady {
+          Button(intent: HushSetReadyIntent()) {
+            Text(state.actReady)
+              .font(.system(size: compact ? 14 : 15, weight: .medium))
+              .frame(maxWidth: .infinity, minHeight: height)
+          }
+          .buttonStyle(.plain)
+          .foregroundColor(HX.ink0)
+          .background(HX.ink0.opacity(0.12), in: Capsule())
+        }
+        Button(intent: HushCompleteSetIntent()) {
+          Text(state.actDone)
+            .font(.system(size: compact ? 14 : 16, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: height)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(HX.stage)
+        .background(HX.ink0, in: Capsule())
+      }
+    } else if state.isResting {
+      HStack(spacing: 10) {
+        Button(intent: HushAddRestIntent()) {
+          Text(state.actAddRest)
+            .font(.system(size: compact ? 14 : 15, weight: .medium))
+            .monospacedDigit()
+            .frame(maxWidth: .infinity, minHeight: height)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(HX.ink0)
+        .background(HX.ink0.opacity(0.12), in: Capsule())
+        Button(intent: HushEndRestIntent()) {
+          Text(state.actStart)
+            .font(.system(size: compact ? 14 : 16, weight: .semibold))
+            .frame(maxWidth: .infinity, minHeight: height)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(HX.stage)
+        .background(HX.ink0, in: Capsule())
       }
     }
   }

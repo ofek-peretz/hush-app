@@ -19,14 +19,17 @@
       "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "66",
+      "buildNumber": "72",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
         "NSHealthUpdateUsageDescription": "Hush saves your completed strength workouts to Apple Health.",
         "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Hush listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+        "NSSpeechRecognitionUsageDescription": "Hush turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised.",
         "UIBackgroundModes": [
-          "location"
+          "location",
+          "audio"
         ]
       },
       "entitlements": {
@@ -139,10 +142,18 @@
         }
       ],
       "@bacons/apple-targets",
+      "./plugins/withLockIntents",
       "expo-font",
       "expo-video",
       "@sentry/react-native/expo",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Hush listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+          "speechRecognitionPermission": "Hush turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised."
+        }
+      ]
     ],
     "extra": {
       "eas": {
@@ -163,12 +174,20 @@
                   "bundleIdentifier": "com.hushfitness.app.watch",
                   "targetName": "HushWatch",
                   "entitlements": {
-                    "com.apple.developer.healthkit": true
+                    "com.apple.developer.healthkit": true,
+                    "com.apple.security.application-groups": [
+                      "group.com.hushfitness.app"
+                    ]
                   }
                 },
                 {
                   "bundleIdentifier": "com.hushfitness.app.watch.widget",
-                  "targetName": "HushWatchWidget"
+                  "targetName": "HushWatchWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.hushfitness.app"
+                    ]
+                  }
                 }
               ]
             }
