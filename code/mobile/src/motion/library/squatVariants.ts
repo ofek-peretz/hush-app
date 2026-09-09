@@ -27,7 +27,7 @@ import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2 } from '../types';
 import { DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { leads } from '../curves';
-import { barPathTicks, dumbbellSide, floorScene, plateGhost } from '../kit';
+import { barPathTicks, dumbbellSide, floorScene, kettlebellHang, plateGhost } from '../kit';
 import { SQUAT_ANKLE, SQUAT_BAR_X, SQUAT_HEEL, SQUAT_TOE, squatCore } from './bbBackSquat';
 
 const FLOOR_Y = 193;
@@ -35,7 +35,7 @@ const FLOOR_Y = 193;
 interface SquatVariantParams {
   id: string;
   carryDX: number;
-  implement: 'front_rack' | 'goblet' | 'smith' | 'bodyweight';
+  implement: 'front_rack' | 'goblet' | 'smith' | 'bodyweight' | 'kettlebell';
   /** The planted foot slid forward of the balance line — the Smith's stance. See `squatCore`. */
   footDX?: number;
 }
@@ -56,7 +56,7 @@ function squatVariant(p: SquatVariantParams): Rig {
        +2 → +4 puts the ring's line through the chin rather than the eyes (audit, 2026-09-03). */
     /* The goblet bell sits at the STERNUM, +15 (was +6): at +6 its top plate overlapped the chin
        by 3u and the clip was a snowman — two dark discs stacked on the head (audit, 2026-09-03). */
-    const carry: Vec2 = { x: shoulder.x + p.carryDX, y: shoulder.y + (p.implement === 'goblet' ? 15 : 4) };
+    const carry: Vec2 = { x: shoulder.x + p.carryDX, y: shoulder.y + (p.implement === 'goblet' || p.implement === 'kettlebell' ? 15 : 4) };
     /* Arms: front-rack and goblet hold HIGH IN FRONT — elbow forward of the shoulder, forearm up
        to the carry; smith grips the bar on the traps exactly as the back squat does. */
     let elbow: Vec2;
@@ -67,7 +67,7 @@ function squatVariant(p: SquatVariantParams): Rig {
         x: shoulder.x - 18 * sinLean - 12 * cosLean,
         y: shoulder.y + 18 * cosLean - 12 * sinLean,
       };
-    } else if (p.implement === 'goblet') {
+    } else if (p.implement === 'goblet' || p.implement === 'kettlebell') {
       /* Elbow tucked at the ribs, forearm FORWARD to a fist cupping the bell from below (elbow
          ~100°, forearm 9u on screen): the arm used to fold to 13° with a 2u forearm — a wedge, no
          hands (audit, 2026-09-03). */
@@ -159,6 +159,11 @@ function squatVariant(p: SquatVariantParams): Rig {
     } else if (p.implement === 'bodyweight') {
       /* Nothing in the hands, nothing to draw: the body is the load. */
       front = [];
+    } else if (p.implement === 'kettlebell') {
+      /* A goblet squat's ORIGINAL implement. The bell hangs by its horns from the cupped hands —
+         the mass BELOW the grip, which is the one thing that separates this drawing from the
+         dumbbell goblet standing beside it in the catalogue (`kit.kettlebellHang`). */
+      front = kettlebellHang(carry, { x: 0, y: 1 }, 8.5);
     } else {
       /* Goblet at the sternum. */
       /*
@@ -223,6 +228,9 @@ export const gobletSquatRig = squatVariant({ id: 'goblet_squat', carryDX: 8, imp
 /* The bodyweight squat (2026-09-10): the goblet's upright solve with empty, forward-reaching hands
    — the lift a bodyweight-only room leads its quads with. */
 export const bwSquatRig = squatVariant({ id: 'bw_squat', carryDX: 8, implement: 'bodyweight' });
+/* The goblet squat's original implement (2026-09-10): the same upright solve, the bell hanging by
+   its horns from the cupped hands rather than a dumbbell standing on end between them. */
+export const kbGobletSquatRig = squatVariant({ id: 'kb_goblet_squat', carryDX: 8, implement: 'kettlebell' });
 /* carryDX −4.5, the back squat's own correction: the bar rides the TRAPEZIUS SHELF behind the neck,
    not the shoulder joint. At 0 the bar dot sat exactly over the joint with the head drawn directly
    above it, and read as passing through the neck — see `bbBackSquat.BAR_BEHIND_SHOULDER`.

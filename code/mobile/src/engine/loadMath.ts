@@ -12,7 +12,7 @@
  */
 import type { Equipment } from './catalog';
 import { snapDown } from './v5/grid';
-import { STARTING_INCREMENT, BAR_KG, FIXED_BAR_KG } from './v5/constants';
+import { STARTING_INCREMENT, BAR_KG, FIXED_BAR_KG, KETTLEBELL_KG } from './v5/constants';
 
 /** Epley one-rep-max estimate from a working set. */
 export function epley(load: number, reps: number): number {
@@ -49,7 +49,11 @@ export { BAR_KG, FIXED_BAR_KG };
  * so the wheel, the seed and the loops cannot disagree about the lightest honest number.
  */
 export function emptyBarKg(equipment: Equipment): number {
-  return equipment === 'barbell' ? BAR_KG : equipment === 'fixed_barbell' ? FIXED_BAR_KG : 0;
+  if (equipment === 'barbell') return BAR_KG;
+  if (equipment === 'fixed_barbell') return FIXED_BAR_KG;
+  // F-23 — a bell is a cast object; the smallest one a home set holds is 4 kg.
+  if (equipment === 'kettlebell') return KETTLEBELL_KG;
+  return 0;
 }
 
 /**

@@ -89,6 +89,8 @@ export function loadLine(exerciseId: string | null, kg: number | null, l: VoiceL
       return tg('voice.loadPlateLoaded', { total, side: unit(setup?.perSide ?? 0) });
     case 'dumbbell':
       return tg('voice.loadDumbbell', { perHand: total });
+    case 'kettlebell':
+      return tg('voice.loadKettlebell', { bell: total });
     case 'selectorized':
     case 'cable':
       return tg('voice.loadPin', { total, pin: spokenNumber(displayWeight(kg, l.units) ?? kg, 'f', l.locale) /* a bare number — abstract counting, feminine */ });
@@ -107,6 +109,7 @@ export function readyWhen(exerciseId: string | null, kg: number | null): string 
     case 'barbell': return tg('voice.readyBarbell');
     case 'fixed_barbell': return tg('voice.readyFixed');
     case 'dumbbell': return tg('voice.readyDumbbell');
+    case 'kettlebell': return tg('voice.readyKettlebell');
     case 'selectorized':
     case 'cable': return tg('voice.readyPin');
     case 'plate_loaded': return tg('voice.readyPlate');
@@ -131,6 +134,8 @@ export function deltaLine(exerciseId: string | null, fromKg: number, toKg: numbe
     }
     case 'dumbbell':
       return tg('voice.deltaDumbbell', { perHand: total });
+    case 'kettlebell':
+      return tg('voice.deltaKettlebell', { bell: total });
     case 'selectorized':
     case 'cable':
       return tg('voice.deltaPin', { pin: spokenNumber(dispTo, 'f', l.locale) });

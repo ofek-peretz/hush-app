@@ -14,6 +14,9 @@ import { pickExercises } from '@/engine/v5/programAssembly';
 import { swapCandidates } from '@/domain/swapPool';
 import { exerciseById } from '@/data/exercises';
 import { fixtureModel } from '@/data/api/fixtureModel';
+import { emptyBarKg } from '@/engine/loadMath';
+import { snapDown } from '@/engine/v5/grid';
+import { KETTLEBELL_KG } from '@/engine/v5/constants';
 
 describe('inRoom', () => {
   it('absent list = full gym — everything passes', () => {
@@ -111,5 +114,43 @@ describe('the swap pool respects the room', () => {
       prefs: { substitutes: { bb_bench_press: 'machine_chest_press' } },
     });
     expect(out[0]?.id).toBe('machine_chest_press');
+  });
+});
+
+describe('the home-room shelf is programmed only where it is needed (2026-09-10)', () => {
+  const kbRoom = { equipment: ['kettlebell'] } as never;
+
+  it('a kettlebell room gets kettlebell lifts', () => {
+    const quads = pickExercises('Quads', 2, undefined, {}, kbRoom);
+    expect(quads).toContain('kb_goblet_squat');
+    for (const id of quads) {
+      const ex = exerciseById(id);
+      expect(ex.bodyweight || ex.equipment === 'bodyweight' || ex.equipment === 'kettlebell').toBe(true);
+    }
+    expect(pickExercises('Glutes', 2, undefined, {}, kbRoom)).toContain('kb_swing');
+  });
+
+  it('⛔ a FULL GYM never sees them — the audited rotation is untouched', () => {
+    // The whole reason they are choice-only: admitting them everywhere moved two measured boards
+    // (share inversions 149 → 178, unavoidable under-dose 111 → 114).
+    for (const muscle of ['Quads', 'Hamstrings', 'Glutes'] as const) {
+      const picked = pickExercises(muscle, 4, undefined, {}, undefined);
+      for (const id of ['kb_goblet_squat', 'kb_rdl', 'kb_swing', 'bw_squat', 'split_squat']) {
+        expect({ muscle, id, picked: picked.includes(id) }).toEqual({ muscle, id, picked: false });
+      }
+    }
+  });
+
+  it('⛔ …and neither does a declared room that does not hold them', () => {
+    const cableRoom = { equipment: ['cable'] } as never;
+    expect(pickExercises('Quads', 3, undefined, {}, cableRoom)).not.toContain('kb_goblet_squat');
+    // bodyweight is in EVERY room, so the bodyweight shelf does open in a narrow declared one.
+    expect(pickExercises('Quads', 3, undefined, {}, cableRoom)).toContain('bw_squat');
+  });
+
+  it('a bell has a floor and a coarse ladder — no 2 kg kettlebell exists', () => {
+    expect(emptyBarKg('kettlebell')).toBe(KETTLEBELL_KG);
+    expect(snapDown(10, 'kettlebell')).toBe(8);
+    expect(snapDown(2, 'kettlebell')).toBe(KETTLEBELL_KG);
   });
 });

@@ -323,6 +323,11 @@ export const STARTING_INCREMENT: Record<Equipment, number> = {
   barbell: 2.5,
   fixed_barbell: 2.5, // fixed-bar sets step in 2.5s (10 · 12.5 · 15 …); her grid refines as ever
   dumbbell: 1.0,
+  /* A kettlebell ladder is coarse and fixed — 8 · 12 · 16 · 20 · 24 · 28 — because a bell is one
+     cast object, not a bar you add to. Four kilos IS the rung, and her performed grid (F-2) refines
+     it the moment she owns something off the ladder (a 6, a 10). The floor is 4: the lightest bell
+     a home set holds, and no lift may be prescribed under what physically exists (S-55). */
+  kettlebell: 4.0,
   machine: 2.5,
   cable: 2.5,
   bodyweight: 0,
@@ -349,6 +354,15 @@ export const BAR_KG = 20;
  * the 10 the rack actually holds).
  */
 export const FIXED_BAR_KG = 10;
+
+/**
+ * F-23 — **THE LIGHTEST BELL.** The floor under every `kettlebell` load (2026-09-10), the same
+ * room-fact as `BAR_KG` and `FIXED_BAR_KG`: a bell is a cast object and the smallest one a home set
+ * holds is 4 kg. Without a floor, `snapDown` would happily prescribe a 2 kg kettlebell — a thing
+ * that does not exist — and no loop can correct downward out of a floor (S-55b), so the athlete's
+ * only escape would be a manual swap.
+ */
+export const KETTLEBELL_KG = 4;
 
 /**
  * F-20 — **LOOP 1'S SECOND WITNESS.** The founder's gym finding #3 (2026-08-25): his first set

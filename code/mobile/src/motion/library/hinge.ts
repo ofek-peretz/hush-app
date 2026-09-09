@@ -40,7 +40,7 @@ import { angleAt, dist, lerp, twoBoneIK, twoBoneIK3, withinReach } from '../geom
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE, PLATE_R } from '../anthro';
 import { type Curve, easesOut, leads } from '../curves';
-import { barbellFront, barPathTicks, cable, dumbbellEnd, floorScene, plateGhost, pulley, sampledPathTicks } from '../kit';
+import { barbellFront, barPathTicks, cable, dumbbellEnd, floorScene, kettlebellHang, plateGhost, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { far, FLOOR_Y } from '../bodies';
 
@@ -724,4 +724,144 @@ export const cablePullThrough: Rig = (() => {
     ],
   };
   return { id: 'cable_pull_through', chains: hingeChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 184, 30) };
+})();
+
+/*
+ * kb_rdl (2026-09-10, the home-gym family) — the RDL's own skeleton, with a bell in each hand.
+ *
+ * The pose is `bb_rdl`'s and `db_rdl`'s verbatim: the same hinge, the same planted feet, the same
+ * bar line, the same FormSpec. What differs is the only thing that differs in the room — the mass
+ * hangs BELOW the grip instead of sitting in line with it, which is the whole of why a kettlebell
+ * is its own family (see `kit.kettlebellHang`).
+ */
+export const kbRdl: Rig = (() => {
+  const poseAt = (rom: number) => rdlPose(rom, RDL_TOP, RDL_BOT);
+  const decorAt = (rom: number): Decor => {
+    const hand = poseAt(rom).j.hand;
+    return { back: barPathTicks(TICK_X, RDL_TOP, RDL_BOT), front: kettlebellHang(hand, { x: 0, y: 1 }) };
+  };
+  return { id: 'kb_rdl', chains: hingeChains, formspec: rdlFormspec(), poseAt, decorAt, scene: floorScene(FLOOR_Y, 184, 30) };
+})();
+
+/*
+ * ═══ kb_swing — the hinge that throws (2026-09-10, the home-gym family) ═══════════════════════
+ *
+ * The kettlebell's signature lift, and the one movement in the family a dumbbell drawing would
+ * teach WRONG: the mass hangs below the grip and travels on an arc pinned at the shoulder, which is
+ * the whole of why a swing swings.
+ *
+ * ── WHAT IS BORROWED, AND WHY THAT IS THE HONEST PART ───────────────────────────────────────────
+ * The BODY is `rdlPose`'s, verbatim: the same planted feet, the same frozen soft knee, the same
+ * hip-hinge solve that three audits have already been through. A swing IS a hip hinge — the founder's
+ * own family note for this file — and re-authoring the hinge to draw it would have been two skeletons
+ * for one movement, the defect `bbRdl`'s own header warns about.
+ *
+ * ── WHAT IS RE-AUTHORED: THE ARM, AND NOTHING ELSE ──────────────────────────────────────────────
+ * An RDL's arm hangs plumb for the whole rep; a swing's arm is a RIGID SPOKE that rotates about the
+ * shoulder. So the hand is placed at `ARM` from the shoulder at an angle φ measured from straight
+ * down, positive toward the front:
+ *
+ *     rom 0 (the top)      φ = 78°   — arms near-horizontal, the bell at chest height, hips through
+ *     rom 1 (the backswing) φ = −34°  — the arm behind vertical, the bell between and behind the legs
+ *
+ * The elbow sits ON the spoke (a straight arm has no bend to solve) at its own bone ratio, so the
+ * skin reads as one long limb rather than a folded one, and `spanFixed` asserts what the cue says:
+ * **the arms never bend.** The bell's own arc is then the pivot's, which is what `path.kind: 'arc'`
+ * declares — its constraint is the pivot invariant, not an axis (see `types.FormSpec`).
+ *
+ * ⚠️ THE ARM LEADS AND THE HIPS FOLLOW, and the order is the coaching. `leads(0.22)` puts the spoke
+ * most of the way back before the hinge finishes: the bell is thrown by the hips and CAUGHT by the
+ * backswing, not lowered by the arms. Authored in lockstep the clip read as a front raise performed
+ * while bending over.
+ */
+/**
+ * ⛔ THE TOP OF A SWING IS STANDING, AND THE RDL'S TOP IS NOT (measured, 2026-09-10).
+ *
+ * `RDL_TOP` is the standing shoulder plus 1.5 — a deliberate offset so an RDL opens with the hips
+ * already sitting back off the knee (soft knees, rep one). Driven from it the swing measured
+ * **hip 157.3°, trunk 13.8° from vertical at rom 0**: an athlete bent over at the moment the lift
+ * is defined by being locked out.
+ *
+ * The endpoints below are the swing's own. The BOTTOM is the RDL's, measured off it rather than
+ * retyped — hip 23.3 units behind the frozen knee, trunk 62.3° from vertical — because the bottom
+ * of a swing and the bottom of an RDL are the same hinge in the room, and two files guessing at one
+ * position is how this library's audits keep finding two skeletons for one movement.
+ */
+/** The hip's travel behind the frozen knee, and the trunk's lean, top → bottom. */
+const SWING_HIP_BACK_TOP = 6;
+const SWING_HIP_BACK_BOT = 23.3;
+const SWING_LEAN_TOP = 4;
+const SWING_LEAN_BOT = 62.3;
+const SWING_PHI_TOP = 78 * DEG;
+const SWING_PHI_BOT = -34 * DEG;
+const SWING_ARM_LEADS = leads(0.22);
+
+export const kbSwing: Rig = (() => {
+  const poseAt = (rom: number): Pose => {
+    /*
+     * ⛔ THE BODY IS SOLVED IN THE SWING'S OWN TERMS, NOT FROM A BAR HEIGHT (measured, 2026-09-10).
+     *
+     * The first authoring drove `rdlPose` with a higher top so the hips would finish through, and it
+     * walked the two-bone IK straight through its own singularity: between shoulder-y 61.75 and 62.5
+     * the solved hip swings far enough back that the KNEE opens to **179.5°** — past the
+     * no-hyperextension cap — and then closes again. A non-monotone knee inside one descent, on a lift
+     * whose knee is supposed to be frozen. `RDL_TOP`'s +1.5 offset exists precisely to start an RDL
+     * clear of that region, which is why the RDL never met it.
+     *
+     * A swing is not defined by where a bar hangs; it is defined by the HIP. So the hip is placed
+     * directly on the thigh from the frozen knee (`back` = how far behind the knee it travels), the
+     * trunk is placed on the torso from the hip at its own lean, and both are lerped. No IK, no
+     * branch, no singularity — and the endpoints are the RDL's own measured numbers, so the bottom
+     * of a swing and the bottom of an RDL are the same hinge, as they are in the room.
+     */
+    const back = lerp(SWING_HIP_BACK_TOP, SWING_HIP_BACK_BOT, rom);
+    const lean = lerp(SWING_LEAN_TOP, SWING_LEAN_BOT, TORSO_LEADS(rom)) * DEG;
+    const hip: Vec2 = { x: RDL_KNEE.x - back, y: RDL_KNEE.y - Math.sqrt(Math.max(1, ATHLETE.thigh * ATHLETE.thigh - back * back)) };
+    const shoulder: Vec2 = { x: hip.x + TORSO * Math.sin(lean), y: hip.y - TORSO * Math.cos(lean) };
+    const head = headOn(shoulder, Math.sin(lean));
+    const phi = lerp(SWING_PHI_TOP, SWING_PHI_BOT, SWING_ARM_LEADS(rom));
+    /* The spoke, from the shoulder: φ from straight down, positive toward the front (+x). */
+    const u: Vec2 = { x: Math.sin(phi), y: Math.cos(phi) };
+    const hand: Vec2 = { x: shoulder.x + u.x * ARM, y: shoulder.y + u.y * ARM };
+    const elbow: Vec2 = {
+      x: shoulder.x + u.x * ATHLETE.upperArm,
+      y: shoulder.y + u.y * ATHLETE.upperArm,
+    };
+    return {
+      headR: HEAD_R,
+      j: withFarSide({ head, shoulder, elbow, hand, hip, knee: RDL_KNEE, ankle: ANKLE, heel: HEEL, toe: TOE, bar: hand }),
+    };
+  };
+
+  const decorAt = (rom: number): Decor => {
+    const hand = poseAt(rom).j.hand;
+    /* The arc the bell actually travels — sampled, because a swing's path is neither a line nor a
+       vertical and a straight tick ladder would state a path the movement does not have. */
+    const arc = Array.from({ length: 13 }, (_, i) => poseAt(i / 12).j.hand);
+    return { back: sampledPathTicks(arc), front: kettlebellHang(hand, { x: 0, y: 1 }) };
+  };
+
+  const formspec: FormSpec = {
+    /* The rep STARTS at the top (hips through, bell floating) and the backswing is the eccentric —
+       the same reading `bb_deadlift` uses for a lift that begins standing. */
+    tempo: DEFAULT_TEMPO,
+    start: [
+      { kind: 'jointAngle', joint: 'hip', neighbors: ['knee', 'shoulder'], min: 164, max: 179, label: 'hips through — standing tall at the top' },
+      { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 172, max: 180, label: 'arms long — the bell floats, it is not lifted' },
+    ],
+    end: [
+      { kind: 'jointAngle', joint: 'knee', neighbors: ['ankle', 'hip'], min: 145, max: 179, label: 'knees SOFT in the backswing — a hinge, not a squat' },
+      { kind: 'jointAngle', joint: 'elbow', neighbors: ['shoulder', 'hand'], min: 172, max: 180, label: 'and still long at the bottom' },
+    ],
+    path: { track: 'bar', kind: 'arc', tol: 1.5 },
+    invariants: [
+      ...plantedFeet('hinge, not squat'),
+      { kind: 'pointFixed', point: 'knee', tol: 0.5, label: 'knees soft and FROZEN — the shin never travels' },
+      { kind: 'angleNever', joint: 'knee', neighbors: ['ankle', 'hip'], aboveDeg: 179, label: 'no knee hyperextension' },
+      /* THE ONE CUE OF THE LIFT, ASSERTED: the arm is a rope, and its length never changes. */
+      { kind: 'spanFixed', a: 'shoulder', b: 'hand', tol: 0.5, label: 'the arms never bend — the hips throw the bell' },
+    ],
+  };
+
+  return { id: 'kb_swing', chains: hingeChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 184, 30) };
 })();

@@ -21,7 +21,7 @@ import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import { stanceOf } from './bodyMap';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
-import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, BODYWEIGHT_ROOM_ONLY_IDS, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, ROOM_ONLY_IDS, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
 // S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
 // this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
@@ -300,10 +300,25 @@ export function pickExercises(
   const banned = forbiddenFor(muscle, profile?.painEases, nowMs);
   /* A room with NOTHING in it (2026-09-10) — `equipment: []`, distinct from absent (full gym). */
   const bodyweightOnly = profile?.equipment != null && profile.equipment.length === 0;
+  /*
+   * ⛔ THE HOME-ROOM SHELF IS PROGRAMMED ONLY IN A ROOM THAT NEEDS IT (2026-09-10).
+   *
+   * `ROOM_ONLY_IDS` names the lifts a narrow room actually has — the bodyweight squat, the split
+   * squat, the kettlebell three. They are choice-only in the catalogue because a commercial gym's
+   * audited rotation is the leg press and the barbell RDL, and letting them into every pool moved
+   * two measured boards. They open exactly when she has DECLARED a room (`profile.equipment` is
+   * present, which a full-gym athlete's never is) and that room holds the family they need —
+   * bodyweight being in every room by definition.
+   */
+  const roomOpens = (id: string): boolean => {
+    if (profile?.equipment == null) return false; // a full gym: the audited rotation, untouched
+    const needs = ROOM_ONLY_IDS.get(id);
+    return needs != null && (needs === 'bodyweight' || profile.equipment.includes(needs));
+  };
   const universe = exercisesForMuscle(muscle as MuscleGroup)
     // One question for every pool: regressions AND the choice-only shelf stay hers to ask for —
-    // except the shelf's own quad work, which the bodyweight-only room may be handed unasked.
-    .filter((e) => engineMayAssign(e.id) || (bodyweightOnly && BODYWEIGHT_ROOM_ONLY_IDS.has(e.id)))
+    // except the home-room shelf, in a room that has nothing else to offer.
+    .filter((e) => engineMayAssign(e.id) || roomOpens(e.id))
     .filter((e) => !banned.has(e.pattern));
   /*
    * ⛔ THE ROOM (2026-09-01, audit 06). Lifts her room cannot hold are out — a home lifter with two

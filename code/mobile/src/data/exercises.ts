@@ -40,7 +40,7 @@ import { MOVEMENTS } from './movements';
  * one family floored every "barbell" isolation lift at 20 kg and the editor refused to go lower.
  * A fixed bar is different iron with a different floor and different steps; the family carries that.
  */
-export type EquipmentFamily = 'barbell' | 'fixed_barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight';
+export type EquipmentFamily = 'barbell' | 'fixed_barbell' | 'dumbbell' | 'kettlebell' | 'machine' | 'cable' | 'bodyweight';
 
 /**
  * How a load is physically SET UP — finer than `equipment`, so the live workout can tell the
@@ -53,6 +53,7 @@ export type LoadStyle =
   | 'barbell' // an Olympic bar + plates → "20 + 20 / side", "20 kg bar"
   | 'fixed_barbell' // a pre-weighted fixed bar → "Use the 30 kg bar"
   | 'dumbbell' // one dumbbell per hand → "20 kg / hand"
+  | 'kettlebell' // one cast bell → "the 16 kg bell" (the headline IS the whole figure)
   | 'selectorized' // a pin-selected weight stack → "Set the pin to 24"
   | 'cable' // a pin-selected cable stack → "Set the pin to 28"
   | 'plate_loaded' // a lever machine loaded with plates → "30 + 30 / side"
@@ -403,6 +404,9 @@ export const EXERCISES: Exercise[] = [
   // The bodyweight-only room's quad lifts (2026-09-10): a room with nothing in it still squats and splits.
   { id: 'bw_squat', name: 'Bodyweight Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Arms out in front.', 'Sit straight down.', 'Drive up through the heels.'], synonyms: ['air squat', 'bodyweight squat'] },
   { id: 'split_squat', name: 'Split Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Feet planted, one in front.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['static lunge'] },
+  // The kettlebell family (2026-09-10, the home-gym room): a bell is one cast object on a coarse
+  // ladder (F-23), which is why it is its own family and not a dumbbell with a different picture.
+  { id: 'kb_goblet_squat', name: 'Kettlebell Goblet Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'kettlebell', tier: 'compound', baseKg: 16, cues: ['Bell by the horns, at your chest.', 'Sit straight down between your knees.', 'Drive up through the whole foot.'], synonyms: ['goblet squat', 'kb squat'] },
   { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Back foot elevated.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['split squat'] },
   { id: 'walking_lunge', name: 'Walking Lunge', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Long step.', 'Knee tracks the toes.', 'Push off the front foot.'], synonyms: ['lunge'] },
   { id: 'leg_extension', name: 'Leg Extension', capability: 'knee_dominant', muscle: 'Quads', pattern: 'knee_extension', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Extend fully.', 'Lower under control.'] },
@@ -428,6 +432,8 @@ export const EXERCISES: Exercise[] = [
   { id: 'bb_rdl', name: 'Romanian Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Soft knees.', 'Push the hips back.', 'Keep the bar close.'], synonyms: ['rdl'] },
   { id: 'sumo_deadlift', name: 'Sumo Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 60, bwScaled: true, cues: ['Wide stance.', 'Knees out.', 'Drive hips through.'] },
   { id: 'db_rdl', name: 'Dumbbell Romanian Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'dumbbell', tier: 'compound', baseKg: 18, cues: ['Soft knees.', 'Hips back.', 'Keep the weights close.'], synonyms: ['db rdl', 'dumbbell rdl'] },
+  { id: 'kb_rdl', name: 'Kettlebell Romanian Deadlift', capability: 'hip_dominant', muscle: 'Hamstrings', pattern: 'hinge', support: 'free', equipment: 'kettlebell', tier: 'compound', baseKg: 16, bwScaled: true, cues: ['A bell in each hand, arms hanging.', 'Push your hips back, back flat.', 'Stand tall and squeeze.'], synonyms: ['kb rdl'] },
+  { id: 'kb_swing', name: 'Kettlebell Swing', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'hinge', support: 'free', equipment: 'kettlebell', tier: 'compound', baseKg: 16, bwScaled: true, cues: ['Hinge at the hips, arms long.', 'Snap the hips through — the bell floats.', 'Let it swing back between your legs.'], synonyms: ['swing', 'kb swing'] },
   /*
    * ⚠ï¸ THE GOOD MORNING IS BACK (founder, 2026-08-02: *"these are common exercises — so if an
    * athlete wants to do them, they just don't exist? that isn't serious"*).
@@ -582,16 +588,32 @@ export const CHOICE_ONLY_IDS: ReadonlySet<string> = new Set([
   'db_pullover', 'close_grip_pulldown', 'meadows_row', 'cable_upright_row',
   'curtsy_lunge', 'db_sumo_squat', 'smith_hip_thrust', 'frog_pump', 'donkey_kick',
   /*
-   * The bodyweight-only room's quad lifts (2026-09-10). In a gym they are a CHOICE — the leg press
-   * is what the audited rotation hands a beginner, and admitting these to every pool moved the
-   * week-balance board — but in a room with nothing in it they are the only quad work there is, so
-   * `pickExercises` admits them there and nowhere else (`BODYWEIGHT_ROOM_ONLY_IDS`).
+   * ⛔ THE HOME-ROOM SHELF (2026-09-10) — choice-only in a GYM, programmed in a room that needs it.
+   *
+   * These are not bodybuilding variations; they are the lifts a narrow room actually has. In a
+   * commercial gym the audited rotation is the leg press and the barbell RDL, and admitting these
+   * to every pool measurably moved the week-balance board (share inversions 149 → 178, unavoidable
+   * under-dose 111 → 114) — the engine started handing a kettlebell swing to an athlete standing in
+   * front of a rack. In a room that holds only bells, or only her body, they are the WHOLE of the
+   * work available. So they are assigned exactly when she has declared a room that holds them, and
+   * nowhere else (`ROOM_ONLY_IDS`, read by `pickExercises`).
    */
   'bw_squat', 'split_squat',
+  'kb_goblet_squat', 'kb_rdl', 'kb_swing',
 ]);
 
-/** The choice-only lifts a BODYWEIGHT-ONLY room may have assigned — the shelf's own quad work. */
-export const BODYWEIGHT_ROOM_ONLY_IDS: ReadonlySet<string> = new Set(['bw_squat', 'split_squat']);
+/**
+ * The choice-only lifts a DECLARED room may have programmed for her, and the family each needs.
+ * A full gym (`profile.equipment` absent) never sees them: the audited rotation is unchanged for
+ * every athlete who has not told us her room is narrow. See `CHOICE_ONLY_IDS`.
+ */
+export const ROOM_ONLY_IDS: ReadonlyMap<string, EquipmentFamily> = new Map([
+  ['bw_squat', 'bodyweight'],
+  ['split_squat', 'bodyweight'],
+  ['kb_goblet_squat', 'kettlebell'],
+  ['kb_rdl', 'kettlebell'],
+  ['kb_swing', 'kettlebell'],
+]);
 
 export function isChoiceOnly(id: string): boolean {
   return CHOICE_ONLY_IDS.has(id);
@@ -658,6 +680,7 @@ export const LOAD_STEP_KG: Record<EquipmentFamily, number> = {
   barbell: 2.5, // smallest plate pair commonly available (1.25 kg/side)
   fixed_barbell: 2.5, // the next fixed bar in the set (10 -> 12.5 -> 15 ...)
   dumbbell: 2, // next dumbbell up in the working range
+  kettlebell: 4, // the next bell on the ladder (8 · 12 · 16 · 20 · 24) — a bell is cast, not added to
   machine: 5, // pin / plate-stack increment
   cable: 5, // pin-stack increment
   bodyweight: 0, // no external load — progress by reps, then a harder variation
@@ -709,6 +732,7 @@ const DEFAULT_LOAD_STYLE: Record<EquipmentFamily, LoadStyle> = {
   barbell: 'barbell',
   fixed_barbell: 'fixed_barbell',
   dumbbell: 'dumbbell',
+  kettlebell: 'kettlebell',
   cable: 'cable',
   machine: 'selectorized',
   bodyweight: 'bodyweight',

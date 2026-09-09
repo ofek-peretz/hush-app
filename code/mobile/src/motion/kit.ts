@@ -146,6 +146,39 @@ export function dumbbellEnd(hand: Vec2, r = 8): Primitive[] {
   ];
 }
 
+/**
+ * A KETTLEBELL, hanging from `hand` in direction `dir` (2026-09-10, the home-gym family).
+ *
+ * ⛔ IT IS DRAWN AS THE SILHOUETTE, NOT AS A DUMBBELL WITH A LABEL. The whole reason a kettlebell is
+ * a different family from a dumbbell is that the mass hangs BELOW the grip rather than sitting in
+ * line with it — which is why a swing swings and why the bell rests on the back of the forearm in a
+ * rack. Drawn as two discs on a handle, every one of these clips would have taught a dumbbell
+ * movement under a kettlebell's name, which is the defect `theClipOutranksTheCard` exists for.
+ *
+ * The shape is the honest minimum a coach reads at a glance: a squat body offset a bell's-height
+ * along `dir`, and the two horns of the handle running from the hand to its shoulders.
+ */
+export function kettlebellHang(hand: Vec2, dir: Vec2, r = 8): Primitive[] {
+  const len = Math.hypot(dir.x, dir.y) || 1;
+  const u = { x: dir.x / len, y: dir.y / len };
+  const n = { x: -u.y, y: u.x };
+  /** The bell's centre — a handle's height plus the body's radius, along the hang. */
+  const c = { x: hand.x + u.x * (r * 1.55), y: hand.y + u.y * (r * 1.55) };
+  const horn = (s: number): Primitive => ({
+    kind: 'line',
+    a: { x: hand.x + n.x * s * 1.6, y: hand.y + n.y * s * 1.6 },
+    b: { x: c.x + n.x * s * r * 0.78 - u.x * r * 0.55, y: c.y + n.y * s * r * 0.78 - u.y * r * 0.55 },
+    w: 2.4,
+    color: 'ink0',
+    cap: 'round',
+  });
+  return [
+    { kind: 'circle', c, r, fill: 'ink1' },
+    horn(-1),
+    horn(1),
+  ];
+}
+
 /** A dumbbell seen SIDE-ON along direction `dir` (hammer grips, goblet holds): handle + two plates. */
 /* half 7.5 / plateR 6, not 6.5 / 4 (2026-09-07): a 10–15 kg bell's plates are ~14 cm ≈ 6u; at r4 every
    lunge, calf raise and kickback carried a toy. Callers that pass their own numbers are unchanged. */

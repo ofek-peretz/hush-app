@@ -850,6 +850,7 @@ const ROOM_LABEL: Record<EquipmentFamily, string> = {
   dumbbell: 'profile.room_dumbbell',
   machine: 'profile.room_machine',
   cable: 'profile.room_cable',
+  kettlebell: 'profile.room_kettlebell',
   bodyweight: 'profile.room_barbell', // never rendered — bodyweight is not an option (see ROOM_FAMILIES)
 };
 

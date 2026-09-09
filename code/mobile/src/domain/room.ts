@@ -27,6 +27,7 @@ export const ROOM_FAMILIES: Exclude<EquipmentFamily, 'bodyweight'>[] = [
   'barbell',
   'fixed_barbell',
   'dumbbell',
+  'kettlebell',
   'machine',
   'cable',
 ];

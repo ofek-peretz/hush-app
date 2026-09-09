@@ -15,7 +15,7 @@ import { closeGripBench, dbBenchPress, declineBbPress, inclineBbPress, inclineDb
 import { arnoldPress, dbShoulderPress, machineShoulderPress, smithOverheadPress } from './library/pressVertical';
 import { bbOverheadPress } from './library/overheadPressStanding';
 import { cableRow, dbRow, facePull, inclineDbRow, machineRow, meadowsRow, singleArmCableRow, smithRow, tBarRow } from './library/pullRow';
-import { bbDeadlift, bbRdl, cablePullThrough, dbRdl, goodMorning, sumoDeadlift, trapBarDeadlift } from './library/hinge';
+import { bbDeadlift, bbRdl, cablePullThrough, dbRdl, goodMorning, kbRdl, kbSwing, sumoDeadlift, trapBarDeadlift } from './library/hinge';
 import { bbCurl, bbCurl21, cableCurl, cableRopeHammerCurl, concentrationCurl, dbCurl, ezBarCurl, hammerCurl, inclineDbCurl, preacherCurl, reverseCurl, singleArmCableCurl, spiderCurl } from './library/curl';
 import { cableLateralRaise, cableUprightRow, dbLateralRaise, machineLateralRaise } from './library/lateralRaise';
 import { machineTricepsExt, ropePushdown, singleArmPushdown, tricepsKickback, tricepsPushdown } from './library/pushdown';
@@ -29,7 +29,7 @@ import { bulgarianSplitSquatRig, curtsyLungeRig, reverseLungeRig, splitSquatRig,
 import { cableFlyRig, dbFlyRig, inclineDbFlyRig, lowCableFlyRig, pecDeckRig, rearDeltFlyRig, reversePecDeckRig } from './library/fly';
 import { bbShrugRig, dbShrugRig } from './library/shrug';
 import { cableCrunchRig, machineCrunchRig, sitUpRig } from './library/crunch';
-import { bwSquatRig, dbSumoSquatRig, frontSquatRig, gobletSquatRig, smithSquatRig } from './library/squatVariants';
+import { bwSquatRig, dbSumoSquatRig, frontSquatRig, gobletSquatRig, kbGobletSquatRig, smithSquatRig } from './library/squatVariants';
 import { cableFrontRaise, dbFrontRaise } from './library/frontRaise';
 import { seatedCalfRaiseRig, seatedDbCalfRaiseRig } from './library/calfBent';
 import { dbOverheadTricepsExt, overheadTricepsExt, skullcrusher } from './library/overheadTriceps';
@@ -54,7 +54,7 @@ const RIGS: Rig[] = [
   // pull_row
   tBarRow, dbRow, cableRow, machineRow, facePull, singleArmCableRow, smithRow, inclineDbRow,
   // hinge
-  bbDeadlift, bbRdl, dbRdl, goodMorning, sumoDeadlift, trapBarDeadlift, cablePullThrough,
+  bbDeadlift, bbRdl, dbRdl, kbRdl, kbSwing, goodMorning, sumoDeadlift, trapBarDeadlift, cablePullThrough,
   // curl
   bbCurl, dbCurl, cableCurl, singleArmCableCurl, hammerCurl, reverseCurl, preacherCurl, concentrationCurl, inclineDbCurl,
   // the bodybuilding shelf (choice-only, 2026-08-26)
@@ -84,7 +84,7 @@ const RIGS: Rig[] = [
   // crunch
   sitUpRig, cableCrunchRig, machineCrunchRig,
   // squat (completed)
-  frontSquatRig, gobletSquatRig, smithSquatRig, bwSquatRig,
+  frontSquatRig, gobletSquatRig, smithSquatRig, bwSquatRig, kbGobletSquatRig,
   // front_raise
   dbFrontRaise, cableFrontRaise,
   // calf_bent

@@ -70,6 +70,8 @@ export interface LoadSetup {
   pin?: number;
   /** Fixed-bar weight (fixed_barbell). */
   fixedBar?: number;
+  /** The bell's own weight (kettlebell) — one cast object, never per side or per hand. */
+  bell?: number;
 }
 
 /**
@@ -98,6 +100,10 @@ export function loadSetup(exerciseId: string | null | undefined, displayValue: n
     case 'selectorized':
     case 'cable':
       return { style, headline: displayValue, pin: displayValue };
+    case 'kettlebell':
+      // One cast bell. The figure IS the bell — nothing is per side and nothing is per hand, even
+      // when both hands are on it (a goblet squat) or one is (a single-arm row).
+      return { style, headline: displayValue, bell: displayValue };
     case 'fixed_barbell':
       return { style, headline: displayValue, fixedBar: displayValue };
   }
@@ -346,6 +352,8 @@ export function equipmentLoad(setup: LoadSetup | null): EquipmentLoad | null {
     case 'selectorized':
     case 'cable':
       return { value: setup.pin ?? setup.headline, style: setup.style, total: null };
+    case 'kettlebell':
+      return { value: setup.bell ?? setup.headline, style: setup.style, total: null };
     case 'fixed_barbell':
       return { value: setup.fixedBar ?? setup.headline, style: setup.style, total: null };
     default:

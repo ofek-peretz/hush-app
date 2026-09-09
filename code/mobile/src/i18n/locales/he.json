@@ -1113,6 +1113,7 @@
     "barbell": "מוט",
     "fixed_barbell": "מוט קבוע",
     "dumbbell": "משקולות יד",
+    "kettlebell": "קטלבל",
     "machine": "מכונה",
     "cable": "כבל",
     "bodyweight": "משקל גוף"
@@ -1387,6 +1388,7 @@
     "room_barbell": "מוט ופלטות",
     "room_fixed_barbell": "מוטות קבועים",
     "room_dumbbell": "משקולות יד",
+    "room_kettlebell": "קטלבלס",
     "room_machine": "מכונות",
     "room_cable": "עמדת כבלים",
     "weekTurns": "השבוע מתחלף ביום",
@@ -1518,6 +1520,7 @@
     "loadFixedBar": "מוט של {{total}}",
     "loadPlateLoaded": "{{total}}: {{side}} בכל צד",
     "loadDumbbell": "{{perHand}} בכל יד",
+    "loadKettlebell": "הקטלבל של {{bell}}",
     "loadPin": "{{total}}: תשים את הפין על {{pin}}",
     "loadPin_female": "{{total}}: תשימי את הפין על {{pin}}",
     "loadBodyweight": "בלי משקל",
@@ -1528,6 +1531,8 @@
     "deltaRemoveSide": "תוריד {{amount}} מכל צד",
     "deltaRemoveSide_female": "תורידי {{amount}} מכל צד",
     "deltaDumbbell": "קח {{perHand}} בכל יד",
+    "deltaKettlebell": "קח את הקטלבל של {{bell}}",
+    "deltaKettlebell_female": "קחי את הקטלבל של {{bell}}",
     "deltaDumbbell_female": "קחי {{perHand}} בכל יד",
     "deltaPin": "תעביר את הפין ל{{pin}}",
     "deltaPin_female": "תעבירי את הפין ל{{pin}}",
@@ -1536,6 +1541,7 @@
     "readyBarbell": "כשהמוט טעון",
     "readyFixed": "כשהמוט ביד",
     "readyDumbbell": "כשהמשקולות ביד",
+    "readyKettlebell": "כשהקטלבל ביד",
     "readyPin": "כשהפין במקום",
     "readyPlate": "כשהמכונה טעונה",
     "readyBodyweight": "כשאתה במקום",
@@ -2183,6 +2189,21 @@
       "שב ישר למטה.",
       "עלה בדחיפה."
     ],
+    "kb_rdl": [
+      "קטלבל בכל יד, ידיים תלויות.",
+      "דחוף את האגן אחורה, גב ישר.",
+      "עמוד זקוף וסחט."
+    ],
+    "kb_swing": [
+      "היכנס לציר ירכיים, ידיים ישרות.",
+      "שחרר את האגן קדימה — הקטלבל עף.",
+      "תן לו לחזור אחורה בין הרגליים."
+    ],
+    "kb_goblet_squat": [
+      "החזק את הקטלבל בקרניים מול החזה.",
+      "שב ישר למטה בין הברכיים.",
+      "עלה בדחיפה דרך כל כף הרגל."
+    ],
     "bw_squat": [
       "ידיים קדימה.",
       "שב ישר למטה.",
@@ -2617,6 +2638,21 @@
       "החזיקי צמוד לחזה.",
       "שבי ישר למטה.",
       "עלי בדחיפה."
+    ],
+    "kb_rdl_female": [
+      "קטלבל בכל יד, ידיים תלויות.",
+      "דחפי את האגן אחורה, גב ישר.",
+      "עמדי זקופה וסחטי."
+    ],
+    "kb_swing_female": [
+      "היכנסי לציר ירכיים, ידיים ישרות.",
+      "שחררי את האגן קדימה — הקטלבל עף.",
+      "תני לו לחזור אחורה בין הרגליים."
+    ],
+    "kb_goblet_squat_female": [
+      "החזיקי את הקטלבל בקרניים מול החזה.",
+      "שבי ישר למטה בין הברכיים.",
+      "עלי בדחיפה דרך כל כף הרגל."
     ],
     "bw_squat_female": [
       "ידיים קדימה.",
@@ -3632,6 +3668,9 @@
     "front_squat": "סקוואט קדמי",
     "glute_bridge": "גשר ישבן",
     "goblet_squat": "סקוואט גובלט",
+    "kb_goblet_squat": "סקוואט גובלט בקטלבל",
+    "kb_rdl": "דדליפט רומני בקטלבל",
+    "kb_swing": "נדנוד קטלבל",
     "bw_squat": "סקוואט משקל גוף",
     "split_squat": "ספליט סקוואט",
     "good_morning": "גוד מורנינג",
