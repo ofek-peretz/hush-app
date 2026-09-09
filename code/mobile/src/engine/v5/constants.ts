@@ -398,22 +398,40 @@ export const ATTEMPTS_TO_CLEAR_SEED = 1;
 export const BOOTSTRAP_RUNGS_PER_MOVE = 1;
 
 /**
- * ════ F-21 · A RAISE NEEDS ONE REP OF HEADROOM ON THE WORST SET (S-22b, 2026-09-10, measured) ════
+ * ════ F-21 · A RAISE NEEDS TWO REPS OF HEADROOM ON THE WORST SET (S-22b, 2026-09-10, measured) ════
  *
  * S-22 raised the load whenever every set met Tlo — including when the worst set landed EXACTLY on
  * it. Traced on the virtual athletes, that is the oscillation the accuracy board had been printing
  * for a month: set 4 reaches 8 → raise → set 4 falls to 6–7 → hold → stall → back off → set 4
- * reaches 8 → raise… A clear at the edge is not headroom; it is the edge. With one rep of margin
- * required before the load moves, the board (band 8–12, seed one rung light — the two rules that
- * shipped with this one):
+ * reaches 8 → raise… A clear at the edge is not headroom; it is the edge.
  *
- *     in band  38.5% → 63.5%     mean miss 1.47 → 0.82 reps     set 1  32.8% → 73.5%
- *     2nd occurrence in band  29.6% → 47.6%     6th+  42.6% → 67.8%
+ * ⛔⛔ AND THE SIZE OF THE MARGIN WAS SETTLED AGAINST HER CAPACITY, NOT AGAINST THE IN-BAND BOARD.
  *
- * Alone, on the old 8–10 band with the old seed, the margin is worth 38.5% → ~44%. One rep, not two:
- * two would hold a lift that is genuinely ready on most equipment grids.
+ * `thePrescriptionIsAccurate` gets monotonically better as this number grows — 63.5% at one rep,
+ * 75.6% at two, 82.5% at three — and **that board cannot see the failure a big margin causes.** A
+ * load parked well under her capacity produces high reps, and high reps still land inside an 8–12
+ * band; the engine looks excellent while asking her for less every week. So the arm was scored a
+ * second way: the simulated body publishes its own true capacity, and a fresh set lands in her band
+ * when `load / capacity` sits in [0.88, 1.0]. Measured at the tenth week, all three athletes:
+ *
+ *       margin      in band     load/cap in window     UNDER 0.88     OVER 1.0
+ *       1 rep        63.5%           57.1%               25.4%         17.5%
+ *       2 reps       75.6%           50.0%               48.3%          1.7%
+ *       3 reps       82.5%           41.4%               56.9%          1.7%
+ *
+ * One rep tracks her capacity most closely and leaves **17.5% of lifts prescribed ABOVE it** — sets
+ * she cannot finish. Two reps very nearly deletes that error (17.5% → 1.7%) and pays for it in the
+ * currency this engine has always said it prefers: `rungsForHeadroom`'s own note — *"a coach who is
+ * unsure errs light"* — and `theProgrammeSurvivesTheMonths`, which grades being left ABOVE capacity
+ * and does not grade being left under it. Three reps buys nothing more on that axis and freezes the
+ * lift: 30 of 58 lifts never rose at all, and the weakest athlete's load went BACKWARD over ten
+ * weeks.
+ *
+ * ⚠️ THE COST IS NAMED, NOT HIDDEN: half of all lifts finish the tenth week a little light — a rep
+ * or two over the band's top on a fresh set. That is one under-stimulating set at a time, and a
+ * hold corrects it within one occurrence; an over-capacity prescription is not so cheap.
  */
-export const RAISE_HEADROOM_REPS = 1;
+export const RAISE_HEADROOM_REPS = 2;
 
 /**
  * ════ B-10 · THE FIRST GUESS ERRS ONE RUNG LIGHT (B-1c, 2026-09-10, measured) ════

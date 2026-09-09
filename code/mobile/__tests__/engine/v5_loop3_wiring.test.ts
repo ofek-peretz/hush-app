@@ -34,7 +34,7 @@ describe('D · Loop 3 — the learned per-muscle set target moves on facts', () 
   beforeEach(async () => { await resetV5(); });
 
   it('S-32 · completed every set AND the lift advanced → +1 set (seeded from the real prescription)', async () => {
-    const history = [session(T(0), [set(60, 9), set(60, 9), set(60, 9)])]; // 3 prescribed, 3 completed, a rep to spare → advances (S-22b)
+    const history = [session(T(0), [set(60, 10), set(60, 10), set(60, 10)])]; // 3 prescribed, 3 completed, a rep to spare → advances (S-22b)
     await advanceV5(['bb_bench_press'], BAND, history, seed, Date.now(), undefined, prescribed3);
     const vol = await getVolumeTargetsV5();
     expect(vol[CHEST]).toBe(4); // seed 3 → earned one → 4
@@ -82,7 +82,7 @@ describe('D · Loop 3 — the learned per-muscle set target moves on facts', () 
     // Chest is trained twice this week (bench on one upper day, incline on another) → weekly 6 sets.
     // This session trained only bench. Seeding from ONE occurrence (bench=3) would store 3 and HALVE
     // the muscle at the next regeneration; seeding from the WEEKLY figure (6) stores 6 → grows to 7.
-    const history = [session(T(0), [set(60, 9), set(60, 9), set(60, 9)])]; // bench: 3 done, a rep to spare → advances
+    const history = [session(T(0), [set(60, 10), set(60, 10), set(60, 10)])]; // bench: 3 done, a rep to spare → advances
     const prescribed = (id: string) => (id === 'bb_bench_press' ? 3 : id === 'incline_bb_press' ? 3 : 0);
     await advanceV5(['bb_bench_press', 'incline_bb_press'], BAND, history, seed, Date.now(), undefined, prescribed, { [CHEST]: 6 });
     const vol = await getVolumeTargetsV5();

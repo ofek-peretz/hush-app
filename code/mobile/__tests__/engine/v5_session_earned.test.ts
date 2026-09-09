@@ -72,7 +72,7 @@ describe('a workout that earned a load change says so — at the whistle, not on
     // S-22: all sets cleared Tlo (8), so the lift goes up. This is the moment the Complete screen
     // exists to report, and before 2026-07-17 it could not: the decision had not been computed yet.
     const at = '2026-07-16T10:00:00Z';
-    const earned = await earnedFor([session(at, [set(EX, 40, 10), set(EX, 40, 10), set(EX, 40, 9)])], at);
+    const earned = await earnedFor([session(at, [set(EX, 40, 11), set(EX, 40, 11), set(EX, 40, 10)])], at);
 
     expect(earned).toHaveLength(1);
     // The screen renders `text` — an i18n key in Hush's first person, with the number and the

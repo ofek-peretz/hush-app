@@ -60,12 +60,13 @@ describe('metTlo — the predicate every decision is built on', () => {
     expect(r.load).toBe(60); // cleared at the edge → the anchor holds (S-22b)
   });
 
-  it('S-22b · the load goes up when the WORST set has one rep to spare over Tlo (measured 2026-09-10)', () => {
+  it('S-22b · the load goes up when the WORST set has two reps to spare over Tlo (measured 2026-09-10)', () => {
     // A clear at the edge is the edge: raising from it is the oscillation the board printed for a
-    // month (raise → set 4 under → hold → back off → raise). One rep of headroom is the price.
-    const edge = decide([set(60, 9), set(60, 8), set(60, 8)]);
+    // month (raise → set 4 under → hold → back off → raise). Two reps of headroom is the price
+    // (F-21, settled against her capacity rather than against the in-band board).
+    const edge = decide([set(60, 12), set(60, 9), set(60, 8)]); // the WORST set is what is read
     expect(edge.decision).toBe('hold');
-    const clear = decide([set(60, 10), set(60, 9), set(60, 9)]);
+    const clear = decide([set(60, 10), set(60, 10), set(60, 10)]);
     expect(clear.decision).toBe('progress');
     expect(clear.load).toBeGreaterThan(60);
   });
@@ -123,7 +124,7 @@ describe('the load it lands on is a real one, and never the lighter of two', () 
    */
   it('S-22 · a progression builds on the load she just cleared, never under it', () => {
     const history = [rec(50, [set(50, 9), set(50, 9), set(50, 9)])];
-    const r = decide([set(60, 9), set(60, 9), set(60, 9)], { history, load: 60 });
+    const r = decide([set(60, 10), set(60, 10), set(60, 10)], { history, load: 60 });
     expect(r.decision).toBe('progress');
     expect(r.load).toBeGreaterThan(60); // not 50-and-a-rung, which `min` would give
   });

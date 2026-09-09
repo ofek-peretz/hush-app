@@ -28,7 +28,7 @@ const ROLL2 = new Date('2026-07-20T10:00:00Z').getTime(); // Mon after → rolls
 
 describe('Loop 1 · perRungForV5 — her fitted reps-per-rung from history (F-13)', () => {
   it('null until enough like-for-like pairs (B-5 → one cautious rung)', () => {
-    const history = [session('2026-07-08T10:00:00Z', [set('bb_bench_press', 60, 9)])]; // one point → no slope
+    const history = [session('2026-07-08T10:00:00Z', [set('bb_bench_press', 60, 10)])]; // one point → no slope
     expect(perRungForV5('bb_bench_press', history)).toBeNull();
   });
 
@@ -44,7 +44,7 @@ describe('Loop 1 · perRungForV5 — her fitted reps-per-rung from history (F-13
     // fewer pairs than F-12 → null → B-5's one cautious rung, which is the safe direction.
     const history = [
       session('2026-07-01T10:00:00Z', [set('bb_bench_press', 55, 12), set('bb_bench_press', 57.5, 11)]),
-      session('2026-07-03T10:00:00Z', [set('bb_bench_press', 60, 10), set('bb_bench_press', 62.5, 9)]),
+      session('2026-07-03T10:00:00Z', [set('bb_bench_press', 60, 10), set('bb_bench_press', 62.5, 10)]),
       session('2026-07-06T10:00:00Z', [set('bb_bench_press', 65, 8), set('bb_bench_press', 67.5, 7)]),
       session('2026-07-08T10:00:00Z', [set('bb_bench_press', 70, 6), set('bb_bench_press', 72.5, 5)]),
     ];
@@ -78,7 +78,7 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
   });
 
   it('S-22 · a full-clear workout advances the load PER WORKOUT (not at Saturday — L7)', async () => {
-    const history: Session[] = [session(new Date(WEEK1).toISOString(), [set('bb_bench_press', 60, 9), set('bb_bench_press', 60, 9), set('bb_bench_press', 60, 9)])]; // one rep to spare — S-22b
+    const history: Session[] = [session(new Date(WEEK1).toISOString(), [set('bb_bench_press', 60, 10), set('bb_bench_press', 60, 10), set('bb_bench_press', 60, 10)])]; // one rep to spare — S-22b
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     const before = (await currentV5Targets(history))['bb_bench_press'].weight;
     // ONE advance folds the completed workout immediately — no waiting for a weekly boundary.
@@ -96,8 +96,8 @@ describe('Stage 5 · the façade drives the prescription from exercise-keyed sta
     const mon = new Date('2026-07-13T10:00:00Z').toISOString();
     const thu = new Date('2026-07-16T10:00:00Z').toISOString();
     const history: Session[] = [
-      session(thu, [set('bb_bench_press', 62.5, 9), set('bb_bench_press', 62.5, 9), set('bb_bench_press', 62.5, 9)]), // newest first
-      session(mon, [set('bb_bench_press', 60, 9), set('bb_bench_press', 60, 9), set('bb_bench_press', 60, 9)]),
+      session(thu, [set('bb_bench_press', 62.5, 10), set('bb_bench_press', 62.5, 10), set('bb_bench_press', 62.5, 10)]), // newest first
+      session(mon, [set('bb_bench_press', 60, 10), set('bb_bench_press', 60, 10), set('bb_bench_press', 60, 10)]),
     ];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2); // folds Mon then Thu, in order

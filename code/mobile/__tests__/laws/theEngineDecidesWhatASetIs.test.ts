@@ -117,7 +117,7 @@ describe('3 · every performed set is evidence', () => {
   it("the engine's OWN warm-up mark is still the one exclusion", () => {
     const withBridge = decideExercise({
       state: state(),
-      session: [{ load: 30, reps: 5, isApproach: true }, { load: 60, reps: 9 }, { load: 60, reps: 9 }, { load: 60, reps: 9 }],
+      session: [{ load: 30, reps: 5, isApproach: true }, { load: 60, reps: 10 }, { load: 60, reps: 10 }, { load: 60, reps: 10 }],
       meta: BARBELL,
       rotationAvailable: true,
     });

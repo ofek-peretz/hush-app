@@ -11,7 +11,7 @@ import { ensureExercisesV5, advanceV5, getWeeklyPlanV5, getWeeklyUpdateV5, markW
 import { bandFor } from '@/engine/v5/repBand';
 import type { Session, SetLog, Program } from '@/data/local/models';
 
-const BAND = bandFor('8-10');
+const BAND = bandFor('8-12'); // the shipping default since 2026-09-10 — on an 8-10 band F-21's margin lands exactly on Thi, so the modest sentence could never fire
 const seed = (id: string) => (id === 'bb_bench_press' ? 60 : null);
 const set = (w: number | null, reps: number): SetLog => ({ exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: w, recommendedReps: 8, actualWeight: w, actualReps: reps, edited: false, persistedAt: '', restBeforeS: 90 });
 const session = (startedAt: string, sets: SetLog[]): Session => ({ id: `s_${startedAt}`, programDayId: 'd', startedAt, state: 'SAVED', earlyFinish: false, sets });
@@ -29,7 +29,7 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
   beforeEach(async () => { await resetV5(); });
 
   it('⛔ …and a workout at the TOP of the band earns the stronger sentence', async () => {
-    const history: Session[] = [session(WEEK1, [set(60, 10), set(60, 10), set(60, 10)])];
+    const history: Session[] = [session(WEEK1, [set(60, 12), set(60, 12), set(60, 12)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
     const update = await getWeeklyUpdateV5(ROLL2);
@@ -37,7 +37,7 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
   });
 
   it('a full-clear workout → a "load up" change in the closed-week mirror, unseen then seen', async () => {
-    const history: Session[] = [session(WEEK1, [set(60, 9), set(60, 9), set(60, 9)])];
+    const history: Session[] = [session(WEEK1, [set(60, 10), set(60, 10), set(60, 10)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // per-workout: folds WEEK1 now
 
@@ -108,8 +108,8 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     // Two chest occurrences this week, each completed AND advancing → Loop 3 grows chest volume (3→4).
     // The FIRST fold seeds (no change); the SECOND records the grow, which the mirror must name.
     const history: Session[] = [
-      session(new Date('2026-07-15T09:00:00Z').toISOString(), [set(60, 9), set(60, 9), set(60, 9)]),
-      session(new Date('2026-07-15T17:00:00Z').toISOString(), [set(62.5, 9), set(62.5, 9), set(62.5, 9)]),
+      session(new Date('2026-07-15T09:00:00Z').toISOString(), [set(60, 10), set(60, 10), set(60, 10)]),
+      session(new Date('2026-07-15T17:00:00Z').toISOString(), [set(62.5, 10), set(62.5, 10), set(62.5, 10)]),
     ];
     const prescribed = (id: string) => (id === 'bb_bench_press' ? 3 : 0);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1, undefined, prescribed, { Chest: 3 });

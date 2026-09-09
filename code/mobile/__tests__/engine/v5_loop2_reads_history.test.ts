@@ -33,7 +33,7 @@ const BARBELL: ExerciseMeta = { equipment: 'barbell', bodyweight: false, observe
 const set = (load: number | null, reps: number, extra: Partial<SetPerf> = {}): SetPerf => ({ load, reps, ...extra });
 const rec = (load: number | null, sets: SetPerf[]): SessionRecord => ({ load, sets });
 /** A session where every set met Tlo, at `load`. */
-const cleared = (load: number): SessionRecord => rec(load, [set(load, 9), set(load, 9), set(load, 9)]);
+const cleared = (load: number): SessionRecord => rec(load, [set(load, 10), set(load, 10), set(load, 10)]);
 /** A session at `load` that did not clear. */
 const failed = (load: number): SessionRecord => rec(load, [set(load, 5), set(load, 5), set(load, 4)]);
 
@@ -206,7 +206,7 @@ describe('a session with sets but nothing usable', () => {
   });
 
   it('a single unreadable session is not a verdict — one bad day holds', () => {
-    const r = decide([set(60, 9), set(60, 9), set(60, 9)], {
+    const r = decide([set(60, 10), set(60, 10), set(60, 10)], {
       load: 60, history: [rec(60, [set(null, 0)])],
     }, true);
     expect(r.decision).toBe('progress'); // this session cleared; the junk one says nothing

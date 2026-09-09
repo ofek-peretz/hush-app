@@ -450,9 +450,23 @@ describe('⛔ the prescription is a forecast, and this is its accuracy', () => {
  * per-set ramp was measured not to close (`perSetShape`). The harness band is 8–12 because the
  * default is; an athlete who declares 8–10 is graded on 8–10 and lands ~48%.
  */
-const IN_BAND = 60.0;
-const MEAN_MISS = 0.9;
-const FIRST_SET_IN_BAND = 70.0;
+/*
+ * ── ⛔ RAISED AGAIN 2026-09-10, AND THIS BOARD IS NOT THE ONLY JUDGE ANYMORE ────────────────────
+ *
+ * F-21's margin went 1 → 2 reps and every number here improved: 63.5 → 75.6% in band, 0.82 → 0.54
+ * mean miss, 32.8 → 79.5% on set 1, 47.6 → 63.7% on a lift's second occurrence.
+ *
+ * ⚠️ AND THE ARM WAS NOT CHOSEN ON THESE NUMBERS. This board rises monotonically with the margin —
+ * three reps scores 82.5% — because **a load parked under her capacity produces high reps, and high
+ * reps still land inside an 8–12 band.** An engine that stops asking more of her reads as excellent
+ * here. The margin was settled against the simulated body's own published capacity instead (see
+ * `constants.RAISE_HEADROOM_REPS`), where three reps froze 30 of 58 lifts and sent the weakest
+ * athlete's load backward. Any future work that moves these numbers must say what it did to
+ * `load / capacity`, or it has not been measured at all.
+ */
+const IN_BAND = 72.0;
+const MEAN_MISS = 0.62;
+const FIRST_SET_IN_BAND = 76.0;
 
 /*
  * ⚠️ RE-MEASURED 2026-08-16 after the core pool began rotating (`theCorePoolIsActuallyUsed`), and the

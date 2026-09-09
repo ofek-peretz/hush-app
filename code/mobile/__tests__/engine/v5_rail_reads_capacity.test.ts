@@ -19,6 +19,11 @@
  *      15 reps        3 rungs                    62.5           67.5
  *      18 reps        5 rungs                    62.5           72.5
  *
+ * ⚠️ THE 11-REP ROW READS 60 SINCE 2026-09-10 and the table is left as it was measured. F-21 asks
+ * the WORST set for two reps of headroom before any raise, and 11 on set 1 decays to 9 by set 4 —
+ * one rep. The rail is not what holds it there; the raise is never sized at all. Every other row is
+ * unchanged, which is the point: this file measures the CEILING, and the ceiling did not move.
+ *
  * Every large move was flattened to one rung. The engine measured her, decided she had earned five
  * rungs, and then handed her one — with nothing in the change log to say a ceiling had done it.
  *
@@ -63,8 +68,11 @@ describe('a raise the engine sized is a raise she gets', () => {
   });
 
   it('⚠️ …and an ORDINARY clear still moves exactly one — nothing was loosened', () => {
-    // The common case, and the one S-22's "all three sets hit 8, the row goes to 47.5" describes.
-    expect(nextLoad(11)).toBe(62.5);
+    // The common case. Set 1 at 12 leaves the WORST of four decaying sets at 10 — two reps over an
+    // 8-floor, which is what F-21 has asked for since 2026-09-10. At 11 the worst set lands on 9
+    // and the lift correctly HOLDS instead: that hold is the whole of the rule, and it is the one
+    // change this fixture records.
+    expect(nextLoad(11)).toBe(60);
     expect(nextLoad(12)).toBe(62.5);
     expect(nextLoad(13)).toBe(62.5);
   });

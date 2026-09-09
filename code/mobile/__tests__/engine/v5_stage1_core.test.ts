@@ -64,7 +64,7 @@ describe('S-51 · Loop 1 never corrects a bodyweight lift (no load axis)', () =>
 describe('S-22 · all working sets met Tlo → the load goes up', () => {
   it('progress, and the athlete never has to reach the top of the band', () => {
     // One rep over the floor on every set is enough (S-22b); the top of the band is never required.
-    const r = decideExercise({ state: state({ load: 80, history: [{ load: 80, sets: [S(80, 8), S(80, 8)] }] }), session: [S(80, 9), S(80, 9), S(80, 9)], meta: bb() });
+    const r = decideExercise({ state: state({ load: 80, history: [{ load: 80, sets: [S(80, 8), S(80, 8)] }] }), session: [S(80, 10), S(80, 10), S(80, 10)], meta: bb() });
     expect(r.decision).toBe('progress');
     expect(r.load!).toBeGreaterThan(80);
   });
@@ -89,7 +89,7 @@ describe('L10 · the anchor is the MEDIAN of met-Tlo sets — a fat finger canno
     // three sets met Tlo: 80, 80, 400 (fat finger). median = 80. progress steps from 80, not 400.
     const r = decideExercise({
       state: state({ load: 80, history: [{ load: 80, sets: [S(80, 8), S(80, 8)] }] }),
-      session: [S(80, 9), S(80, 9), S(400, 9)],
+      session: [S(80, 10), S(80, 10), S(400, 10)],
       meta: bb(),
     });
     expect(r.decision).toBe('progress');
@@ -104,7 +104,7 @@ describe('S-15 · she loads far LESS than prescribed — the median absorbs the 
     // anchor is the median of {40, 40, 4} = 40. The 4 never becomes a load she is prescribed.
     const r = decideExercise({
       state: state({ load: 40 }),
-      session: [S(40, 9), S(40, 9), S(4, 12)],
+      session: [S(40, 10), S(40, 10), S(4, 12)],
       meta: bb(),
     });
     expect(r.decision).toBe('progress');
@@ -181,7 +181,7 @@ describe('S-39 · the engine follows her down, and back up — no deload constru
     const lower = down.load!;
     const back = decideExercise({
       state: state({ load: lower, history: [{ load: lower, sets: [S(lower, 8), S(lower, 8)] }] }),
-      session: [S(lower, 9), S(lower, 9), S(lower, 9)], meta: bb(),
+      session: [S(lower, 10), S(lower, 10), S(lower, 10)], meta: bb(),
     });
     expect(back.decision).toBe('progress');
     expect(back.load!).toBeGreaterThan(lower); // …and back up the moment she clears again

@@ -118,8 +118,8 @@ describe('2+3+4 · the whole arc, scoped and honest', () => {
     const easedSession: Session = {
       ...session(T(12, 10), 9),
       sets: [
-        ...[0, 1, 2].map((i) => set(SQUAT, i, 9)),
-        ...[0, 1, 2].map((i) => ({ ...set(BENCH, i, 9), recommendedWeight: before[BENCH].weight, actualWeight: before[BENCH].weight })),
+        ...[0, 1, 2].map((i) => set(SQUAT, i, 10)),
+        ...[0, 1, 2].map((i) => ({ ...set(BENCH, i, 10), recommendedWeight: before[BENCH].weight, actualWeight: before[BENCH].weight })),
       ],
     };
     await advanceV5(LIFTS, BAND, [...history, easedSession], seed, Date.parse(easedSession.startedAt) + HOUR);
@@ -167,7 +167,7 @@ describe('2+3+4 · the whole arc, scoped and honest', () => {
     await db.appendCardioActivity(run(T(11, 22), 8.2)); // Monday night's run (window → Wed ~10:40)
     const offline = {
       ...session(T(12, 10), 9),
-      sets: [0, 1, 2].map((i) => ({ ...set(SQUAT, i, 9), recommendedWeight: before[SQUAT].weight, actualWeight: before[SQUAT].weight })),
+      sets: [0, 1, 2].map((i) => ({ ...set(SQUAT, i, 10), recommendedWeight: before[SQUAT].weight, actualWeight: before[SQUAT].weight })),
     };
     // First fold since before the run — Wednesday morning, still inside the 36 h window.
     await advanceV5(LIFTS, BAND, [...history, offline], seed, Date.parse(T(13, 9)));

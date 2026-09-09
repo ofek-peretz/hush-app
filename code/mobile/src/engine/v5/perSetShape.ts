@@ -122,9 +122,31 @@
  * ── ⛔ 2026-09-10 — THE BASE WAS FIXED, THREE WAYS, AND THE BOARD MOVED 38.5% → 63.5% ────────────
  * The formula report reopened this file's question and a trace answered it in one line per lift:
  * the seed opened at her fresh 8RM (B-10 now errs one rung light), a clear with set 4 exactly on Tlo
- * triggered a raise set 4 then failed (F-21 now wants one rep of headroom), and a two-rep band was
- * narrower than a rung and than the fatigue across four sets (the default is 8–12 now). All three
- * are BASE and BAND fixes, exactly as the paragraph below predicted; the shape stayed unwired.
+ * triggered a raise set 4 then failed (F-21 now wants headroom), and a two-rep band was narrower
+ * than a rung and than the fatigue across four sets (the default is 8–12 now). All three are BASE
+ * and BAND fixes, exactly as the paragraph below predicted; the shape stayed unwired.
+ *
+ * ── ⛔⛔ AND THEN IT WAS WIRED A SEVENTH TIME, ON THE FIXED BASE, AND LOST AGAIN (2026-09-10) ─────
+ * The reason recorded below — *"Loop 1 is already the per-set controller, so a predictive ramp
+ * lowers what the reactive one has just lowered"* — HAD GONE STALE, and honestly so: the founder
+ * revoked Loop 1's mid-session authority on 2026-08-26 (*"mid-session she is a logger"*), and with
+ * the base fixed the live profile no longer rises after set 1, it DECAYS (73.5 / 67.8 / 60.0 / 46.1
+ * in band by position). There was no second controller left for a ramp to fight, which is exactly
+ * the condition this module was built for. So it was wired through `sessionTargets` and measured:
+ *
+ *       flat, 1-rep raise margin ....  63.5%      ramp, 1-rep margin ....  56.9%   (set 4 46.1 → 39.2)
+ *       flat, 2-rep raise margin ....  75.6%      ramp, 2-rep margin ....  68.3%
+ *
+ * It loses at BOTH margins, and the mechanism is new and worth keeping: **equalising the sets makes
+ * `allMet` fire more often**, so S-22 raises more often, so the load outruns her — `under` climbed
+ * 30.3% → 36.9% overall. The late-set shortfall a flat load produces is not only a defect; it is
+ * also the BRAKE that was holding the raise rate honest. Re-created explicitly (the 2-rep margin,
+ * F-21) the brake is worth 12 points on its own, and the ramp on top of it is still worth −7.
+ *
+ * ⚠️ SO THE SHAPE IS NOT THE LEVER, AND THIS IS THE THIRD DISTINCT REASON WHY. The wiring is
+ * deleted rather than left dark — a `perSetLoadsForV5` nobody calls is the dead machinery this
+ * engine's audits keep finding — and the module stays as the measured answer to a question that
+ * will be asked again.
  *
  * ⚠️ SO THIS MODULE STAYS BUILT AND UNWIRED, AND THE FILE IS NO LONGER WAITING FOR A SIXTH IDEA.
  * The per-set spread is real and it is ALREADY being closed, by Loop 1, from evidence. What is left

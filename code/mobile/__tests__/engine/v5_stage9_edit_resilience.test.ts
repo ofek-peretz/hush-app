@@ -38,7 +38,7 @@ describe('Stage 9 · v5 survives the athlete\'s edits', () => {
   beforeEach(async () => { await resetV5(); });
 
   it('S-40 · adding an exercise (frequency change / regen) preserves every existing exercise\'s state', async () => {
-    const history: Session[] = [session(WK1, [set('bb_bench_press', 60, 9), set('bb_bench_press', 60, 9), set('bb_bench_press', 60, 9)])];
+    const history: Session[] = [session(WK1, [set('bb_bench_press', 60, 10), set('bb_bench_press', 60, 10), set('bb_bench_press', 60, 10)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2); // bench progresses past 60

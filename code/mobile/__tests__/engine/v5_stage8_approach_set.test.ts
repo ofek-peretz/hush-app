@@ -33,7 +33,7 @@ describe('Stage 8 · the approach set is excluded from the fold', () => {
 
   it('a light approach set does not drag the progression — only the working sets decide', async () => {
     // Week: an approach set at 40 (measurement) + three working sets at 60 that all meet Tlo.
-    const history: Session[] = [session(WEEK1, [set(40, 20, true), set(60, 9), set(60, 9), set(60, 9)])];
+    const history: Session[] = [session(WEEK1, [set(40, 20, true), set(60, 10), set(60, 10), set(60, 10)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL2);

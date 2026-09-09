@@ -80,7 +80,7 @@ describe('S-28 · the load holds, and the release is her own measured headroom',
     const bb: ExerciseState = { exerciseId: 'bb_row', load: 45, band: BAND, sets: 3, history: bbHistory };
     const out = decideExercise({
       state: bb,
-      session: [0, 1, 2].map(() => ({ load: 45, reps: 9, restBeforeS: 90 })),
+      session: [0, 1, 2].map(() => ({ load: 45, reps: 10, restBeforeS: 90 })),
       meta: barbell,
     });
     expect(out.decision).toBe('progress');
@@ -89,7 +89,7 @@ describe('S-28 · the load holds, and the release is her own measured headroom',
 
   it('silent until her slope is fitted (F-12) — no measured fact, no claim that the jump breaks her', () => {
     const thin: ExerciseState = { exerciseId: 'machine_chest_press', load: 40, band: BAND, sets: 3, history: [] };
-    const out = decideExercise({ state: thin, session: at(9), meta: stack });
+    const out = decideExercise({ state: thin, session: at(10), meta: stack });
     expect(out.decision).toBe('progress'); // B-5's cautious rung stands
   });
 });
