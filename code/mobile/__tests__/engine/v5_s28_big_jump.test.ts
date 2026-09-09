@@ -75,12 +75,12 @@ describe('S-28 · the load holds, and the release is her own measured headroom',
     expect(decideExercise({ state: s, session: at(9), meta: stack }).decision).toBe('rung_out_of_reach');
   });
 
-  it('S-22 is untouched on micro-loadable equipment — "All three sets hit 8. The row goes to 47.5."', () => {
+  it('S-22 is untouched on micro-loadable equipment — "All three sets hit 9. The row goes to 47.5." (a rep to spare, S-22b)', () => {
     const bbHistory = slopeHistory([40, 42.5, 45, 47.5], [10, 9, 8, 7]);
     const bb: ExerciseState = { exerciseId: 'bb_row', load: 45, band: BAND, sets: 3, history: bbHistory };
     const out = decideExercise({
       state: bb,
-      session: [0, 1, 2].map(() => ({ load: 45, reps: 8, restBeforeS: 90 })),
+      session: [0, 1, 2].map(() => ({ load: 45, reps: 9, restBeforeS: 90 })),
       meta: barbell,
     });
     expect(out.decision).toBe('progress');

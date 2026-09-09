@@ -27,13 +27,13 @@ describe('Stage 6 · v5 owns the prescription', () => {
     expect(sample!.repBandHi).toBe(12); // Thi
   });
 
-  it('no declared band → the 8-10 default band still applies (no v4 fallback)', async () => {
+  it('no declared band → the default band (8-12 since 2026-09-10) still applies (no v4 fallback)', async () => {
     await db.saveProfile({ ...base });
     await fixtureModel.generateProgram({ ...base });
     const targets = await fixtureModel.sessionTargets({ programDayId: 'd', completedSessions: 0 } as never);
     const sample = targets.find((t) => t.recommendedWeight != null);
     expect(sample!.recommendedReps).toBe(8); // default Tlo
-    expect(sample!.repBandHi).toBe(10); // default Thi
+    expect(sample!.repBandHi).toBe(12); // default Thi
   });
 
   it('generation produces a valid, well-formed program', async () => {

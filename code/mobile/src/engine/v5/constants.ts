@@ -398,6 +398,36 @@ export const ATTEMPTS_TO_CLEAR_SEED = 1;
 export const BOOTSTRAP_RUNGS_PER_MOVE = 1;
 
 /**
+ * ════ F-21 · A RAISE NEEDS ONE REP OF HEADROOM ON THE WORST SET (S-22b, 2026-09-10, measured) ════
+ *
+ * S-22 raised the load whenever every set met Tlo — including when the worst set landed EXACTLY on
+ * it. Traced on the virtual athletes, that is the oscillation the accuracy board had been printing
+ * for a month: set 4 reaches 8 → raise → set 4 falls to 6–7 → hold → stall → back off → set 4
+ * reaches 8 → raise… A clear at the edge is not headroom; it is the edge. With one rep of margin
+ * required before the load moves, the board (band 8–12, seed one rung light — the two rules that
+ * shipped with this one):
+ *
+ *     in band  38.5% → 63.5%     mean miss 1.47 → 0.82 reps     set 1  32.8% → 73.5%
+ *     2nd occurrence in band  29.6% → 47.6%     6th+  42.6% → 67.8%
+ *
+ * Alone, on the old 8–10 band with the old seed, the margin is worth 38.5% → ~44%. One rep, not two:
+ * two would hold a lift that is genuinely ready on most equipment grids.
+ */
+export const RAISE_HEADROOM_REPS = 1;
+
+/**
+ * ════ B-10 · THE FIRST GUESS ERRS ONE RUNG LIGHT (B-1c, 2026-09-10, measured) ════
+ *
+ * B-1 models a working load from sex and bodyweight, and the model is, by construction, the load she
+ * makes Tlo on FRESH. Set 1 at Tlo means sets 2–4 under it — every second occurrence opened heavy
+ * (66.8% of second-occurrence sets under the band on the board). One rung lighter opens set 1 a rep
+ * or two over the floor and the last set on it, and Loop 2 climbs from evidence: second occurrence
+ * 38.1% → 47.6% in band, cold start 60% in band. It is also the sentence the product already says
+ * about the first number — "a careful first guess" — made true.
+ */
+export const SEED_RUNGS_LIGHT = 1;
+
+/**
  * F-16 — where the load–rep continuum ends, for the purpose of reading headroom.
  *
  * Epley's RATIO between two rep counts holds well across roughly 3–20 reps (a 20-rep set is ~60% of

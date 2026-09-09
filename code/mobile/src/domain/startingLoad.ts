@@ -16,7 +16,7 @@ import type { Profile, Experience, Capability } from '@/data/local/models';
 import { isEvidenceSet } from '@/domain/setEvidence';
 import { BAR_KG, emptyBarKg } from '@/engine/loadMath';
 import { loadFloor } from '@/engine/v5/grid';
-import { STARTING_INCREMENT } from '@/engine/v5/constants';
+import { STARTING_INCREMENT, SEED_RUNGS_LIGHT } from '@/engine/v5/constants';
 import type { Exercise } from '@/data/exercises';
 
 /**
@@ -238,6 +238,20 @@ export function personalScale(
   return clamp(median, PERSONAL_SCALE_FLOOR, 1);
 }
 
+/**
+ * B-1's number on real plates — the load the model says she works at, before B-1c's one-rung
+ * discount. The milestone ladders are cut from THIS (a club is a multiple of what the model thought
+ * of her, not of the careful first bar she was handed), and it is what `startingWeight` starts from.
+ */
+export function modelledStartingWeight(ex: Exercise, profile: LoadProfile): number | null {
+  const modelled = modelledLoadKg(ex, profile);
+  if (modelled == null) return null;
+  const step = 1;
+  let kg = snapToStock(Math.round(modelled / step) * step, ex);
+  kg = Math.max(kg, emptyBarKg(ex.equipment));
+  return Math.max(kg, step);
+}
+
 export function startingWeight(ex: Exercise, profile: LoadProfile): number | null {
   const modelled = modelledLoadKg(ex, profile);
   if (modelled == null) return null;
@@ -251,5 +265,9 @@ export function startingWeight(ex: Exercise, profile: LoadProfile): number | nul
   // which is the whole reason the family exists: a beginner woman's curl now seeds at 10-15 kg
   // instead of being forced up to an Olympic bar she would never curl.
   kg = Math.max(kg, emptyBarKg(ex.equipment));
+  // B-1c — the first guess errs one rung light (`SEED_RUNGS_LIGHT`, measured): the model's number is
+  // the load she makes Tlo on fresh, which leaves every later set under it. Never below the bar.
+  const inc = STARTING_INCREMENT[ex.equipment] ?? 0;
+  if (inc > 0) kg = Math.max(emptyBarKg(ex.equipment), kg - inc * SEED_RUNGS_LIGHT);
   return Math.max(kg, step);
 }

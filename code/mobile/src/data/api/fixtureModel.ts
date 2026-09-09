@@ -1726,7 +1726,7 @@ async function foldEngineUnsynchronised(
   bucketOpenMs: number | undefined,
 ): Promise<void> {
   // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
-  // to her single declared band, then the '8-10' default.
+  // to her single declared band, then the default band (DEFAULT_REP_BAND).
   // ⛔ A band WRITTEN ON THE SEAT wins (founder 2026-09-07, `Slot.repBand`): the model's per-lift
   // range, when it wrote one. Same arithmetic below — the floor prices the seed, Loop 2 moves
   // inside the pair — with the sheet's numbers instead of the profile's.
@@ -2332,7 +2332,7 @@ export const fixtureModel: ModelClient = {
     // exercises fall back to the seed. The Weekly Update reads from v5 too (domain/weeklyUpdate), so a
     // v5 athlete's load, progression and narration all come from one engine.
     // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
-    // to her single declared band, then the '8-10' default — unless the SEAT carries one
+    // to her single declared band, then the default band (DEFAULT_REP_BAND).— unless the SEAT carries one
     // (`Slot.repBand`, the model's per-lift range, 2026-09-07), which wins as it does in the fold.
     const bandOf = (exId: string) => {
       const written = slotBandOf(program, exId);

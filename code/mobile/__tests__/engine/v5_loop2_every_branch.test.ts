@@ -52,10 +52,22 @@ describe('metTlo — the predicate every decision is built on', () => {
    * EXACTLY on Tlo from a success into a failure, which is the difference between progressing and
    * holding for every athlete who hits her target exactly.
    */
-  it('S-22 · every set exactly AT Tlo is a cleared workout — the load goes up', () => {
+  it('S-22 · every set exactly AT Tlo is a cleared workout — met, so never a hold-for-failure', () => {
+    // `>=` → `>` would turn a set that landed EXACTLY on Tlo into a failure; it is a success.
     const r = decide([set(60, 8), set(60, 8), set(60, 8)]);
-    expect(r.decision).toBe('progress');
-    expect(r.load).toBeGreaterThan(60);
+    expect(r.decision).not.toBe('stall_backoff');
+    expect(r.decision).not.toBe('stall_rotate');
+    expect(r.load).toBe(60); // cleared at the edge → the anchor holds (S-22b)
+  });
+
+  it('S-22b · the load goes up when the WORST set has one rep to spare over Tlo (measured 2026-09-10)', () => {
+    // A clear at the edge is the edge: raising from it is the oscillation the board printed for a
+    // month (raise → set 4 under → hold → back off → raise). One rep of headroom is the price.
+    const edge = decide([set(60, 9), set(60, 8), set(60, 8)]);
+    expect(edge.decision).toBe('hold');
+    const clear = decide([set(60, 10), set(60, 9), set(60, 9)]);
+    expect(clear.decision).toBe('progress');
+    expect(clear.load).toBeGreaterThan(60);
   });
 
   it('S-24 · one set ONE rep short of Tlo is not a cleared workout — the load holds', () => {

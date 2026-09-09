@@ -18,9 +18,10 @@ describe('S-6 · T is the band she picks — a floor and a ceiling, applied to e
     expect(bandFor('6-8')).toEqual({ lo: 6, hi: 8 });
     expect(bandFor('12-15')).toEqual({ lo: 12, hi: 15 });
   });
-  it('undefined → the default 8-10 (never a guess)', () => {
+  it('undefined → the default 8-12 (never a guess; measured 2026-09-10 — see repBand.ts)', () => {
     expect(bandFor(undefined)).toEqual(bandFor(DEFAULT_REP_BAND));
-    expect(DEFAULT_REP_BAND).toBe('8-10');
+    expect(DEFAULT_REP_BAND).toBe('8-12');
+    expect(bandFor('8-10')).toEqual({ lo: 8, hi: 10 }); // the old default stays a choice
   });
   it('Loop 1 reads her real Thi off the target; older profiles fall back to a provisional window', () => {
     expect(bandFromTarget(8, 10)).toEqual({ lo: 8, hi: 10 }); // her declared band

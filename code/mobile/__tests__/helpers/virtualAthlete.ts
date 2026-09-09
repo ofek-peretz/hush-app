@@ -36,7 +36,7 @@ import { loadFloor } from '@/engine/v5/grid';
 import type { Profile, Program, Session, SetLog } from '@/data/local/models';
 
 export const TLO = 8;
-export const THI = 10;
+export const THI = 12;
 
 /** Deterministic — a law may not pass or fail by luck. */
 export function rng(seed: number) {
@@ -112,7 +112,7 @@ export async function train(p: Person, weeks: number): Promise<TrainingRun> {
 
   const profile: Profile = {
     units: 'kg', goal: 'build_muscle', healthConnected: false,
-    sex: p.sex, weightKg: p.weightKg, daysPerWeek: p.days, workoutMinutes: p.minutes, repBand: '8-10',
+    sex: p.sex, weightKg: p.weightKg, daysPerWeek: p.days, workoutMinutes: p.minutes, repBand: '8-12',
   };
   await db.saveProfile(profile);
 

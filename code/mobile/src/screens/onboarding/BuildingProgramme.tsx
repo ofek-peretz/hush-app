@@ -51,6 +51,7 @@ import { useCopy } from '@/i18n/useCopy';
 import { BuildingProgrammeView, beatFor, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
+import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { programmeName, type ProgrammeName } from '@/domain/programmeName';
@@ -511,7 +512,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
        * `bodyMap`, then generated a different week from the same answers one screen later.
        */
       bodyMap: inputs.bodyMap,
-      repBand: '8-10',
+      repBand: DEFAULT_REP_BAND,
       ...(inputs.goalText ? { goalText: inputs.goalText } : {}),
       ...(inputs.limitsText ? { limitsText: inputs.limitsText } : {}),
     }),
@@ -644,7 +645,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       }
       builtAtMs.current = Date.now();
       setBuilt({
-        muscles: buildMusclesFromProgram(program, profile.repBand ?? '8-10'),
+        muscles: buildMusclesFromProgram(program, profile.repBand ?? DEFAULT_REP_BAND),
         name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER, program.title),
         lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
       });

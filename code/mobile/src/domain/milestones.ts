@@ -31,7 +31,7 @@
 
 import type { Profile, Session } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
-import { startingWeight, type LoadProfile } from '@/domain/startingLoad';
+import { modelledStartingWeight, type LoadProfile } from '@/domain/startingLoad';
 import { currentWeekOpen } from '@/domain/weekCadence';
 import { isEvidenceSet } from '@/domain/setEvidence';
 
@@ -152,7 +152,7 @@ export function clubLadders(profile?: MilestoneProfile | null): ClubLadders {
     const ex = exerciseById(exId);
     const grid = CLUB_GRID[exId];
     if (!ex || !grid) continue;
-    const anchor = startingWeight(ex, anchorProfile);
+    const anchor = modelledStartingWeight(ex, anchorProfile);
     if (anchor == null) continue;
 
     const rungs: number[] = [];

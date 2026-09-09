@@ -75,6 +75,7 @@ import { useApp, engineMayRebuild } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { programmeName } from '@/domain/programmeName';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
+import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import type { Program, Profile } from '@/data/local/models';
 import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
@@ -112,7 +113,7 @@ export function ProgramCreated({ route, navigation }: Props) {
       weightKg: inputs.weightKg,
       daysPerWeek: inputs.daysPerWeek,
       units: inputs.units,
-      repBand: '8-10',
+      repBand: DEFAULT_REP_BAND,
       bodyMap: inputs.bodyMap,
       workoutMinutes: inputs.workoutMinutes ?? 60,
     }) as Profile,

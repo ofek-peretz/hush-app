@@ -37,7 +37,7 @@ beforeEach(async () => { await resetV5(); });
 it('S-60 · a fully-completed approach occurrence still EARNS a set (approach never marks it unfinished)', async () => {
   // Prescribed 4. Set 0 is the LIGHT approach measurement; sets 1–3 are working, all at Tlo → the lift
   // advances. She completed all four prescribed slots, so the muscle is "completed" and earns +1 (S-32).
-  const history = [session(T(0), [set(40, 8, /* approach */ true), set(60, 8), set(60, 8), set(60, 8)])];
+  const history = [session(T(0), [set(40, 8, /* approach */ true), set(60, 9), set(60, 9), set(60, 9)])];
   await advanceV5(['bb_bench_press'], BAND, history, seed, Date.now(), undefined, prescribed4);
   const vol = await getVolumeTargetsV5();
   expect(vol[CHEST]).toBe(5); // seed 4 → earned one → 5 (NOT held/trimmed by the approach set)

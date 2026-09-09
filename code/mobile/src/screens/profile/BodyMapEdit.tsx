@@ -50,7 +50,7 @@ const STANCES: { key: MuscleStance; word: string }[] = [
 ];
 
 /** The bands a muscle may sit in. Hers per muscle; the profile's `repBand` is the fallback. */
-const BANDS: RepBandChoice[] = ['6-8', '8-10', '10-12', '12-15'];
+const BANDS: RepBandChoice[] = ['6-8', '8-10', '8-12', '10-12', '12-15'];
 
 /** The three answers a lapsed rest window can take — see `painReport`. */
 const ANSWERS: { key: EaseAnswer; word: string }[] = [

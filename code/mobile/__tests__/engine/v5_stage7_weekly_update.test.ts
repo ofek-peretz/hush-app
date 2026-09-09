@@ -37,7 +37,7 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
   });
 
   it('a full-clear workout → a "load up" change in the closed-week mirror, unseen then seen', async () => {
-    const history: Session[] = [session(WEEK1, [set(60, 8), set(60, 8), set(60, 8)])];
+    const history: Session[] = [session(WEEK1, [set(60, 9), set(60, 9), set(60, 9)])];
     await ensureExercisesV5(['bb_bench_press'], BAND, history, seed);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1); // per-workout: folds WEEK1 now
 
@@ -108,8 +108,8 @@ describe('Stage 7 · v5 produces the Weekly Update the screens render', () => {
     // Two chest occurrences this week, each completed AND advancing → Loop 3 grows chest volume (3→4).
     // The FIRST fold seeds (no change); the SECOND records the grow, which the mirror must name.
     const history: Session[] = [
-      session(new Date('2026-07-15T09:00:00Z').toISOString(), [set(60, 8), set(60, 8), set(60, 8)]),
-      session(new Date('2026-07-15T17:00:00Z').toISOString(), [set(62.5, 8), set(62.5, 8), set(62.5, 8)]),
+      session(new Date('2026-07-15T09:00:00Z').toISOString(), [set(60, 9), set(60, 9), set(60, 9)]),
+      session(new Date('2026-07-15T17:00:00Z').toISOString(), [set(62.5, 9), set(62.5, 9), set(62.5, 9)]),
     ];
     const prescribed = (id: string) => (id === 'bb_bench_press' ? 3 : 0);
     await advanceV5(['bb_bench_press'], BAND, history, seed, ROLL1, undefined, prescribed, { Chest: 3 });

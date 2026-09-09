@@ -42,6 +42,7 @@
 import type { CoachPlan, PlannedBlock, PlannedSession } from '@/domain/coachPlan';
 import type { Program, ProgramDay, SetTarget } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
+import { DEFAULT_REP_BAND, bandFor } from '@/engine/v5/repBand';
 
 /** The band a lift is prescribed in, from the engine's own target for it. */
 function bandOf(target: SetTarget | undefined, fallback: [number, number]): [number, number] {
@@ -114,7 +115,7 @@ function sessionOf(day: ProgramDay, byExercise: Map<string, SetTarget>, band: [n
 export function coachPlanFromProgram(
   program: Program | null | undefined,
   targets: readonly SetTarget[] = [],
-  band: [number, number] = [8, 10],
+  band: [number, number] = [bandFor(DEFAULT_REP_BAND).lo, bandFor(DEFAULT_REP_BAND).hi],
   title?: string,
 ): CoachPlan | null {
   if (!program) return null;
@@ -141,6 +142,7 @@ export function coachPlanFromProgram(
 
 /** Her declared band as a pair — the fallback when the engine has no target for a lift yet. */
 export function bandFromChoice(choice: string | undefined): [number, number] {
-  const parts = (choice ?? '8-10').split('-').map((n) => Number(n));
-  return parts.length === 2 && parts.every((n) => Number.isFinite(n)) ? [parts[0], parts[1]] : [8, 10];
+  const parts = (choice ?? DEFAULT_REP_BAND).split('-').map((n) => Number(n));
+  const fallback = bandFor(DEFAULT_REP_BAND);
+  return parts.length === 2 && parts.every((n) => Number.isFinite(n)) ? [parts[0], parts[1]] : [fallback.lo, fallback.hi];
 }

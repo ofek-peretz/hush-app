@@ -20,9 +20,9 @@ export type Units = 'kg' | 'lb';
 
 export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness' | 'toning';
 
-/** Engine v5 — the athlete's declared rep band (T). One onboarding question; default '8-10'.
+/** Engine v5 — the athlete's declared rep band (T). Never asked; default '8-12' (measured 2026-09-10, `repBand.DEFAULT_REP_BAND`).
  *  It is a floor and a ceiling: Tlo is the target, Thi the "too light" mark. See the register S-6. */
-export type RepBandChoice = '6-8' | '8-10' | '10-12' | '12-15';
+export type RepBandChoice = '6-8' | '8-10' | '8-12' | '10-12' | '12-15';
 
 /** Engine v5 — the athlete's stance on a muscle group on the body map. `off` never appears in the
  *  programme; `emphasis` gets first claim on volume (budget of 2, F-4). Default: every muscle `normal`. */
@@ -88,13 +88,13 @@ export interface Profile {
   limitsText?: string;
   experience?: Experience; // drives starting weights; collected in onboarding
   daysPerWeek: number; // 1..6
-  /** Engine v5 — her declared rep band (T). Absent on older profiles => default '8-10'. Also the
+  /** Engine v5 — her declared rep band (T). Absent on older profiles => the default band (`DEFAULT_REP_BAND`). Also the
    *  v5-cohort marker (a set value opts the athlete onto the v5 engine) and the per-exercise fallback
    *  when a muscle has no override in `repBandByMuscle`. */
   repBand?: RepBandChoice;
   /** Engine v5 (Revision 7) — the rep band PER MUSCLE (register Part 9). Each exercise reads the band
    *  of its primary muscle (`exercise.muscle`); a muscle absent here falls back to `repBand`, then the
-   *  '8-10' default. Set-once preference, edited in the body map — never asked in onboarding. Keyed by
+   *  default band. Set-once preference, edited in the body map — never asked in onboarding. Keyed by
    *  MuscleGroup. */
   repBandByMuscle?: Record<string, RepBandChoice>;
   /** Engine v5 — the body map: per-muscle stance. Absent on older profiles => every muscle 'normal'

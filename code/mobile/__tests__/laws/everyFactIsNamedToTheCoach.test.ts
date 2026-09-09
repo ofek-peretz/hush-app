@@ -201,7 +201,10 @@ describe('⛔ and nothing is sent that is not about HER', () => {
       join(__dirname, '../../src/screens/onboarding/BuildingProgramme.tsx'),
       'utf8',
     );
-    expect(ob).toContain("repBand: '8-10'");
+    // The literal became the shared constant on 2026-09-10 (8-12, measured) — still one default for
+    // everybody, still never asked, so the fact stays unsent for the same reason.
+    expect(ob).toContain('repBand: DEFAULT_REP_BAND');
+    expect(ob).not.toMatch(/repBand:\s*inputs\./);
   });
 });
 

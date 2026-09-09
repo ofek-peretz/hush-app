@@ -36,7 +36,7 @@
 // 
 
 import { EXERCISES, exerciseById } from '@/data/exercises';
-import { startingWeight } from '@/domain/startingLoad';
+import { startingWeight, modelledStartingWeight } from '@/domain/startingLoad';
 import { SETS_MIN, SETS_MAX } from '@/engine/v5/constants';
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { db } from '@/data/local/db';
@@ -84,8 +84,9 @@ describe('B-1 · the cold start reads her sex and her bodyweight, and nothing el
     const legext = exerciseById('leg_extension')!; // lower, machine — same
     const f = { sex: 'female' as const, weightKg: 75 };
     const m = { sex: 'male' as const, weightKg: 75 };
-    expect(startingWeight(pushdown, f)! / startingWeight(pushdown, m)!).toBeCloseTo(0.5, 1);
-    expect(startingWeight(legext, f)! / startingWeight(legext, m)!).toBeCloseTo(0.66, 1);
+    // The MODELLED number — B-1c's one-rung discount (2026-09-10) is a seed rule, not a population fact.
+    expect(modelledStartingWeight(pushdown, f)! / modelledStartingWeight(pushdown, m)!).toBeCloseTo(0.5, 1);
+    expect(modelledStartingWeight(legext, f)! / modelledStartingWeight(legext, m)!).toBeCloseTo(0.66, 1);
   });
 });
 

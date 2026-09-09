@@ -14,7 +14,7 @@ import { median, percentileNearestRank } from './stats';
 import { snapDown, moveRungs, nextRung, prevRung, loadFloor } from './grid';
 import { repsPerRung, rungsForHeadroom, rungOutOfReach, bootstrapPerRung } from './repsPerRung';
 import { epley, loadForReps } from '@/engine/loadMath';
-import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED, EPLEY_VALID_REPS } from './constants';
+import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED, EPLEY_VALID_REPS, RAISE_HEADROOM_REPS } from './constants';
 
 const EPS = 1e-6;
 
@@ -275,6 +275,11 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
      * set short of Tlo, `allMet` goes false, and the lift takes a hold or a back-off. Pricing from the
      * most fatigued set is conservative, and conservative is what keeps the load climbing at all.
      */
+    // S-22b — a clear AT the edge holds; the load moves when the worst set has a rep to spare
+    // (`RAISE_HEADROOM_REPS`, measured). The hold keeps the anchor, exactly as S-24 does.
+    if (worstReps - band.lo < RAISE_HEADROOM_REPS) {
+      return { decision: 'hold', load: anchor, band, sets: state.sets };
+    }
     const n = rungsForHeadroom(worstReps - band.lo, perRung, 'up', bootstrapPerRung(anchor, band.lo, meta));
     let load = snapDown(moveRungs(anchor, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
     load = applyRail(load, state.history, band, meta, anchor); // L11 (base = max(settled, anchor))

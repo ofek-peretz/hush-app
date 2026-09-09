@@ -10,11 +10,20 @@ import type { Band } from './types';
 import type { RepBandChoice } from '@/data/local/models';
 
 /** Default band — the onboarding recommendation, and the fallback for older profiles. */
-export const DEFAULT_REP_BAND: RepBandChoice = '8-10';
+/**
+ * ⛔ 8–12, NOT 8–10 (2026-09-10, measured). A two-rep band is narrower than one equipment rung is
+ * worth (a 2.5 kg rung on a 42 kg bar is ~2 reps) and narrower than the fatigue across four sets
+ * (~2.4 reps), so no single load could put a whole lift inside it — the board sat at 38% in band for
+ * a month with set 1 over and set 4 under from the same correct number. Four reps is the band
+ * hypertrophy is actually coached in, and on the board it is worth 47.9% → 63.5% in band on its own.
+ * 8–10 stays a choice for anyone who declared it; a written seat band (`Slot.repBand`) still wins.
+ */
+export const DEFAULT_REP_BAND: RepBandChoice = '8-12';
 
 const BANDS: Record<RepBandChoice, Band> = {
   '6-8': { lo: 6, hi: 8 },
   '8-10': { lo: 8, hi: 10 },
+  '8-12': { lo: 8, hi: 12 },
   '10-12': { lo: 10, hi: 12 },
   '12-15': { lo: 12, hi: 15 },
 };

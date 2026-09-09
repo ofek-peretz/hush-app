@@ -119,6 +119,13 @@
  * leaves some set short of Tlo, `allMet` goes false, and the lift holds or backs off. The
  * conservative reading is what keeps the load climbing at all. That note now sits in `loop2`.
  *
+ * ── ⛔ 2026-09-10 — THE BASE WAS FIXED, THREE WAYS, AND THE BOARD MOVED 38.5% → 63.5% ────────────
+ * The formula report reopened this file's question and a trace answered it in one line per lift:
+ * the seed opened at her fresh 8RM (B-10 now errs one rung light), a clear with set 4 exactly on Tlo
+ * triggered a raise set 4 then failed (F-21 now wants one rep of headroom), and a two-rep band was
+ * narrower than a rung and than the fatigue across four sets (the default is 8–12 now). All three
+ * are BASE and BAND fixes, exactly as the paragraph below predicted; the shape stayed unwired.
+ *
  * ⚠️ SO THIS MODULE STAYS BUILT AND UNWIRED, AND THE FILE IS NO LONGER WAITING FOR A SIXTH IDEA.
  * The per-set spread is real and it is ALREADY being closed, by Loop 1, from evidence. What is left
  * of it is set 1 — the one position no in-session corrector can reach, because it is the evidence.

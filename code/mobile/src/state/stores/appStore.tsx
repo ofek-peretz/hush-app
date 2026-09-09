@@ -9,6 +9,7 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer, useRe
 import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
 import type { LearnedAboutHer } from '@/domain/coachPlan';
 import { applyLearned } from '@/domain/coachLearned';
+import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import type { AthleteRecord } from '@/domain/record';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
@@ -818,7 +819,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // It is NOT asked (register Part 9 §A): the rep band defaults to 8-10, editable per-muscle in
           // the body map later. Minutes default to a 60-minute ceiling, editable in Settings. The body
           // map itself comes from the body-map screen (all-normal when skipped → a full-body v5 plan).
-          repBand: '8-10',
+          repBand: DEFAULT_REP_BAND,
           bodyMap: inputs.bodyMap,
           // Rev 7: the time budget is a 60-minute ceiling by default (S-64), editable in Settings —
           // and hers when she told the coach how long she actually has (`withLearned`).

@@ -432,9 +432,27 @@ describe('⛔ the prescription is a forecast, and this is its accuracy', () => {
  * fit an hour it always fitted. Set 1 is the number to win back — it is the honest test of the load
  * choice, and it is now the widest gap on this board.
  */
-const IN_BAND = 38.0;
-const MEAN_MISS = 1.6;
-const FIRST_SET_IN_BAND = 32.7;
+/*
+ * ── ⛔⛔ RE-PINNED UP 2026-09-10 — THREE MEASURED RULES, ONE TRACE ───────────────────────────────
+ *
+ * A trace of one athlete's first six occurrences of every lift showed the whole board in one line:
+ * `42.5 [8 7 6 7] → 42.5 [9 8 7 7] → 40 [11 10 9 8] → 42.5 [9 8 7 6]` — a lift that could never
+ * settle, because (a) the seed opened at her fresh 8RM so every later set was under, (b) a clear
+ * with set 4 exactly on Tlo triggered a raise that set 4 then failed, and (c) a two-rep band is
+ * narrower than one rung is worth and than the fatigue across four sets. The three fixes, each
+ * measured on this board and kept because it won (`constants.RAISE_HEADROOM_REPS`,
+ * `constants.SEED_RUNGS_LIGHT`, `repBand.DEFAULT_REP_BAND` = 8–12):
+ *
+ *     all graded  38.5 → 63.5%     mean miss 1.47 → 0.82     set 1  32.8 → 73.5%
+ *     2nd occurrence  29.6 → 47.6%     6th+  42.6 → 67.8%     cold start 60.2% in band
+ *
+ * What is left is the late-set `under` (set 4: 53.5%) — the fatigue across a flat load, which a
+ * per-set ramp was measured not to close (`perSetShape`). The harness band is 8–12 because the
+ * default is; an athlete who declares 8–10 is graded on 8–10 and lands ~48%.
+ */
+const IN_BAND = 60.0;
+const MEAN_MISS = 0.9;
+const FIRST_SET_IN_BAND = 70.0;
 
 /*
  * ⚠️ RE-MEASURED 2026-08-16 after the core pool began rotating (`theCorePoolIsActuallyUsed`), and the
