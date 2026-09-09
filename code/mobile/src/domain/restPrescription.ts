@@ -34,6 +34,45 @@ import type { Session } from '@/data/local/models';
 // set needs real recovery, an isolation set doesn't (S2, approved 2026-07-05).
 export const REST_COMPOUND_S = 150; // between sets of a compound lift
 export const REST_ISOLATION_S = 75; // between sets of an isolation lift
+
+/**
+ * ════ B-11 · AND THE REST MATCHES THE PRESCRIPTION, NOT ONLY THE LIFT (2026-09-10) ════
+ *
+ * The two numbers above read ONE fact — is this lift a compound — and the founder's line for them is
+ * *"rest matches the work"*. It did not: a set of five and a set of fifteen on the same barbell were
+ * given the same 150 seconds, because the only thing the bootstrap could see was the exercise.
+ *
+ * Since 2026-09-07 the model writes a REP RANGE per lift (`Slot.repBand`, from her own words on the
+ * builder — *"twelve weeks to a half marathon"*, *"I want to get strong"*), and the engine already
+ * obeys it end to end: `coachDraft` keeps it, `materializeTemplate` writes it, `slotBandOf` lets it
+ * outrank her profile band in the fold and in the prescription. **The one thing that never followed
+ * it was the clock.** So the goal she typed shaped every load and every rep in her week and left her
+ * resting ninety seconds before a heavy triple.
+ *
+ * The band's FLOOR is the intensity: a prescription that starts at five reps is near-maximal work
+ * and needs minutes; one that starts at twelve is metabolic and needs less. The factor is applied to
+ * the tier bootstrap only — the moment she has `MIN_REST_SAMPLES` of her own (F-17), her measured
+ * median is the whole answer and this table is never consulted again. Same discipline as every
+ * other B-*: a guess that a fact of hers replaces within three sets.
+ *
+ *     band floor      factor      compound       isolation
+ *       ≤ 5            1.5         225 s          113 s        a true strength set
+ *       ≤ 7            1.25        188 s           94 s
+ *       8 … 11         1.0         150 s           75 s        the hypertrophy default (8-12)
+ *       ≥ 12           0.8         120 s           60 s        metabolic work
+ */
+export const REST_BAND_FACTORS: readonly { maxFloor: number; factor: number }[] = [
+  { maxFloor: 5, factor: 1.5 },
+  { maxFloor: 7, factor: 1.25 },
+  { maxFloor: 11, factor: 1.0 },
+  { maxFloor: Infinity, factor: 0.8 },
+];
+
+/** The bootstrap multiplier for a prescription that starts at `bandLo` reps. Absent band → 1. */
+export function restBandFactor(bandLo?: number | null): number {
+  if (bandLo == null || !Number.isFinite(bandLo)) return 1;
+  return REST_BAND_FACTORS.find((r) => bandLo <= r.maxFloor)!.factor;
+}
 export const REST_TRANSITION_S = 120; // between exercises (the walk + setup)
 /** Plan-level fallback for a stale installed watch app (pre-per-step-rest builds). */
 export const REST_INTER_S = 90;
@@ -84,7 +123,14 @@ export const SET_EXEC_SECONDS = { compound: 45, isolation: 30 } as const;
  */
 export function perSetSeconds(
   exerciseId: string,
-  opts: { compound: boolean; restS: number | null; execS: number | null },
+  opts: {
+    compound: boolean;
+    restS: number | null;
+    execS: number | null;
+    /** The prescription's floor, when the seat carries one (B-11). Shapes only the BOOTSTRAP rest —
+     *  a measured `restS` is hers and is never scaled. Absent → the tier number, as before. */
+    bandLo?: number | null;
+  },
 ): number {
   /*
    * ════ THE SECOND SIDE IS CHARGED. THE DECISION, AND THE NUMBERS THAT MADE IT (2026-08-16) ════
@@ -132,7 +178,14 @@ export function perSetSeconds(
   const workBootstrap = SET_EXEC_SECONDS[opts.compound ? 'compound' : 'isolation'];
   // No rest fact → the whole-set bootstrap (it already bundles work + rest); only the work doubles.
   if (opts.restS == null) {
-    const bundled = (opts.compound ? COMPOUND_SET_MIN : ISOLATION_SET_MIN) * 60;
+    /*
+     * B-11 — the bundle carries a REST inside it, and a prescription that starts at five reps needs
+     * a longer one. The band's factor is charged as the DELTA on the tier's rest, so the work half
+     * of the bundle is untouched and the ordinary 8-12 seat prices exactly as it always did.
+     */
+    const tier = opts.compound ? REST_COMPOUND_S : REST_ISOLATION_S;
+    const bandDelta = Math.round(tier * restBandFactor(opts.bandLo)) - tier;
+    const bundled = (opts.compound ? COMPOUND_SET_MIN : ISOLATION_SET_MIN) * 60 + bandDelta;
     return sides === 1 ? bundled : bundled + workBootstrap;
   }
   if (opts.execS != null) return opts.execS + opts.restS; // hers — both sides already inside it
@@ -311,17 +364,19 @@ export function restTransitionIsLearned(): boolean {
  * The between-sets rest for an exercise: HER measured median on that lift (S-17) once she has any,
  * else the tier bootstrap. Unknown exercise → compound, the safe long side.
  */
-export function restInterSecondsFor(exerciseId: string | null | undefined): number {
+export function restInterSecondsFor(exerciseId: string | null | undefined, bandLo?: number | null): number {
   if (exerciseId) {
     const learned = learnedRestByExercise.get(exerciseId);
-    if (learned != null) return learned;
+    if (learned != null) return learned; // her own median outranks every guess (S-17 / F-17)
   }
-  return tierRestS(exerciseId);
+  return tierRestS(exerciseId, bandLo);
 }
 
-/** The day-one tier bootstrap for a lift (B-4). Unknown exercise → compound, the safe long side. */
-function tierRestS(exerciseId: string | null | undefined): number {
-  return (exerciseId && exerciseById(exerciseId)?.tier === 'isolation') ? REST_ISOLATION_S : REST_COMPOUND_S;
+/** The day-one tier bootstrap for a lift (B-4), shaped by the prescription's own floor (B-11).
+ *  Unknown exercise → compound, the safe long side. */
+function tierRestS(exerciseId: string | null | undefined, bandLo?: number | null): number {
+  const tier = (exerciseId && exerciseById(exerciseId)?.tier === 'isolation') ? REST_ISOLATION_S : REST_COMPOUND_S;
+  return Math.round(tier * restBandFactor(bandLo));
 }
 
 /**

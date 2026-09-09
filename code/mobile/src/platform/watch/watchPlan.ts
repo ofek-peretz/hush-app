@@ -27,6 +27,7 @@ import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { exerciseById, muscleGroupsLabel } from '@/data/exercises';
 import type { PlannedItem } from '@/domain/coachPlan';
 import { loadSetup } from '@/domain/loadPresentation';
+import { restInterSecondsFor } from '@/domain/restPrescription';
 import {
   WATCH_PLAN_SCHEMA_VERSION,
   type WatchPlanSnapshot,
@@ -103,7 +104,9 @@ function buildSteps(
         blockId: target.blockId,
         reasonType: target.reasonType,
         reasonDelta: target.reasonDelta,
-        restInterS: restInterSFor ? restInterSFor(slot.exerciseId) : undefined,
+        // B-11 — her median when the supplier has one, else the phone's own band-shaped bootstrap,
+        // so a standalone strength seat rests like a strength seat (see the coach-plan builder).
+        restInterS: restInterSFor?.(slot.exerciseId) ?? restInterSecondsFor(slot.exerciseId, target.repBandLo),
         loadSetup: setup
           ? {
               style: setup.style,
@@ -263,11 +266,19 @@ export function buildCoachWatchPlan(inp: {
              * not earned one yet", so reaching that branch at all is the proof. The first branch is
              * a number the COACH wrote, and it must never wear her name.
              */
+            /*
+             * ⛔ AND WITH NEITHER, THE WRIST NOW GETS THE PHONE'S OWN BOOTSTRAP (B-11, 2026-09-10).
+             * It used to send nothing and let the standalone wrist fall back to one flat 90 seconds
+             * for every lift in the week — so an athlete training away from her phone rested the
+             * same before a heavy triple and a set of fifteen. `restInterSecondsFor` with the seat's
+             * floor is exactly what `restAfterStep` would answer on the phone, and it is deliberately
+             * NOT marked `restIsLearned`: it is a prescription, not her measured median.
+             */
             ...(block.restS != null
               ? { restInterS: block.restS }
               : inp.restInterSFor?.(item.ex) != null
                 ? { restInterS: inp.restInterSFor(item.ex) as number, restIsLearned: true }
-                : {}),
+                : { restInterS: restInterSecondsFor(item.ex, item.reps[0]) }),
             ...(setup
               ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
               : {}),

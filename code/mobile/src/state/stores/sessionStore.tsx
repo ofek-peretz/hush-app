@@ -1175,7 +1175,10 @@ export function restAfterStep(step: Step): number {
   if (step.restAfterS != null) return step.restAfterS; // the coach said so; 0 is "straight on"
   // S-17 · the two kinds of rest, split by a fact the step already carries. The walk to the next
   // station is her pooled pace; the rest between sets of a lift is that lift's own number.
-  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId);
+  // B-11 — and the between-sets rest reads the PRESCRIPTION's floor, not only the lift's tier: a
+  // seat the model wrote at 4-6 reps is near-maximal work and earns minutes. Her measured median
+  // still outranks it the moment she has one (`restInterSecondsFor`).
+  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId, step.target?.repBandLo);
 }
 
 /**

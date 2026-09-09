@@ -251,6 +251,8 @@ function perSetMinutes(
   exerciseId: string,
   restSecFor?: (id: string) => number | null,
   execSecFor?: (id: string) => number | null,
+  /** The seat's own prescription floor (B-11) — a strength range costs the hour more rest. */
+  bandLo?: number | null,
 ): number {
   const compound = isCompound(exerciseId);
   const rest = restSecFor?.(exerciseId) ?? null;
@@ -278,7 +280,7 @@ function perSetMinutes(
    * `exec` is HERS the doubling is already in it and must not be applied twice; it is applied only to
    * the bootstrap, which is a per-side estimate.
    */
-  return perSetSeconds(exerciseId, { compound, restS: rest, execS: exec }) / 60;
+  return perSetSeconds(exerciseId, { compound, restS: rest, execS: exec, bandLo }) / 60;
 }
 
 /** Estimated prescribed-work minutes for a day (work sets only) — her measured set duration + her
@@ -315,7 +317,7 @@ export function estimateSessionMinutes(
    * add, in front of a clock she can see.
    */
   const serial = day.slots.reduce((m, s) => {
-    let mins = s.setCount * perSetMinutes(s.exerciseId, restSecFor, execSecFor);
+    let mins = s.setCount * perSetMinutes(s.exerciseId, restSecFor, execSecFor, s.repBand?.[0]);
     const rest = restSecFor?.(s.exerciseId) ?? null;
     if (rest != null && transitionSec != null) mins += (transitionSec - rest) / 60;
     return m + mins;

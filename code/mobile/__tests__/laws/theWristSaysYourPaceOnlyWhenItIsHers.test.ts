@@ -37,6 +37,7 @@
 import fs from 'fs';
 import path from 'path';
 import { buildCoachWatchPlan } from '@/platform/watch/watchPlan';
+import { REST_COMPOUND_S } from '@/domain/restPrescription';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const swift = (f: string) => fs.readFileSync(path.join(ROOT, 'targets', 'watch', f), 'utf8');
@@ -82,10 +83,33 @@ describe('⛔ the phone only claims her pace on her own number', () => {
     expect(step.restIsLearned).toBeUndefined();
   });
 
-  it('⛔ no rest known at all → nothing is claimed', () => {
+  it('⛔ no rest of HERS → the phone sends its own bootstrap, and claims nothing', () => {
+    /*
+     * ⛔ THIS USED TO ASSERT `restInterS` WAS ABSENT (changed 2026-09-10, B-11). Absent meant the
+     * standalone wrist fell back to one flat 90 seconds for every lift in the week — the same rest
+     * before a heavy triple and a set of fifteen. It now carries the number the PHONE would have
+     * prescribed for that seat (`restInterSecondsFor`, shaped by the band's floor), which is the
+     * whole of S-48: the wrist runs what the phone decided.
+     *
+     * ⚠️ AND THE LAW THIS FILE EXISTS FOR IS UNTOUCHED, which is why the assertion moved rather
+     * than being deleted: `restIsLearned` is the claim, it is set on HER median and nowhere else,
+     * and a prescription must never wear her name.
+     */
     const step = firstStep(build(null, null));
-    expect(step.restInterS).toBeUndefined();
+    expect(step.restInterS).toBe(REST_COMPOUND_S); // an 8-10 seat on a compound: the tier number
     expect(step.restIsLearned).toBeUndefined();
+  });
+
+  it('⛔ …and that bootstrap follows the PRESCRIPTION, so a strength seat rests longer (B-11)', () => {
+    const heavy = buildCoachWatchPlan({
+      ...plan(null),
+      restInterS: 90,
+      restTransitionS: 120,
+      restInterSFor: () => null,
+      sessions: [{ id: 'c0', name: 'Upper A', blocks: [{ rounds: 2, items: [{ kind: 'reps', ex: 'bb_bench_press', load: 60, reps: [4, 6] }] }] }],
+    } as never);
+    expect(firstStep(heavy).restInterS).toBeGreaterThan(REST_COMPOUND_S);
+    expect(firstStep(heavy).restIsLearned).toBeUndefined(); // still not a claim about her
   });
 
   it('⚠️ and `restInterSFor` returning null IS how the phone says "she has not earned one"', () => {
