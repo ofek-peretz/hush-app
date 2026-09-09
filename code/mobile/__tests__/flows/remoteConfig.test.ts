@@ -86,12 +86,25 @@ describe('remote config — the tuning channel', () => {
   });
 });
 
-describe('the trial time cap — built, and disarmed by default', () => {
-  it('disarmed: a once-a-week athlete is gated by sessions alone, exactly as ratified', () => {
+describe('the trial time cap — armed at thirty days (2026-09-09)', () => {
+  it('armed by default: a once-a-week athlete meets the gate on day 30, not after fourteen weeks', () => {
+    const start = '2026-01-01T00:00:00.000Z';
+    const monthsLater = Date.parse('2026-06-01T00:00:00.000Z');
+    const day10 = Date.parse('2026-01-11T00:00:00.000Z');
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(30);
+    expect(entitlement.trialTimeSpent(start, monthsLater)).toBe(true);
+    expect(entitlement.isTrainingGated(3, false, start, monthsLater)).toBe(true);
+    expect(entitlement.isTrainingGated(3, false, start, day10)).toBe(false);
+  });
+
+  it('the config word 0 disarms it — sessions alone gate, the 2026-09-01 arc', () => {
+    entitlement.applyTrialMaxDaysOverride(0);
     const start = '2026-01-01T00:00:00.000Z';
     const monthsLater = Date.parse('2026-06-01T00:00:00.000Z');
     expect(entitlement.trialTimeSpent(start, monthsLater)).toBe(false);
     expect(entitlement.isTrainingGated(3, false, start, monthsLater)).toBe(false);
+    entitlement.applyTrialMaxDaysOverride(undefined); // back to the default for the suites that follow
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(30);
   });
 
   it('armed by the config word: sessions OR days, whichever runs out first', async () => {
@@ -104,7 +117,6 @@ describe('the trial time cap — built, and disarmed by default', () => {
     expect(entitlement.isTrainingGated(3, false, start, day31)).toBe(true); // time spent
     expect(entitlement.isTrainingGated(3, false, start, day10)).toBe(false); // neither spent
     expect(entitlement.isTrainingGated(3, true, start, day31)).toBe(false); // a purchase always unlocks
-    entitlement.applyTrialMaxDaysOverride(null); // disarm for the suites that follow
   });
 
   it('the clamp holds on the cap too', () => {
@@ -113,6 +125,6 @@ describe('the trial time cap — built, and disarmed by default', () => {
     entitlement.applyTrialMaxDaysOverride(10_000);
     expect(entitlement.TRIAL_MAX_DAYS).toBe(365);
     entitlement.applyTrialMaxDaysOverride('forever');
-    expect(entitlement.TRIAL_MAX_DAYS).toBeNull(); // garbage disarms rather than guessing
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(30); // garbage restores the default rather than guessing
   });
 });

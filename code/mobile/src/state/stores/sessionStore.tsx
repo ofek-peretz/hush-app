@@ -276,6 +276,52 @@ export function bringForward(
   return flat.map((st, i) => ({ ...st, globalIndex: i, lastSetOfSession: i === flat.length - 1 }));
 }
 
+/**
+ * ════ ONE MORE SET — hers to add, at the end of the lift's run (2026-09-09, the formula report) ════
+ *
+ * Every competitor makes this one tap; here a lift had exactly the sets the engine wrote and no
+ * door to a fifth. The engine still decides what a set IS — the added set is a copy of the run's
+ * last working step: same target, same rest, the next index — so nothing she authors changes the
+ * prescription's shape, only its count. It lands AFTER the run's last step, ahead of or at the
+ * boundary, so a set added during the transition rest right after her last set is the very next
+ * thing presented, and one added mid-lift waits its turn. A warm-up bridge is never copied.
+ *
+ * Pure. The same plan back when the lift has no working run at or after `boundary` — a lift she
+ * has finished and walked away from (the record) gains nothing, which is `whatIsDoneStaysDone`.
+ */
+export function addWorkingSet(plan: Step[], boundary: number, exerciseId: string): Step[] {
+  const runs = exerciseRuns(plan);
+  // The run of this lift that ENDS at or after the boundary — the one she is on or just left.
+  let at = 0;
+  let pick: { start: number; run: Step[] } | null = null;
+  for (const r of runs) {
+    const end = at + r.length; // exclusive
+    if (r[0].exerciseId === exerciseId && end >= boundary) {
+      pick = { start: at, run: r };
+      break;
+    }
+    at = end;
+  }
+  if (!pick) return plan;
+  const working = pick.run.filter((st) => !st.warmup);
+  const last = working[working.length - 1];
+  if (!last || !last.target) return plan; // a hold, a run, a bridge — nothing to copy
+  const nextIndex = last.exerciseSetIndex + 1;
+  const added: Step = {
+    ...last,
+    globalIndex: 0, // re-derived below
+    exerciseSetIndex: nextIndex,
+    target: { ...last.target, setIndex: nextIndex, reasonType: undefined, reasonDelta: undefined },
+    lastSetOfExercise: true,
+    lastSetOfSession: false,
+  };
+  const total = last.totalSetsInExercise + 1;
+  const grown = pick.run.map((st) => ({ ...st, totalSetsInExercise: st.warmup ? st.totalSetsInExercise : total, lastSetOfExercise: false }));
+  const insertAt = pick.start + pick.run.length;
+  const flat = [...plan.slice(0, pick.start), ...grown, { ...added, totalSetsInExercise: total }, ...plan.slice(insertAt)];
+  return flat.map((st, i) => ({ ...st, globalIndex: i, lastSetOfSession: i === flat.length - 1 }));
+}
+
 /** The lifts she could start now — every run still ahead of `boundary`, first-seen order, the one at the boundary excluded. */
 export function aheadExercisesFrom(plan: Step[], boundary: number): string[] {
   const nextId = plan[boundary]?.exerciseId;
@@ -744,6 +790,9 @@ export interface SessionView {
   /** Move a lift that is still ahead to `toPosition` among the movable ones (the session map's
    *  drag). A lift outside `movableExerciseIds` is refused silently — see `reorderAheadOf`. */
   reorderAhead: (exerciseId: string, toPosition: number) => void;
+  /** One more working set of `exerciseId`, at the end of its run — see `addWorkingSet`. A lift
+   *  that has no run at or after the boundary (finished and left) is refused silently. */
+  addSet: (exerciseId: string) => void;
   /**
    * ════ THE BOARD (founder, 2026-09-07): any free station starts now ════
    * `aheadExerciseIds` — the lifts still wholly ahead of her, first-seen order, the very next one
@@ -3423,6 +3472,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const newPlan = reorderAheadOf(plan, reorderBoundary(machine), exerciseId, toPosition);
         if (newPlan === plan) return;
         void track('session_reordered', { sessionId: sessionRef.current?.id, exerciseId, to: toPosition });
+        dispatch({ type: 'SWAP_PLAN', plan: newPlan });
+      },
+
+      addSet(exerciseId) {
+        const newPlan = addWorkingSet(plan, reorderBoundary(machine), exerciseId);
+        if (newPlan === plan) return;
+        void track('session_set_added', { sessionId: sessionRef.current?.id, exerciseId });
         dispatch({ type: 'SWAP_PLAN', plan: newPlan });
       },
 

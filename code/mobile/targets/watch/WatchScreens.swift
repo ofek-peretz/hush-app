@@ -1204,7 +1204,14 @@ struct WatchRootView: View {
          *
          * One line, only on the one screen that means "nothing has arrived".
          */
-        if !model.wireDiag.isEmpty {
+        /*
+         * ⛔ ONLY A FAULT IS PRINTED (2026-09-09, the formula report, red finding 5). The healthy
+         * idle word — `wc:on · rx:0`, the pipe open and nothing sent yet — is what a reviewer with
+         * no paired session sees first, and it is developer telemetry on a consumer's wrist. A
+         * fault (`wc:on!`, `wc:nokey`, `wc:badframe`, `wc:on · fix:`) still shows, because the
+         * photograph of it is the only instrument this pair of processes has.
+         */
+        if (!model.wireDiag.isEmpty && model.wireDiag != "wc:on" && !model.wireDiag.hasPrefix("wc:on ·")) || model.wireDiag.hasPrefix("wc:on · fix:") {
           Text(model.wireDiag).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2.opacity(0.6))
         }
       }
@@ -1540,10 +1547,43 @@ private struct OutlineButton: View {
  * where her thumb already is. Three soft ticks count her in; the recording's own "go" is the
  * model's beat when it starts. VoiceOver hears the act by its old name (`startCardio`).
  *
- * The gait is still not asked (it never was after 2026-08-01): the wrist records a run, and the
- * consequence stated on the record then still holds — a walk registers with HealthKit as a run.
+ * ⛔ THE GAIT IS ASKED AGAIN (2026-09-09, the formula report, red finding 5 — reversing 2026-08-01).
+ * "One cardio, not two gaits" saved a tap and wrote every walk into Apple Health as a run: wrong
+ * data in Apple's own app, on the record. Two chips — Run · Walk — stand where the count used to
+ * start; the count begins on the pick and carries the gait to the runtime, which already knew
+ * how to record either (`WorkoutRuntime.trackLive(activity:)`).
  */
 private struct CardioPicker: View {
+  let onCardio: (String) -> Void
+  let onCancel: () -> Void
+  /// Nil until she picks — the two chips are the face until then.
+  @State private var gait: String? = nil
+
+  var body: some View {
+    if let gait {
+      CardioCount(gait: gait, onCardio: onCardio, onCancel: onCancel)
+    } else {
+      WristScreen {
+        VStack(spacing: 0) {
+          TopStrip(text: WatchCopy.cardio.uppercased())
+          Spacer(minLength: 2)
+          HStack(spacing: 6) {
+            ChipButton(title: WatchCopy.run, systemImage: "figure.run", tint: Palette.signal) { gait = "run" }
+            ChipButton(title: WatchCopy.walk, systemImage: "figure.walk", tint: Palette.signal) { gait = "walk" }
+          }
+          Spacer(minLength: 2)
+        }
+      } actions: {
+        OutlineButton(title: WatchCopy.cancel, tint: Palette.ink1, border: Palette.ink0.opacity(0.22),
+                      height: 38, fontSize: 13, seated: true, action: onCancel)
+      }
+    }
+  }
+}
+
+/// The 3 · 2 · 1 after the gait is picked — Apple's own idiom, on the wall clock.
+private struct CardioCount: View {
+  let gait: String
   let onCardio: (String) -> Void
   let onCancel: () -> Void
   /// The count runs on the wall clock, not on frames: a dropped frame skips a number rather than
@@ -1554,7 +1594,8 @@ private struct CardioPicker: View {
   var body: some View {
     WristScreen {
       VStack(spacing: 0) {
-        TopStrip(text: WatchCopy.cardio.uppercased())
+        // The strip names what she picked, so the count is already the record's first word.
+        TopStrip(text: (gait == "walk" ? WatchCopy.walk : WatchCopy.run).uppercased())
         Spacer(minLength: 2)
         TimelineView(.animation) { ctx in
           let left = max(0, Self.seconds - ctx.date.timeIntervalSince(startedAt))
@@ -1590,7 +1631,7 @@ private struct CardioPicker: View {
     .task {
       try? await Task.sleep(nanoseconds: UInt64(Self.seconds * 1_000_000_000))
       guard !Task.isCancelled else { return }
-      onCardio("run")
+      onCardio(gait)
     }
   }
 }

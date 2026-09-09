@@ -174,3 +174,27 @@ describe('a change finds its day on the climb', () => {
     expect(pointIndexAt(c.points, Date.parse(iso('2026-05-01')))).toBe(-1);
   });
 });
+
+describe('strengthEstimate — measured strength, said honestly (2026-09-09)', () => {
+  const { strengthEstimate } = require('@/domain/liftDetail');
+
+  it('reads Epley from the one working set that says the most, and names the set', () => {
+    const est = strengthEstimate(
+      [session('a', '2026-09-01', [[60, 8], [60, 8]]), session('b', '2026-09-03', [[70, 5], [65, 8]])],
+      'bb_row',
+    );
+    // 65×8 → 82.3; 70×5 → 81.7; 60×8 → 76 — the 65×8 set wins, and it says so.
+    expect(est).toMatchObject({ e1rm: 82.5, load: 65, reps: 8 });
+  });
+
+  it('ignores sets past ten reps, bodyweight sets, warm-ups and presumed sets', () => {
+    const s = session('a', '2026-09-01', [[40, 20], [null, 8]]);
+    s.sets.push({ exerciseId: 'bb_row', setIndex: 2, actualWeight: 100, actualReps: 5, isApproach: true, persistedAt: iso('2026-09-01') });
+    s.sets.push({ exerciseId: 'bb_row', setIndex: 3, actualWeight: 100, actualReps: 5, presumed: true, persistedAt: iso('2026-09-01') });
+    expect(strengthEstimate([s], 'bb_row')).toBeNull();
+  });
+
+  it('is null for a lift with no evidence', () => {
+    expect(strengthEstimate([], 'bb_row')).toBeNull();
+  });
+});

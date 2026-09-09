@@ -207,15 +207,23 @@ describe('#4 · the two weights that disagreed', () => {
   });
 });
 
-describe('#14 · one cardio, not two gaits', () => {
-  it('asks her to move, not to declare which way', () => {
-    // Founder: *"why was there a Run option and a Walk option? it was just general cardio."* The
-    // canonical CR1 agrees — one serif "Cardio" and one "Start cardio".
+describe('#14 · two gaits, because Apple Health keeps the record', () => {
+  it('asks which way, and the count carries her answer to the runtime', () => {
+    /*
+     * ⛔ REVERSED 2026-09-09 (the formula report, red finding 5). The 2026-08-01 ruling — *"why was
+     * there a Run option and a Walk option? it was just general cardio."* — saved one tap and wrote
+     * every walk into Apple Health as a run, which the code itself recorded as the consequence.
+     * Wrong data in Apple's own app outranks a tap. Two chips, one count, the gait on the wire.
+     */
     const src = read('WatchScreens.swift');
     const at = src.indexOf('private struct CardioPicker');
     const body = src.slice(at, src.indexOf('struct ChooseOverlay', at));
+    expect(body).toContain('WatchCopy.run');
+    expect(body).toContain('WatchCopy.walk');
     expect(body).toContain('WatchCopy.startCardio');
-    expect(body).not.toContain('figure.walk');
+    // The count starts on the pick and hands the SAME gait on — never a literal.
+    expect(body).toContain('onCardio(gait)');
+    expect(body).not.toContain('onCardio("run")');
     expect(body).not.toContain('ForEach');
   });
 

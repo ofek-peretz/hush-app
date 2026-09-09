@@ -69,6 +69,17 @@ export interface Env {
    * bearer-sending build is the fleet. The flag is the migration, not a setting.
    */
   REQUIRE_AUTH?: string;
+  /**
+   * ════ THE ONE DOOR THAT STAYS OPEN TO A STRANGER (2026-09-09, the formula report) ════
+   *
+   * The intake is anonymous end-to-end — her week is built BEFORE she has an account — so a flat
+   * "bearer or 401" would refuse the most important call in the product. With REQUIRE_AUTH on, a
+   * call with no session is still admitted when it is an intake kind (`build`, `import`, `review`) AND it
+   * names an install, and it spends this small per-install budget instead of an account's. An
+   * install id is mintable, so this is a speed bump; the global ceiling is the wall behind it.
+   * Default 6 — a real intake is one build, a retry, an import at most.
+   */
+  DAILY_ANON_CALLS?: string;
   /** Per-account calls per UTC day. Code default 40, deployed 200 (wrangler.toml, 2026-09-09) — a real athlete's heaviest day is under ten. */
   DAILY_ACCOUNT_CALLS?: string;
   /**
@@ -239,6 +250,11 @@ const MAX_OUTPUT_TOKENS = 16_384;
 /** What the app sends. Mirrors `domain/coachPrompt.CoachRequest`, plus the schema to lock onto. */
 interface CoachCall {
   blocks: { text: string; cache?: true }[];
+  /**
+   * Which of the coach's jobs this call is. Read for exactly one decision: whether a call with NO
+   * session may pass at all (see `DAILY_ANON_CALLS`). Absent = a signed-in job.
+   */
+  kind?: 'build' | 'import' | 'review' | 'chat';
   /**
    * How hard to think. Absent means Google's default, `medium`.
    *
@@ -459,7 +475,13 @@ export default {
         sub = await env.HUSH_KV.get(`session:${bearer}`, { cacheTtl: 60 }).catch(() => null);
       }
     }
-    if (env.REQUIRE_AUTH === '1' && !sub) return json({ error: 'unauthorized' }, 401);
+    /*
+     * With auth required, a stranger is turned away UNLESS the body says it is an intake kind —
+     * that decision needs the parsed body, so it is taken below, after the parse, and the
+     * anonymous install is charged its own small budget there. The 401 for a stranger asking for a
+     * signed-in job is the same 401 as a bad shared token.
+     */
+    const authRequired = env.REQUIRE_AUTH === '1';
 
     /*
      * A body too large to be honest is refused before it is read. Content-length can be absent on a
@@ -507,6 +529,12 @@ export default {
     if (!Array.isArray(call.blocks) || call.blocks.length === 0) {
       return json({ error: 'bad_request' }, 400);
     }
+    // The three calls the intake makes before she has an account: the build, the import's read,
+    // and the builder's review of a week she wrote. A chat turn is never anonymous.
+    const ANON_KINDS = ['build', 'import', 'review'];
+    const anonInstall = (request.headers.get('x-hush-install') ?? '').trim();
+    const anonymousIntake = !sub && authRequired && ANON_KINDS.includes(String(call.kind)) && anonInstall.length > 0;
+    if (authRequired && !sub && !anonymousIntake) return json({ error: 'unauthorized' }, 401);
     // The text ceilings — see MAX_BLOCKS for why an unbounded body was the worker's biggest hole.
     if (call.blocks.length > MAX_BLOCKS) return json({ error: 'too_large' }, 413);
     let textChars = 0;
@@ -556,6 +584,12 @@ export default {
       if (sub) {
         const accountCeiling = ceiling(env.DAILY_ACCOUNT_CALLS, 40);
         if (!(await spend(`quota:c:${sub}:${day}`, accountCeiling))) {
+          return json({ error: 'rate_limited' }, 429);
+        }
+      } else if (anonymousIntake) {
+        // A stranger's intake spends the install's own small budget (`DAILY_ANON_CALLS`).
+        const anonCeiling = ceiling(env.DAILY_ANON_CALLS, 6);
+        if (!(await spend(`quota:a:${anonInstall}:${day}`, anonCeiling))) {
           return json({ error: 'rate_limited' }, 429);
         }
       }

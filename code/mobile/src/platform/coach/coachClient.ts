@@ -172,6 +172,14 @@ export async function askCoach(
    * controls. These arrive AFTER every block of text so the cacheable prefix stays byte-identical.
    */
   images?: { mime: string; data: string }[],
+  /**
+   * ════ WHICH OF THE COACH'S JOBS THIS IS (2026-09-09) ════
+   *
+   * The Worker requires a session for every call EXCEPT an intake (`build`, `import`): her week is
+   * built before she has an account, so those two ride on the install's own small daily budget
+   * instead. Everything else — a review, a chat — is refused without a bearer. Absent = `chat`.
+   */
+  kind: 'build' | 'import' | 'review' | 'chat' = 'chat',
 ): Promise<CoachReply> {
   if (!coachIsReachable()) return { ok: false, reason: 'not_configured' };
 
@@ -213,6 +221,7 @@ export async function askCoach(
         ...(schema ? { schema } : {}),
         ...(think ? { think } : {}),
         ...(images?.length ? { images } : {}),
+        kind,
       }),
       signal: controller.signal,
     });

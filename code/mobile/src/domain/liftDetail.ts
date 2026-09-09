@@ -22,6 +22,7 @@
 
 import type { EngineV5State } from '@/data/local/db';
 import { isEvidenceSet } from '@/domain/setEvidence';
+import { epley } from '@/engine/loadMath';
 import type { CoachDecision } from './coachLog';
 import type { Session } from '@/data/local/models';
 import { earnedMilestones, type EarnedMilestone, type MilestoneProfile } from '@/domain/milestones';
@@ -108,6 +109,45 @@ export function liftClimb(sessions: Session[], exerciseId: string): LiftClimb {
     current: points[points.length - 1]?.dayBest ?? 0,
     best: running,
   };
+}
+
+/**
+ * ════ MEASURED STRENGTH — the one number every lifter expects, said honestly (2026-09-09) ════
+ *
+ * The formula report reopened the founder's "no e1RM" ruling with one fact: it is the single most
+ * expected figure in a strength app, and its absence is the first thing a migrating lifter names.
+ * What stays refused is the CLAIM — a milestone, a standard, a percentile. What this is instead is
+ * a READ: Epley over the working sets she actually logged, from the one set that says the most,
+ * shown with the set it came from so the estimate is never mistaken for a lift. Only sets of ten
+ * reps or fewer count — beyond that Epley is a guess about endurance, not strength.
+ */
+export interface StrengthEstimate {
+  /** kg — the Epley estimate, rounded to the nearest 0.5. */
+  e1rm: number;
+  /** The set it was read from. */
+  load: number;
+  reps: number;
+  atMs: number;
+}
+
+export const E1RM_MAX_REPS = 10;
+
+export function strengthEstimate(sessions: Session[], exerciseId: string): StrengthEstimate | null {
+  let best: StrengthEstimate | null = null;
+  for (const s of sessions) {
+    for (const log of s.sets) {
+      if (log.exerciseId !== exerciseId || !isEvidenceSet(log)) continue;
+      if (log.actualWeight == null || !(log.actualWeight > 0) || !(log.actualReps >= 1) || log.actualReps > E1RM_MAX_REPS) continue;
+      const atMs = Date.parse(log.persistedAt || s.startedAt);
+      if (!Number.isFinite(atMs)) continue;
+      const e1rm = Math.round(epley(log.actualWeight, log.actualReps) * 2) / 2;
+      // A tie goes to the heavier set — the estimate closest to a lift that happened.
+      if (!best || e1rm > best.e1rm || (e1rm === best.e1rm && log.actualWeight > best.load)) {
+        best = { e1rm, load: log.actualWeight, reps: log.actualReps, atMs };
+      }
+    }
+  }
+  return best;
 }
 
 /** The few that mattered, for one lift. */

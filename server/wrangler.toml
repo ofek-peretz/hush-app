@@ -45,9 +45,15 @@ binding = "HUSH_KV"
 id = "14a55c2d60944fdfb81d9895cf6b7a66"
 
 [vars]
-# '0' until the first bearer-sending build IS the fleet, then the founder flips it to '1' and a
-# session becomes the price of a coach call. The flag is the migration, not a setting.
-REQUIRE_AUTH = "0"
+# ⛔ FLIPPED TO '1' ON 2026-09-09 (the formula report, red finding 3): with '0' anyone holding the
+# token from the IPA could spend the whole global budget. A session is now the price of every
+# call EXCEPT an intake — a stranger's `build`/`import` still passes, on the install's own small
+# budget below, because her week is built before she has an account. Builds older than the first
+# bearer-sending one (build 65) lose the coach; none are in anyone's hands but the founder's.
+REQUIRE_AUTH = "1"
+# What one anonymous install may spend in a day on intake calls. A real intake is one build, a
+# retry, an import at most.
+DAILY_ANON_CALLS = "6"
 # ⛔ 40 → 200 on 2026-09-09. The founder walked the intake repeatedly on a testing day, crossed 40,
 # and every build after it fell through to the local assembler — a week his own sentence never
 # touched, reported as "the AI ignores my prompt". A real athlete's heaviest honest day is still

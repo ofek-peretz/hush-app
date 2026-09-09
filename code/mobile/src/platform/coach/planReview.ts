@@ -53,7 +53,7 @@ export async function requestPlanReview(draft: Program): Promise<PlanReviewResul
     language: currentLocale(),
   });
 
-  const reply = await askCoach(coachRequest({ facts, ask: { kind: 'plan_review' }, cache: true }), PLAN_REVIEW_SCHEMA);
+  const reply = await askCoach(coachRequest({ facts, ask: { kind: 'plan_review' }, cache: true }), PLAN_REVIEW_SCHEMA, undefined, undefined, 'review');
   if (!reply.ok) return { ok: false, reason: reply.reason };
   const parsed = parsePlanReview(reply.text);
   if (!parsed.ok) return { ok: false, reason: parsed.reason };

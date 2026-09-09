@@ -66,6 +66,8 @@ import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
+import { LegalSheet } from '@/components/LegalSheet';
+import { onNewArm } from '@/platform/experiments';
 import { Button, FooterFade, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
@@ -78,7 +80,7 @@ import { learnPhaseLength } from '@/domain/schedule';
 import type { OnboardingInputs } from '@/data/local/models';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
-import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { FREE_SESSION_LIMIT, TRIAL_MAX_DAYS, TRIAL_MAX_DAYS_DEFAULT } from '@/domain/entitlement';
 import { billing, PRODUCT_IDS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
@@ -192,6 +194,7 @@ export function ProgramCreated({ route, navigation }: Props) {
   }, [program, inputs.bodyMap, t]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [legalOpen, setLegalOpen] = useState(false);
   const reduced = useReducedMotion();
 
   /*
@@ -252,16 +255,43 @@ export function ProgramCreated({ route, navigation }: Props) {
    */
   const armedRef = useRef(false);
 
+  /*
+   * ════ THE WALL MOVES BEHIND THE FIRST WORKOUT — FOR HALF OF THEM (2026-09-09, the formula report)
+   *
+   * The report's reopened ruling, run as an experiment rather than argued: on the NEW arm this CTA
+   * finishes the enrolment with no account at all — continuing IS the agreement, and the legal line
+   * stands under the button to say so — and the account is asked for once, after her first workout
+   * is saved (`WellDone` → `Authentication`, dismissible). On the OLD arm nothing changes. Which arm
+   * an install is on is one stable coin (`platform/experiments`), and the two funnels are told apart
+   * on the wire by `experiment_arm`.
+   */
+  const [wallAfter, setWallAfter] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void onNewArm('signInAfterFirstWorkout').then((arm) => {
+      if (alive) setWallAfter(arm);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   async function onDone() {
     if (busy) return;
     setBusy(true);
     setFailed(false);
     try {
       if (!(await app.isSignedIn())) {
-        armedRef.current = true;
-        setBusy(false);
-        navigation.navigate('Authentication');
-        return;
+        if (await onNewArm('signInAfterFirstWorkout')) {
+          // The new arm: the press is the agreement; the account waits for the first workout.
+          void app.acceptConsent();
+          void track('signin_wall_deferred');
+        } else {
+          armedRef.current = true;
+          setBusy(false);
+          navigation.navigate('Authentication');
+          return;
+        }
       }
       // Builds the program and writes the profile → Root swaps to Home.
       await app.completeOnboarding(inputs);
@@ -338,7 +368,7 @@ export function ProgramCreated({ route, navigation }: Props) {
                 that, because it is both the stronger reassurance and the actual fact. */}
             <View style={styles.cancelRow}>
               <Icon name="check" size={15} color={color.accent} strokeWidth={2.4} />
-              <Text style={styles.cancelText}>{t('ob.readyCancel', { n: FREE_SESSION_LIMIT })}</Text>
+              <Text style={styles.cancelText}>{t('ob.readyCancel', { n: FREE_SESSION_LIMIT, d: TRIAL_MAX_DAYS ?? TRIAL_MAX_DAYS_DEFAULT })}</Text>
             </View>
             {/* And what comes AFTER the fourteen — the price, from the store, in her currency.
                 The strongest form of "no card, no charge" is saying the number it would be. */}
@@ -409,7 +439,26 @@ export function ProgramCreated({ route, navigation }: Props) {
         <FooterFade />
         {failed ? <Text style={styles.error}>{t('errors.general')}</Text> : null}
         <Button variant="primary" size="lg" block label={t('ob.readyCta')} onPress={() => void onDone()} disabled={busy} />
+        {wallAfter ? (
+          /* On the arm with no account wall here, THIS press is the agreement — so the same legal
+             line the sign-in screen carries stands under the same kind of button, and opens the
+             same document. Consent may not point at nothing (founder 2026-09-01). */
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('ob.signinLegalTerms')}
+            hitSlop={10}
+            onPress={() => setLegalOpen(true)}
+            style={styles.legalPress}
+          >
+            <Text style={styles.legal}>
+              {t('ob.signinLegalPre')}
+              <Text style={styles.legalLink}>{t('ob.signinLegalTerms')}</Text>
+              {t('ob.signinLegalPost')}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
+      {legalOpen ? <LegalSheet onClose={() => setLegalOpen(false)} /> : null}
     </SafeAreaView>
   );
 }
@@ -663,4 +712,8 @@ const styles = StyleSheet.create({
 
   footer: { paddingHorizontal: space.gutter, paddingBottom: 30, gap: 10 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center' },
+  // The same three styles the sign-in screen draws its agreement with — one line, one document.
+  legalPress: { minHeight: 44, justifyContent: 'center' },
+  legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'center', lineHeight: 18 },
+  legalLink: { color: color.textSecondary, textDecorationLine: 'underline' }, // rtl-ok: nested span, inherits the centred line
 });

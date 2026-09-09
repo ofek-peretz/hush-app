@@ -151,6 +151,7 @@ const K = {
   watchOffered: 'hush.watch.offered', // 1.3 + 10.4 · platform/watch/watchPresence
   recoverySealed: 'hush.recovery.sealed', // 3.5 · screens/home/HomeView
   reviewAsked: 'hush.review.asked', // the once-ever store-review ask · platform/review
+  liftNotes: 'hush.lift.notes', // her own line per lift ("safety bar, seat 4") · 2026-09-09
 } as const;
 
 /**
@@ -529,6 +530,43 @@ export const db = {
     const all = await this.loadHistory();
     all.unshift(s);
     await setJSON(K.history, all);
+  },
+
+  /**
+   * ════ THE RECORD CAN BE CORRECTED (2026-09-09, the formula report) ════
+   *
+   * One set of one saved session, re-written to what she says it was, stamped `amendedAt`. The
+   * ordinal is the set's position in the session's log (the chip she tapped). A weight of `null`
+   * is bodyweight. Refuses silently on an unknown session or ordinal, a non-positive rep count,
+   * or a negative weight — the record never holds a number that could not have happened.
+   */
+  async amendSessionSet(sessionId: string, ordinal: number, v: { weight: number | null; reps: number }): Promise<boolean> {
+    if (!(v.reps >= 1) || (v.weight != null && !(v.weight >= 0))) return false;
+    const all = await this.loadHistory();
+    const at = all.findIndex((x) => x.id === sessionId);
+    if (at < 0) return false;
+    const sets = all[at].sets ?? [];
+    if (ordinal < 0 || ordinal >= sets.length) return false;
+    const next = [...all];
+    const amended = { ...sets[ordinal], actualWeight: v.weight, actualReps: v.reps, edited: true, amendedAt: new Date().toISOString() };
+    next[at] = { ...next[at], sets: sets.map((s, i) => (i === ordinal ? amended : s)) };
+    await setJSON(K.history, next);
+    return true;
+  },
+
+  /* ── Her own line per lift ─────────────────────────────────────────────────────────────────── */
+
+  /** exerciseId → note. Empty map when she has written none. */
+  async loadLiftNotes(): Promise<Record<string, string>> {
+    return (await getJSON<Record<string, string>>(K.liftNotes)) ?? {};
+  },
+  /** Write (or, with an empty string, erase) her note on one lift. Trimmed, capped at 280 chars. */
+  async saveLiftNote(exerciseId: string, note: string): Promise<void> {
+    const all = await this.loadLiftNotes();
+    const clean = note.trim().slice(0, 280);
+    if (clean.length === 0) delete all[exerciseId];
+    else all[exerciseId] = clean;
+    await setJSON(K.liftNotes, all);
   },
 
   /**

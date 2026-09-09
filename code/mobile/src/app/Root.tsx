@@ -250,6 +250,9 @@ function MainNavigator() {
       <MainStack.Screen name="FreeLog" component={FreeLogScreen} />
       <MainStack.Screen name="WorkoutDetail" component={WorkoutDetail} />
       <MainStack.Screen name="LiftDetail" component={LiftDetail} />
+      {/* The closer over the tabs — see `MainParamList.Authentication`. */}
+      <MainStack.Screen name="Authentication" component={Authentication} />
+
       {/*
         ⛔ THE WORKOUT SHEET — IT RISES FROM THE BOTTOM (founder 2026-08-12): *"לחיצה על אימון פותחת
         MODAL שעולה מלמטה שמציגה את תוכן האימון."*

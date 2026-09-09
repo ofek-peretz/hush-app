@@ -251,6 +251,8 @@ const appFixture = {
   setPendingName: noop,
   setPendingSex: noop,
   signIn: asyncNoop,
+  // The You tab asks on every focus (2026-09-09) — an account exists in the harness.
+  isSignedIn: async () => true,
   acceptConsent: asyncNoop,
   completeOnboarding: asyncNoop,
   // A screen that PERFORMS the weekly roll before it reads (WeeklyUpdate) calls this on mount.
@@ -968,6 +970,10 @@ const liftDetailView = (
     loaded
     band={[8, 10]}
     onBack={noop}
+    /* Measured strength and her note (2026-09-09) — the row under the climb, and the sheet. */
+    estimate={{ e1rm: 60.5, load: 47.5, reps: 8, atMs: Date.now() }}
+    note="Overhand, a thumb wider than the knurling. Bar 2 by the window."
+    onSaveNote={noop}
     climb={{
       mode: 'load',
       firstAtMs: daysAgo(46),
@@ -2776,6 +2782,8 @@ export const GALLERY: GalleryEntry[] = [
         dayName="Upper A"
         bodyweightKg={78}
         onBack={noop}
+        /* A chip opens the correction sheet (2026-09-09); the harness writes nothing. */
+        onAmend={async () => {}}
       />
     </InApp>
   ) },

@@ -357,6 +357,15 @@ export interface SetLog {
   actualWeight: number | null;
   actualReps: number;
   edited: boolean; // true if athlete used Edit Result
+  /**
+   * SHE CORRECTED THE RECORD AFTER THE FACT (2026-09-09, the formula report). A mis-typed set
+   * could only ever be fixed by voice, mid-lift; every competitor lets the record be edited. The
+   * stamp says WHEN she amended it, so a reader can tell a lift from a correction. What the
+   * engine already folded from the original figures is NOT re-folded — a decision made on a
+   * number she later changed stays a decision, with its reason on the record (`whatIsDoneStaysDone`
+   * for the ledger, not the log).
+   */
+  amendedAt?: string;
   /** "Not a working set — excluded from every engine decision." Born as the Build-#33 approach
    *  mark (Rev 8 deleted that mechanism); since 2026-08-24 the WARM-UP RAMP writes it again
    *  (together with `isWarmup` below), deliberately reusing the one mark every fold reader

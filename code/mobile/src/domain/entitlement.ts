@@ -85,20 +85,25 @@ export function applyTrialLimitOverride(n: unknown): void {
 export const TRIAL_NEWS_AT = 3;
 
 /**
- * ════ THE TRIAL'S TIME CAP — BUILT, AND OFF (2026-09-01, the audit's paywall finding) ═══════════
+ * ════ THE TRIAL'S TIME CAP — ARMED AT THIRTY DAYS (2026-09-09, the formula report) ══════════════
  *
  * "14 completed sessions" with no clock means an athlete training once a week gets fourteen FREE
- * WEEKS. The cap closes that — sessions OR days, whichever runs out first — and it ships DISARMED:
- * `null` means the gate is exactly the founder-ratified sessions-only arc, and every screen
- * promise ("14 workouts free") stays true as written. Arming it is a remote-config word
- * (`trialMaxDays`), i.e. a founder decision on a KV entry, never a silent code change — because it
- * changes a promise the Ready screen prints, and that is his to change.
+ * WEEKS. The cap closes that — sessions OR days, whichever runs out first. It was built on
+ * 2026-09-01 and shipped DISARMED (`null`) pending a founder word; the report armed it: thirty
+ * days is a month of honest trying at any cadence, and every promise on the Ready screen now
+ * says both halves ("14 workouts, within 30 days"). Remote config (`trialMaxDays`) can still move
+ * it, and `0` disarms it — a KV word, never a silent code change.
  */
-export let TRIAL_MAX_DAYS: number | null = null;
+export const TRIAL_MAX_DAYS_DEFAULT = 30;
+export let TRIAL_MAX_DAYS: number | null = TRIAL_MAX_DAYS_DEFAULT;
 
-/** Remote-config apply (clamped 7..365; null/garbage disarms). */
+/** Remote-config apply (clamped 7..365; `0` disarms; garbage restores the default). */
 export function applyTrialMaxDaysOverride(n: unknown): void {
   if (typeof n !== 'number' || !Number.isInteger(n)) {
+    TRIAL_MAX_DAYS = TRIAL_MAX_DAYS_DEFAULT;
+    return;
+  }
+  if (n === 0) {
     TRIAL_MAX_DAYS = null;
     return;
   }

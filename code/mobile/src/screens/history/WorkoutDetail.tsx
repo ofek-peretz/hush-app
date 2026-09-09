@@ -4,7 +4,9 @@
  * grades." A centred LOG legend, the workout named in the serif, a mono facts row
  * (MIN · KCAL · T MOVED · UP), then each lift with the load it set for next time
  * (moss NEXT / muted HOLDS) over its actual logged sets as "weight×reps" chips.
- * Immutable — no targets to edit, and Hush attaches no verdict to the work.
+ * Hush attaches no verdict to the work, and no target here can be edited. What CAN be corrected,
+ * since 2026-09-09 (the formula report), is the log itself: a chip opens a sheet, the set is
+ * re-written to what she says it was and stamped `amendedAt`. The engine's decisions stand.
  */
 
 // 
@@ -14,7 +16,9 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Arrive, Legend } from '@/components/ds';
+import { Arrive, Legend, Button, TextField } from '@/components/ds';
+import { BottomSheet } from '@/components/BottomSheet';
+import { LB_PER_KG } from '@/domain/schedule';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
@@ -82,6 +86,12 @@ export function WorkoutDetail({ navigation, route }: Props) {
       dayName={session ? sessionDayName(session) : ''}
       bodyweightKg={app.profile?.weightKg}
       onBack={() => navigation.goBack()}
+      onAmend={async (ordinal, v) => {
+        const ok = await db.amendSessionSet(route.params.sessionId, ordinal, v);
+        if (!ok) return;
+        const all = await db.loadHistory();
+        setSession(all.find((x) => x.id === route.params.sessionId) ?? null);
+      }}
     />
   );
 }
@@ -100,6 +110,7 @@ export function WorkoutDetailView({
   dayName,
   bodyweightKg,
   onBack,
+  onAmend,
 }: {
   session: Session | null;
   forward: Forward;
@@ -108,12 +119,19 @@ export function WorkoutDetailView({
   dayName: string;
   bodyweightKg?: number;
   onBack: () => void;
+  /** Re-write one set to what she says it was (kg, reps) — absent in fixtures, where the chips are read-only. */
+  onAmend?: (ordinal: number, v: { weight: number | null; reps: number }) => Promise<void>;
 }) {
   const { t } = useCopy();
+  /** The chip she opened: its ordinal in the session's log, and the figures as typed (her units). */
+  const [amend, setAmend] = useState<{ ordinal: number; weight: string; reps: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const ordinalOf = new Map<SetLog, number>();
 
   // Group logged sets by exercise, preserving the order they were trained.
   const order: string[] = [];
   const byEx: Record<string, SetLog[]> = {};
+  (session?.sets ?? []).forEach((set, i) => ordinalOf.set(set, i));
   for (const set of session?.sets ?? []) {
     /*
      * WORKING sets only (2026-08-24). A warm-up bridge (`isApproach`) is excluded for two reasons,
@@ -245,8 +263,16 @@ export function WorkoutDetailView({
                     {sets.map((set, i) => {
                       const w = displayWeight(set.actualWeight, units);
                       const moved = corrections.get(i + 1);
+                      const ordinal = ordinalOf.get(set) ?? -1;
                       return (
-                        <View key={i} style={styles.chip}>
+                        <Pressable
+                          key={i}
+                          style={({ pressed }) => [styles.chip, pressed && onAmend && { opacity: press.opacity }]}
+                          disabled={!onAmend || ordinal < 0}
+                          accessibilityRole={onAmend ? 'button' : undefined}
+                          accessibilityLabel={onAmend ? t('history.amendTitle') : undefined}
+                          onPress={() => setAmend({ ordinal, weight: w != null ? String(w) : '', reps: String(set.actualReps) })}
+                        >
                           {moved ? (
                             <Text
                               style={[styles.chipMark, { color: directionTone(moved.direction) }]}
@@ -261,7 +287,8 @@ export function WorkoutDetailView({
                           {/* The clock's mark, kept in the record she reads back (2026-09-07): a set
                               nobody stood behind is drawn as the plan's number, and says so. */}
                           {set.presumed ? <Text style={styles.chipTag}>{t('workout.presumedCell')}</Text> : null}
-                        </View>
+                          {set.amendedAt ? <Text style={styles.chipTag}>{t('history.amendedTag')}</Text> : null}
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -294,6 +321,44 @@ export function WorkoutDetailView({
           <Text style={styles.footer}>{t('history.recordFooter')}</Text>
         </ScrollView>
       )}
+      {amend && onAmend ? (
+        /* The correction sheet — two figures in her units, one verb. A blank weight is bodyweight. */
+        <BottomSheet onClose={() => setAmend(null)} heightFraction={0.46}>
+          <Text style={styles.amendTitle}>{t('history.amendTitle')}</Text>
+          <View style={styles.amendFields}>
+            <TextField
+              label={`${t('history.amendWeight')} · ${unitLabel(units)}`}
+              value={amend.weight}
+              keyboardType="decimal-pad"
+              onChangeText={(weight) => setAmend((a) => (a ? { ...a, weight } : a))}
+              block
+            />
+            <TextField
+              label={t('history.amendReps')}
+              value={amend.reps}
+              keyboardType="number-pad"
+              onChangeText={(reps) => setAmend((a) => (a ? { ...a, reps } : a))}
+              block
+            />
+          </View>
+          <Button
+            variant="primary"
+            block
+            label={t('history.amendSave')}
+            disabled={saving || !(Number(amend.reps) >= 1)}
+            onPress={() => {
+              const shown = amend.weight.trim() === '' ? null : Number(amend.weight.replace(',', '.'));
+              if (shown != null && !Number.isFinite(shown)) return;
+              const weightKg = shown == null ? null : units === 'lb' ? Math.round((shown / LB_PER_KG) * 100) / 100 : shown;
+              setSaving(true);
+              void onAmend(amend.ordinal, { weight: weightKg, reps: Math.round(Number(amend.reps)) }).finally(() => {
+                setSaving(false);
+                setAmend(null);
+              });
+            }}
+          />
+        </BottomSheet>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -399,6 +464,8 @@ const styles = StyleSheet.create({
   chipMark: { fontFamily: font.monoMedium, fontSize: 17, lineHeight: 22, marginEnd: 3, textAlign: 'left' },
   /* "counted as written" beside a presumed set's figures — a word, so sans, and the chip's quietest ink. */
   chipTag: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, marginStart: 6, textAlign: 'left' },
+  amendTitle: { fontFamily: font.serif, fontSize: 24, lineHeight: 28, color: color.textPrimary, textAlign: 'left', marginBottom: 16 },
+  amendFields: { gap: 14, marginBottom: 22 },
 
   footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

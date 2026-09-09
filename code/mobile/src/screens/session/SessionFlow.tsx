@@ -23,7 +23,7 @@ import Svg, { Circle, Defs, G, LinearGradient as SvgGradient, Path, Rect, Stop }
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
-import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, useToast, type ToastAction } from '@/components/ds';
+import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, TextField, useToast, type ToastAction } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ReorderRows } from '@/components/ReorderRows';
@@ -356,6 +356,15 @@ export function SessionFlow({ navigation, route }: Props) {
     } else if (voice.silentBecause === 'no_engine') {
       voiceNoticeRef.current = true;
       notify(t('workout.voiceSilentNoEngine'));
+    } else if (voice.silentBecause === 'no_headset') {
+      /*
+       * ⛔ REVERSING SPEC §0.1 (2026-09-09, the formula report): silence for want of earbuds WAS the
+       * design, and it is also the exact experience of a reviewer testing "the voice coach" on a
+       * speaker — a feature that does nothing and says nothing. One line, once, that names the
+       * condition; the moment earbuds connect the conductor starts and the line is history.
+       */
+      voiceNoticeRef.current = true;
+      notify(t('workout.voiceSilentNoHeadset'));
     }
   }, [voice.silentBecause, notify, t]);
   const confirmRunning = useRef(false);
@@ -2288,6 +2297,20 @@ function ActiveSet({
    * the prescription row while its wheel is up, so no number is ever stated twice.
    */
   const [slot, setSlot] = useState<'athlete' | 'weight' | 'reps'>('athlete');
+  /* Her note on the lift she is standing on — see the identity block. */
+  const [liftNote, setLiftNote] = useState('');
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const noteExerciseId = session.currentExerciseId;
+  useEffect(() => {
+    let active = true;
+    if (!noteExerciseId) return;
+    db.loadLiftNotes()
+      .then((all) => active && setLiftNote(all[noteExerciseId] ?? ''))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [noteExerciseId]);
   /*
    * ════ ⛔ THE REP COUNT STARTS EMPTY, AND IT IS THE BEST ANSWER THIS SCREEN HAS ════
    *
@@ -2783,6 +2806,26 @@ function ActiveSet({
               {session.straightInto}
             </Text>
           ) : null}
+          {/* ════ HER OWN LINE ABOUT THIS LIFT (2026-09-09, the formula report) ════
+              "Seat 4, safety bar." The one thing the record cannot know and every competitor lets
+              her keep. Read from `db.loadLiftNotes` when the lift changes; the pencil opens the
+              same sheet the lift's page has. One line, muted, under the name — never over it. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={liftNote ? t('progress.noteLegend') : t('progress.noteAdd')}
+            onPress={() => setNoteDraft(liftNote)}
+            hitSlop={8}
+            style={styles.noteLine}
+          >
+            {liftNote ? (
+              <Text style={styles.noteLineText} numberOfLines={1}>{liftNote}</Text>
+            ) : (
+              <View style={styles.noteLineAdd}>
+                <Icon name="pencil" size={12} color={stage.ink2} strokeWidth={2} />
+                <Text style={styles.noteLineAddText}>{t('workout.noteOnStage')}</Text>
+              </View>
+            )}
+          </Pressable>
           {/*
             ════ ⛔ THE COACH'S LINE ABOUT THIS LIFT, WHICH THIS SCREEN HAS NEVER DRAWN ════
 
@@ -2995,6 +3038,17 @@ function ActiveSet({
                 unitLabel(units)
               )}
             </Text>
+            {/* ════ THE PLATES (2026-09-09, the formula report) ════
+                "7.5 a side" is the figure she racks by (founder 2026-08-26) and it stays the
+                heading. This is the line under it, for the athlete who does not want to do the
+                sum at the rack: the stack for ONE side, largest first, only when standard plates
+                build it exactly (`loadSetup.plates`) — a number no plates can make says nothing. */}
+            {!isBodyweight && slot !== 'weight' && setup?.plates && setup.plates.length > 0 ? (
+              <Text style={styles.rxSub} numberOfLines={1}>
+                <Text style={styles.rxSubFig}>{setup.plates.join(' · ')}</Text>
+                {` ${t('workout.platesASide')}`}
+              </Text>
+            ) : null}
           </Pressable>
 
           <Pressable
@@ -3192,6 +3246,33 @@ function ActiveSet({
           <WarmupOffer />
         </View>
       </View>
+      {noteDraft != null && noteExerciseId ? (
+        /* The same sheet the lift's page opens (`LiftDetail`) — one note, one home, two doors. */
+        <BottomSheet onClose={() => setNoteDraft(null)} heightFraction={0.4}>
+          <TextField
+            label={t('progress.noteLegend')}
+            value={noteDraft}
+            placeholder={t('progress.notePlaceholder')}
+            onChangeText={setNoteDraft}
+            multiline
+            maxLength={280}
+            block
+            autoFocus
+          />
+          <View style={styles.noteSheetActions}>
+            <Button
+              variant="primary"
+              block
+              label={t('progress.noteSave')}
+              onPress={() => {
+                const next = noteDraft.trim();
+                void db.saveLiftNote(noteExerciseId, next).then(() => setLiftNote(next));
+                setNoteDraft(null);
+              }}
+            />
+          </View>
+        </BottomSheet>
+      ) : null}
     </>
   );
 }
@@ -4291,6 +4372,22 @@ function Rest({
               <Text style={styles.addFifteenLabel}>{t('workout.addSeconds')}</Text>
             </Pressable>
           ) : null}
+          {/* ════ ONE MORE SET (2026-09-09, the formula report) ════
+              The rest is the moment she knows: "that was too easy, one more." The set lands at the
+              end of the lift she just did — during a crossing that is the lift that ENDED
+              (`currentExerciseId`, see the note at `restSeconds`), and it becomes the very next
+              thing; between sets it waits its turn. The engine still wrote the set; she only
+              asked for another of it (`addWorkingSet`). */}
+          {session.currentExerciseId && session.currentTarget ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('workout.oneMoreSet')}
+              onPress={() => session.addSet(session.currentExerciseId!)}
+              style={({ pressed }) => [styles.addFifteen, pressed && styles.addFifteenPressed]}
+            >
+              <Text style={styles.addFifteenLabel}>{t('workout.oneMoreSet')}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -4671,6 +4768,11 @@ const styles = StyleSheet.create({
   // The second half of a superset: the SAME size as the lift she is on, in the quiet tone the unit
   // label wears — present as an equal, subordinate only in colour.
   supersetNext: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
+  noteLine: { marginTop: 4, minHeight: 24, maxWidth: 330, alignItems: 'center', justifyContent: 'center' },
+  noteLineText: { fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: stage.ink1, textAlign: 'center' },
+  noteLineAdd: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  noteLineAddText: { fontFamily: font.sansMedium, fontSize: 17, color: stage.ink2, textAlign: 'center' },
+  noteSheetActions: { marginTop: 18 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
   // The equipment-native figure UNDER the hero: "7 kg a side". The number is a measurement (mono,

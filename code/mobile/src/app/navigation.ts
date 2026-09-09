@@ -322,6 +322,13 @@ export type MainParamList = {
   // Done renders the calm "Workout not started" state instead of a completion.
   WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
   WorkoutDetail: { sessionId: string };
+  /**
+   * THE CLOSER, OVER THE TABS (2026-09-09): the sign-in screen registered on the main stack too,
+   * for the athlete whose enrolment finished without an account (the `signInAfterFirstWorkout`
+   * arm). `after: 'workout'` is the one way in from `WellDone`; from the You tab it opens bare.
+   * Both are dismissible — an account is offered here, never demanded.
+   */
+  Authentication: { after?: 'workout' } | undefined;
   // WHEN SOMETHING HURTS (v7 §13). `exerciseId` = the lift the session was on, so the response can
   // offer the ordinary swap for it; absent when the report is made outside a session.
   /*

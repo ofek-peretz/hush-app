@@ -43,7 +43,13 @@ describe('the coach door has a ceiling', () => {
 
   it('asks who is calling, and can refuse a caller with no answer', () => {
     expect(worker).toContain("session:${bearer}");
-    expect(worker).toMatch(/REQUIRE_AUTH === '1' && !sub/);
+    // Since 2026-09-09 the refusal is decided after the parse, because a stranger's INTAKE (build,
+    // import, review) is admitted on its own small budget — everything else without a session is
+    // still the same 401 as a bad token. Both halves are pinned: the flag, and the one open door.
+    expect(worker).toMatch(/authRequired = env\.REQUIRE_AUTH === '1'/);
+    expect(worker).toMatch(/if \(authRequired && !sub && !anonymousIntake\) return json\(\{ error: 'unauthorized' \}, 401\)/);
+    expect(worker).toMatch(/ANON_KINDS = \['build', 'import', 'review'\]/);
+    expect(worker).toContain('quota:a:${anonInstall}:${day}');
   });
 
   it('⚠️ spends the day\'s budget BEFORE the model is called', () => {

@@ -216,8 +216,17 @@ export function frameOf(rig: Rig, fit?: boolean) {
   return fit ? stageFrame(rig) : VIEWBOX;
 }
 
+/**
+ * ⛔ THE CAP IS THE DEFAULT, NOT AN OPT-IN (2026-09-09, the formula report). Six uncapped figures
+ * on Home timed the renderer out on 2026-08-31 and the fix was applied at that one call site. Every
+ * figure here rebuilds the whole pose on the JS thread each frame, so a screen that forgets the
+ * prop is a screen that can freeze — this is the ceiling the Form door already measured as the
+ * most a rig can be drawn at without cost (`FormMedia`, 45–95 SVG nodes a frame).
+ */
+export const DEFAULT_MOTION_FPS = 30;
+
 export function MotionFigure({ rig, figure, style, fps, tone, fit }: Props) {
-  const rom = useMotionRom(rig, fps);
+  const rom = useMotionRom(rig, fps ?? DEFAULT_MOTION_FPS);
   const prims = buildFrame(rig, rom, figure ?? 'male');
   const box = frameOf(rig, fit);
   return (

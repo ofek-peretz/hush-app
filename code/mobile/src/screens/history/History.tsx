@@ -47,6 +47,7 @@ import {
   totalTonnageKg,
 } from '@/domain/sessionMetrics';
 import { parseHistoryCsv } from '@/domain/historyImport';
+import { sessionsToCsv, exportFileName } from '@/domain/historyExport';
 import { recordFile } from '@/platform/recordFile';
 import { cloudAutoBackup } from '@/platform/cloudBackup';
 import { track } from '@/platform/telemetry';
@@ -192,8 +193,21 @@ export function History({ navigation }: Props) {
     ]);
   }, [app.profile?.units, refresh, t]);
 
+  /*
+   * ════ HER LOG, OUT (2026-09-09, the formula report) ════
+   * The mirror of the door above: the record leaves as the same CSV it arrives in, through the OS
+   * sheet, and Hush steps back — the file is hers. `domain/historyExport` owns the shape.
+   */
+  const exportLog = React.useCallback(async () => {
+    const [all, notes] = await Promise.all([db.loadHistory(), db.loadLiftNotes()]);
+    const csv = sessionsToCsv(all, app.profile?.units ?? 'kg', notes);
+    const result = await recordFile.save(exportFileName(Date.now()), csv);
+    void track('history_exported', { sessions: all.length, result });
+  }, [app.profile?.units]);
+
   return (
     <HistoryView
+      onExportLog={recordFile.available() && (sessions?.length ?? 0) > 0 ? () => void exportLog() : undefined}
       sessions={sessions}
       cardio={cardio}
       dayName={(s) => sessionDayName(s)}
@@ -222,6 +236,7 @@ export function HistoryView({
   onCardio,
   onFreeLog,
   onImportLog,
+  onExportLog,
 }: {
   sessions: Session[] | null;
   cardio: CardioActivity[];
@@ -233,6 +248,8 @@ export function HistoryView({
   onFreeLog?: () => void;
   /** Brings another app's CSV export into this ledger (audit M1) — absent where no picker exists. */
   onImportLog?: () => void;
+  /** Hands her the ledger as a CSV (2026-09-09) — absent where no share sheet exists, or on an empty ledger. */
+  onExportLog?: () => void;
 }) {
   const { t } = useCopy();
 
@@ -369,6 +386,16 @@ export function HistoryView({
               style={({ pressed }) => [styles.freeLogDoor, pressed && styles.rowPressed]}
             >
               <Text style={styles.freeLogDoorText}>{t('history.importDoor')}</Text>
+            </Pressable>
+          ) : null}
+          {/* The way OUT, beside the way in — a record she can take with her is a record she trusts. */}
+          {onExportLog ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onExportLog}
+              style={({ pressed }) => [styles.freeLogDoor, pressed && styles.rowPressed]}
+            >
+              <Text style={styles.freeLogDoorText}>{t('history.exportDoor')}</Text>
             </Pressable>
           ) : null}
 

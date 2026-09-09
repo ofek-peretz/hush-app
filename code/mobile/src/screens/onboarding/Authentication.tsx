@@ -53,16 +53,39 @@ import { useApp } from '@/state/stores/appStore';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { FREE_SESSION_LIMIT, TRIAL_MAX_DAYS, TRIAL_MAX_DAYS_DEFAULT } from '@/domain/entitlement';
 import { LegalSheet } from '@/components/LegalSheet';
 import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, press, motion } from '@/design/tokens';
 import { legendVoice } from '@/design/monoVoice';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
-import type { OnboardingParamList } from '@/app/navigation';
+import type { OnboardingParamList, MainParamList } from '@/app/navigation';
+import { track } from '@/platform/telemetry';
 
-type Props = NativeStackScreenProps<OnboardingParamList, 'Authentication'>;
+/**
+ * Registered on BOTH stacks (2026-09-09): the onboarding closer, and the main-stack closer for the
+ * athlete whose enrolment finished without an account. One component; what differs is where it
+ * goes on success and whether it may be declined, and it reads both from its own params.
+ */
+type Props =
+  | NativeStackScreenProps<OnboardingParamList, 'Authentication'>
+  | NativeStackScreenProps<MainParamList, 'Authentication'>;
 
-export function Authentication({ navigation }: Props) {
+export function Authentication({ navigation: nav, route }: Props) {
+  /* Typed as the onboarding closer — the shape both stacks share (`goBack`, `popToTop`,
+     `navigate('Start')`); which stack it is actually on is read from the state below. */
+  const navigation = nav as NativeStackScreenProps<OnboardingParamList, 'Authentication'>['navigation'];
+  /** From `WellDone`, over the tabs — dismissible, and success lands back on the tabs. */
+  const afterWorkout = (route.params as { after?: 'workout' } | undefined)?.after === 'workout';
+  /** From the You tab — also over the tabs, also dismissible. */
+  const routeNames: string[] = navigation.getState?.()?.routeNames ?? [];
+  const overTabs = afterWorkout || !routeNames.includes('Start');
+  useEffect(() => {
+    if (afterWorkout) void track('signin_wall_after_workout_shown');
+  }, [afterWorkout]);
+  function decline() {
+    void track(afterWorkout ? 'signin_wall_after_workout_skipped' : 'signin_declined');
+    navigation.popToTop();
+  }
   const { t } = useCopy();
   const app = useApp();
   const reduced = useReducedMotion();
@@ -149,6 +172,11 @@ export function Authentication({ navigation }: Props) {
        * account on focus and finishes the enrolment itself. The fallback hop survives for the
        * one path that can still land here without a parent (a stale deep link).
        */
+      if (overTabs) {
+        // Over the tabs there is no enrolment to finish — the account is simply hers now.
+        navigation.popToTop();
+        return;
+      }
       if (navigation.canGoBack()) navigation.goBack();
       else navigation.navigate('Start');
     } catch (e) {
@@ -257,10 +285,10 @@ export function Authentication({ navigation }: Props) {
         {/* THE REASON SHE IS HERE (2026-09-01): the programme is already built and on screen one
             step back — the account is what keeps it hers. Stated as a fact, like everything. */}
         <Arrive order={4}>
-          <Text style={styles.trialFact}>{t('ob.signinSaveFact')}</Text>
+          <Text style={styles.trialFact}>{t(afterWorkout ? 'ob.signinSaveFactAfterWorkout' : 'ob.signinSaveFact')}</Text>
         </Arrive>
         <Arrive order={5}>
-          <Text style={styles.trialFact}>{t('ob.signinTrialFact', { n: FREE_SESSION_LIMIT })}</Text>
+          <Text style={styles.trialFact}>{t('ob.signinTrialFact', { n: FREE_SESSION_LIMIT, d: TRIAL_MAX_DAYS ?? TRIAL_MAX_DAYS_DEFAULT })}</Text>
         </Arrive>
       </View>
       <Arrive order={6} style={styles.actions}>
@@ -312,6 +340,12 @@ export function Authentication({ navigation }: Props) {
             {t('ob.signinLegalPost')}
           </Text>
         </Pressable>
+        {overTabs ? (
+          /* Over the tabs the account is an offer. The way out is a word, not a wall. */
+          <Pressable accessibilityRole="button" onPress={decline} hitSlop={10} style={styles.legalPress}>
+            <Text style={styles.notNow}>{t('ob.signinNotNow')}</Text>
+          </Pressable>
+        ) : null}
         {/* The "your data is only used for your recommendations, they are never sold" line is
             GONE (founder 2026-07-12). Nobody arrives at a training app suspecting we sell them;
             volunteering the denial is what plants the thought. The agreement above is the record;
@@ -566,4 +600,5 @@ const styles = StyleSheet.create({
   trialFact: { fontFamily: font.sansMedium, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'center', marginTop: 18 },
   legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'center', lineHeight: 18 },
   legalLink: { color: color.textSecondary, textDecorationLine: 'underline' }, // rtl-ok: nested span, inherits the centred line
+  notNow: { fontFamily: font.sansMedium, fontSize: textScale.md, color: color.textSecondary, textAlign: 'center', marginTop: 10 },
 });

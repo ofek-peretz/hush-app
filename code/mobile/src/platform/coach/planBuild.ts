@@ -188,7 +188,7 @@ export async function requestPlanBuild(her: {
     }
   };
 
-  const ask1 = () => askCoach({ v: req.v, blocks: req.blocks }, req.schema, req.think);
+  const ask1 = () => askCoach({ v: req.v, blocks: req.blocks }, req.schema, req.think, undefined, 'build');
   const said = !!her.ask?.trim();
   const done = (r: PlanBuildResult): PlanBuildResult => {
     /*

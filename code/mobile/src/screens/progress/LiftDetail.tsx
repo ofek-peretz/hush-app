@@ -24,7 +24,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Arrive, Climb, Legend } from '@/components/ds';
+import { Arrive, Climb, Legend, Button, TextField } from '@/components/ds';
+import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -45,6 +46,8 @@ import {
   liftClimb,
   liftMoments,
   pointIndexAt,
+  strengthEstimate,
+  type StrengthEstimate,
   type LiftChange,
   type LiftClimb,
   type LiftMoment,
@@ -125,6 +128,18 @@ export function LiftDetail({ navigation, route }: Props) {
   }, []);
 
   const climb = useMemo<LiftClimb>(() => liftClimb(sessions ?? [], exerciseId), [sessions, exerciseId]);
+  /* Measured strength and her own note (2026-09-09, the formula report) — see `strengthEstimate`. */
+  const estimate = useMemo(() => strengthEstimate(sessions ?? [], exerciseId), [sessions, exerciseId]);
+  const [note, setNote] = useState<string>('');
+  useEffect(() => {
+    let active = true;
+    db.loadLiftNotes()
+      .then((all) => active && setNote(all[exerciseId] ?? ''))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [exerciseId]);
   const moments = useMemo<LiftMoment[]>(
     () => liftMoments(sessions ?? [], app.profile, exerciseId, climb),
     [sessions, app.profile, exerciseId, climb],
@@ -159,6 +174,12 @@ export function LiftDetail({ navigation, route }: Props) {
       band={band}
       knowledge={knowledge}
       loaded={sessions != null}
+      estimate={estimate}
+      note={note}
+      onSaveNote={(next) => {
+        setNote(next);
+        void db.saveLiftNote(exerciseId, next);
+      }}
       onBack={() => navigation.goBack()}
     />
   );
@@ -179,13 +200,20 @@ export interface LiftDetailViewProps {
   knowledge?: LiftKnowledge;
   /** History has been read. False = still reading, and the page says nothing rather than "empty". */
   loaded: boolean;
+  /** Measured strength (2026-09-09) — Epley over her logged working sets; null with no evidence. */
+  estimate?: StrengthEstimate | null;
+  /** Her own line about this lift, and the way to change it. Absent in fixtures = no note row. */
+  note?: string;
+  onSaveNote?: (note: string) => void;
   onBack: () => void;
 }
 
-export function LiftDetailView({ exerciseId, units, climb, moments, changes, band, knowledge, loaded, onBack }: LiftDetailViewProps) {
+export function LiftDetailView({ exerciseId, units, climb, moments, changes, band, knowledge, loaded, estimate, note, onSaveNote, onBack }: LiftDetailViewProps) {
   const { t } = useCopy();
   const [tab, setTab] = useState<Tab>('moments');
   const [tapped, setTapped] = useState<number | null>(null);
+  /** The note sheet's draft — null while closed. */
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
   /*
    * ════════════════════════════════════════════════════════════════════════════════════════════
    * ⛔ THE CLIMB WAS DRAWN INTO THE WINDOW, NOT INTO ITS OWN SLOT (2026-08-27).
@@ -365,6 +393,65 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
         <View style={styles.graphWaiting}>
           <Text style={styles.climbWaiting}>{t('progress.climbNeedsTwo')}</Text>
         </View>
+      ) : null}
+
+      {/* ════ MEASURED STRENGTH, AND HER OWN LINE (2026-09-09, the formula report) ════
+          The one figure every lifter expects, said as a READ with the set it was read from — never
+          a mark, never a standard. Under it, the one thing the record cannot know: what SHE knows
+          about this lift ("seat 4, safety bar"), kept with the lift and shown on the stage. */}
+      {estimate && !isReps ? (
+        <View style={styles.measuredRow}>
+          <Legend size={17} track={0.18}>{t('progress.measuredStrength')}</Legend>
+          <View style={styles.measuredFig}>
+            <Text style={styles.measuredNum}>{conv(estimate.e1rm)}</Text>
+            <Text style={styles.measuredUnit}>{unit}</Text>
+          </View>
+          <Text style={styles.measuredFrom}>
+            {t('progress.measuredFrom', { load: conv(estimate.load), unit, reps: estimate.reps, date: shortDate(estimate.atMs) })}
+          </Text>
+        </View>
+      ) : null}
+      {onSaveNote ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={note ? t('progress.noteLegend') : t('progress.noteAdd')}
+          onPress={() => setNoteDraft(note ?? '')}
+          style={({ pressed }) => [styles.noteRow, pressed && { opacity: press.opacity }]}
+        >
+          {note ? (
+            <>
+              <Legend size={17} track={0.18}>{t('progress.noteLegend')}</Legend>
+              <Text style={styles.noteText}>{note}</Text>
+            </>
+          ) : (
+            <Text style={styles.noteAdd}>{t('progress.noteAdd')}</Text>
+          )}
+        </Pressable>
+      ) : null}
+      {noteDraft != null && onSaveNote ? (
+        <BottomSheet onClose={() => setNoteDraft(null)} heightFraction={0.4}>
+          <TextField
+            label={t('progress.noteLegend')}
+            value={noteDraft}
+            placeholder={t('progress.notePlaceholder')}
+            onChangeText={setNoteDraft}
+            multiline
+            maxLength={280}
+            block
+            autoFocus
+          />
+          <View style={styles.noteActions}>
+            <Button
+              variant="primary"
+              block
+              label={t('progress.noteSave')}
+              onPress={() => {
+                onSaveNote(noteDraft.trim());
+                setNoteDraft(null);
+              }}
+            />
+          </View>
+        </BottomSheet>
       ) : null}
 
       <View style={styles.body}>
@@ -682,6 +769,15 @@ const styles = StyleSheet.create({
   climbWaiting: { fontFamily: font.serif, fontSize: 17, lineHeight: 23, color: color.textMuted, textAlign: 'left' },
 
   body: { flex: 1, minHeight: 0, paddingHorizontal: 30, paddingTop: 12 },
+  measuredRow: { marginHorizontal: 30, marginTop: 18, gap: 4 },
+  measuredFig: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  measuredNum: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 30, lineHeight: 34, color: color.textPrimary, textAlign: 'left' },
+  measuredUnit: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
+  measuredFrom: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
+  noteRow: { marginHorizontal: 30, marginTop: 16, gap: 4, minHeight: 44, justifyContent: 'center' },
+  noteText: { fontFamily: font.serif, fontSize: 19, lineHeight: 25, color: color.textPrimary, textAlign: 'left' },
+  noteAdd: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },
+  noteActions: { marginTop: 18 },
 
   /* Its own band above the tabs — it is a different KIND of thing from the two stories under it:
      they are what happened, this is what was learned from it. */

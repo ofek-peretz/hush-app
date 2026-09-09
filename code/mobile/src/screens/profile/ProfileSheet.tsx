@@ -116,6 +116,18 @@ export function ProfileSheet({ navigation }: Props) {
   const p = app.profile;
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [legalOpen, setLegalOpen] = useState(false);
+  /** Whether an account exists — read on every focus, because the closer over the tabs can change it. */
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () => void app.isSignedIn().then((v) => alive && setSignedIn(v)).catch(() => {});
+    read();
+    const off = navigation.addListener('focus', read);
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [app, navigation]);
   /** The height of the page's own viewport — how much of it the body map may have. See below. */
   const [viewport, setViewport] = useState(0);
 
@@ -728,14 +740,27 @@ export function ProfileSheet({ navigation }: Props) {
             read as the page's primary action and put a big target under an idle thumb. Both
             exits are now plain text: reachable, unmistakable, and weighted like what they are. */}
         <View style={styles.actions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('profile.signOut')}
-            onPress={confirmSignOut}
-            style={({ pressed }) => [styles.exit, pressed && styles.exitPressed]}
-          >
-            <Text style={styles.exitLabel}>{t('profile.signOut')}</Text>
-          </Pressable>
+          {signedIn === false ? (
+            /* No account yet (the `signInAfterFirstWorkout` arm, or a declined closer): the door
+               stays here, as an offer, for as long as she has none. */
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.signIn')}
+              onPress={() => navigation.navigate('Authentication')}
+              style={({ pressed }) => [styles.exit, pressed && styles.exitPressed]}
+            >
+              <Text style={[styles.exitLabel, styles.exitOffer]}>{t('profile.signIn')}</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.signOut')}
+              onPress={confirmSignOut}
+              style={({ pressed }) => [styles.exit, pressed && styles.exitPressed]}
+            >
+              <Text style={styles.exitLabel}>{t('profile.signOut')}</Text>
+            </Pressable>
+          )}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('profile.deleteAccount')}
@@ -1093,6 +1118,7 @@ const styles = StyleSheet.create({
   exit: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
   exitPressed: { backgroundColor: color.fillSubtle },
   exitLabel: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
+  exitOffer: { color: color.accent },
   exitDanger: { color: alert.stage },
   legalRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
   legalRowText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },

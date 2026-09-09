@@ -70,6 +70,34 @@ test('REQUIRE_AUTH=1 makes a session the price of entry — and the same 401 hid
   assert.equal(anonymous.status, 401);
   const wrongToken = await worker.fetch(post({ blocks: [{ text: 'hi' }] }, { 'x-hush-token': 'wrong' }), e);
   assert.deepEqual(await anonymous.json(), await wrongToken.json());
+  // A stranger asking for a signed-in job is refused even when the request names an install…
+  const chat = await worker.fetch(post({ blocks: [{ text: 'hi' }], kind: 'chat' }, { 'x-hush-install': 'i1' }), e);
+  assert.equal(chat.status, 401);
+  // …and an intake kind with no install to charge is refused too.
+  const noInstall = await worker.fetch(post({ blocks: [{ text: 'hi' }], kind: 'build' }), e);
+  assert.equal(noInstall.status, 401);
+});
+
+test("the intake stays open to a stranger under REQUIRE_AUTH=1 — on the install's own small budget", async () => {
+  const e = env({ REQUIRE_AUTH: '1', DAILY_ANON_CALLS: '2', DAILY_GLOBAL_CALLS: '1000' });
+  const kv = (e as { HUSH_KV: ReturnType<typeof memKv> }).HUSH_KV;
+  const build = () => worker.fetch(post({ blocks: [{ text: 'hi' }], kind: 'build' }, { 'x-hush-install': 'i1' }), e);
+  // The walls let it through — the only thing left is the model, which this file forbids, so the
+  // answer is the upstream failure: never a 401 and never a 429.
+  const first = await build();
+  assert.notEqual(first.status, 401);
+  assert.notEqual(first.status, 429);
+  assert.equal([...kv.store.keys()].some((k) => k.startsWith('quota:a:i1:')), true);
+  await build();
+  const third = await build();
+  assert.equal(third.status, 429);
+  // An import and the builder's review are intake kinds too; a chat turn is not.
+  const imp = await worker.fetch(post({ blocks: [{ text: 'hi' }], kind: 'import' }, { 'x-hush-install': 'i2' }), e);
+  assert.notEqual(imp.status, 401);
+  const review = await worker.fetch(post({ blocks: [{ text: 'hi' }], kind: 'review' }, { 'x-hush-install': 'i3' }), e);
+  assert.notEqual(review.status, 401);
+  const chat = await worker.fetch(post({ blocks: [{ text: 'hi' }], kind: 'chat' }, { 'x-hush-install': 'i4' }), e);
+  assert.equal(chat.status, 401);
 });
 
 test('the text ceilings refuse before anything is billed (audit finding 1)', async () => {

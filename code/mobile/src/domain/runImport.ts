@@ -46,6 +46,7 @@ export type AskFn = (
   schema?: Record<string, unknown>,
   think?: 'minimal' | 'low' | 'medium' | 'high',
   images?: { mime: string; data: string }[],
+  kind?: 'build' | 'import' | 'review' | 'chat',
 ) => Promise<{ ok: true; text: string } | { ok: false; reason: string }>;
 
 export type ImportFailure =
@@ -127,7 +128,7 @@ export async function runImport(
     if (!input.images || input.images.length === 0) return { ok: false, reason: 'nothing_given' };
     input.onPhase?.('reading');
     const req = importReadRequest({ locale });
-    const reply = await ask({ v: req.v, blocks: req.blocks }, req.schema, req.think, input.images);
+    const reply = await ask({ v: req.v, blocks: req.blocks }, req.schema, req.think, input.images, 'import');
     if (!reply.ok) return { ok: false, reason: 'unreachable' };
     week = readImportedWeek(asJson(reply.text));
   }
@@ -164,7 +165,7 @@ export async function runImport(
   if (matched.unmatched.length > 0) {
     input.onPhase?.('matching');
     const req = importRequest({ unmatched: matched.unmatched, locale });
-    const reply = await ask({ v: req.v, blocks: req.blocks }, req.schema, req.think);
+    const reply = await ask({ v: req.v, blocks: req.blocks }, req.schema, req.think, undefined, 'import');
     /*
      * ⚠️ A FAILED SUGGESTION CALL IS NOT A FAILED IMPORT. Her matched lifts are already a programme;
      * the leftovers simply stay on the report as "I could not find this", which is a true sentence

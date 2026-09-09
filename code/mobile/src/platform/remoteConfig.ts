@@ -29,6 +29,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { applyTrialLimitOverride, applyTrialMaxDaysOverride } from '@/domain/entitlement';
+import { applyExperimentPct } from '@/platform/experiments';
 
 /* Deliberately OUTSIDE db.K (like the install id): config is a fact about the BUILD's tuning, not
  * about the athlete, and an account wipe should not reset an experiment arm mid-flight. */
@@ -51,12 +52,16 @@ export interface RemoteConfig {
   /** The trial's TIME cap in days (sessions OR days, first spent gates). Absent = disarmed —
    *  the founder-ratified sessions-only arc. Clamped 7..365 at the apply site. */
   trialMaxDays?: number;
+  /** Percent of installs whose account wall stands AFTER the first workout (the formula report's
+   *  reopened ruling, run as an experiment). 0 and 100 end it. Clamped at the apply site. */
+  signInAfterFirstWorkoutPct?: number;
 }
 
 /** The allow-list, applied. Unknown keys never get this far; bad types are ignored per-field. */
 function apply(cfg: RemoteConfig): void {
   applyTrialLimitOverride(cfg.trialSessionLimit);
   applyTrialMaxDaysOverride(cfg.trialMaxDays);
+  applyExperimentPct('signInAfterFirstWorkout', cfg.signInAfterFirstWorkoutPct);
 }
 
 /** Rebuild the config field-by-field from an untrusted body — the circle's own discipline. */
@@ -66,6 +71,7 @@ function sanitize(raw: unknown): RemoteConfig {
     const r = raw as Record<string, unknown>;
     if (typeof r.trialSessionLimit === 'number') cfg.trialSessionLimit = r.trialSessionLimit;
     if (typeof r.trialMaxDays === 'number') cfg.trialMaxDays = r.trialMaxDays;
+    if (typeof r.signInAfterFirstWorkoutPct === 'number') cfg.signInAfterFirstWorkoutPct = r.signInAfterFirstWorkoutPct;
   }
   return cfg;
 }

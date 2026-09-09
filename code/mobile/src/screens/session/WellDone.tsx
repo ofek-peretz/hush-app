@@ -647,7 +647,21 @@ export function WellDone({ navigation, route }: Props) {
   // host on its History tab (nested initial route) so "View record" opens the timeline directly.
   function goHome() {
     app.clearPortraitFlag();
-    navigation.reset({ index: 0, routes: [{ name: 'HomeTabs' }] });
+    /*
+     * ════ THE ACCOUNT IS ASKED FOR HERE, ONCE, ON THE NEW ARM (2026-09-09, the formula report) ════
+     *
+     * An athlete whose enrolment finished without an account (`ProgramCreated`, the
+     * `signInAfterFirstWorkout` arm) has just saved her first workout — the one moment the sentence
+     * "an account keeps it yours" is about something she can lose. The closer is pushed OVER the
+     * tabs, dismissible, and never again from here: the You tab keeps the door after that.
+     */
+    void app.isSignedIn().then((signed) => {
+      if (signed || notStarted) {
+        navigation.reset({ index: 0, routes: [{ name: 'HomeTabs' }] });
+      } else {
+        navigation.reset({ index: 1, routes: [{ name: 'HomeTabs' }, { name: 'Authentication', params: { after: 'workout' } }] });
+      }
+    });
   }
   function goRecord() {
     /*
