@@ -285,11 +285,14 @@ describe('⛔ the engine’s week reaches the screen', () => {
      */
     expect(stillDirect).toEqual([]);
 
-    // 5 · the pre-workout card explains a lift the engine placed — it needs the same stored week.
+    // 5 · the pre-workout card reads the same stored week — for the day's budget verdict and, since
+    //     2026-09-07, for the drag that reorders it (`app.reorderExercise` by day id). The placement
+    //     sheet it used to build off that read is gone with the founder's ruling (theWedgeLands…).
     const pre = src('screens/plan/PreWorkoutScreen.tsx');
     expect(pre).toContain('db.loadProgram');
-    expect(pre).toContain('liftPlacement');
-    expect(pre).toContain('WhyHereSheet');
+    expect(pre).toContain('app.reorderExercise');
+    expect(pre).not.toContain('WhyHereSheet');
+
 
     // 6 · and the row asks for every lift, not only a changed one (the WHY defect, in one line).
     expect(src('components/PlanLifts.tsx')).toContain('onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId)');

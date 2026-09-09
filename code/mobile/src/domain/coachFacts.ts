@@ -73,6 +73,9 @@ export interface FactSet {
   rest?: number;
   /** She corrected this set by hand rather than taking what was proposed. */
   edited?: boolean;
+  /** The session clock wrote it, not her (2026-09-07): `w`/`r` are the prescription copied across,
+   *  NOT what she lifted. A coach reading it as performance would be grading the engine's own work. */
+  presumed?: boolean;
 }
 
 /** One lift inside the session that just happened. */
@@ -505,6 +508,7 @@ function liftOf(exerciseId: string, sets: SetLog[]): FactLift | null {
       r: x.actualReps,
       ...(x.restBeforeS != null ? { rest: x.restBeforeS } : {}),
       ...(x.edited ? { edited: true as const } : {}),
+      ...(x.presumed ? { presumed: true as const } : {}),
     })),
   };
 }

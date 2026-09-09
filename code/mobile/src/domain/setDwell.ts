@@ -50,6 +50,7 @@
 //
 
 import { exerciseById } from '@/data/exercises';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { exerciseMotion } from '@/motion/registry';
 import { DEFAULT_TEMPO, repDurationMs } from '@/motion/timeline';
 import { learnedExecS, type ExecSample } from '@/engine/v5/timeBudget';
@@ -95,6 +96,22 @@ export function nudgeAfterS(exerciseId: string | null | undefined, reps: number)
   const setup = SETUP_S[ex?.tier === 'isolation' ? 'isolation' : 'compound'];
   const n = Number.isFinite(reps) && reps > 0 ? reps : 8;
   return Math.round(setup + n * repSeconds(exerciseId) + BUFFER_S);
+}
+
+/** The founder's margin for a set whose START is known: fifteen seconds, not ten (spec §3.3). */
+export const VOICE_BUFFER_S = 15;
+
+/**
+ * ════ WHEN THE VOICE ASKS "סיימת?" (spec §3.3) ════
+ *
+ * The clock's `nudgeAfterS` prices the walk to the rack and the loading because it counts from
+ * the moment the set went ON SCREEN. The voice counts from the moment she said "מוכן" — or from
+ * the end of the rest, when the set starts on that beat — so the setup is already paid for and
+ * the only unknowns are the reps themselves. Floor reps × this lift's rep time, plus fifteen.
+ */
+export function voiceAskAfterS(exerciseId: string | null | undefined, reps: number): number {
+  const n = Number.isFinite(reps) && reps > 0 ? reps : 8;
+  return Math.round(n * repSeconds(exerciseId) + VOICE_BUFFER_S);
 }
 
 /**
@@ -147,7 +164,7 @@ export function learnedExecSFor(history: Session[], exerciseId: string): number 
   const samples: ExecSample[] = [];
   for (const s of history)
     for (const l of s.sets) {
-      if (l.exerciseId !== exerciseId || l.isApproach) continue;
+      if (l.exerciseId !== exerciseId || !isEvidenceSet(l)) continue; // a presumed set's stamp is the clock's, not her last rep
       samples.push({ exerciseId: l.exerciseId, sessionId: s.id, atMs: Date.parse(l.persistedAt), restBeforeS: l.restBeforeS });
     }
   samples.sort((a, b) => a.atMs - b.atMs);

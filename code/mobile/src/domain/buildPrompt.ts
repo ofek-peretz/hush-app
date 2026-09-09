@@ -88,7 +88,40 @@ import heCopy from '@/i18n/locales/he.json';
 import type { PromptBlock } from '@/domain/coachPrompt';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 2;
+export const BUILD_PROMPT_VERSION = 3;
+
+/**
+ * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
+ *
+ * *"לגבי הממצא — אני רוצה שתנתח את כל האפשרויות העומדות בפנייך ותיקח את ההחלטה שתשדרג בצורה
+ * המקסימלית את חווית המשתמש."*
+ *
+ * The finding (live probe, same day): asked for a footballer's week, the model HEARD it — day names
+ * said "כוח מתפרץ" and "מהירות", the lifts were trap-bar pulls, split squats and hip thrusts — and
+ * the week still read as ordinary hypertrophy, because every lift landed on her one rep band
+ * (8–10) with hypertrophy loads and rests. The split was athletic; the prescription was not, and
+ * the prescription is what she reads on every set.
+ *
+ * The options, weighed:
+ *   · a prompt line asking for `missing` to be filled — cheap, and beside the point: the lifts
+ *     were fine, the numbers were not;
+ *   · athletic movements in the catalogue (jumps, sprints, cleans) — real, and a rig each; a
+ *     shopping list `missing` now feeds (see the line below), not a same-day change;
+ *   · rest per lift — the engine LEARNS rests (S-17) and would fight a written one;
+ *   · **a rep range per lift** — the one number that turns a bodybuilder's 4×8–10 into a power
+ *     day's 4×3–5 and an endurance day's 3×15–20, on the same catalogue, today. It is STRUCTURE
+ *     the way `sets` and `pair` are — a coach writes it on the sheet — and it is not a load: the
+ *     engine still prices the opening weight at the range's floor (S-38) and progresses inside it
+ *     (Loop 2 reads the band it is handed, per exercise, and always has).
+ *
+ * So `reps` joins the schema as OPTIONAL, `[low, high]`, described on the field itself (the
+ * schema is a prompt channel that costs the instruction block nothing). Absent ⇒ her own band,
+ * exactly as before. Carried through `TemplateLift.reps` → `Slot.repBand`, read by the engine's
+ * `bandOf` ahead of her profile band, and shown as `4×3–5` everywhere a scheme is printed.
+ * Clamped by the reader to `REPS_MIN..REPS_MAX`; a wrong-shaped value is dropped, never guessed.
+ */
+export const REPS_MIN = 2;
+export const REPS_MAX = 30;
 
 /** What a week may be. Both ends are the engine's own range — `fixtureModel` builds 2–6. */
 export const BUILD_MIN_DAYS = 2;
@@ -140,6 +173,26 @@ export const BUILD_WEEK_SCHEMA = {
       maxItems: 8,
       items: { type: 'string' },
     },
+    /*
+     * ⛔ THE AUTHOR NAMES THE WEEK (founder 2026-09-09): *"התוכנית צריכה להיות מדויקת לפי מה שקורה
+     * בפועל … אם ספורטאי מגיע ומבקש תוכנית עבור האתלטיות שלו האימונים יהיו שונים בשמות."*
+     *
+     * A three-day push/pull/upper week was being announced as "Upper / Lower" by a heuristic that
+     * knew two words. No heuristic over muscles can say "power week for the pitch"; the model that
+     * shaped the week can, and it already names every day. Its meaning lives HERE, on the field,
+     * because the instruction block is measured and this costs it nothing (see `pair`).
+     *
+     * ⚠️ IT SITS BEFORE `days`, so the model commits to what the week IS before it writes it — the
+     * same order the old coach schema kept for its title. Optional: a week with nothing worth
+     * calling it falls back to the shape heuristic, which cannot lie (`programmeName`).
+     * The founder's standing ruling on titles: specific to this athlete, never one that would fit
+     * anybody — and no example of one anywhere in the prompt.
+     */
+    name: {
+      type: 'string',
+      description:
+        'A short title for this whole week, in the athlete’s language, as a coach would write at the top of the sheet: what it is built around. Specific to this athlete — never a title that would fit anybody.',
+    },
     days: {
       type: 'array',
       minItems: BUILD_MIN_DAYS,
@@ -153,9 +206,20 @@ export const BUILD_WEEK_SCHEMA = {
           name: { type: 'string' },
           lifts: {
             type: 'array',
-            minItems: BUILD_MIN_LIFTS,
-            maxItems: BUILD_MAX_LIFTS,
+            /*
+             * ⛔ NO `minItems`/`maxItems` HERE ANY MORE — MEASURED, 2026-09-07. Google prices a
+             * response schema by the states its constrained decoder must hold, and it refuses one
+             * over budget with a bare `400 INVALID_ARGUMENT`. Nine live probes on the production
+             * Worker: the week with `days` bounded 2–6 AND `lifts` bounded 1–12 accepts ONE more
+             * optional integer and nothing else — a string, an array, a second integer all 400.
+             * Drop either bound and the `reps` array is accepted at once (`planBuildSchemaProbe4`,
+             * hand-run). The day bound is the one that carries meaning (her answer); the lift bound
+             * was only ever a sanity check on SHAPE, and the reader keeps it: `readCoachWeek` caps a
+             * day at `BUILD_MAX_LIFTS` and `draftFromCoachWeek` drops an empty one. Same refusal,
+             * enforced where it costs no states.
+             */
             items: {
+
               type: 'object',
               additionalProperties: false,
               required: ['ex', 'sets'],
@@ -196,6 +260,14 @@ export const BUILD_WEEK_SCHEMA = {
                   type: 'boolean',
                   description:
                     'Run this exercise and the next one as a superset: alternate them, with no pause between the two.',
+                },
+                /* See the note at `REPS_MIN`. Optional; the description is the whole instruction. */
+                reps: {
+                  type: 'array',
+                  items: { type: 'integer' },
+
+                  description:
+                    'Optional. The rep range for this exercise as [low, high], when the goal calls for something other than the athlete’s default range.',
                 },
               },
             },
@@ -326,7 +398,8 @@ function instructions(locale: 'en' | 'he'): string {
     '· Exactly the number of days the athlete asked for.',
     '· Only ids from the CATALOGUE. A line is `id = name | name | name` — one lift under all the',
     '  names we know it by. Never invent an id.',
-    '· A lift you want that is not there: put the name in `missing`.',
+    '· A lift you want that is not there: put the name in `missing` — name it, do not silently swap it.',
+
     `· Write each day’s name in ${locale === 'he' ? 'Hebrew' : 'English'}.`,
   ].join('\n');
 }

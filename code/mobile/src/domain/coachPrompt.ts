@@ -561,6 +561,8 @@ function hersAlone(facts: CoachFacts): Omit<CoachFacts, 'catalogue' | 'movements
 export interface CoachRequest {
   v: number;
   blocks: PromptBlock[];
+  /** The Worker's fast lane (a small, quick model) — voice turns only. See `domain/voiceTurn`. */
+  tier?: 'fast';
 }
 
 /**

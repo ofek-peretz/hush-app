@@ -136,6 +136,8 @@ describe('⛔ copy nothing renders', () => {
 
   it('⛔ the deleted conversation took its words with it', () => {
     // The specific case this law was written on: a feature is out when its copy is out too.
+    // (Reopened for one day, 2026-09-08 — the coach in her ear — and closed again by the founder
+    // the same evening: "לא צריך אימון קולי". The namespace is empty once more, by his hand.)
     expect(keys.filter((k) => k.startsWith('coach.'))).toEqual([]);
   });
 });

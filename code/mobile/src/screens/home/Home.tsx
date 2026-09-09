@@ -11,19 +11,20 @@
 // 
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { plannedMinutes } from '@/domain/duration';
-import { View, StyleSheet } from 'react-native';
+
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import { HomeView, type HomeWorkoutOption } from '@/screens/home/HomeView';
 import { homePlanRows, settledPlanRows } from '@/screens/home/homePlan';
-import { ExerciseDemo } from '@/components/ExerciseDemo';
+
 import { TrainTogetherSheet } from '@/components/TrainTogetherSheet';
 import { usePair } from '@/state/stores/pairStore';
 import { useCopy } from '@/i18n/useCopy';
-import { currentLocale, tg } from '@/i18n';
+import { tg } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 import { nextUp } from '@/domain/milestones';
@@ -31,10 +32,13 @@ import { milestoneCopy } from '@/domain/milestoneCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
-import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, queuedWorkout } from '@/domain/coachWeek';
+import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, queuedWorkout } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
-import { REST_INTER_S, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds, refreshLearnedRests, useSession } from '@/state/stores/sessionStore';
+import { useSession } from '@/state/stores/sessionStore';
+// From the registry itself, not re-exported through the session store: a number should not pull
+// the whole React session module in behind it (2026-09-09).
+import { REST_INTER_S, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds, refreshLearnedRests } from '@/domain/restPrescription';
 import { buildCoachWatchPlan, watchPlanToPublish } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry } from '@/platform/telemetry';
@@ -59,15 +63,12 @@ import {
   type WristOffer,
 } from '@/platform/watch/watchPresence';
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
-import { changedLiftCase, type ChangedLiftCase } from '@/domain/changedLiftCase';
-import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
-import { WhyHereSheet, whyHereProps } from '@/components/WhyHereSheet';
-import { liftPlacement, type LiftPlacement } from '@/domain/whyLiftIsHere';
+
 import { weekNotice } from '@/domain/weekNotice';
-import { WEEKLY_SETS_FLOOR } from '@/engine/v5/constants';
+
 /* ⛔ `Line` and `coachBrief` went with the week's brief and its unseen dot — see the deletion
    note in the effect below. */
-import { muscleGroupsLabel, exerciseDisplayName, exerciseCues, muscleOf } from '@/data/exercises';
+import { muscleGroupsLabel, muscleOf } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { LoadDirection } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
@@ -230,19 +231,6 @@ export function Home({ navigation, route }: Props) {
         setCoachPlan(plan);
         // The week is now KNOWN — whatever it turned out to be. See `weekLoaded`.
         setWeekLoaded(true);
-        /*
-         * The placements come off the ENGINE's week, which is the only thing that knows why a lift
-         * was chosen. Built for the whole week rather than per tap: this is the screen she opens
-         * every morning, and a sheet that takes a frame to appear reads as a stall.
-         */
-        const here: Record<string, LiftPlacement> = {};
-        for (const d of program?.days ?? [])
-          if (!d.isRest)
-            for (const s of d.slots) {
-              const lp = liftPlacement(s.exerciseId, program, app.profile?.bodyMap, app.profile?.daysPerWeek, history ?? []);
-              if (lp) here[s.exerciseId] = lp;
-            }
-        setPlacements(here);
         const notice = weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek });
         setEngineNotice(notice ? t(notice.key, notice.params) : null);
         const since = weekOpenMs ?? 0;
@@ -374,21 +362,21 @@ export function Home({ navigation, route }: Props) {
    * the stamped weekly view and the saved history; nothing on that sheet is computed at read time,
    * because a reason Hush did not measure is not a reason (R7).
    */
-  const [whyByExercise, setWhyByExercise] = useState<Record<string, ChangedLiftCase>>({});
-  const [whyFor, setWhyFor] = useState<string | null>(null);
-  /**
-   * ⛔ AND THE REASON A LIFT IS HERE AT ALL (founder 2026-08-12) — the second door onto the WHY.
+  /*
+   * ════ ⛔ A ROW OPENS THE DAY'S CARD, AND NOTHING ELSE (founder, 2026-09-07) ════
    *
-   * The pre-workout card got this first; Today did not, so pressing a row here still fell through to
-   * the form clip whenever the engine had not MOVED that load — which in her first week is every row
-   * she has. One idea ("press a lift, it explains itself") cannot have two answers depending on
-   * which screen she is standing on.
+   * *"במסך הבית כשלוחצים על תרגיל מופיע 'למה זה כאן' — אני רוצה להוריד את זה, אין בזה צורך. אני רק
+   * רוצה שלחיצה על הכרטיס תפתח את המסך שמציג את עריכת האימון."*
+   *
+   * Three sheets used to stand behind a lift row here — the load's case, the placement, the form
+   * clip — chosen by how much the engine knew about the row. All three states, the placement
+
+   * walk over the whole week on every load, and the two `Why…Sheet` mounts are deleted with the
+   * ruling. The row is a door onto `PreWorkout`, which is where the swap, the drag, the clip and
+   * the load's case all live — one room for one workout, which was the 2026-08-12 ruling too.
    */
-  const [placements, setPlacements] = useState<Record<string, LiftPlacement>>({});
-  const [hereFor, setHereFor] = useState<string | null>(null);
   /** The one sentence about what her week could not do — see `domain/weekNotice`. */
   const [engineNotice, setEngineNotice] = useState<string | null>(null);
-  const [formFor, setFormFor] = useState<string | null>(null);
   /*
    * ⛔ THE ENGINE'S PER-SET TARGET READ WAS HERE, and the `pending` machinery around it.
    *
@@ -574,9 +562,8 @@ export function Home({ navigation, route }: Props) {
       try {
         /* ⛔ TWO READS LEFT WITH THE COUNTS THEY FED (2026-08-26): `loadCoachLetterSeen` (the
            unseen dot) and `loadCoachPlanWeek` (the week's change total). Both were spent on props
-           this screen's view never read; `log` stays because `saidFor` below is live. */
-        const [log, before, engine] = await Promise.all([
-          db.loadCoachLog().catch(() => null),
+           this screen's view never read; the log went with the WHY sheet (2026-09-07). */
+        const [before, engine] = await Promise.all([
           db.loadCoachPlanPrev().catch(() => null),
           /*
            * ⛔ THE ENGINE'S OWN RECORD OF THIS WEEK (2026-08-19). Everything below was derived from
@@ -613,39 +600,10 @@ export function Home({ navigation, route }: Props) {
         // The coach's pair still answers for an athlete whose week predates v5; the engine wins.
         const directions = Object.keys(engineDirections).length > 0 ? engineDirections : fromPlans;
         /*
-         * THE CASE BEHIND EACH LIT LOAD. Today lights a moved load in the direction it moved, and
-         * tapping it must say why — otherwise the tap falls through to the form clip and the one
-         * screen that names a decision refuses to explain it.
-         *
-         * The sentence is the coach's own, matched to the lift by the note it wrote. A lift with a
-         * direction and no note keeps its colour and simply has no sheet: the colour is a fact we
-         * derived, and inventing a sentence to go under it would be the app arguing on the coach's
-         * behalf.
+         * ⚠️ THE CASE BEHIND EACH LIT LOAD IS NO LONGER BUILT HERE (2026-09-07). Today lights a
+         * moved load in its direction; the load's ARGUMENT opens on the pre-workout card, which the
+         * row now opens, and which builds the same `coachChangedCase` for its own rows.
          */
-        const saidFor = new Map((log ?? []).filter((d) => d.ex).map((d) => [d.ex as string, d.say]));
-        setWhyByExercise(
-          Object.fromEntries(
-            Object.keys(directions)
-              .map((ex) => {
-                /*
-                 * ⛔ A MISSING SENTENCE USED TO CLOSE THE SHEET ENTIRELY.
-                 *
-                 * `if (!say) return null` — so a load that visibly moved could be tapped and
-                 * nothing opened. She saw a number in moss and had no way to reach the reason,
-                 * which is the one question this sheet exists to answer. And the coach does not
-                 * write a note for every lift: measured across three live programmes, two of three
-                 * athletes got notes on some lifts and none on others.
-                 *
-                 * The direction and both loads are MEASURED — they come from comparing the coach's
-                 * two programmes. Only the closing line is its prose, so only the closing line is
-                 * missing when it wrote none.
-                 */
-                const c = coachChangedCase(ex, coachPlan, before, saidFor.get(ex), app.profile?.units ?? 'kg');
-                return c ? ([ex, c] as const) : null;
-              })
-              .filter((e): e is NonNullable<typeof e> => e != null),
-          ),
-        );
         /*
          * LOADS UP — the fact on the recovery band. It was counted off the engine's snapshot; it is
          * counted off the same two programmes the direction comes from, so the band and the row
@@ -669,7 +627,6 @@ export function Home({ navigation, route }: Props) {
       } catch {
         if (!cancelled) {
           setChangedDir({});
-          setWhyByExercise({});
           setLoadsUp(0);
         }
       }
@@ -723,7 +680,9 @@ export function Home({ navigation, route }: Props) {
        */
       // No "~" — the founder struck the approximation mark (device QA 2026-08-23): the figure is
       // the engine's own pricing of the session, and hedging it read as the app unsure of itself.
-      durationLabel: todayCoach && todayCoach.minutes > 0 ? `${todayCoach.minutes} min` : undefined,
+      // …and in her language: the wrist prints this verbatim (uppercased), so "52 min" sat inside a
+      // Hebrew meta line as the one English word on the Start screen (2026-09-09).
+      durationLabel: todayCoach && todayCoach.minutes > 0 ? `${todayCoach.minutes} ${t('common.minShort')}` : undefined,
       // WT7 — her very first: no completed session anywhere in her history. Read from the same
       // history every other surface reads, so the wrist and the phone agree about which day it is.
       firstWorkout: saved != null && saved.length === 0,
@@ -839,7 +798,7 @@ export function Home({ navigation, route }: Props) {
         let kcal: number | null = null;
         for (const s of wk) {
           // Working sets only — the same line sessionMetrics draws, so this band and the Log agree.
-          for (const set of s.sets) kg += set.isApproach ? 0 : (set.actualWeight ?? 0) * set.actualReps;
+          for (const set of s.sets) kg += isEvidenceSet(set) ? (set.actualWeight ?? 0) * set.actualReps : 0;
           if (s.sets.length) {
             const last = Date.parse(s.sets[s.sets.length - 1].persistedAt);
             const sessionMs = Math.max(0, last - Date.parse(s.startedAt));
@@ -1133,7 +1092,9 @@ export function Home({ navigation, route }: Props) {
        * known: the load's case when the engine moved it, the placement when it merely put the lift
        * there, and the form clip when neither exists. Two screens, one idea.
        */
-      onForm={(id) => (whyByExercise[id] ? setWhyFor(id) : placements[id] ? setHereFor(id) : setFormFor(id))}
+      onForm={() => {
+        if (todayId) navigation.navigate('PreWorkout', { workoutId: todayId });
+      }}
       resumable={resumable}
       onResume={onResume}
       onStart={onStart}
@@ -1244,23 +1205,6 @@ export function Home({ navigation, route }: Props) {
        */
       nextWorkoutName={nextCoach?.name ?? coachWorkouts[0]?.name ?? null}
       />
-      {/* WHY THIS CHANGED — the engine's argument for the lift it moved, at full length. */}
-      {hereFor && placements[hereFor] ? (
-        <View style={StyleSheet.absoluteFill}>
-          <WhyHereSheet
-            {...whyHereProps(placements[hereFor], exerciseDisplayName(hereFor), t, WEEKLY_SETS_FLOOR)}
-            onClose={() => setHereFor(null)}
-          />
-        </View>
-      ) : null}
-      {whyFor && whyByExercise[whyFor] ? (
-        <View style={StyleSheet.absoluteFill}>
-          <WhyChangedSheet {...whyProps(whyByExercise[whyFor], t, currentLocale())} onClose={() => setWhyFor(null)} />
-        </View>
-      ) : null}
-
-      {/* The form clip — the one job the plan screen did that the list on Home does not. It was a
-          whole screen away (Home → chip → chip again → a row's ▶); it is now a tap on the lift. */}
       {/*
         ⛔ THE PAIR'S SHEET IS MOUNTED HERE AND NOWHERE ELSE, and the reason is the Begin button.
         The HOST does not start a workout from inside the sheet — she opens a room, her partner
@@ -1291,18 +1235,7 @@ export function Home({ navigation, route }: Props) {
           onGated={() => navigation.navigate('Paywall', { source: 'gate' })}
         />
       ) : null}
-
-      {formFor ? (
-        <ExerciseDemo
-          title={exerciseDisplayName(formFor)}
-          exerciseId={formFor}
-          cues={exerciseCues(formFor)}
-          focusLabel={t('workout.focusOn')}
-          formGuideLabel={t('workout.form')}
-          doneLabel={t('workout.tapAnywhere')}
-          onDone={() => setFormFor(null)}
-        />
-      ) : null}
     </>
+
   );
 }

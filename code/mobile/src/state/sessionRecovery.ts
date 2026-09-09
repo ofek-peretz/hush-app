@@ -47,6 +47,13 @@ export interface ResumeSnapshot<S extends ResumeStep = ResumeStep> {
   /** Epoch ms Pause was pressed (freezes the rest clock), or null. */
   pausedAtMs: number | null;
   savedAt: string; // ISO
+  /** A rest already banked but not yet stamped onto a set (L3) — see the store's snapshot write. */
+  pendingRestS?: number;
+  /**
+   * WHEN THE SET ON SCREEN WAS PRESENTED (2026-09-07): so a resume measures the ask about it from
+   * the truth (`domain/setDwell`) instead of restarting the set's clock from the wake.
+   */
+  presentedAtMs?: number | null;
 }
 
 export interface ReconciledResume {
@@ -161,7 +168,21 @@ const NOTHING_SALVAGED: SalvageResult = { trained: false, programDayId: null };
 export async function salvageOrphanSession(): Promise<SalvageResult> {
   let result: SalvageResult = NOTHING_SALVAGED;
   try {
-    const active = await db.loadActiveSession();
+    const active0 = await db.loadActiveSession();
+    /*
+     * ⛔ A SALVAGE KEEPS ONLY WHAT SHE SAID (2026-09-07). Builds 64–71 wrote `presumed` rows (the
+     * clock's, cancelled 2026-09-09); an active session from one of them can still be lying here.
+     * Salvage the sets she actually logged and drop the presumed ones — a record with none left is
+     * the "entered and left" case below and is never saved.
+     */
+    const active =
+      active0 && active0.sets.some((s) => s.presumed)
+        ? {
+            ...active0,
+            sets: active0.sets.filter((s) => !s.presumed),
+            ...(active0.items ? { items: active0.items.filter((i) => !(i.kind === 'reps' && i.presumed)) } : {}),
+          }
+        : active0;
     if (active) {
       if (active.sets.length > 0) {
         const history = await db.loadHistory();

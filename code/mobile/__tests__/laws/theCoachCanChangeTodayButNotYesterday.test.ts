@@ -237,8 +237,17 @@ describe('⛔ and the door itself is gone', () => {
     expect(read('src/components/PausedStage.tsx')).not.toContain('onCoach');
   });
 
-  it('⚠️ and the phone has no door left to "the machine is taken" — the wrist still does', () => {
-    expect(flow()).not.toContain('markEquipmentOccupied');
+  it('⚠️ …and the phone has its door to "the machine is taken" BACK — by the board (founder, 2026-09-07)', () => {
+    /*
+     * The loss recorded above was the founder's to reopen, and he reopened it with the plan that
+     * makes a crowded gym the ordinary case: "busy" on any set presses the same verb the
+     * wrist presses (`markEquipmentOccupied`), and the session map starts any
+     * lift still ahead (`startExerciseNow`). Neither is a coach sheet — the sheet stays gone.
+     */
+    // The phone's own door is the map (start any lift still ahead) and swap on every set — the founder's
+    // ruling on glass, 2026-09-08: "יש swap ויש פקד שמציג את התרגילים הנותרים". `markEquipmentOccupied`
+    // (push it to the end) stays the wrist's verb; the phone never needed a fourth control for it.
+    expect(flow()).toContain('startExerciseNow');
     expect(read('src/platform/watch/watchBridge.ts')).toContain('markEquipmentOccupied');
   });
 });

@@ -155,14 +155,51 @@ it('⛔ a day opens the ONE management surface — the pre-workout card, by work
   expect(navigate).toHaveBeenCalledWith('PreWorkout', { workoutId: 'coach_0' });
 });
 
-it('⛔ the library is one row away', async () => {
+/*
+ * ⛔ THE LIBRARY DOOR IS GONE FROM THIS TAB, AND THE EDIT DOOR IS FIRST (founder, 2026-09-07):
+ * *"יש את ספריית התרגילים למטה — תמחק את הפקד הזה. ולמה שינוי התוכנית מופיע למטה? … זה אמור להיות
+ * בראש המסך ולא למטה."* The library keeps a quiet door on the builder's chooser (`PlanBuilder`,
+ * off the Program tab), so it is still reachable; it is simply not on this tab's face.
+ */
+it('⛔ no library door on the tab; the edit door is the FIRST button, before the week', async () => {
   const navigate = jest.fn();
   const tree = await mount(navigate);
-  const row = tree.root.findAll(
-    (n) => n.props?.accessibilityRole === 'button' && n.props?.accessibilityLabel === tg('program.libraryRow'),
-  )[0];
-  await act(async () => row.props.onPress());
-  expect(navigate).toHaveBeenCalledWith('ExerciseLibrary');
+  expect(
+    tree.root.findAll((n) => n.props?.accessibilityRole === 'button' && n.props?.accessibilityLabel === tg('program.libraryRow')),
+  ).toHaveLength(0);
+  const buttons = tree.root.findAll((n) => n.props?.accessibilityRole === 'button' && typeof n.props?.accessibilityLabel === 'string');
+  expect(buttons[0]?.props.accessibilityLabel).toBe(tg('program.buildRow'));
+  await act(async () => buttons[0].props.onPress());
+  expect(navigate).toHaveBeenCalledWith('PlanBuilder');
+});
+
+/**
+ * THE RECEIPT (founder, 2026-09-07 — the plan's fourth part): the engine's decisions, counted off
+ * her own log, on the tab where the week she is about to train is. Silent on a first week.
+ */
+it('⛔ says nothing on a log with no decision in it', async () => {
+  const tree = await mount();
+  // The legend is drawn tracked and uppercased (`Legend`), so the comparison is case-blind.
+  expect(allText(tree).toUpperCase()).not.toContain(tg('program.receiptLegend').toUpperCase());
+});
+
+it('⛔ counts the decisions off her log — and puts the fixed plan beside the engine once they have parted', async () => {
+  const { db } = require('@/data/local/db');
+  const set = (w: number) => ({ exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: w, recommendedReps: 8, actualWeight: w, actualReps: 8, edited: false, persistedAt: '2026-08-01T10:00:00.000Z' });
+  // Five occurrences of the bench: 60 → 60 → 62.5 → 62.5 → 62.5. A fixed "+2.5 a session" plan
+  // would stand at 70 today; the engine stands at 62.5 — they have parted by more than two grains.
+  db.loadHistory.mockResolvedValueOnce(
+    [60, 60, 62.5, 62.5, 62.5].map((w, i) => ({
+      id: `s${i}`, programDayId: 'coach_0', startedAt: new Date(Date.now() - (5 - i) * 86_400_000).toISOString(), state: 'SAVED', earlyFinish: false, trained: true, sets: [set(w)],
+    })),
+  );
+  const tree = await mount();
+  const said = allText(tree);
+  expect(said.toUpperCase()).toContain(tg('program.receiptLegend').toUpperCase());
+  expect(said).toContain(tg('program.receiptDecisions', { count: 4, raises: 1, holds: 3, eases: 0 }));
+  // The lift's name is isolated (`bidi`) on the page exactly as the paywall isolates it.
+  const { bidi } = require('@/i18n/bidi');
+  expect(said).toContain(tg('paywall.receiptBehind', { lift: bidi('Barbell Bench Press'), fixed: 70, engine: 62.5, unit: 'kg' }));
 });
 
 it('a trained workout wears the done chip; an untrained one does not', async () => {
@@ -211,8 +248,8 @@ describe('the week the sheet used to hold', () => {
             units="kg"
             settled
             onDay={() => {}}
-            onLibrary={() => {}}
             onBuild={() => {}}
+
             {...over}
           />
         </SafeAreaProvider>,

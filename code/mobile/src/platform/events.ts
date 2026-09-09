@@ -83,6 +83,13 @@ export const WATCH_EVENTS = {
    * state is invisible in the dataset without this.
    */
   statePublishFailed: 'watch_state_publish_failed',
+  /**
+   * A string in an outgoing envelope held an unpaired UTF-16 surrogate — half an emoji — and was
+   * repaired before the wire (founder 2026-09-08, `wc:badframe:json`: Apple's JSON parser refuses
+   * the whole document over one such escape). Carries `paths` (`lobby.workouts[1].name`), which
+   * is where the DATA is broken — the event exists so the source gets fixed, not just the symptom.
+   */
+  wireRepaired: 'watch_wire_repaired',
   /** A watch-originated intent was accepted and mapped to a session event.
    *  Carries `latencyMs` (issuedAt→received) = watch completion latency. */
   actionReceived: 'watch_action_received',
@@ -214,6 +221,18 @@ export const BUILD_EVENTS = {
    * model as "it wrote something unreadable".
    */
   truncated: 'build_truncated_retry',
+  /**
+   * ⛔ THE ANSWER LANDED / THE ANSWER NEVER CAME — WITH THE REASON (founder 2026-09-09).
+   *
+   * *"כתבתי בשדה החופשי שאני לא רוצה אימוני רגליים בכלל וקיבלתי 2 אימוני רגליים."* The model had
+   * obeyed (six live calls, zero leg lifts); the DEVICE had fallen through to the local assembler,
+   * and nothing anywhere recorded which of three causes it met. A build is the most important call
+   * the product makes, and it was the only one whose failure left no trace. `missed` carries the
+   * reason, the attempts and the wall clock; `landed` carries the same minus the reason, so the
+   * rate is a division and not a guess.
+   */
+  landed: 'build_landed',
+  missed: 'build_missed',
 } as const;
 /*
  * ⚠️ THE FUNNEL'S FAR EDGES ARE NOT HERE, DELIBERATELY. `onboarding_completed`,

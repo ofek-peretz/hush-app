@@ -15,7 +15,7 @@
 // 
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
+import { View, Text, Pressable, StyleSheet, AppState, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 import Animated, { useSharedValue, useAnimatedProps, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
@@ -26,8 +26,12 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, useToast, type ToastAction } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
+import { ReorderRows } from '@/components/ReorderRows';
+
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
+import { track } from '@/platform/telemetry';
 import { bidi } from '@/i18n/bidi';
 import { MotionThumb } from '@/motion/render/MotionThumb';
 import { MotionFigure } from '@/motion/render/MotionFigure';
@@ -38,7 +42,9 @@ import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, filmSubject, type CompleteResult } from '@/state/stores/sessionStore';
 import { exerciseById, exerciseCues, exerciseDisplayName } from '@/data/exercises';
-import { STARTING_INCREMENT } from '@/engine/v5/constants';
+import { exerciseNameSize } from '@/screens/session/nameSize';
+import { useVoiceCoach } from '@/platform/voice/useVoiceCoach';
+import { weightStepFor } from '@/domain/weightStep';
 import { emptyBarKg } from '@/engine/loadMath';
 import { isOutdoorMovement, isTrackedMovement } from '@/data/movements';
 // `OpenStage` was imported here for a week after it was deleted (2026-08-12). `ItemStage` exports
@@ -50,9 +56,8 @@ import { PairStrip } from '@/components/PairStrip';
 import { usePair } from '@/state/stores/pairStore';
 import { SHARED_SWAP_WAIT_MS, sharedRestEndsAt } from '@/domain/sharedSession';
 import { PairSwapSheet } from '@/components/PairSwapSheet';
-import { isSwapMoment } from '@/domain/swapPool';
 import { displayWeekNumber } from '@/domain/weekCadence';
-import { displayWeight, unitLabel, learnPhaseLength } from '@/domain/schedule';
+import { displayWeight, kgFromDisplay, unitLabel, learnPhaseLength } from '@/domain/schedule';
 import { equipmentLoad, equipmentValue, loadSetup, rxType, totalFromEquipment, type LoadSetup } from '@/domain/loadPresentation';
 import { StageBreath } from '@/components/StageBreath';
 import { db } from '@/data/local/db';
@@ -168,6 +173,11 @@ const FIRST_GYM_KEY = 'first_workout_modal';
 export function SessionFlow({ navigation, route }: Props) {
   const { t } = useCopy();
   const session = useSession();
+  /* The voice coach (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md) rides the same view this screen
+     draws and presses the same verbs; with no earbuds it is silent and this screen is exactly what
+     it was. The one thing read back is WHY it is silent, for the two reasons that are defects
+     (a refused permission, a build with no engine) — one notice, once (see below). */
+  const voice = useVoiceCoach(session);
   /* Two athletes, one bar (`state/stores/pairStore`). Solo — which is nearly every workout — every
      field below is in its resting state and nothing on this screen changes. */
   const pair = usePair();
@@ -259,7 +269,7 @@ export function SessionFlow({ navigation, route }: Props) {
    */
   // ONE predicate, every caller — see `beatSpeaksFor`. Since the 2026-08-26 ruling every
   // working set speaks (the capture IS the beat); only a warm-up bridge logs in silence.
-  const beatSpeaks = beatSpeaksFor(confirm, null);
+  const beatSpeaks = beatSpeaksFor(confirm);
 
   // ⛔ `editing` IS GONE (founder, 2026-08-26 — second cut): the editor room was deleted when its
   // two dials moved onto the stage itself, so there is no door state left to hold. The watch-safety
@@ -330,6 +340,24 @@ export function SessionFlow({ navigation, route }: Props) {
 
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
+  /*
+   * ════ A SILENT COACH SAYS WHY — ONCE (founder, 2026-09-09) ════
+   *   > *"לא היה שמע גם מהצד שהמאמן מדבר וגם מהצד שהוא מחכה לאישור ממני."*
+   * Silence for want of earbuds is the design (spec §0.1: no message). Silence because the
+   * microphone was refused, or because the build has no engine, is a defect she can act on — so
+   * the stage says it, through the one notice door, once per mount, with the settings as the act.
+   */
+  const voiceNoticeRef = useRef(false);
+  useEffect(() => {
+    if (voiceNoticeRef.current) return;
+    if (voice.silentBecause === 'permission') {
+      voiceNoticeRef.current = true;
+      notify(t('workout.voiceSilentPermission'), [{ label: t('workout.voiceOpenSettings'), onPress: () => void Linking.openSettings() }]);
+    } else if (voice.silentBecause === 'no_engine') {
+      voiceNoticeRef.current = true;
+      notify(t('workout.voiceSilentNoEngine'));
+    }
+  }, [voice.silentBecause, notify, t]);
   const confirmRunning = useRef(false);
   // Equipment-learning toast: the engine's pristine load for the active set (captured before any
   // Edit Result), and whether the athlete corrected the load to a different available weight.
@@ -542,8 +570,6 @@ export function SessionFlow({ navigation, route }: Props) {
    */
   const exerciseAtLogRef = useRef<string | null>(null);
 
-
-
   useEffect(() => {
     if (!confirm || confirmRunning.current) return;
     confirmRunning.current = true;
@@ -626,7 +652,7 @@ export function SessionFlow({ navigation, route }: Props) {
        * `beatCorrection` is deliberately NOT read here — it cannot be known before `completeSet`
        * resolves, and it owns its own hold when it arrives.
        */
-    }, beatSpeaksFor(confirm, null) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0);
+    }, beatSpeaksFor(confirm) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0);
     return () => {
       clearTimeout(id);
       if (holdId) clearTimeout(holdId);
@@ -662,7 +688,7 @@ export function SessionFlow({ navigation, route }: Props) {
     };
     // The same speak-predicate as the phone's own beat — ONE function, so the two devices can
     // never drift apart again (that divergence was the 2026-08-16 repro).
-    if (!beatSpeaksFor(beat, null)) return;
+    if (!beatSpeaksFor(beat)) return;
     setWatchBeat(beat);
     haptics.setLogged(); // one tap — the same rhythm the phone's own capture has
     const id = setTimeout(() => setWatchBeat(null), CONFIRM_DWELL_MS);
@@ -935,8 +961,9 @@ export function SessionFlow({ navigation, route }: Props) {
   const nextIsALift = !!exerciseById(session.nextExerciseId ?? '');
   const exIndex = session.exerciseProgress?.index ?? 0;
   /* ⛔ `chromeOrdinal` STOOD HERE: two `t()` calls on every render of the workout screen, handed to
-     nothing. `<StageBar>` below takes no `ordinal` and no `center`, and destructured both without
-     ever reading them — a live-looking prop surface, which is how it survived two redesigns. */
+     nothing. `<StageBar>` below takes no `ordinal` (it does take `center`, for a beat with no
+     clock — see its own note), and destructured the ordinal without ever reading it — a
+     live-looking prop surface, which is how it survived two redesigns. */
   const onSet = !confirm && session.displayPhase === 'SET_PRESENTED';
   /* Resting BETWEEN SETS of one lift — not a crossing, which belongs to the next lift's set 1 and
      whose rail segment moves on its own. See the `LiftRail` note below.
@@ -982,7 +1009,13 @@ export function SessionFlow({ navigation, route }: Props) {
    * The swap for every OTHER lift lives on the transition rest, which is where she finds out the
    * machine is taken. See `swapPool` for the argument.
    */
-  const canSwap = isSwapMoment((session.setLabel?.n ?? 1) - 1, exIndex) && onLift;
+  /*
+   * ⛔ ON EVERY SET (founder, 2026-09-07 — the board). The first-set rule's stated reason was that a
+   * mid-lift swap "strands the sets she has already logged", and it never did — `retargetPlanForSwap`
+   * re-points only the steps from the cursor on. A machine taken between set 2 and set 3 is the
+   * ordinary case; the disc is live wherever there is a lift on the stage.
+   */
+  const canSwap = onLift;
 
   return (
     <View style={styles.root}>
@@ -1024,16 +1057,10 @@ export function SessionFlow({ navigation, route }: Props) {
                 ? () => void startQuickSwap('current')
                 : isTransition && nextIsALift
                   ? () => void startQuickSwap('next')
-                  : onSet && onLift
-                    ? /* ⛔ DISABLED, NOT VANISHED (design review 2026-09-01). The disc used to leave
-                         the bar from set 2 on — a control that comes and goes teaches her the chrome
-                         is unstable, and the RULE (swap before the first set, so logged sets are
-                         never stranded) was taught only by disappearance. The disc stays, dimmed,
-                         and pressing it says the rule once. */
-                      () => notify(t('swap.onlyFirstSet'))
-                    : undefined
+                  : undefined
             }
-            swapQuiet={onSet && onLift && !canSwap}
+            /* The quiet disc is gone with the rule it taught (2026-09-07): the swap is live on every set. */
+            swapQuiet={false}
             /*
              * ⛔ THE FORM DISC IS DELETED FROM THE CHROME (founder, 2026-08-31): *"צריך להוריד את
              * הפקד של צפייה בסרטון כי הכנסנו אותו למסך עצמו."*
@@ -1064,6 +1091,7 @@ export function SessionFlow({ navigation, route }: Props) {
              * batch have already found. The coach is one tap from Today, where she is not mid-set.
              */
           />
+          {/* What the ear heard, and what was done about it — one line under the chrome (2026-09-07). */}
           {/*
             The session's shape, drawn — see `LiftRail`. It replaces "LIFT 1 / 6".
 
@@ -1096,7 +1124,7 @@ export function SessionFlow({ navigation, route }: Props) {
           </Pressable>
         </>
         {paceBeat ? (
-          <RestLearned took={paceBeat.took} was={paceBeat.was} now={paceBeat.now} nextSet={session.nextSetLabel?.n ?? 1} />
+          <RestLearned took={paceBeat.took} was={paceBeat.was} now={paceBeat.now} />
         ) : beatSpeaks ? (
           <Logged units={units} confirm={confirm!} />
         ) : session.displayPhase === 'SET_PRESENTED' && itemShape ? (
@@ -1325,7 +1353,38 @@ export function SessionFlow({ navigation, route }: Props) {
       {overlay === 'map' ? (
         <BottomSheet onClose={() => setOverlay('none')}>
           <Legend style={styles.mapLegend}>{t('workout.sessionMap')}</Legend>
-          {(session.sessionExerciseIds ?? []).map((id) => {
+          {/*
+            ════ ⛔ THE MAP IS WHERE SHE REORDERS THE REST OF THE SESSION (founder, 2026-09-07) ════
+
+            *"במהלך האימון יש פקד שמציג את התרגילים — אני רוצה שיהיה אפשרות להחליף את סדר התרגילים
+            שם. רק תוודא שמה שבוצע אי אפשר להחליף ותסדר ותעצב את המסך יפה."*
+
+            Every row that is still ahead carries a grip; a done row and the lift she is standing
+            on do not, and nothing can be dropped into their seats (`ReorderRows` holds a dragged
+            row at the last movable seat). Which rows are movable is the STORE's answer
+            (`movableExerciseIds` — see `movableExercisesFrom` for the boundary and the superset
+            lock), so the sheet cannot offer a move the plan would refuse. The drop calls
+            `reorderAhead` with the seat's position among the movable rows, and the live plan is
+            what re-renders the list — the sheet animates the promise, the store keeps it.
+          */}
+          {(session.aheadExerciseIds ?? []).length > 0 ? (
+            /* THE BOARD (founder, 2026-09-07): a lift still ahead is one press from being next. */
+            <Text style={styles.mapHint}>{t('workout.mapTapHint')}</Text>
+          ) : (session.movableExerciseIds ?? []).length > 1 ? (
+            <Text style={styles.mapHint}>{t('workout.mapReorderHint')}</Text>
+          ) : null}
+          <ReorderRows
+            items={(session.sessionExerciseIds ?? []).map((id) => ({ key: id, movable: (session.movableExerciseIds ?? []).includes(id) }))}
+            gripColor={color.textMuted}
+            gripLabel={t('program.reorderGrip')}
+            onMove={(from, to) => {
+              const ids = session.sessionExerciseIds ?? [];
+              const movable = session.movableExerciseIds ?? [];
+              const position = movable.indexOf(ids[to] ?? '');
+              if (position >= 0) session.reorderAhead?.(ids[from], position);
+            }}
+            renderItem={(item, _i, grip, lifted) => {
+            const id = item.key;
             const currentAt = (session.sessionExerciseIds ?? []).indexOf(session.currentExerciseId ?? '');
             const at = (session.sessionExerciseIds ?? []).indexOf(id);
             const state: 'done' | 'now' | 'ahead' = at < currentAt ? 'done' : at === currentAt ? 'now' : 'ahead';
@@ -1336,8 +1395,20 @@ export function SessionFlow({ navigation, route }: Props) {
                down. It mattered less while the only door was the rail; the map has a control on
                every beat now, so an absent count must read as "no number yet", never as a crash. */
             const sets = session.sessionSetCounts?.[id] ?? 0;
+            /* A lift still wholly ahead can start NOW — the row is the control (2026-09-07). The
+               next lift in line needs no verb (it is next); a done or current row is a record. */
+            const startable = (session.aheadExerciseIds ?? []).includes(id);
             return (
-              <View key={id} style={styles.mapRow}>
+              <Pressable
+                accessibilityRole={startable ? 'button' : undefined}
+                accessibilityLabel={startable ? t('workout.startNamed', { name: bidi(exerciseDisplayName(id)) }) : undefined}
+                disabled={!startable}
+                onPress={() => {
+                  session.startExerciseNow?.(id);
+                  setOverlay('none');
+                }}
+                style={[styles.mapRow, state === 'now' && styles.mapRowNow, lifted && styles.mapRowLifted]}
+              >
                 {/* ⛔ `tone` — THE THUMB HAS BEEN INVISIBLE SINCE THE DAY IT LANDED. It draws in the
                     paper ladder, whose near limb is #191714, on a sheet that is #1b1914: present in
                     the tree, absent to the eye, and nobody noticed because a 30-point figure being
@@ -1354,12 +1425,18 @@ export function SessionFlow({ navigation, route }: Props) {
                 </Text>
                 {state === 'done' ? (
                   <Icon name="check" size={15} color={up.stage} strokeWidth={2.2} />
+                ) : state === 'now' ? (
+                  <Legend size={17} track={0.12} tone="accent">{t('workout.mapNow')}</Legend>
+                ) : startable ? (
+                  <Legend size={17} track={0.12} tone="onStage">{t('workout.startNow')}</Legend>
                 ) : (
                   <Text style={styles.mapSets}>{sets > 0 ? `${sets}×` : ''}</Text>
                 )}
-              </View>
+                {grip}
+              </Pressable>
             );
-          })}
+            }}
+          />
           {/* The same explicit close the swap sheet carries — a sheet's drag handle alone is a
               gesture some athletes never try (design review 2026-09-01). */}
           <Button variant="ghost" block label={t('swap.close')} onPress={() => setOverlay('none')} style={styles.mapClose} />
@@ -1837,9 +1914,16 @@ function SetRunningLong() {
     haptics.warning(); // the one beat — a tap on the shoulder, not the rest-over GO
   }, [long]);
   if (!long) return null;
+  /*
+   * ⛔ THE ONLY SET THIS LINE STILL SPEAKS FOR IS THE LAST ONE (2026-09-07 — the session runs
+   * itself). Every other set is presumed by the clock at exactly this instant (`domain/sessionClock`)
+   * and the stage moves to the rest; the last set of the session is the one the clock never touches,
+   * because SESSION_SAVED is hers alone. So what is running long here is the workout, and the ask
+   * is the finish — the act underneath it.
+   */
   return (
     <Text style={styles.runningLong} accessibilityLiveRegion="polite">
-      {t('workout.setRunningLong')}
+      {t('workout.finishAsk')}
     </Text>
   );
 }
@@ -1949,27 +2033,21 @@ function LiftRail({
         .filter(Boolean)
         .join(' · ')}
     >
-      <View style={styles.railTrack}>
-        {Array.from({ length: Math.max(1, total) }).map((_, i) => {
-          if (i !== index || !sets) {
-            return <View key={i} style={[styles.railSeg, i < index && styles.railSegDone]} />;
-          }
-          return (
-            <View key={i} style={styles.railOpen}>
-              {Array.from({ length: sets }).map((_, k) => (
-                <View
-                  key={k}
-                  style={[
-                    styles.setPip,
-                    k < (setN as number) - 1 && styles.setPipDone,
-                    k === (setN as number) - 1 && styles.setPipNow,
-                  ]}
-                />
-              ))}
-            </View>
-          );
-        })}
-      </View>
+      {/*
+        ════ ⛔ THE TRACK IS GONE — THE SENTENCE STAYS (founder, 2026-09-07) ════
+
+        *"יש גם פס התקדמות במסך האימון וגם את מספר התרגיל ואיזה סט. צריך לבחור מה מהם נשאר. אני
+        חושב שעדיף להוריד את פס ההתקדמות הזה."*
+
+        The rail was two rows of one instrument: strokes per lift with the live lift opened into
+        pips, and, since 2026-09-01, the same fact written under it as a caption. Two statements of
+        one position, eight points apart — the exact excess this screen has been losing all summer,
+        and he chose which one goes. The strokes and the pips are deleted; the WRITTEN line is the
+        instrument now, and it keeps the rail's three duties: the `progressbar` role with the whole
+        sentence for VoiceOver, the same `setLabel` derivation for every shape (a run, a hold, a
+        set), and the door onto the session map (the `Pressable` around it). Nothing she could read
+        or reach is lost; one drawing is.
+      */}
       {/*
         ════ ⛔ THE WRITTEN COUNT IS BACK — AS THE RAIL'S OWN CAPTION (founder, 2026-09-01) ════
 
@@ -1982,7 +2060,7 @@ function LiftRail({
         centred under the track. Not a second instrument — the first one's label.
       */}
       {total > 1 || sets ? (
-        <Text style={styles.railCaption} numberOfLines={1}>
+        <Text style={styles.railLine} numberOfLines={1}>
           {[
             total > 1 ? t('workout.exerciseCount', { n: index + 1, N: total }) : null,
             sets ? t(warmup ? 'workout.warmupOfM' : 'workout.setOfM', { n: setN, m: setM }) : null,
@@ -2032,10 +2110,8 @@ function ElapsedClock({ from }: { from: number }) {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const totalS = Math.max(0, Math.floor((now - from) / 1000));
-  const mm = Math.floor(totalS / 60);
-  const ss = totalS % 60;
-  return <Text style={styles.stageBarClock}>{`${mm}:${String(ss).padStart(2, '0')}`}</Text>;
+  // Floored, then formatted by the workout's one clock (`clockOf`) — the elapsed never rounds up.
+  return <Text style={styles.stageBarClock}>{clockOf(Math.max(0, Math.floor((now - from) / 1000)))}</Text>;
 }
 
 /**
@@ -2067,16 +2143,11 @@ function Breathe({ children }: { children: React.ReactNode }) {
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
-
-
 /* ------------------------------------------------------- Equipment-native load */
 /** The setup instruction lines under the headline load — equipment-native, never a universal
  *  "per side". Tells the athlete exactly how to load the weight so they never have to calculate. */
 
 type ExecT = (k: string, o?: Record<string, unknown>) => string;
-
-
-
 
 /**
  * The equipment-native figure that rides INLINE beside the load hero (mock 2.2, line 382):
@@ -2125,27 +2196,19 @@ function CalChip({ icon, label }: { icon: IconName; label: string }) {
   );
 }
 
-
-
 /* ----------------------------------------------------------------- Active Set */
 /*
  * ════ THE EQUIPMENT'S OWN DETENT, SHARED (2026-08-26) ════
- * One ladder for every control that can put a load into her history: the stage's nudgers and the
- * editor's dials read the SAME per-equipment step and the same bar floor. The full reasoning —
- * the 41.5 kg bench that no plates could build — lives at the DETENT note inside EditSet.
+ * One ladder for every control that can put a load into her history: the stage's nudgers, the
+ * editor's dials and the lock screen's steppers read the SAME per-equipment step and the same bar
+ * floor — `domain/weightStep` since 2026-09-08, so the Live Activity turns by it too. The full
+ * reasoning — the 41.5 kg bench that no plates could build — lives at the DETENT note inside EditSet.
  */
-const WEIGHT_STEP_LB: Record<string, number> = { barbell: 5, fixed_barbell: 5, dumbbell: 2.5, machine: 5, cable: 5, bodyweight: 1 };
-
-function weightStepFor(units: 'kg' | 'lb', equipment: string | undefined): number {
-  return units === 'kg'
-    ? (equipment ? STARTING_INCREMENT[equipment as keyof typeof STARTING_INCREMENT] : 0) || 0.5
-    : (equipment ? WEIGHT_STEP_LB[equipment] : 0) || 1;
-}
 
 /** No lift goes under its bar — the same `emptyBarKg` floor the editor's wheel refuses to cross. */
 function weightFloorFor(units: 'kg' | 'lb', equipment: string | undefined): number {
   const floorKg = equipment ? emptyBarKg(equipment as Parameters<typeof emptyBarKg>[0]) : 0;
-  return floorKg > 0 ? (units === 'kg' ? floorKg : Math.round(floorKg * 2.2046226)) : 0;
+  return floorKg > 0 ? (displayWeight(floorKg, units) ?? 0) : 0;
 }
 
 function ActiveSet({
@@ -2248,6 +2311,18 @@ function ActiveSet({
    * ⚠️ THE COST IS HONEST AND IT IS A TAP. One set used to be one press. It is now: the count, then
    * the act. That is the price of the log being true, and the founder set it knowingly.
    */
+  /*
+   * ════ ⛔ SUPERSEDED — THE FIELD OPENS FULL, AND THE ACT LOGS AS WRITTEN (founder, 2026-09-07) ════
+   *
+   * Everything above was right for a diary, and the founder approved the plan that ends the diary:
+   * *"בכל סט וסט להזין ולהכנס לפלאפון… היתרון בלהתאמן לבד שאתה לא צריך להשתעבד לפלאפון."* The set
+   * is now presumed done as written (`domain/sessionClock`), and a deviation is what she enters —
+   * so the field shows the prescription in the muted ink until she types, and the act logs the set
+   * as written in one press. `repsTyped` still means "she typed": empty is "as written", never
+   * "nobody has said" — the clock is about to say it, and the rest screen says it was the clock.
+   * `theAppNeverAnswersForHer` still holds where it matters: the RECORD carries the clock's mark
+   * (`presumed`), and nothing reads a presumed set as her performance (`domain/setEvidence`).
+   */
   const [repsTyped, setRepsTyped] = useState<string>('');
   /** What is being typed right now, as glyphs — so `7.` and `07` behave the way a keypad does. */
   const [draft, setDraft] = useState<string>('');
@@ -2275,11 +2350,9 @@ function ActiveSet({
    * place the running-long nudge uses. It clears itself the moment a count lands.
    * ⚠️ ABOVE THE `!target` GUARD — a hook below it is the founder's own crash, third telling.
    */
-  const [askedForReps, setAskedForReps] = useState(false);
-  const repsAnsweredNow = repsTyped !== '' && Number(repsTyped) > 0;
-  useEffect(() => {
-    if (repsAnsweredNow) setAskedForReps(false);
-  }, [repsAnsweredNow]);
+  /* `askedForReps` is gone with the rule it served (2026-09-07): the act no longer refuses a set.
+     `holdClock`, which took its seat, went with the clock's presumption (2026-09-09): no clock
+     writes a set, so there is nothing for an open field to hold. */
   /*
    * WHICH STEP THIS IS — one string, and the only reason it is derived up HERE.
    *
@@ -2363,8 +2436,7 @@ function ActiveSet({
   const wMin = weightFloorFor(units, ex?.equipment);
   const weightVal = displayWeight(target.recommendedWeight, units) ?? 0;
   const setDialWeight = (v: number) => {
-    const kg = units === 'lb' ? +(v / 2.2046226).toFixed(1) : v;
-    session.editCurrentSet({ weight: kg, reps: target.recommendedReps });
+    session.editCurrentSet({ weight: kgFromDisplay(v, units), reps: target.recommendedReps });
   };
   const setDialReps = (v: number) => session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
   /* Where her count stands inside the band — the brand's own range mark becomes the readback:
@@ -2510,12 +2582,33 @@ function ActiveSet({
    * would show a pound athlete a kilo figure; skipping the second would put the total back beside a
    * field headed "a side", which is the two-scales fault this whole pass exists to remove.
    */
+  /*
+   * ════ ⛔ LAST TIME, AS ONE STRIP OF HER SETS (founder, 2026-09-07) ════
+   *
+   * *"להוריד את האפשרויות של 8, 9, 10 חזרות בלחיצה אוטומטית ולהשאיר את האפשרות ללחוץ על המשקל או על
+   * החזרות ולהקליד … אני רק רוצה שיהיה עיצוב יפה שיראה מה היה בפעם הקודמת."*
+   *
+   * The two fields each carried a "last time" line under their own figure — the same session split
+   * in two, one number per field, matched by set position. Now it is ONE strip under the fields:
+   * every set of her previous session on this lift, load × reps, in the order she did them, with
+   * the set she is on now lit. What the split lines could not say — that she faded on set four, or
+   * held — is exactly what a row of four cells says at a glance. `LastTimeStrip` was deleted on
+   * 2026-08-31 for sitting at the TOP of the screen above the athlete; this stands under the
+   * figures it is compared against, which is where the 08-31 note said the loss should be put back.
+   *
+   * ⚠️ THE LOAD IS THE EQUIPMENT'S OWN NUMBER, per set — `loads[i]` beside `reps[i]`, converted by
+   * `equipmentValue` exactly as the field above it is, so a per-side field never sits over a total.
+   * Absent on a warm-up bridge and on a lift she has never done: nothing is claimed about a set that
+   * never happened.
+   */
   const prevSetIdx = setN - 1;
-  const prevReps = !isWarmupSet && lastTime ? lastTime.reps[prevSetIdx] ?? null : null;
-  const prevLoad =
+  const lastSets =
     !isWarmupSet && lastTime
-      ? equipmentValue(session.currentExerciseId, displayWeight(lastTime.loads?.[prevSetIdx] ?? lastTime.loadKg ?? null, units), units)
-      : null;
+      ? lastTime.reps.map((reps, i) => ({
+          reps,
+          load: equipmentValue(session.currentExerciseId, displayWeight(lastTime.loads?.[i] ?? lastTime.loadKg ?? null, units), units),
+        }))
+      : [];
   const eqLabel =
     eq == null
       ? t('editResult.weight')
@@ -2581,44 +2674,20 @@ function ActiveSet({
    * takes her to the one thing still owed.
    */
   /*
-   * ════════════════════════════════════════════════════════════════════════════════════════════
-   * ⛔ THE COUNTS SHE WAS ASKED FOR, AS THE ANSWER — the tap cost of the whole product
-   * ════════════════════════════════════════════════════════════════════════════════════════════
+   * ⛔ THE BAND CELLS ARE GONE (founder, 2026-09-07): *"להוריד את האפשרויות של 8, 9, 10 חזרות
+   * בלחיצה אוטומטית ולהשאיר את האפשרות ללחוץ על המשקל או על החזרות ולהקליד."*
    *
-   * The empty rep field is right and it is expensive. A session is about twenty-four sets, and
-   * every one of them costs three presses: open the field, type the count, finish. Seventy-two
-   * presses an hour, of which the overwhelming majority are a single digit that the coach already
-   * named a range for. Hevy does it in ONE — and the price it pays is that its logs are full of
-   * numbers nobody typed, which is the trade this screen refuses.
-   *
-   * ⚠️ SO THE BAND BECOMES THE ANSWERS. The coach said 8–10; those are laid out as three cells at
-   * the foot, and the athlete says which one. She is still the one saying it — nothing is filled in
-   * for her and nothing is a default — but saying it is now one press instead of two. The common
-   * set falls from three presses to two, and the interesting set (six because she failed, twelve
-   * because she flew) keeps its keypad behind the last cell and costs exactly what it did before.
-   *
-   * ⛔ AND THEY LIVE AT THE FOOT, WHICH IS THIS FILE'S OWN RULE: *"the middle of this screen is now
-   * only what she reads; the foot is only what she presses."* A row of counts is a control.
-   *
-   * ⚠️ CAPPED AT FOUR. A 6–12 band is seven cells of 42 points, which is under the touch floor and
-   * reads as a keypad drawn badly. Four is what fits at a size a shaking hand can hit; anything the
-   * band offers beyond that is what the keypad is for.
+   * They were built on 2026-08-31 as the tap-cost answer — the coach's own band laid out as three
+   * one-press cells at the foot. He used them and does not want them: a row of counts under the
+   * act is a second instrument for a number the field above already takes, and the field is the
+   * one that says what she did rather than what was hoped. Both figures are typed now, and the
+   * reps field carries the same pencil the load has carried since the third time he could not tell
+   * it was pressable. The keypad's one seat is the athlete's slot, as before.
    */
-  const BAND_CELLS = 4;
-  const bandChoices = Array.from(
-    { length: Math.min(BAND_CELLS, Math.max(1, bandHi - bandLo + 1)) },
-    (_, i) => bandLo + i,
-  );
-  /** Her count is off the band — six because she failed, twelve because she flew. */
-  const otherOn = repsTyped !== '' && Number(repsTyped) > 0 && !bandChoices.includes(Number(repsTyped));
-
-    const repsEntered = repsTyped !== '' && Number(repsTyped) > 0;
+  const repsEntered = repsTyped !== '' && Number(repsTyped) > 0;
+  /* ⛔ THE ACT LOGS AS WRITTEN (founder, 2026-09-07 — superseding the 08-31 gate above). An
+     untouched field is the prescription; the press is her word on it. The pad is for a deviation. */
   const onCompletePressed = () => {
-    if (!repsEntered) {
-      setAskedForReps(true);
-      openField('reps');
-      return;
-    }
     onComplete();
   };
 
@@ -2637,7 +2706,6 @@ function ActiveSet({
   const loadSpoken = isBodyweight
     ? t('workout.bodyweight')
     : `${displayWeight(target.recommendedWeight, units)} ${unitLabel(units)}${annex ? ` · ${annex.value} ${annex.suffix}` : ''}`;
-
 
   /*
    * THE SWAP IS OFFERED BEFORE THE FIRST SET OF **EVERY** LIFT — not just the session's first.
@@ -2706,9 +2774,12 @@ function ActiveSet({
           ) : session.straightInto ? (
             <Legend size={20} track={0.28} align="center" style={styles.group}>{t('workout.superset')}</Legend>
           ) : null}
-          <Text style={styles.exName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>{exName}</Text>
+          {/* Sized from the name, never fitted — see `nameSize.ts` for the frame that shrank it to
+              nothing (founder 2026-09-08). Two lines are allowed; the size already guarantees the
+              name fits them, so nothing here is ever clipped or shrunk. */}
+          <Text style={[styles.exName, exerciseNameSize(exName)]} numberOfLines={2}>{exName}</Text>
           {session.straightInto ? (
-            <Text style={styles.supersetNext} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72}>
+            <Text style={[styles.supersetNext, exerciseNameSize(session.straightInto)]} numberOfLines={2}>
               {session.straightInto}
             </Text>
           ) : null}
@@ -2924,52 +2995,69 @@ function ActiveSet({
                 unitLabel(units)
               )}
             </Text>
-            {/* What she put on this end LAST time — see the note at `prevLoad`. Absent, not zero,
-                on a lift she has never done: nothing is claimed about a set that never happened. */}
-            {prevLoad != null && !isBodyweight ? (
-              <Text style={styles.rxPrev} numberOfLines={1}>
-                {`${t('workout.prevShort')} `}
-                <Text style={styles.rxPrevFig}>{prevLoad}</Text>
-              </Text>
-            ) : null}
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${t('workout.repsUnit')} · ${repsEntered ? repsTyped : t('workout.repsEmpty')}`}
+            accessibilityLabel={`${t('workout.repsUnit')} · ${repsEntered ? repsTyped : `${target.recommendedReps} · ${t('workout.asWritten')}`}`}
             onPress={() => openField('reps')}
             style={[styles.rxCell, slot === 'reps' && styles.rxCellOpen]}
           >
-            <Legend size={17} track={0.24} align="center" style={styles.rxHead}>{t('workout.repsUnit')}</Legend>
+            <View style={styles.rxHeadRow}>
+              <Legend size={17} track={0.24} align="center" style={styles.rxHead}>{t('workout.repsUnit')}</Legend>
+              <Icon name="pencil" size={14} color={stage.ink2} strokeWidth={2} />
+            </View>
             <View style={styles.rxFigureRow}>
               {/*
-                ⛔ THE EMPTY MARK IS A RULE, NOT A ZERO AND NOT A PLACEHOLDER NUMBER. `0` is a
-                claim — it says she did no reps — and a greyed `8` is the app answering for her,
-                which is the whole thing this field exists to stop. An em-dash says the one true
-                thing: nobody has said yet.
+                ⛔ THE FIELD OPENS FULL (founder, 2026-09-07 — superseding the em-dash rule). The
+                prescription stands in the MUTED ink until she types: it is what the set will be
+                logged as if she says nothing, and the muting is the one honest signal that it is
+                the plan's number and not yet hers. The record keeps that distinction too
+                (`presumed`, `domain/setEvidence`), so a greyed 8 is no longer the app answering for
+                her — it is the app saying what it will presume.
               */}
               <Text
                 style={[
                   styles.rxFigure,
-                  rxType(slot === 'reps' ? draft || '—' : repsEntered ? repsTyped : '—'),
+                  rxType(slot === 'reps' ? draft || '—' : repsEntered ? repsTyped : String(target.recommendedReps)),
                   !repsEntered && slot !== 'reps' && styles.rxFigureEmpty,
                 ]}
                 numberOfLines={1}
               >
-                {slot === 'reps' ? draft || '—' : repsEntered ? repsTyped : '—'}
+                {slot === 'reps' ? draft || '—' : repsEntered ? repsTyped : String(target.recommendedReps)}
               </Text>
             </View>
             {/* The band under the count — the instruction the count is aimed at. A collapsed band
                 (a fixed rep count) says nothing rather than "8–8". */}
             <Text style={styles.rxSub} numberOfLines={1}>{bandLo === bandHi ? '' : `${bandLo}–${bandHi}`}</Text>
-            {prevReps != null ? (
-              <Text style={styles.rxPrev} numberOfLines={1}>
-                {`${t('workout.prevShort')} `}
-                <Text style={styles.rxPrevFig}>{prevReps}</Text>
-              </Text>
-            ) : null}
           </Pressable>
         </Arrive>
+
+        {/* Her previous session on this lift, set by set — see the note at `lastSets`. */}
+        {lastSets.length > 0 ? (
+          <Arrive key={`last-${beat}`} order={3} style={styles.lastRow}>
+            <Legend size={17} track={0.2} style={styles.lastLegend}>{t('workout.prevShort')}</Legend>
+            <View style={styles.lastCells}>
+              {lastSets.map((s, i) => {
+                const now = i === prevSetIdx;
+                return (
+                  <View
+                    key={i}
+                    style={[styles.lastCell, now && styles.lastCellNow]}
+                    accessible
+                    accessibilityLabel={`${t('workout.setOfM', { n: i + 1, m: lastSets.length })} · ${s.load != null ? `${s.load} ${unitLabel(units)} × ` : ''}${s.reps} ${t('workout.repsUnit')}`}
+                  >
+                    {s.load != null ? (
+                      <Text style={[styles.lastFig, now && styles.lastFigNow]} numberOfLines={1}>{`${s.load}×${s.reps}`}</Text>
+                    ) : (
+                      <Text style={[styles.lastFig, now && styles.lastFigNow]} numberOfLines={1}>{String(s.reps)}</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </Arrive>
+        ) : null}
 
         {/* ⛔ THE ENGINE'S NUMBER SURVIVES HER TYPO (design review 2026-09-01). One keystroke into
             the weight field and the prescription was gone — no undo, no way back but remembering
@@ -3056,58 +3144,6 @@ function ActiveSet({
           far jumps a detent cannot make — and the foot returns to ONE act, which is what this
           screen's own "the foot is only what she presses" rule always wanted.
         */}
-        {/*
-          ⛔ THE ANSWERS, ABOVE THE ACT — see `bandChoices`. The chosen one is LIT rather than the
-          others being dimmed, because before she has answered there is no chosen one and a row of
-          equals is the honest picture of an open question.
-
-          ⚠️ THE LAST CELL IS THE KEYPAD, and it is not a fallback — it is the whole reason this row
-          is allowed to exist. A row of four counts with no way past them would be the app narrowing
-          what she is permitted to have done to what it hoped she would do.
-        */}
-        {target ? (
-          <View style={styles.countRow}>
-            {bandChoices.map((v) => {
-              const on = repsEntered && Number(repsTyped) === v;
-              return (
-                <Pressable
-                  key={v}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`${v} ${t('workout.repsUnit')}`}
-                  onPress={() => {
-                    setRepsTyped(String(v));
-                    setDraft(String(v));
-                    setDraftPristine(false);
-                    setSlot('athlete');
-                    session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
-                  }}
-                  style={({ pressed }) => [styles.countCell, on && styles.countCellOn, pressed && styles.countCellPressed]}
-                >
-                  <Text style={[styles.countFigure, on && styles.countFigureOn]}>{v}</Text>
-                </Pressable>
-              );
-            })}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('workout.otherCount')}
-              onPress={() => openField('reps')}
-              /* ⚠️ LIT WHEN HER ANSWER IS NOT ONE OF THE FOUR — not while the pad is merely open.
-                 The row's job is to say WHERE her count is; a cell that lights because a keypad is
-                 showing would put two lit cells in a row of five and say nothing about the set. */
-              style={({ pressed }) => [
-                styles.countCell,
-                styles.countCellOther,
-                otherOn && styles.countCellOn,
-                pressed && styles.countCellPressed,
-              ]}
-            >
-              {/* ⚠️ THE PENCIL, NOT AN ELLIPSIS. `…` reads as "there is more of this list"; the
-                  cell is not a fifth count, it is the door to writing one down. */}
-              <Icon name="pencil" size={20} color={otherOn ? stage[0] : stage.ink1} strokeWidth={2.2} />
-            </Pressable>
-          </View>
-        ) : null}
 
         {/* WHOSE TURN IT IS, and where her partner is — §11.2, and nothing at all when she is
             training alone. It sits directly above the act because the act is the hand-off. */}
@@ -3119,11 +3155,16 @@ function ActiveSet({
         {/* Pressed "Complete set" with no count — the pad is open and this says why (never both
             lines at once: the running-long ask is about a set she has not logged, and answering
             the button supersedes it). */}
-        {askedForReps && !session.setRunningLong ? (
+        {slot !== 'athlete' && (draft === '' || draft === '.') ? (
+          /* ⛔ AN EMPTY FIELD SAYS SO (founder 2026-09-07): *"ניסיתי להזין משקל או חזרות מבלי לכתוב
+             מספר וזה לא נתן … לפחות שיהיה כתוב שאי אפשר להזין נתון ריק."* The pad is open and the
+             field holds nothing — the stage refused it silently. Same voice and seat as the
+             running-long ask; it clears itself the moment a digit lands. */
           <Text style={styles.runningLong} accessibilityLiveRegion="polite">
-            {t('workout.repsFirst')}
+            {t('workout.emptyEntry')}
           </Text>
         ) : null}
+
         <Button
           variant="onstage"
           size="stage"
@@ -3531,10 +3572,9 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
  * the flash bugs of 2026-08-16 were three askers answering apart. Since the 2026-08-26 ruling the
  * answer is simply: EVERY working set speaks — the capture is the beat — and a WARM-UP BRIDGE
  * NEVER does (it is not a measured set; `theWarmupIsABridgeNotAMeasurement`). The second argument
- * survives so the three call sites read unchanged; nothing feeds it since corrections left the
- * live session.
+ * it once took (a correction) left with the live loop; nothing fed it, so it is gone (2026-09-09).
  */
-export function beatSpeaksFor(confirm: Confirm | null, _correction: unknown): boolean {
+export function beatSpeaksFor(confirm: Confirm | null): boolean {
   if (confirm == null) return false;
   return confirm.warmup !== true;
 }
@@ -3554,9 +3594,11 @@ export function beatSpeaksFor(confirm: Confirm | null, _correction: unknown): bo
  * No verdict — a shorter rest is not worse than a longer one, and Hush does not have an opinion
  * about it. No button, because there is nothing to agree to: the set begins on its own.
  */
-function RestLearned({ took, was, now, nextSet }: { took: number; was: number; now: number | null; nextSet: number }) {
+function RestLearned({ took, was, now }: { took: number; was: number; now: number | null }) {
   const { t } = useCopy();
-  const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.max(0, Math.round(sec)) % 60).padStart(2, '0')}`;
+  // `clockOf` — the workout's one clock format; this had its own copy, the only one of four that
+  // clamped negatives, and the four have been one since 2026-09-09.
+  const clock = clockOf;
   /*
    * ════════════════════════════════════════════════════════════════════════════════════════════
    * ⛔ THE HERO IS THE REST SHE WILL GET, NOT THE ONE SHE JUST TOOK (founder, 2026-08-12)
@@ -3598,7 +3640,9 @@ function RestLearned({ took, was, now, nextSet }: { took: number; was: number; n
 
       {/* What it was. Only when the median actually MOVED — a struck figure identical to the one
           above it would announce a change that did not happen. */}
-      {now != null && now !== was ? <Text style={styles.paceWas}>{clock(was)}</Text> : null}
+      {/* The SAME test `endRestLearned` fires the beat on (whole seconds) — strict inequality here
+          could strike a row over a change the trigger had already called "nothing" (2026-09-09). */}
+      {now != null && Math.round(now) !== Math.round(was) ? <Text style={styles.paceWas}>{clock(was)}</Text> : null}
     </View>
   );
 }
@@ -3686,12 +3730,31 @@ function Rest({
   // and printed on the rest card; nothing reads them now.)
   const nextSet = session.nextSetLabel;
   const nextDelta = nextTarget?.reasonType;
+  /*
+   * ════ A LOAD THAT MOVED MID-LIFT IS SAID WHERE SHE CAN STILL ACT ON IT (2026-09-08) ════
+   *
+   * Loop 1 can ease or raise the next set of the SAME lift (gallery 2.2l). The set stage shows
+   * it, but by then she is on the bench with the old plates on the bar; the rest is where the bar
+   * gets changed. So the card carries the new figure — in the direction's own colour, the one law
+   * from `design/tokens` — and ONLY when it moved: a load that holds is not news (the
+   * constant-column ruling, 2026-09-02), and the crossing and the warm-up rung keep their own
+   * branches above. Measured against her last logged set of this lift, not the prescription: a
+   * presumed set carried the prescription, so the comparison is still the bar as it stands.
+   */
+  const lastOfThisLift = (session.loggedSets ?? []).filter((l) => l.exerciseId === session.currentExerciseId && !l.isApproach).slice(-1)[0];
+  const lastWeight = lastOfThisLift ? displayWeight(lastOfThisLift.actualWeight, units) : null;
+  const movedTo =
+    !isTransition && !session.setLabel?.warmup && !session.nextSetLabel?.warmup && nextWeight != null && lastWeight != null && nextWeight !== lastWeight
+      ? nextWeight
+      : null;
+  const movedBy = movedTo != null && lastWeight != null ? +(movedTo - lastWeight).toFixed(2) : 0;
   /* ⚠️ `nextSetup` IS ALIVE AGAIN (founder gym finding #2, 2026-08-25: *"היה כתוב בזמן מנוחה 30
      קילו אבל לא כמה לשים בכל צד"*). The v7 2.4b ruling kept the per-side figure off this card on
      the grounds that she is "still walking to the station" — his own session answered that the
      walk is exactly when he wants to know what to rack. The crossing card now carries the same
      equipment-native line the set stage does: plates a side, the pin, the bar to pick up. */
-  const nextSetup = isTransition ? loadSetup(session.nextExerciseId, nextWeight, units) : null;
+  // …and the same line under a load that MOVED mid-lift (2026-09-08): she is changing the plates now.
+  const nextSetup = isTransition ? loadSetup(session.nextExerciseId, nextWeight, units) : movedTo != null ? loadSetup(session.currentExerciseId, movedTo, units) : null;
   const nextAnnex = heroAnnex(nextSetup, t, units);
   /* The face and the tracking are ONE answer, taken from the string itself — see the note at the
      markup for the fault this replaces. A Hebrew suffix makes the whole line sans and untracked. */
@@ -3746,12 +3809,23 @@ function Rest({
   // How much of the session's "+15 sec" total this screen has already folded into its countdown.
   const appliedExtraRef = useRef(0);
 
-  // A new rest period (duration changed / phase changed): reset and re-anchor.
+  // A new rest period (duration changed / phase changed / the ANCHOR moved): reset and re-anchor.
   useEffect(() => {
+    /*
+     * ⛔ THE STORE'S END, NOT `now + restSeconds` (code review 2026-09-09). Anchoring at mount was
+     * right for a rest that began when this screen appeared, and wrong for the two rests that do
+     * not: one the CLOCK started at its due instant while the phone slept (the ring restarted a
+     * full rest over a remainder the wrist and the lock screen were already counting down), and
+     * one "I just finished" re-anchored to NOW (the store moved, the ring never did). The mirror's
+     * end instant — `restEndsAtMs` — is the one every surface counts to; a rest with no anchor
+     * yet (the first frame of a resume) keeps the old arithmetic.
+     */
+    const endAt = session.restEndsAtMs ?? Date.now() + session.restSeconds * 1000;
+    const rem = Math.max(0, Math.round((endAt - Date.now()) / 1000));
     setTotal(session.restSeconds);
-    setRemaining(session.restSeconds);
-    remainingRef.current = session.restSeconds;
-    endAtRef.current = paused ? null : Date.now() + session.restSeconds * 1000;
+    setRemaining(rem);
+    remainingRef.current = rem;
+    endAtRef.current = paused ? null : endAt;
     /**
      * THE EXTENSION IS ALREADY IN THE ANCHOR — DO NOT ADD IT TWICE.
      *
@@ -3768,11 +3842,12 @@ function Rest({
     beatsFiredRef.current.clear(); // fresh rest → re-arm the Approach countdown
     prevRemForBeatsRef.current = session.restSeconds;
     // Locked/background backstop: schedule the OS-level 7s warning + rest-over alert
-    // against the same absolute end (or clear it while paused).
-    if (endAtRef.current != null) void restHaptics.arm(endAtRef.current);
+    // against the same absolute end (or clear it while paused). ALWAYS with the next set's words
+    // (`restAlert`) — this used to re-arm bare and overwrite the store's payload with "Go." (2026-09-09).
+    if (endAtRef.current != null) void restHaptics.arm(endAtRef.current, session.restAlert ?? undefined);
     else void restHaptics.disarm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.restSeconds, session.displayPhase]);
+  }, [session.restSeconds, session.displayPhase, session.restStartedAtMs]);
 
   // Pause freezes the value; resume re-anchors the end from the frozen remaining.
   useEffect(() => {
@@ -3782,8 +3857,9 @@ function Rest({
     } else {
       endAtRef.current = Date.now() + remainingRef.current * 1000;
       sync();
-      void restHaptics.arm(endAtRef.current); // resume — reschedule from the new end
+      void restHaptics.arm(endAtRef.current, session.restAlert ?? undefined); // resume — reschedule from the new end
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, sync]);
 
   // Cancel any pending locked/background alerts when this rest screen tears down
@@ -3874,7 +3950,8 @@ function Rest({
     }
     endAtRef.current += delta * 1000;
     sync();
-    void restHaptics.arm(endAtRef.current); // the end moved out — reschedule the OS alerts
+    void restHaptics.arm(endAtRef.current, session.restAlert ?? undefined); // the end moved out — reschedule the OS alerts
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extraS, sync]);
 
   const addFifteen = useCallback(() => {
@@ -4068,6 +4145,16 @@ function Rest({
                     <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text>
                   </Text>
                 </View>
+              ) : movedTo != null ? (
+                // THE NEXT SET OF THIS LIFT MOVED (2026-09-08): the new figure in the direction's colour,
+                // with the step it took — she reads it here, at the bar, and changes the plates now.
+                <View style={styles.upRight}>
+                  <Text style={[styles.upWeight, { color: directionTone(movedBy > 0 ? 'up' : 'down') }]}>
+                    {movedTo}
+                    <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text>
+                  </Text>
+                  <LoadDelta value={movedBy} unit={unitLabel(units)} />
+                </View>
               ) : null}
             </View>
             {/*
@@ -4118,6 +4205,9 @@ function Rest({
             */}
             {knownLine ? <Text style={styles.upKnown}>{knownLine}</Text> : null}
 
+            {/* ⛔ NO "OR START" CHIPS HERE (founder, 2026-09-08, on glass): *"יש swap ויש פקד שמציג
+                את התרגילים הנותרים — צריך למחוק את השני."* A taken station is the swap disc or the
+                session map, both one press away in the chrome; the card stays the card. */}
 
             {/* ═══ THE SIGNATURE MOMENT (2026-07-17, moved to the logged beat 2026-07-24) ═══
                 The set she just finished moved the next one — the brief's "single most distinctive
@@ -4146,9 +4236,6 @@ function Rest({
             is likely to be taken"* (his own ruling of 2026-08-12). Both are discs now, in the one
             place the stage puts its controls.
           */}
-          {false ? (
-            <View style={styles.upActions} />
-          ) : null}
         </View>
       </View>
 
@@ -4336,6 +4423,7 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
  * a style nobody uses, a prop nobody reads and an import of a symbol that does not exist all sit
  * exactly as quietly as working code.
  */
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: stage[0] },
   safe: { flex: 1 },
@@ -4407,55 +4495,10 @@ const styles = StyleSheet.create({
    * it would be a second reading of the same fact in a second place, which is the two-rows problem
    * that got the stacked version rejected in the first place.
    */
-  /* A COLUMN since 2026-09-01: the instrument's track above, its written caption under it. */
-  railRow: { alignItems: 'stretch', gap: 7, paddingHorizontal: 24, marginTop: 18 },
-  railCaption: { fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: stage.ink2, textAlign: 'center' },
-  railTrack: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  /* A lift she is not on: one stroke, and nothing to count. */
-  railSeg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(241,238,229,0.12)' },
-  /* ⛔ MOSS, NOT DIM CREAM (founder, 2026-08-12): *"אפשר לעשות שכאשר תרגיל מסתיים להפוך את הקו
-     המלא למעלה לירוק שמסמן הושלם."* A dimmer segment says "behind me"; it does not say DONE, and
-     the difference is the whole point of looking at the rail. Moss is the product's finished colour
-     everywhere else — the pips on the lift-done beat are the same green. */
-  railSegDone: { backgroundColor: up.stage, opacity: 0.55 },
-  /*
-   * ════ ⛔ THE OPEN LIFT IS A WELL, AND WHAT IS IN IT IS A DIFFERENT KIND OF THING ════
-   *
-   * This was `flex: 2.5` of 6-point ticks at `rgba(...,0.14)`, sitting among 3-point strokes at
-   * `rgba(...,0.12)` — a three-point difference in height and two hundredths in alpha. On the
-   * device that is ten near-identical marks in a row, and the nesting that the whole design rests
-   * on (**her sets live inside her lift**) was invisible: four sets read as four more lifts.
-   *
-   * Two changes, and neither is a caption:
-   *
-   *   · THE WELL. The open segment now has a ground of its own and sits inside it with padding, so
-   *     the group is drawn as a container rather than implied by a gap. Containment is the one
-   *     cue that survives being glanced at, and it is the literal shape of the fact.
-   *   · THE PIPS. A set is a ROUND mark at 8 points, not a stroke at 6 — the app's own vocabulary
-   *     for a countable set (`ExerciseDone`'s pips, same green when spent). A stroke is position; a
-   *     pip is a thing you can count. The rail and its contents now belong to two different
-   *     families on purpose.
-   *
-   * ⚠️ AND AN UNDONE SET IS VISIBLE. It was 0.14 against a 0.12 neighbour — the sets she has left,
-   * which is the entire question, were the faintest marks on the screen.
-   */
-  railOpen: {
-    flex: 2.5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    /* marginHorizontal 6: the open lift's pill sat 6 points off its neighbour strokes — close
-       enough to read as one broken strip (design review 2026-09-01). Twelve points of clearance
-       each side lets the rail read as "lifts… ‹this one, opened into its sets› …lifts". */
-    marginHorizontal: 6,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(241,238,229,0.07)',
-  },
-  setPip: { flex: 1, height: 8, borderRadius: 4, backgroundColor: 'rgba(241,238,229,0.24)' },
-  setPipDone: { backgroundColor: up.stage, opacity: 0.8 }, // a finished SET, in the finished colour
-  setPipNow: { backgroundColor: stage.ink0 },
+  /* The position, written — the one line left of the rail (2026-09-07). The caption's voice at the
+     caption's size: a fact she glances at, not a heading, centred where the track was. */
+  railRow: { alignItems: 'stretch', paddingHorizontal: 24, marginTop: 14 },
+  railLine: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: stage.ink1, textAlign: 'center' },
   /* The figure, at the end of its own row. Tabular + a floor on the width so the rail does not
      shuffle sideways every time a digit lands. */
   // The chrome's centre group: [ordinal] · [elapsed] (handoff 2.2). A dim dot parts the ordinal
@@ -4586,6 +4629,12 @@ const styles = StyleSheet.create({
 
   /* ── the session map (the rail's own sheet, 2026-08-26) ── */
   mapLegend: { marginBottom: 6 },
+  mapHint: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left', marginBottom: 8 },
+
+  /* The lift she is on: a faint well, so "now" is a place on the list and not only a word. */
+  mapRowNow: { backgroundColor: 'rgba(241,238,229,0.05)', borderRadius: 12, marginHorizontal: -8, paddingHorizontal: 8 },
+  mapRowLifted: { backgroundColor: stage[2], borderRadius: 12, marginHorizontal: -8, paddingHorizontal: 8 },
+
   mapClose: { marginTop: 18 },
   mapRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   mapName: { flex: 1, fontFamily: font.sans, fontSize: 17, color: color.textSecondary, textAlign: 'left' },
@@ -4597,6 +4646,9 @@ const styles = StyleSheet.create({
   footerStoodDown: { opacity: 0 },
   /* A disc past its moment: present, quiet, still answering (see StageBar.swapQuiet). */
   discQuiet: { opacity: 0.55 },
+  /* The ear, open: the disc takes the moss (2026-09-07). */
+  discLive: { borderRadius: 19, backgroundColor: 'rgba(143,176,122,0.18)' },
+  /* What was heard, then what was done — the stage's quiet voice, centred under the chrome. */
 
   // Active set
   /* The muscle group — the lift's eyebrow. ⛔ It kept the ordinal's muted ink after everything around
@@ -4608,10 +4660,12 @@ const styles = StyleSheet.create({
    * figures at the foot (38). **The lift is the subject of the screen**; it was set below two things
    * that describe it.
    *
-   * ⚠️ `adjustsFontSizeToFit` IS WHAT MAKES THIS SAFE, and it is why the number can move at all. A
-   * coach names sessions in words and Hebrew runs long — "לחיצת חזה במוט" at 36 would overrun 330
-   * points, and the prop shrinks it to fit rather than clipping. The floor stays 0.72 of 36 = 26,
-   * which is still above the type floor.
+   * ⚠️ THE SIZE HERE IS THE ONE-LINE CASE ONLY. `adjustsFontSizeToFit` used to make 36 safe for a
+   * long Hebrew name — and on iOS it also fitted the name to the block's HEIGHT, which the keypad's
+   * slide and the `Arrive` animation squeeze for a few frames, so the name was sometimes drawn at
+   * a size nobody can read from the bar (founder 2026-09-08). The call site now overrides
+   * `fontSize`/`lineHeight` from the name's own length (`nameSize.ts`): 36 to 16 characters, 30 to
+   * 30, 26 beyond — arithmetic, never a measurement, so no frame can move it.
    */
   exName: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
   // The second half of a superset: the SAME size as the lift she is on, in the quiet tone the unit
@@ -4870,6 +4924,7 @@ const styles = StyleSheet.create({
   rxRow: { alignSelf: 'stretch', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'stretch', gap: 10 },
   /* The way back to the prescription — a quiet line, 44pt with its hitSlop, under the fields. */
   restoreRow: { alignSelf: 'center', minHeight: 32, justifyContent: 'center' },
+  /* The board at the crossing (2026-09-07): the lifts still ahead, one chip each, under the card. */
   restoreText: { fontFamily: font.sans, fontSize: 17, color: stage.ink2, textDecorationLine: 'underline', textAlign: 'center' },
   /*
    * ⛔ A FIELD HAS TO LOOK LIKE A FIELD. The founder read a muted caption as a deleted feature
@@ -4902,33 +4957,18 @@ const styles = StyleSheet.create({
      the kind of line that tries to slip under. */
   rxSub: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: stage.ink2, textAlign: 'center' },
   rxSubFig: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: stage.ink1, textAlign: 'center' },
-  /* Last time, quieter than today's own sub-line: it is context, not instruction. */
-  rxPrev: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: stage.ink2, textAlign: 'center' },
+  /* ════ last time, set by set (2026-09-07) ════
+     A quiet strip under the two fields: the legend at the start, then one cell per set she did,
+     `load×reps` in the mono, the set she is on now raised in a faint well. Read, never pressed —
+     it lives in the body, not the foot. */
+  lastRow: { alignSelf: 'stretch', gap: 8, marginTop: 6 },
+  lastLegend: { color: stage.ink2 },
+  lastCells: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  lastCell: { minWidth: 58, paddingHorizontal: 10, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(241,238,229,0.04)' },
+  lastCellNow: { backgroundColor: 'rgba(241,238,229,0.12)' },
+  lastFig: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 17, color: stage.ink2, textAlign: 'center' },
+  lastFigNow: { fontFamily: font.monoMedium, color: stage.ink0, textAlign: 'center' },
 
-  /*
-   * ════ THE COUNTS, AT THE FOOT ════
-   *
-   * ⚠️ 52 TALL AND `flex: 1` WIDE. Five cells across a 338-point stage with 8 between them is 62
-   * each — over the 44-point touch floor in both axes, which is the number that matters for a hand
-   * that is shaking and a phone that may be lying on a bench.
-   */
-  countRow: { flexDirection: 'row', gap: 8 },
-  countCell: {
-    flex: 1,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: 'rgba(241,238,229,0.06)',
-  },
-  /* The keypad's cell is quieter than the counts: it is the way out, not one of the answers. */
-  countCellOther: { backgroundColor: 'rgba(241,238,229,0.03)' },
-  /* Chosen — filled, not outlined. An outline among fills reads as "disabled" at a glance. */
-  countCellOn: { backgroundColor: stage.ink0 },
-  countCellPressed: { backgroundColor: 'rgba(241,238,229,0.16)' },
-  countFigure: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 24, lineHeight: 29, color: stage.ink0, textAlign: 'center' },
-  countFigureOn: { color: stage[0] },
-  rxPrevFig: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 17, color: stage.ink2, textAlign: 'center' },
   /*
    * ⛔ `aspectRatio` FROM THE FRAME, NEVER A LITERAL HEIGHT — and it has now been wrong twice in
    * the same place, each time by about a hundred points of nothing.
@@ -5186,7 +5226,6 @@ const styles = StyleSheet.create({
   upSideMono: { fontFamily: font.mono },
   upSideValue: { color: stage.ink1 },
   /* Still ahead (finding #9): a label and a line of names, dimmest thing on the card. */
-  upActions: { flexDirection: 'row', gap: 10 },
 
   // Sheets
   sheetLegend: { marginBottom: 8 },

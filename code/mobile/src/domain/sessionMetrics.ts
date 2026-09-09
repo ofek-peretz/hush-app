@@ -38,6 +38,7 @@
 //
 
 import type { Session, SetLog } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { sessionKcal } from '@/domain/energy';
 
 /** A parsed instant, or null when the stamp is missing or unparseable. Never NaN downstream. */
@@ -96,7 +97,7 @@ export function sessionTonnageKg(s: Session | null | undefined): number {
     // Working sets only (2026-08-24): a warm-up bridge and a legacy approach set both carry
     // `isApproach`, and neither is the work her tonnage celebrates — the same line every engine
     // reader draws. Kilograms she moved warming up prepare the number; they are not the number.
-    if (x?.isApproach) continue;
+    if (!x || !isEvidenceSet(x)) continue; // …and a presumed set (2026-09-07) is the prescription, not kilos she moved
     const w = typeof x?.actualWeight === 'number' && Number.isFinite(x.actualWeight) ? x.actualWeight : 0;
     const reps = typeof x?.actualReps === 'number' && Number.isFinite(x.actualReps) ? Math.max(0, x.actualReps) : 0;
     kg += w * reps;

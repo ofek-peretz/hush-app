@@ -181,7 +181,9 @@ export function ProgramCreated({ route, navigation }: Props) {
      * A NO-BREAK SPACE before the middot glues it to the term it follows, so the break can only
      * happen AFTER a separator — which is where a list is allowed to break.
      */
-    const n = programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER);
+    const n = programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER, program.title);
+    /* The author's title stands alone — see the same note in `BuildingProgramme`. */
+    if (n.title) return n.title;
     return [
       t(n.key),
       t('plan.weekDays', { n: n.days }),

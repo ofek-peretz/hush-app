@@ -33,6 +33,8 @@ import { startingWeight, personalScale, snapToStock } from '@/domain/startingLoa
 import { retainedAfterGap, daysSinceLastSession } from '@/engine/v5/detraining';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
+import type { Band } from '@/engine/v5/types';
+
 import { chooseDonor, type VolumeCandidate } from '@/engine/v5/volumeAllocation';
 import { advanceV5, currentV5Targets, applyDetrainingV5, activeDeloadV5, getVolumeTargetsV5, recordStructuralChangeV5, perRungForV5, getSessionEarnedV5, getSessionForwardV5, type V5Target } from '@/engine/v5/v5Engine';
 import type { Explanation } from '@/engine/weeklyView';
@@ -40,6 +42,7 @@ import { assembleV5DayLists, ESSENTIAL_PATTERNS, essentialPatternOf } from '@/en
 import { weeklyTargets } from '@/engine/v5/assembler';
 import { repairWeek } from '@/domain/weekRepair';
 import { learnedExecSFor } from '@/domain/setDwell';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { learnedInterRestS, learnedTransitionRestS, REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN, perSetSeconds, pairedRestSavedS } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SESSION_MIN, SESSION_MAX, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
@@ -1092,7 +1095,7 @@ function bestPatternE1rm(
   let baseKg = 0;
   for (const s of history) {
     for (const log of s.sets) {
-      if (log.isApproach || log.actualWeight == null || log.actualReps <= 0) continue;
+      if (!isEvidenceSet(log) || log.actualWeight == null || log.actualReps <= 0) continue;
       const ex = exerciseById(log.exerciseId);
       if (!ex || ex.baseKg == null || enginePattern(log.exerciseId) !== pattern) continue;
       if (muscle == null || ex.muscle !== muscle) continue; // strength does not cross a muscle…
@@ -1138,7 +1141,7 @@ export function smartSeed(
   let own = 0;
   for (const s of history)
     for (const log of s.sets)
-      if (!log.isApproach && log.exerciseId === id && log.actualWeight != null && log.actualReps > 0) own = Math.max(own, epley(log.actualWeight, log.actualReps));
+      if (isEvidenceSet(log) && log.exerciseId === id && log.actualWeight != null && log.actualReps > 0) own = Math.max(own, epley(log.actualWeight, log.actualReps));
   if (own > 0) return toWorking(own);
   // 2. transfer from the best SAME-PATTERN, SAME-MUSCLE lift, scaled by relative difficulty (the
   //    baseKg ratio). The muscle is load-bearing — see `bestPatternE1rm`.
@@ -1704,7 +1707,18 @@ async function foldEngine(
   return run;
 }
 
+/** The band written on a lift's seat in the week on disk, if its author wrote one — see `Slot.repBand`. */
+function slotBandOf(program: Program | null | undefined, exId: string): Band | null {
+  for (const d of program?.days ?? []) {
+    for (const s of d.slots) {
+      if (s.exerciseId === exId && s.repBand) return { lo: s.repBand[0], hi: s.repBand[1] };
+    }
+  }
+  return null;
+}
+
 async function foldEngineUnsynchronised(
+
   program: Program,
   profile: Awaited<ReturnType<typeof loadProfileSafe>>,
   history: Session[],
@@ -1713,7 +1727,12 @@ async function foldEngineUnsynchronised(
 ): Promise<void> {
   // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
   // to her single declared band, then the '8-10' default.
+  // ⛔ A band WRITTEN ON THE SEAT wins (founder 2026-09-07, `Slot.repBand`): the model's per-lift
+  // range, when it wrote one. Same arithmetic below — the floor prices the seed, Loop 2 moves
+  // inside the pair — with the sheet's numbers instead of the profile's.
   const bandOf = (exId: string) => {
+    const written = slotBandOf(program, exId);
+    if (written) return written;
     const m = exerciseById(exId)?.muscle;
     return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
   };
@@ -2313,8 +2332,11 @@ export const fixtureModel: ModelClient = {
     // exercises fall back to the seed. The Weekly Update reads from v5 too (domain/weeklyUpdate), so a
     // v5 athlete's load, progression and narration all come from one engine.
     // Per-muscle T (register Part 9): each exercise reads the band of its primary muscle, falling back
-    // to her single declared band, then the '8-10' default.
+    // to her single declared band, then the '8-10' default — unless the SEAT carries one
+    // (`Slot.repBand`, the model's per-lift range, 2026-09-07), which wins as it does in the fold.
     const bandOf = (exId: string) => {
+      const written = slotBandOf(program, exId);
+      if (written) return written;
       const m = exerciseById(exId)?.muscle;
       return bandFor((m ? profile.repBandByMuscle?.[m] : undefined) ?? profile.repBand);
     };

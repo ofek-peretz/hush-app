@@ -170,18 +170,25 @@ describe('the stage bar centres its middle group', () => {
      * and pressing it states the rule. The bar's centring also stops being intermittent, which is
      * the fault this whole file was opened for.
      */
+    /*
+     * ⛔ AND FROM 2026-09-07 IT IS LIVE ON EVERY SET (founder — the board). The first-set rule's
+     * reason was that a mid-lift swap "strands the sets she has already logged", and it never did:
+     * `retargetPlanForSwap` re-points only the steps from the cursor on. A machine taken between
+     * set 2 and set 3 is the ordinary case the board exists for, so the disc is neither quiet nor
+     * gone: it is the same control on set 1 and on set 2, which is also what keeps the bar centred.
+     */
     expect(
       draw(1).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction')).length,
     ).toBeGreaterThan(0);
     const set2 = draw(2).root.findAll((n) => n.props.accessibilityLabel === tg('workout.swapAction'));
     expect(set2.length).toBeGreaterThan(0);
-    // …and it is QUIET there: somewhere above the disc sits the 0.55 wash that says "past its moment".
+    // …and it is NOT quiet there: no 0.55 wash anywhere on the stage says "past its moment".
     const quiet = draw(2).root.findAll((n) => {
       const st = n.props?.style;
       const flat = Array.isArray(st) ? Object.assign({}, ...st.flat().filter(Boolean)) : st;
       return !!flat && flat.opacity === 0.55;
     });
-    expect(quiet.length).toBeGreaterThan(0);
+    expect(quiet).toEqual([]);
   });
 
   it('⛔ carries NO coach opener — it moved to the paused stage', () => {

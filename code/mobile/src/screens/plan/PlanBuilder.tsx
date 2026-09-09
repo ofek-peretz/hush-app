@@ -34,7 +34,7 @@
 //
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -115,6 +115,23 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
   const [days, setDays] = useState(opensOn);
   const [ask, setAsk] = useState('');
   /*
+   * ════ ⛔ THE LINE IS THE STEP (founder, 2026-09-07) ════
+   *
+   * *"צריך שיהיה רק החלק של 'בנה תוכנית עבורי'. וצריך לעצב את המסך בצורה יפה וטובה, ובדוגמא לא
+   * לעשות דגש על 'גב, בלי מוט ישר' אלא לכתוב משהו שמזמין לכתוב כל דבר שהמתאמן רוצה שהתוכנית תבנה
+   * סביבו."*
+   *
+   * Two rulings in one sentence. The DOORS are gone from the intake — the blank sheet and the
+   * shelves still exist on the Program tab for the athlete who goes looking, but the intake has one
+   * path and it is this screen; so this screen is drawn as the step it always was rather than as a
+   * form behind a button. And the field leads: it is the one thing that makes the week HERS rather
+   * than a template's, so it stands first and tallest, over three lines, and the wheels follow it.
+   *
+   * The placeholder is an INVITATION to say anything — a goal, a sport, the room, a limit, a date
+   * she is training for — never an example she could copy. It is copy, not prompt: the model never
+   * sees it (see the no-examples note in `buildPrompt`).
+   */
+  /*
    * ════ THE QUESTION THE PRODUCT STOPPED ASKING (2026-09-01, audit lever 3 — decided) ════
    * `workoutMinutes` was silently defaulted to 60 at ProgramCreated after its screen was deleted —
    * the exact category of default the intake's own law calls a lie (`daysPerWeek: 0` means "nobody
@@ -126,6 +143,22 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
 
   const body = (
     <View style={styles.askRows}>
+      <View style={styles.askCol}>
+        <Legend size={22} track={0.26} style={styles.askLegend}>{t('ob.weekAskLegend')}</Legend>
+        <TextField
+          block
+          value={ask}
+          onChangeText={setAsk}
+          placeholder={t('ob.weekAskPlaceholder')}
+          maxLength={400}
+          multiline
+          numberOfLines={3}
+          inputStyle={styles.askInput}
+          returnKeyType="done"
+          blurOnSubmit
+        />
+        <Text style={styles.askOptional}>{t('ob.weekAskOptional')}</Text>
+      </View>
       <View style={styles.askCol}>
         <Legend size={22} track={0.26} style={styles.askLegend}>{t('ob.daysPerWeek')}</Legend>
         <WheelPicker
@@ -152,23 +185,6 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
           label={t('ob.minutesLabel')}
         />
       </View>
-      {/*
-        ⚠️ THE PLACEHOLDER IS AN INVITATION, NOT AN EXAMPLE TO COPY. It shows the KIND of thing that
-        helps — an emphasis, a piece of equipment to avoid — because a blank line under "what
-        matters to you?" is a question most people answer with nothing. It is copy, not prompt: the
-        model never sees it, which is the whole reason it is allowed to be concrete here and is
-        forbidden in `buildPrompt` (see the no-examples note there).
-      */}
-      <TextField
-        block
-        label={t('ob.weekAskLegend')}
-        value={ask}
-        onChangeText={setAsk}
-        placeholder={t('ob.weekAskPlaceholder')}
-        maxLength={200}
-        returnKeyType="done"
-      />
-      <Text style={styles.askOptional}>{t('ob.weekAskOptional')}</Text>
     </View>
   );
 
@@ -178,12 +194,12 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
     return (
       <OnboardingScaffold
         onBack={onBack}
-        /* 5/5 — the rail ADVANCES here (audit lever 3): it used to redraw 4/4 on the step right
-           before the payoff, which read as a stall at the exact moment she was closest to done. */
-        progress={{ index: 5, total: 5 }}
+        /* 4/4 — the doors' step is gone (2026-09-07), so this is the last beat before the payoff. */
+        progress={{ index: 4, total: 4 }}
         keyboard
         legend={t('ob.weekLegend')}
         title={t('ob.askTitle')}
+        sub={t('ob.askSub')}
         headGap={22}
         bodyTop={16}
         footer={act}
@@ -510,6 +526,12 @@ export interface PlanBuilderViewProps {
   onStartBlank: () => void;
   /** A proven shelf was chosen — the container materializes it into a draft (planTemplates). */
   onStartTemplate: (templateId: string) => void;
+  /**
+   * The exercise library's door — off the Program tab (founder 2026-09-07: *"תמחק את הפקד הזה"*),
+   * and a quiet last row under the shelves here, on the chooser that is ABOUT which lifts a week
+   * is made of. Program-tab chrome only; the intake has no library to open (no profile yet).
+   */
+  onLibrary?: () => void;
   onDraft: (next: Program) => void;
   onSave: () => void;
   onRevert: () => void;
@@ -535,6 +557,12 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
      the branches below return early and hooks may not sit behind one. */
   const [asking, setAsking] = useState(!!props.previewAsking);
   const d = props.draft;
+  /*
+   * ⛔ IN THE INTAKE THERE ARE NO DOORS ANY MORE (founder 2026-09-07): *"צריך שיהיה רק החלק של 'בנה
+   * תוכנית עבורי'."* The ask IS the step. Back from it is back out of the step (`onExit` → the
+   * previous screen), not to a chooser that no longer exists. The Program tab keeps its doors.
+   */
+  const intakeAsks = !!props.intake && !!props.onLetHushBuild && props.offerDoors;
 
   const adviceLine = (f: WeekFinding): string | null => {
     switch (f.rule) {
@@ -561,12 +589,12 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
    * over the sheet). Returning is `onBack`, which puts the three doors back — she has changed her
    * mind about who writes the week, which is the question the doors ask.
    */
-  if (asking && props.onLetHushBuild) {
+  if ((asking || intakeAsks) && props.onLetHushBuild) {
     return (
       <AskTheCoach
         opensOn={DAYS_OPENS_ON}
         intake={!!props.intake}
-        onBack={() => setAsking(false)}
+        onBack={intakeAsks ? props.onExit : () => setAsking(false)}
         onAsk={(days, ask, minutes) => {
           setAsking(false);
           props.onLetHushBuild?.(days, ask, minutes);
@@ -667,7 +695,8 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
       return (
         <OnboardingScaffold
           onBack={props.onExit}
-          progress={{ index: 4, total: 5 }}
+          progress={{ index: 4, total: 4 }}
+
           /* The legend names the thing, the title asks the one question about it: HER WEEK — who
              writes it? A title that tried to carry both would be a sentence, and this step is a
              question with three answers standing under it. */
@@ -758,6 +787,20 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
           </Arrive>
 
           {shelves}
+
+          {props.onLibrary ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('program.libraryRow')}
+              onPress={props.onLibrary}
+              style={({ pressed }) => [styles.tplCard, styles.libraryDoor, pressed && styles.tplCardPressed]}
+            >
+              <View style={styles.tplHead}>
+                <Text style={styles.tplName}>{t('program.libraryRow')}</Text>
+              </View>
+              <Text style={styles.tplTag}>{t('program.librarySub')}</Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     );
@@ -1016,7 +1059,8 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
  * needs it.
  */
 type Props = {
-  navigation: Pick<NativeStackScreenProps<MainParamList, 'PlanBuilder'>['navigation'], 'goBack'> & {
+  navigation: Pick<NativeStackScreenProps<MainParamList, 'PlanBuilder'>['navigation'], 'goBack' | 'navigate'> & {
+
     /* ⚠️ NOT OPTIONAL, AND NEVER CALLED OPTIONALLY. Both navigators hand one over — and
        `everythingBuiltCanBeReached` walks the source for `replace('X'`, so an optional CALL
        (`replace?.(`) is invisible to it and would leave `BuildingProgramme` reading as a registered
@@ -1244,6 +1288,19 @@ export function PlanBuilder({ navigation, route }: Props) {
           .then((program) => setDraft(draftFromProgram(program)))
           .catch(() => setDraft(blankDraft(`built_${Date.now()}`, dayNamer)));
       };
+      /*
+       * ⛔ A SENTENCE SHE WROTE IS NEVER ANSWERED BY A DIFFERENT WEEK IN SILENCE (founder
+       * 2026-09-09: *"אסור שיהיה כשלון בכלל"*). On this door the failure used to be the quietest
+       * in the product — no reveal, no line, the local week simply appeared in the editor as if the
+       * model had written it. Now it is said, and she chooses: ask again, or the local week as a
+       * door. Without a sentence the local week IS the answer, exactly as before.
+       */
+      const askAgainOrNot = () =>
+        Alert.alert(t('ob.buildingFailedTitle'), t('ob.buildingFailedSub'), [
+          { text: t('ob.buildingWithoutCoach'), style: 'cancel', onPress: assembleLocally },
+          { text: t('ob.buildingRetry'), onPress: () => letTheModelBuild(daysPerWeek, ask, minutes) },
+        ]);
+      const failed = ask.trim() ? () => { setBuildBusy(false); askAgainOrNot(); } : assembleLocally;
       void requestPlanBuild({
         daysPerWeek,
         sex: her.sex === 'female' ? 'female' : 'male',
@@ -1251,18 +1308,18 @@ export function PlanBuilder({ navigation, route }: Props) {
         ...(ask.trim() ? { ask: ask.trim() } : {}),
       })
         .then((res) => {
-          if (!res.ok) return assembleLocally();
+          if (!res.ok) return failed();
           const drafted = draftFromCoachWeek(res.week, {
             id: `built_ai_${Date.now()}`,
             dayNamer: (i) => dayNamer(String.fromCharCode(65 + i)),
           });
-          if (!drafted) return assembleLocally();
+          if (!drafted) return failed();
           setBuildBusy(false);
           setDraft(drafted);
         })
-        .catch(() => assembleLocally());
+        .catch(() => failed());
     },
-    [inputs, app, intake, navigation, dayNamer],
+    [inputs, app, intake, navigation, dayNamer, t],
   );
 
   if (!loaded) return <SafeAreaView style={styles.screen} edges={['top']} />;
@@ -1323,6 +1380,7 @@ export function PlanBuilder({ navigation, route }: Props) {
        * guard like this silently does nothing. The view draws no door without it.
        */
       {...(canBuildForHer ? { onLetHushBuild: letTheModelBuild } : {})}
+      {...(intake ? {} : { onLibrary: () => navigation.navigate('ExerciseLibrary') })}
       onStartTemplate={(id) => {
         const tpl = templateById(id);
         if (!tpl) return;
@@ -1464,8 +1522,15 @@ const styles = StyleSheet.create({
   /* ════ the ask step (2026-08-29) ════
      The two questions breathe: this is the one screen where she talks to the model, and a wheel and
      a written line crammed together is the sheet it replaced. */
-  askRows: { gap: 26 },
+  libraryDoor: { marginTop: 18 },
+  askRows: { gap: 30 },
+
   askCol: { gap: 12 },
+  /* Her sentence, at a reading size: three lines of prose, not one figure — the field's default
+     30-point voice is the intake's single-answer voice (a weight, a name) and it wraps a sentence
+     into a column. */
+  askInput: { fontSize: 22, lineHeight: 30, minHeight: 92, textAlignVertical: 'top' },
+
   /* The same full-ink 22 the intake's own wheel legends carry (`AboutYou`) — one legend voice over
      an instrument, across every screen that has one. */
   askLegend: { color: color.textPrimary },

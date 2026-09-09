@@ -27,7 +27,7 @@
 
 import * as Notifications from 'expo-notifications';
 import { tg } from '@/i18n';
-import { ensureNotificationPermission } from '@/platform/notifications';
+import { hasNotificationPermission } from '@/platform/notifications';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import { liveActivityRunning } from '@/platform/liveActivity';
 import { track } from '@/platform/telemetry';
@@ -65,7 +65,7 @@ export function restAlertDelays(
 export interface RestHaptics {
   /** (Re)arm the locked/background rest alerts for a rest ending at `endAtMs`. Idempotent
    *  — cancels any prior pair first. A no-op (after cancel) when a watch workout owns. */
-  arm(endAtMs: number): Promise<void>;
+  arm(endAtMs: number, done?: { title: string; body: string }): Promise<void>;
   /** Cancel any scheduled rest alerts (rest ended / paused / workout exited). */
   disarm(): Promise<void>;
 }
@@ -76,13 +76,20 @@ async function cancelBoth(): Promise<void> {
 }
 
 export const restHaptics: RestHaptics = {
-  async arm(endAtMs) {
+  async arm(endAtMs, done) {
     try {
       // Re-arm is idempotent: always clear the prior pair first (+15s / resume reschedule).
       await cancelBoth();
       const { warnInS, doneInS } = restAlertDelays(endAtMs, Date.now());
       if (warnInS == null && doneInS == null) return; // rest already over / sub-second
-      if (!(await ensureNotificationPermission())) return;
+      /*
+       * ⛔ NEVER ASK HERE (code review 2026-09-09). `ensureNotificationPermission` can RAISE the iOS
+       * dialog, and this is called as a rest begins — standing at a loaded bar, which `setNudge`
+       * already names as the worst moment in the product for a system prompt. The one honest ask
+       * belongs to Well Done's pre-ask (§8.2); this schedules when already granted and is otherwise
+       * silent, exactly like every other scheduler since 2026-09-01.
+       */
+      if (!(await hasNotificationPermission())) return;
       // The wrist owns the BUZZ when it is there; the phone still lights up (silent).
       const sound = phoneOwnsRestHaptics();
       /**
@@ -124,8 +131,9 @@ export const restHaptics: RestHaptics = {
         await Notifications.scheduleNotificationAsync({
           identifier: DONE_ID,
           content: {
-            title: tg('notifications.restDoneTitle'),
-            body: tg('notifications.restDoneBody'),
+            // A rest the CLOCK started wears the next set's figures (`nextSetAlert`); hers says "Go."
+            title: done?.title ?? tg('notifications.restDoneTitle'),
+            body: done?.body ?? tg('notifications.restDoneBody'),
             data: { kind: 'rest_done' },
             sound,
             interruptionLevel: 'timeSensitive', // break through lock screen + Focus (see rest_warn)

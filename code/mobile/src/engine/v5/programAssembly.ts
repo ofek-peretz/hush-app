@@ -12,9 +12,10 @@
  * builds each day from that list, so the ordering / clustering / time-cap laws are shared verbatim.
  *
  * DAY-ONE DENSITY is the one number the register leaves to this layer — structure is an output, but the
- * sets→exercises granularity is ours. `DAY_ONE_EX_DIVISOR` turns a muscle's starting weekly-set target
- * (B-2: 10 normal, 16 emphasis) into an exercise COUNT; Loop 3 refines volume from there (S-32/34). It
- * is named and tunable, not doctrine.
+ * sets→exercises granularity is ours. `DAY_ONE_EX_DIVISOR` turns a muscle's weekly-set target (B-2,
+ * frequency-aware since 2026-08-08: `WEEKLY_SETS_PER_DAY × days`, scaled by `MUSCLE_VOLUME_SHARE`; an
+ * emphasis mark transfers whole `DAY_ONE_EX_DIVISOR` blocks toward the muscle) into an exercise COUNT;
+ * Loop 3 refines volume from there (S-32/34). It is named and tunable, not doctrine.
  */
 import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import { stanceOf } from './bodyMap';
@@ -28,17 +29,20 @@ import { inRoom } from '@/domain/room';
 import { forbiddenFor } from '@/domain/painReport';
 
 /**
- * A muscle's starting weekly-set target (B-2) divided by this → its day-one exercise COUNT (min 1). At
- * 10 normal / 16 emphasis this yields 2 exercises for a normal muscle and 3 for an emphasised one — a
- * standard day-one shape. Loop 3 grows or trims volume from there. Tunable (founder), not doctrine.
+ * A muscle's weekly-set target (B-2) divided by this → its exercise COUNT (min 1): one block of five
+ * sets is one lift. A four-day week (20 × share) lands a large muscle on 2–3 lifts and a marked one
+ * a block higher — a standard day-one shape. Loop 3 grows or trims volume from there. Tunable
+ * (founder), not doctrine.
  */
 export const DAY_ONE_EX_DIVISOR = 5;
 
 /**
- * The most lifts a day realistically holds — seven is a 60-minute session at three to five sets a
- * lift, the same arithmetic `enforceTimeCap` prices. Declared here rather than inside the dealer
- * because the region's CAPACITY is now read before the deal (see the share-scaling note below), and
- * one number must answer both.
+ * The most lifts a day realistically holds, BEFORE the clock trims it. Seven is not the hour's
+ * arithmetic (`enforceTimeCap` prices seven lifts at 3–5 sets as 42–105 minutes against
+ * `SESSION_MAX`); it is the dealer's ceiling so a region's capacity is bounded before the deal and
+ * the time cap does the pricing afterwards. Declared here rather than inside the dealer because the
+ * region's CAPACITY is read before the deal (see the share-scaling note below), and one number must
+ * answer both.
  */
 const MAX_LIFTS_PER_DAY = 7;
 

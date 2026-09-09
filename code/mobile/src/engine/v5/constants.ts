@@ -103,16 +103,17 @@ export const CANONICAL_MUSCLE_ORDER: readonly string[] = [
   'Core',
 ] as const;
 
-// B-4 (day-one per-set cost) lives where assembly prices a day — `fixtureModel`'s
-// COMPOUND_SET_MIN / ISOLATION_SET_MIN + SET_EXEC_SECONDS — replaced by her measured rest (S-17)
+// B-4 (day-one per-set cost) lives where assembly prices a day — `domain/restPrescription`'s
+// COMPOUND_SET_MIN / ISOLATION_SET_MIN + SET_EXEC_SECONDS (moved there 2026-08-11) — replaced by her measured rest (S-17)
 // and set durations (learnedExecS) the moment she has them. A second copy of those numbers used to
 // sit HERE (`STARTING_SET_SECONDS`, unwired, and disagreeing with the live ones): one declared
 // constant, one home — it is gone.
 
 /**
- * B-2 — starting weekly sets per muscle, before earned/cut volume (Loop 3) takes over. `base` for a
- * normal muscle; an emphasised muscle starts with `base + emphasisBonus` (its first claim on volume,
- * S-4). Both are overwritten within a few weeks by S-32/S-34.
+ * B-2 — the LEGACY starting weekly sets per muscle, read only on the days-unknown path
+ * (`assembler.weeklyTargets` with `days == null`). The live rule is `startingWeeklySets(days)`
+ * below, and an emphasis mark is a TRANSFER of `DAY_ONE_EX_DIVISOR` blocks (assembler), not a
+ * bonus: `emphasisBonus` is read by nothing and kept only so the shape of an old state decodes.
  */
 export const STARTING_WEEKLY_SETS = { base: 10, emphasisBonus: 6 } as const;
 

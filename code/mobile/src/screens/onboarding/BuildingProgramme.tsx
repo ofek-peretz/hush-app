@@ -43,7 +43,7 @@ import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
 
 import { importFailure, peekImport, settledImport } from '@/domain/pendingImport';
-import { AppState, Text, StyleSheet } from 'react-native';
+import { AppState, Text, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { Button } from '@/components/ds';
@@ -55,7 +55,8 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { programmeName, type ProgrammeName } from '@/domain/programmeName';
 import { draftFromCoachWeek } from '@/domain/coachDraft';
-import { requestPlanBuild } from '@/platform/coach/planBuild';
+import { sealAuthored } from '@/domain/planBuilder';
+import { requestPlanBuild, type PlanBuildFailure } from '@/platform/coach/planBuild';
 import { color, font } from '@/design/tokens';
 import type { Profile, Program } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
@@ -190,21 +191,44 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * between a week that was WRITTEN and one that was picked, and `programmeName` never overwrites
    * them (it composes the sentence ABOVE the list, not the day rows).
    */
-  const askTheModel = useCallback(async (): Promise<Program | null> => {
+  /*
+   * ⛔ …AND SINCE 2026-09-09 IT ANSWERS WITH THE REASON, NOT `null`. The founder's ruling —
+   * *"אסור שיהיה כשלון בכלל"* — needs the screen to SAY what happened, and "no answer" is three
+   * different sentences: no network, a wall we built, a pipe that dropped it. Folding them into one
+   * was right when the fallback was silent; a failure she is shown has to be the true one.
+   */
+  const askTheModel = useCallback(async (): Promise<{ ok: true; program: Program } | { ok: false; reason: PlanBuildFailure }> => {
     const res = await requestPlanBuild({
       daysPerWeek: inputs.daysPerWeek,
       sex: inputs.sex === 'female' ? 'female' : 'male',
       ...(inputs.weightKg != null ? { weightKg: inputs.weightKg } : {}),
       ...(coachAsk ? { ask: coachAsk } : {}),
     }).catch(() => null);
-    if (!res?.ok) return null;
-    return draftFromCoachWeek(res.week, {
+    if (!res) return { ok: false, reason: 'upstream' };
+    if (!res.ok) return { ok: false, reason: res.reason };
+    const program = draftFromCoachWeek(res.week, {
       id: `built_ai_${Date.now()}`,
       dayNamer: (i) => t('builder.dayNamed', { letter: String.fromCharCode(65 + i) }),
     });
+    return program ? { ok: true, program } : { ok: false, reason: 'nothing_said' };
   }, [inputs, coachAsk, t]);
-  const [failed, setFailed] = useState(false);
-  /** She asked in her own words and no answer came back in time — carried to the reveal, not buried. */
+  /**
+   * Why the screen stopped: the sealed week could not be read (`disk`), or the coach did not answer
+   * a sentence she wrote — with the reason, so the scaffold can say the true one.
+   */
+  const [failed, setFailed] = useState<null | 'disk' | PlanBuildFailure>(null);
+  /**
+   * ⛔ THE LOCAL WEEK IS A DOOR SHE OPENS, NOT A SUBSTITUTION (founder 2026-09-09).
+   *
+   * *"המתאמן צריך לקבל את התוכנית הטובה ביותר עבור מטרותיו האישיות ואם זה לא צולח נכשלנו עוד לפני
+   * שהמשתמש התחיל להתאמן."* He had written "no leg days at all" and received two — the model had
+   * obeyed and the call had fallen through, silently, to an assembler that cannot read a sentence.
+   * So when she wrote one and the coach did not answer, this screen STOPS and says so; the local
+   * assembler runs only when she presses this door herself, and then the reveal does not quote her
+   * sentence over a week it never touched.
+   */
+  const [withoutCoach, setWithoutCoach] = useState(false);
+  /** She asked in her own words and the week was built without the coach — carried to the reveal, not buried. */
   const coachMissed = useRef(false);
   /*
    * ⛔ THE WEEK THAT GOT WRITTEN IS THE TRUTH ABOUT HOW OFTEN SHE TRAINS (2026-08-30).
@@ -252,6 +276,17 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * is showing her what it did.
    */
   const [shownMuscles, setShownMuscles] = useState(0);
+  /**
+   * ⛔ THE WALK LOOPS WHILE THE CALL IS OUT (founder 2026-09-09: *"אסור שיהיה כשלון בכלל"*).
+   *
+   * The placeholder walk used to END — ten muscles, 18.8 seconds, then a fully lit body with dashed
+   * rows and no motion — and that end was the ceiling on the model's time: past it the screen had
+   * nothing left to draw, so the budget cut the call and the local assembler answered instead.
+   * The founder overruled the cut. So once every muscle is lit, the rows keep moving through the
+   * same ten muscles again, in order, each for its own beat: still true (a week covers them), still
+   * dashes (nothing is invented), and the screen is alive for as long as the answer takes.
+   */
+  const [cycle, setCycle] = useState(0);
   const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number } | null>(null);
   /** When the show began — wall-clock, so a background gap costs nothing (see the catch-up below). */
   const startedAtMs = useRef(Date.now());
@@ -275,7 +310,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
      */
 
     const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
-    if (shownMuscles >= total) return;
+    if (shownMuscles >= total && built) return;
     /*
      * ⛔ THE ANSWER IS IN ⇒ THE BODY FILLS AT ONCE. See `FILL_HOLD_MS`: the walk is a cover for
      * the wait, so the instant there is nothing left to wait for the cover has no work to do.
@@ -289,9 +324,13 @@ export function BuildingProgramme({ navigation, route }: Props) {
       setShownMuscles(total);
       return;
     }
-    const id = setTimeout(() => setShownMuscles((n) => n + 1), beatFor(PLACEHOLDER_LIFTS));
+    /* Every muscle lit and still no answer ⇒ the loop (see `cycle`). Same beat, next muscle. */
+    const id = setTimeout(
+      () => (shownMuscles >= total ? setCycle((c) => c + 1) : setShownMuscles((n) => n + 1)),
+      beatFor(PLACEHOLDER_LIFTS),
+    );
     return () => clearTimeout(id);
-  }, [shownMuscles, built]);
+  }, [shownMuscles, built, cycle]);
 
   /*
    * ⛔ THE NAME WAITS FOR THE FILL (found in the audit, 2026-08-05).
@@ -339,11 +378,11 @@ export function BuildingProgramme({ navigation, route }: Props) {
         return;
       }
       if (elapsed < openingMs) return;
-      const n = Math.min(
-        PLACEHOLDER_MUSCLES.length,
-        1 + Math.floor((elapsed - openingMs) / beatFor(PLACEHOLDER_LIFTS)),
-      );
+      const beats = 1 + Math.floor((elapsed - openingMs) / beatFor(PLACEHOLDER_LIFTS));
+      const n = Math.min(PLACEHOLDER_MUSCLES.length, beats);
       setShownMuscles((cur) => Math.max(cur, n));
+      /* …and past the last muscle the same arithmetic says how far round the loop the show is. */
+      setCycle((cur) => Math.max(cur, beats - PLACEHOLDER_MUSCLES.length));
     });
     return () => sub.remove();
   }, [built]);
@@ -510,8 +549,10 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * shown, and the only way to guarantee that is for both to be the same read. A `Program` in a
    * navigation param would be a second copy that a failed write could silently disagree with.
    */
-  const build = useCallback(async () => {
-    setFailed(false);
+  const build = useCallback(async (opts: { withoutCoach?: boolean } = {}) => {
+    setFailed(null);
+    const skipCoach = !!opts.withoutCoach;
+    setWithoutCoach(skipCoach);
     try {
       /*
        * ════════════════════════════════════════════════════════════════════════════════════════
@@ -538,12 +579,40 @@ export function BuildingProgramme({ navigation, route }: Props) {
          today, but the ternary below would DISCARD an answer paid for over a sealed week — a call
          spent re-answering a settled question, and a second week that could disagree with the one
          she trains. The guard is where the money is spent, not where the result is chosen. */
-      const asked = !authored && coachAsk != null ? await askTheModel() : null;
+      const answer = !authored && coachAsk != null && !skipCoach ? await askTheModel() : null;
+      /*
+       * ⛔ A SENTENCE SHE WROTE AND NO ANSWER ⇒ THE SCREEN STOPS AND SAYS SO (founder 2026-09-09).
+       * It does not build her a different week underneath her own words. The scaffold names the
+       * reason, offers the ask again, and offers the local week as a door — see `withoutCoach`.
+       */
+      if (answer && !answer.ok && coachAsk?.trim()) {
+        setFailed(answer.reason);
+        return;
+      }
+      /*
+       * ════ ⛔ THE WEEK THE MODEL WROTE IS SEALED AND WRITTEN TO DISK, HERE, BEFORE IT IS SHOWN ════
+       *
+       * Founder, 2026-09-09, on build 72: *"זה לא עובד. ביקשתי מהבינה בלי אימון רגליים והוא שם לי
+       * כאן פעמיים אימון רגליים."*
+       *
+       * The model had obeyed (eleven live calls that day, zero leg lifts) and this screen had DRAWN
+       * its week — and then nothing wrote it anywhere. `ProgramCreated` reads the disk, finds no
+       * programme, and `completeOnboarding` generates the engine's week over the one she was just
+       * shown: two leg days, in silence, under an animation that quoted her own sentence. Every
+       * other author on this road writes before the reveal (the builder seals → `saveBuiltProgram`
+       * → `authored: true`; the import adopts); the model's week was the one that never landed.
+       *
+       * So it takes the builder's exact road: `sealAuthored` stamps the passport that makes
+       * `engineMayRebuild` refuse, and `saveBuiltProgram` puts it on disk — what she is shown is
+       * what she trains, because both are the same record.
+       */
+      const asked = answer?.ok ? sealAuthored(answer.program) : null;
       /* ⚠️ ONLY WHEN THERE WAS A SENTENCE TO LOSE. Pressing through the ask step without writing a
          line is still the coach path (`coachAsk` is `''`), but there is nothing to apologise for
          and nothing to offer again — the local week IS the answer to saying nothing. */
       coachMissed.current = !authored && !!coachAsk?.trim() && asked == null;
       if (asked) {
+        await app.saveBuiltProgram(asked);
         const wrote = asked.days.filter((d) => !d.isRest).length;
         if (wrote > 0) authoredDays.current = wrote;
       }
@@ -570,13 +639,13 @@ export function BuildingProgramme({ navigation, route }: Props) {
       // Nothing on disk under `authored` means the write that preceded this navigation did not land.
       // The retry is already here and it is the honest answer — never a generated week wearing hers.
       if (!program) {
-        setFailed(true);
+        setFailed('disk');
         return;
       }
       builtAtMs.current = Date.now();
       setBuilt({
         muscles: buildMusclesFromProgram(program, profile.repBand ?? '8-10'),
-        name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER),
+        name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER, program.title),
         lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
       });
       /*
@@ -588,9 +657,9 @@ export function BuildingProgramme({ navigation, route }: Props) {
     } catch {
       // A pure function that throws is a defect, not an outage — but onboarding may never be a dead
       // end, so the retry stays. It just has nothing to blame a network for any more.
-      setFailed(true);
+      setFailed('disk');
     }
-  }, [profile, authored, model, coachAsk, askTheModel]);
+  }, [profile, authored, model, coachAsk, askTheModel, app]);
 
   /*
    * ⛔ THE BUILD WAITS FOR A RUNNING IMPORT — BUT NEVER FOR LONG, AND THAT SECOND HALF IS THE WHOLE
@@ -637,13 +706,37 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * "Reading what you told me." above a screen whose entire job is showing her the reading happen.
    */
   if (failed) {
+    /*
+     * ⛔ THE TRUE SENTENCE, NOT "IN TIME" (2026-09-09). Three things can stop the coach and they
+     * are three different lines: no network (offline, or a socket that timed out), a wall we built
+     * (the Worker's limit), and everything else — a pipe that dropped the answer three times, or a
+     * build shipped without its key. She reads the one that happened.
+     */
+    const coachFailed = failed !== 'disk';
+    const title = failed === 'offline' || failed === 'timed_out'
+      ? t('ob.buildingOfflineTitle')
+      : failed === 'rate_limited'
+        ? t('ob.buildingBusyTitle')
+        : t('ob.buildingFailedTitle');
     return (
       <OnboardingScaffold
         legend={t('ob.buildingFailedLegend')}
-        title={t('ob.buildingFailedTitle')}
+        title={title}
         headGap={32}
-        footer={<Button variant="primary" size="lg" block label={t('ob.buildingRetry')} onPress={() => void build()} />}
+        footer={
+          <View style={styles.failedFooter}>
+            <Button variant="primary" size="lg" block label={t('ob.buildingRetry')} onPress={() => void build()} />
+            {/* The local week, as a DOOR — never as the thing that happened to her. See `withoutCoach`. */}
+            {coachFailed ? (
+              <Button variant="ghost" size="lg" block label={t('ob.buildingWithoutCoach')} onPress={() => void build({ withoutCoach: true })} />
+            ) : null}
+          </View>
+        }
       >
+        {/* Her own words, kept and shown — the retry sends exactly these again. */}
+        {coachFailed && coachAsk?.trim() ? (
+          <Text style={styles.failedAsk} numberOfLines={4}>{`“${coachAsk.trim()}”`}</Text>
+        ) : null}
         <Text style={styles.failed}>{t('ob.buildingFailedSub')}</Text>
       </OnboardingScaffold>
     );
@@ -676,17 +769,35 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * no gap to fill any more: the catalogue's muscles carry the opening beat, and the real week
    * replaces them whole.
    */
+  /*
+   * ⚠️ ON THE LOOP the whole body stays lit and only the muscle whose rows are being drawn moves:
+   * the view draws the LAST entry's rows, so the list is rotated to end on the muscle whose turn it
+   * is. `lit` is a set, so the order costs nothing there.
+   */
+  const placeholders = (): readonly string[] => {
+    const n = PLACEHOLDER_MUSCLES.length;
+    if (shownMuscles < n || cycle === 0) return PLACEHOLDER_MUSCLES.slice(0, shownMuscles);
+    const k = (n - 1 + cycle) % n;
+    return [...PLACEHOLDER_MUSCLES.slice(k + 1), ...PLACEHOLDER_MUSCLES.slice(0, k + 1)];
+  };
   const muscles: BuildMuscle[] = built
     ? built.muscles.slice(0, shownMuscles)
-    : PLACEHOLDER_MUSCLES.slice(0, shownMuscles).map((m) => ({ muscle: m, lifts: waitingRows }));
+    : placeholders().map((m) => ({ muscle: m, lifts: waitingRows }));
 
   /*
    * The week's name, said in her language. `programmeName` returns the PARTS — the shape, the
    * muscles she leads with, the days — because Hebrew assembles this sentence differently, and a
    * domain module that returned English prose would be a second copy layer nobody translates.
    */
+  /*
+   * The author's own title STANDS ALONE when the week has one — it is a whole sentence about the
+   * week (live, 2026-09-09: *"תכנית 3 ימים לפלג גוף עליון בלבד (ללא רגליים)"*), and appending
+   * "3 days a week" to it says the same thing twice. The shape key is the truthful fallback, and
+   * that one is a word, so the day count and the led muscles complete it.
+   */
   const named = built?.name
-    ? [
+    ? built.name.title
+      ?? [
         t(built.name.key),
         t('plan.weekDays', { n: built.name.days }),
         ...(built.name.led.length > 0
@@ -717,7 +828,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       note={importFailed ? t(`import.fail.${importFailed}`) : null}
       /* Only when she wrote one — an empty ask is still the coach path, and there is nothing to
          quote. See `askedFor` on the view for why this is the AI signature and a badge is not. */
-      askedFor={coachAsk?.trim() ? coachAsk.trim() : null}
+      askedFor={coachAsk?.trim() && !withoutCoach ? coachAsk.trim() : null}
     />
   );
 }
@@ -762,4 +873,13 @@ const styles = StyleSheet.create({
     color: color.textSecondary,
     textAlign: 'left',
   },
+  failedAsk: {
+    fontFamily: font.serif,
+    fontSize: 20,
+    lineHeight: 28,
+    color: color.textPrimary,
+    textAlign: 'left',
+    marginBottom: 14,
+  },
+  failedFooter: { gap: 10 },
 });

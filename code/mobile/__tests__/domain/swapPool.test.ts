@@ -243,11 +243,16 @@ describe('when the swap verb is offered (isSwapMoment)', () => {
         .replace(/^\s*\/\/.*$/gm, '') // whole-line comments
         .replace(/\/\/.*$/gm, ''); // trailing comments
 
-    expect(code(stage)).toMatch(/canSwap\s*=\s*isSwapMoment\(/);
-    expect(code(mirror)).toMatch(/isSwapMoment\(/);
-    // …and neither may resurrect its own answer. Scoped to the SWAP: `exerciseSetIndex === 0` also
-    // spells the Equipment-Occupied law ("applies at the START of an exercise"), which is a
-    // different rule that merely shares this shape — a blanket ban would forbid it too.
+    /*
+     * ⛔ SUPERSEDED (founder, 2026-09-07 — the board). The verb is live on EVERY set, on both
+     * surfaces: the first-set rule's reason ("a mid-lift swap strands the sets she has already
+     * logged") was never true — `retargetPlanForSwap` re-points only the steps from the cursor on.
+     * `isSwapMoment` stays a pure fact for the record above; NEITHER surface asks it any more, and
+     * neither may resurrect a set-position gate of its own. The scan is inverted, not deleted.
+     */
+    expect(code(stage)).not.toMatch(/canSwap\s*=\s*isSwapMoment\(/);
+    expect(code(stage)).toMatch(/canSwap\s*=\s*onLift;/);
+    expect(code(mirror)).not.toMatch(/isSwapMoment\(/);
     expect(code(stage)).not.toMatch(/canSwap\s*=\s*exNo/);
     expect(code(mirror)).not.toMatch(/swapOptions[\s\S]{0,120}?exerciseSetIndex === 0/);
   });

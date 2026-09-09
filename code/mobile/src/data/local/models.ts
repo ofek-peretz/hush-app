@@ -63,6 +63,18 @@ export interface Profile {
   units: Units;
   goal: Goal;
   /**
+   * THE VOICE COACH (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md, 2026-09-08). Absent means ON:
+   * the spec's whole point is that the phone stays in the pocket, so the voice is the default and
+   * the screen is the fallback. `false` is the one switch in the You tab that turns it off.
+   *
+   * ⛔ `voiceSpec`, NOT `voiceCoach` (2026-09-09). The field was `voiceCoach` — the switch of the
+   * phase-B "coach in her ear" the founder killed on 2026-09-08 — and a `false` he wrote into his
+   * profile that day survived every build since, silencing the NEW voice with no sign (*"לא היה
+   * שמע… ולא הופיע דיאלוג"*: no permission dialog means the gate shut before it). A dead feature's
+   * switch is not this feature's switch: a fresh key starts everyone at the spec's default.
+   */
+  voiceSpec?: boolean;
+  /**
    * ⛔ HER OWN WORDS, from onboarding (founder 2026-08-04, taking the chat out of the front door).
    *
    * Distinct from `goal`, which is an ENUM the product settled long ago (hypertrophy-first, one
@@ -165,6 +177,16 @@ export interface Slot {
   capability: Capability; // capability class is FIXED for the slot
   exerciseId: string;
   setCount: number;
+  /**
+   * ⛔ A REP RANGE WRITTEN ON THIS SEAT (founder 2026-09-07) — the model's per-lift band when it
+   * wrote one (`buildPrompt` at `REPS_MIN`), written only by `planBuilder.setLiftBand`. Absent on
+   * every engine-dealt and shelf-built slot: her profile band (per muscle, then the single choice,
+   * then 8–10) answers exactly as it always did. The engine's `bandOf` reads this FIRST, so the
+   * opening load is priced at this floor (S-38) and Loop 2 progresses inside this band — the same
+   * arithmetic, a different pair of numbers. Never a load, never a rest.
+   */
+  repBand?: [number, number];
+
   // Supplemental work (currently: core) — included in the program but NOT a primary
   // progression target. One per week, 3 sets, placed last, preferring upper sessions.
   // Rendered like any slot; it just never drives capability load/progression.
@@ -275,6 +297,13 @@ export interface Program {
    * This is also the door for the COACH track: a coach writes the week, Hush runs the loads.
    */
   authored?: 'engine' | 'athlete_or_coach';
+  /**
+   * The AUTHOR'S title for the week, when it has one — today the model's (`BUILD_WEEK_SCHEMA.name`,
+   * 2026-09-09). Shown by the reveal and the ready screen ahead of the shape heuristic in
+   * `programmeName`. Absent for the engine's weeks, the shelves and a week she typed; those are
+   * named by what their lifts make.
+   */
+  title?: string;
 }
 
 /** Reason types Hush may attach to a changed set (spec §4.4). */
@@ -337,6 +366,20 @@ export interface SetLog {
    *  (the exclusion); this mark exists so surfaces can LABEL it honestly ("Warm-up"), and so the
    *  rest learner can tell a warm-up first-touch from a legacy approach measurement. */
   isWarmup?: boolean;
+  /**
+   * ⛔ A ROW THE SESSION CLOCK WROTE, NOT HER — builds 64–71 only (2026-09-07 → 2026-09-09).
+   *
+   * For two days the clock presumed a set done as written when its expected duration elapsed with
+   * no word from her; the founder cancelled that outright on 2026-09-09 (*"הסט האוטומטי עדיין
+   * קיים אפילו שאמרתי לך לבטל אותו לגמרי"*). NOTHING WRITES THIS MARK ANY MORE. It stays on the
+   * model because records from those builds carry it, and they must keep reading as they did:
+   * PRESENT (she was there, the plan passed through it) and NOT EVIDENCE (`actualWeight` /
+   * `actualReps` are the prescription copied across). `domain/setEvidence` holds the two
+   * predicates; every reader of a log asks one of them and never the raw marks.
+   *
+   * An engine mark in the `isWarmup`/`isApproach` family, exactly as the ruling below requires.
+   */
+  presumed?: true;
   /*
    * ⛔ NO `tag` HERE, AND NO SET-TYPE OF ANY KIND SHE AUTHORS (founder ruling, 2026-08-24).
    * A 'failure' | 'drop' tag lived on this model for a few hours. The ruling that removed it is
@@ -460,6 +503,8 @@ export interface RepsResult extends ItemResultBase {
   reps: number;
   /** She corrected it by hand rather than taking what was proposed. */
   edited?: boolean;
+  /** The same mark as `SetLog.presumed` — records from builds 64–71 only; nothing writes it now. */
+  presumed?: true;
 }
 
 /** Held or worked for a duration. `seconds` is what she ACTUALLY held — see `TimeStage`. */
@@ -530,6 +575,17 @@ export interface Session {
    * whoever asked. Absent on sessions saved before this field — those fall back to the old lookup.
    */
   prescribed?: number;
+  /**
+   * SHE SAID SHE WAS DONE (2026-09-07 — the session runs itself).
+   *
+   * The clock never ends a session. So a session reaches SAVED either by her word — the finish
+   * control, or "done" by voice or wrist — or by salvage after the resume window. This is the
+   * difference, stamped at save. `sessionTrained` counts a PRESUMED set (builds 64–71) toward the
+   * workout only under her word: a session whose sets the clock wrote
+   * while the phone sat in a locker, never finished by her, is judged on what she actually said.
+   * Absent on every session saved before the field existed (those were all finished by hand).
+   */
+  finishedByAthlete?: true;
   startedAt: string;
   state: SessionState;
   earlyFinish: boolean;

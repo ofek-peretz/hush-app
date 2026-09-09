@@ -29,6 +29,7 @@
 // 
 
 import type { Session } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 
 /** One past occurrence of a lift, as a screen needs it. */
 export interface LastTime {
@@ -78,7 +79,7 @@ export function lastTimeOn(
     if (opts.excludeSessionId && s.id === opts.excludeSessionId) continue;
     // `isApproach` is a Rev-8 legacy flag on old records — a measurement, not a working set, and it
     // was never something she "did last time".
-    const sets = s.sets.filter((x) => x.exerciseId === exerciseId && !x.isApproach);
+    const sets = s.sets.filter((x) => x.exerciseId === exerciseId && isEvidenceSet(x));
     if (sets.length === 0) continue;
     const at = Date.parse(s.startedAt);
     return {

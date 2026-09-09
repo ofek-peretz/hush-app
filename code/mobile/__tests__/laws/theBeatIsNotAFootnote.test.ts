@@ -89,6 +89,6 @@ describe('the lift-done beat carries a screen on its own', () => {
 
 describe('one predicate, shared by the askers that once diverged', () => {
   it('the wrist replay asks the same beatSpeaksFor the render guard asks', () => {
-    expect(flow()).toContain('if (!beatSpeaksFor(beat, null)) return;');
+    expect(flow()).toContain('if (!beatSpeaksFor(beat)) return;');
   });
 });

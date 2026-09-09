@@ -82,10 +82,16 @@ describe('a lift the coach moved', () => {
      * today's defects. A law that cannot fail on its own motivating bug is a comment with a test
      * runner attached — so this one reads the screen.
      */
-    const home = read('src/screens/home/Home.tsx');
-    expect(home).not.toContain('if (!say) return null;');
+    /*
+     * ⚠️ THE SCREEN MOVED (2026-09-07). Today no longer builds the case — a Home row opens the
+     * day's card, and the card is the one screen that builds it. Same bug, same shape, one screen
+     * over: the card must pass whatever sentence it has, present or not.
+     */
+    const card = read('src/screens/plan/PreWorkoutScreen.tsx');
+    expect(card).not.toContain('if (!say) return null;');
     // …and it passes whatever it has, present or not.
-    expect(home).toMatch(/coachChangedCase\(ex, coachPlan, before, saidFor\.get\(ex\)/);
+    expect(card).toMatch(/coachChangedCase\(ex, now, before, saidFor\.get\(ex\)/);
+
   });
 
   it('the screen does not draw an empty sentence as a failed one', () => {
@@ -118,9 +124,12 @@ describe('⛔ the answer carries the verb (founder, device QA 2026-08-23)', () =
 
   it('…and the pre-workout card hands the door through — gated exactly like the row’s own swap', () => {
     const host = src('src/screens/plan/PreWorkoutScreen.tsx');
-    // Both sheet hosts pass onSwap, and both are gated on the day not being done.
+    // ONE sheet host since 2026-09-07 — the WHY-HERE sheet left the card with the founder's ruling
+    // (`theWedgeLandsBeforeSheTrains`); the load's case still passes onSwap, gated on the day not
+    // being done.
     const doors = host.split('onSwap: () =>').length - 1;
-    expect(doors).toBe(2);
+    expect(doors).toBe(1);
     expect(host).toContain('setSwapFor(id)');
   });
+
 });

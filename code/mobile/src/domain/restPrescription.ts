@@ -301,6 +301,12 @@ export function restIsLearnedFor(exerciseId: string | null | undefined): boolean
   return !!exerciseId && learnedRestByExercise.has(exerciseId);
 }
 
+/** The crossing's twin: is the walk between stations her pooled median (`learnedTransitionRestS`)
+ *  rather than the bootstrap? The wrist's "your pace" on a transition rest asks this (2026-09-09). */
+export function restTransitionIsLearned(): boolean {
+  return learnedTransitionS != null;
+}
+
 /**
  * The between-sets rest for an exercise: HER measured median on that lift (S-17) once she has any,
  * else the tier bootstrap. Unknown exercise → compound, the safe long side.

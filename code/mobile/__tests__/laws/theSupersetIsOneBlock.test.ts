@@ -135,7 +135,10 @@ describe('the model may WRITE one', () => {
     expect(lift.required).toEqual(['ex', 'sets']);
     // The engine's three jobs stay refused by shape — a pair is STRUCTURE, not a prescription.
     const json = JSON.stringify(BUILD_WEEK_SCHEMA);
-    for (const forbidden of ['load', 'reps', 'rest']) {
+    // `reps` left this list on 2026-09-07 — the rep RANGE is the one prescription the model may
+    // make, by founder ruling; `theModelWritesAWeekSheCanEdit` pins its exact shape.
+    for (const forbidden of ['load', 'rest']) {
+
       expect({ forbidden, present: json.includes(forbidden) }).toEqual({ forbidden, present: false });
     }
   });

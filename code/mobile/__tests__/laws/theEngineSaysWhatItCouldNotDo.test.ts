@@ -117,10 +117,12 @@ describe('⛔ the one sentence about her week', () => {
     expect(pre).toContain('overBudget');
     expect(src('screens/plan/PreWorkout.tsx')).toContain('props.budgetNote');
 
-    // 3 · and the WHY opens from a row on BOTH screens, not only the card
-    expect(home).toContain('WhyHereSheet');
-    expect(home).toMatch(/placements\[id\] \? setHereFor\(id\)/);
-    expect(pre).toContain('WhyHereSheet');
+    // 3 · the WHY-HERE sheet no longer opens from a row on EITHER screen (founder 2026-09-07:
+    //     "אין בזה צורך") — the week's and the day's sentences above are the whole of what the
+    //     engine says about what it could not do. `theWedgeLandsBeforeSheTrains` pins the ruling.
+    expect(home).not.toContain('WhyHereSheet');
+    expect(pre).not.toContain('WhyHereSheet');
     expect(src('components/PlanLifts.tsx')).toContain('onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId)');
+
   });
 });

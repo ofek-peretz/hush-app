@@ -178,49 +178,50 @@ describe('what she did last time, inside the field it belongs to', () => {
         });
       });
 
-      it('states her load and her reps for THIS set, per side, under today’s figures', () => {
+      /*
+       * ⛔ ONE STRIP, EVERY SET (founder, 2026-09-07: *"עיצוב יפה שיראה מה היה בפעם הקודמת"*). The
+       * word appears ONCE, as the strip's legend, and each of her sets follows as `load×reps` in the
+       * field's own per-side units. The guarantees below are the 08-31 ones unchanged: the right
+       * number, per set, in her units, in both languages, and nothing at all when there is nothing.
+       */
+      const word = (s: string) => s.toUpperCase().startsWith(tg('workout.prevShort').toUpperCase()); // Legend may uppercase Latin
+      it('states her load and her reps for EVERY set, per side, under today’s figures', () => {
         const read = cells(draw(makeSession()));
-        /* The word — twice, once under each figure. */
-        expect(read.filter((s) => s.startsWith(tg('workout.prevShort')))).toHaveLength(2);
+        /* The word — once, as the strip's legend. */
+        expect(read.filter(word)).toHaveLength(1);
         /*
          * ⛔ 32.5 → 6.25 (founder, 2026-08-31): *"שמתי לב שלמעלה לא כתוב כמה הורם בכל צד באימון
          * הקודם ורק סך הכל."* It said the TOTAL while the field below it said the per-side figure —
-         * two scales for one quantity on one screen, so the only comparison the athlete actually
-         * makes needed bar arithmetic in her head. `(32.5 − 20) / 2 = 6.25`.
+         * two scales for one quantity on one screen. `(32.5 − 20) / 2 = 6.25`. Set 2 of the fixture
+         * was 9 reps; sets 3 and 4 were 8. All four stand, in her order.
          */
-        expect(read).toContain('6.25');
-        /* Set 2 of the fixture: she did 9 reps on it last time. Positional, per set — not the
-           lift's average and not its first set. */
-        expect(read).toContain('9');
+        expect(read.filter((s) => s === '6.25×9')).toHaveLength(2);
+        expect(read.filter((s) => s === '6.25×8')).toHaveLength(2);
       });
 
       it('⛔ says nothing at all on a lift she has never done', () => {
         const read = cells(draw(makeSession({ lastTime: null, setsSoFar: [], loadsSoFar: [] })));
-        expect(read.filter((s) => s.startsWith(tg('workout.prevShort')))).toHaveLength(0);
+        expect(read.filter(word)).toHaveLength(0);
       });
 
       it('⛔ and nothing on a warm-up bridge — half the working load is not a comparison', () => {
         const read = cells(draw(makeSession({ setLabel: { n: 1, m: 1, warmup: true } })));
-        expect(read.filter((s) => s.startsWith(tg('workout.prevShort')))).toHaveLength(0);
+        expect(read.filter(word)).toHaveLength(0);
       });
 
       it('⚠️ a load that moved mid-lift is read PER SET, never flattened to one figure', () => {
         /*
-         * Loop 1 raised her from 32.5 to 35 last week, on sets 3 and 4. The fixture stands on set 2,
-         * so the honest answer is 32.5 → 6.25 a side. Reading the lift's last load (35 → 7.5) would
-         * compare today against a set she has not reached.
+         * Loop 1 raised her from 32.5 to 35 last week, on sets 3 and 4. The strip says so: two cells
+         * at 6.25 a side and two at 7.5 — reading the lift's last load for every set would print
+         * four cells at 7.5 and erase the raise that happened.
          */
         const read = cells(
           draw(makeSession({ lastTime: { ago: 4, loadKg: 35, reps: [9, 9, 8, 8], loads: [32.5, 32.5, 35, 35] } })),
         );
-        /*
-         * ⚠️ READ POSITIONALLY, because `7.5` is ALSO on this screen — it is TODAY's per-side
-         * figure, the fixture's own 35 kg prescription. A bare `not.toContain('7.5')` would be
-         * asserting that the stage does not draw the load it is prescribing. What must hold is that
-         * the figure UNDER THE WORD is her set-2 load, not the lift's last one.
-         */
-        expect(read[read.indexOf(tg('workout.prevShort')) + 1]).toBe('6.25');
+        expect(read.filter((s) => s === '6.25×9')).toHaveLength(2);
+        expect(read.filter((s) => s === '7.5×8')).toHaveLength(2);
       });
+
     });
   }
 });

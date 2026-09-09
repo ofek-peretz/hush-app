@@ -39,6 +39,7 @@
 // 
 
 import type { Session, SetLog, Units } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { recordCardFromHistory } from '@/domain/shareCard';
 
@@ -73,7 +74,7 @@ export interface SessionPoster {
 // Working sets only — a warm-up bridge (`isApproach`) never counts here, exactly as in
 // sessionMetrics, so the poster and the Log row state the same tonnes.
 const tonnesOf = (sets: readonly SetLog[]): number => {
-  const kg = sets.reduce((sum, s) => sum + (s.isApproach ? 0 : (s.actualWeight ?? 0) * s.actualReps), 0);
+  const kg = sets.reduce((sum, s) => sum + (isEvidenceSet(s) ? (s.actualWeight ?? 0) * s.actualReps : 0), 0);
   return Math.round(kg / 100) / 10;
 };
 

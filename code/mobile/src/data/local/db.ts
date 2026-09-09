@@ -291,6 +291,9 @@ export interface PersistedSessionResume {
    *  .restBeforeS). Carried across an app kill so a crash between "Ready" and "Complete Set"
    *  does not silently drop the rest fact. Optional: snapshots written before v5 Stage 0. */
   pendingRestS?: number;
+  /** When the set on screen was presented (2026-09-07) — see `sessionRecovery.ResumeSnapshot`.
+   *  Optional: snapshots written before the clock. */
+  presentedAtMs?: number | null;
 }
 
 /** Persisted LIVE-RUN snapshot. Shape mirrors `platform/cardio/cardioRun`'s CardioResume — kept

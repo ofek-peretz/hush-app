@@ -20,16 +20,15 @@
  *     looking at, and the only thing that reaches storage is a week she sealed herself;
  *   · it cannot prescribe: `BUILD_WEEK_SCHEMA` has no load, no reps and no rest field, so the
  *     engine's three jobs are structurally out of its reach;
- *   · and it never strands her — every failure is a REASON, and the caller falls through to the
- *     local assembler, which is what this door did on its own until today.
+ *   · and it never strands her — every failure is a REASON, counted with its cause, and the caller
+ *     SAYS it and offers the ask again. The local assembler is a door she opens, never a silent
+ *     substitution (founder 2026-09-09 — see `PLAN_BUILD_SAID_MS`).
  *
- * ⚠️ ONE RETRY, AND ONLY FOR A TRUNCATED STREAM (2026-08-30). Every other failure falls back
- * instantly — the worker already hedges, and a retry on top of a hedge is how one tap becomes six
- * calls. A truncation is the one failure that is neither the model's nor the network's opinion
- * about anything: measured at ONE CALL IN FIVE, it is a stream that died mid-sentence, and the same
- * request a second later simply works. Silently handing her a locally-assembled week instead — on
- * a fifth of the builds, on the door whose whole promise is that the model wrote it — is the wrong
- * trade against six more seconds.
+ * ⚠️ BOUNDED RETRIES, ON PIPE FAILURES ONLY (2026-08-30, widened 2026-09-09). It was one retry on
+ * `truncated` alone; a double truncation (one in twenty-five) then fell through to a week her
+ * sentence never touched, and the founder's ruling is that this call does not fail. So: up to
+ * `PLAN_BUILD_ATTEMPTS`, on every reason in `RETRYABLE`, inside one budget — and never on a
+ * deterministic refusal, where a second call is a second bill for the same answer.
  */
 
 //
@@ -41,9 +40,25 @@ import { askCoach, type CoachFailure, type CoachReply } from '@/platform/coach/c
 import { BUILD_EVENTS } from '@/platform/events';
 import { track } from '@/platform/telemetry';
 
+export type PlanBuildFailure = CoachFailure | 'not_json' | 'nothing_said' | 'too_slow';
 export type PlanBuildResult =
-  | { ok: true; week: CoachWeekDraft }
-  | { ok: false; reason: CoachFailure | 'not_json' | 'nothing_said' | 'too_slow' };
+  | { ok: true; week: CoachWeekDraft; attempts: number; ms: number }
+  | { ok: false; reason: PlanBuildFailure; attempts: number; ms: number };
+
+/**
+ * ⛔ WHICH FAILURES A SECOND CALL CAN ANSWER (founder 2026-09-09: *"אסור שיהיה כשלון בכלל"*).
+ *
+ * Every reason here is the PIPE's — a stream that died, an empty body, a 5xx, a dropped socket —
+ * and the same request a moment later simply works (truncation was measured at one call in five,
+ * and its retry at nearly one hundred percent). The three that are NOT here are deterministic:
+ * `not_configured` and `refused` are a build shipped wrong, `rate_limited` is a wall we built, and
+ * a retry against any of them is a second bill for the same answer.
+ */
+export const RETRYABLE: ReadonlySet<PlanBuildFailure> = new Set<PlanBuildFailure>([
+  'truncated', 'empty', 'upstream', 'offline', 'timed_out', 'not_json', 'nothing_said',
+]);
+/** How many times one tap may ask. Three is where the measured failure classes go to under 1%. */
+export const PLAN_BUILD_ATTEMPTS = 3;
 
 /**
  * ⛔ HOW LONG THE INTAKE MAY EVER WAIT ON THIS CALL (founder 2026-08-30, describing the freeze:
@@ -101,12 +116,27 @@ export const PLAN_BUILD_BUDGET_MS = 13_000;
  * seconds to be told the same thing is pure cost, so she keeps the short budget. This is the whole
  * reason the two constants exist rather than one raised number.
  *
- * ⛔ AND IT IS CAPPED BY THE COVER, NOT CHOSEN. 18.8s is the placeholder walk's own length
- * (`OPENING_MS` + 9 × `beatFor(PLACEHOLDER_LIFTS)`) — past it the screen has nothing left to draw
- * and goes static, which is the freeze this whole area was rebuilt to remove. The law recomputes
- * both from source and fails if the budget ever outgrows the drawing.
+ * ⚠️ IT WAS CAPPED BY THE COVER (18.5 s, the placeholder walk's own length) until 2026-09-09. The
+ * walk LOOPS now while the call is out, so the drawing can no longer run dry under a slow answer,
+ * and the cap moved to where the measured tail ends — see the note directly below.
  */
-export const PLAN_BUILD_SAID_MS = 18_500;
+/*
+ * ⛔ 2026-09-09 — THE FOUNDER OVERRULED THE CAP: *"אבל למה יש כשלון בכלל? זה יצירת התוכנית והשלב
+ * הכי חשוב. אסור שיהיה כשלון בכלל ואם צריך נחליף מודל או נעשה כל דבר אחר. המתאמן צריך לקבל את
+ * התוכנית הטובה ביותר עבור מטרותיו האישיות ואם זה לא צולח נכשלנו עוד לפני שהמשתמש התחיל להתאמן."*
+ *
+ * He said it after writing "no leg days at all" and receiving two. The model had not disobeyed —
+ * six live calls the same hour wrote zero leg lifts, every one in under seven seconds — the call
+ * had FALLEN THROUGH to the local assembler, which cannot read a sentence, and the 18.5 s cap was
+ * one of the three ways it could. So the cap no longer sits at the length of the drawing: the
+ * drawing now loops while the call is out (`BuildingProgramme`), and the budget is set where the
+ * measured tail actually ends — 45 s is past every healthy answer ever recorded here (slowest
+ * 21.5 s) with room for two more attempts.
+ *
+ * ⚠️ AND PAST IT SHE IS NO LONGER HANDED A DIFFERENT WEEK IN SILENCE. The caller shows the failure,
+ * names it, and offers to ask again — the local assembler is a door she opens, not a substitution.
+ */
+export const PLAN_BUILD_SAID_MS = 45_000;
 
 /**
  * Ask the model for a week. Never throws; never retries; never writes.
@@ -159,45 +189,79 @@ export async function requestPlanBuild(her: {
   };
 
   const ask1 = () => askCoach({ v: req.v, blocks: req.blocks }, req.schema, req.think);
-  let reply = await within(ask1());
-  /*
-   * ⛔ ONCE, AND ONLY ON `truncated` — see the note in the header. The bound is a literal second
-   * attempt rather than a loop, because the failure it answers is transient and a loop against a
-   * genuinely broken stream is how one tap becomes a bill.
-   *
-   * ⚠️ AND ONLY IF THE BUDGET CAN AFFORD IT. A truncation at second 20 is not worth a second call
-   * she will never see the answer to — `within` returns the fallback immediately once time is out.
-   */
-  if (reply && !reply.ok && reply.reason === 'truncated' && left() > 4_000) {
-    void track(BUILD_EVENTS.truncated, { daysPerWeek: her.daysPerWeek });
-    reply = await within(ask1());
-  }
-  if (!reply) return { ok: false, reason: 'too_slow' };
-  if (!reply.ok) return { ok: false, reason: reply.reason };
+  const said = !!her.ask?.trim();
+  const done = (r: PlanBuildResult): PlanBuildResult => {
+    /*
+     * ⛔ EVERY OUTCOME IS COUNTED, WITH ITS REASON (2026-09-09). Until today a build that fell
+     * through left NOTHING behind — not on the phone, not in Sentry — so when the founder reported
+     * "two leg days after I asked for none" there was no way to say which of three causes he had
+     * met. The reason is the whole diagnosis, and it costs one event.
+     */
+    void track(r.ok ? BUILD_EVENTS.landed : BUILD_EVENTS.missed, {
+      ...(r.ok ? {} : { reason: r.reason }),
+      attempts: r.attempts,
+      ms: r.ms,
+      said,
+      daysPerWeek: her.daysPerWeek,
+    });
+    return r;
+  };
 
-  let json: unknown;
-  try {
-    json = JSON.parse(reply.text);
-  } catch {
-    return { ok: false, reason: 'not_json' };
-  }
-  const week = readCoachWeek(json);
-  if (!week) return { ok: false, reason: 'nothing_said' };
-
+  let attempts = 0;
+  let last: PlanBuildFailure = 'too_slow';
   /*
-   * ⛔ THE CATALOGUE'S OWN SHOPPING LIST (founder 2026-08-29): *"אם כן נוסיף עוד תרגילים ככל
-   * שנצטרך."*
+   * ⛔ UP TO `PLAN_BUILD_ATTEMPTS`, ON `RETRYABLE` REASONS ONLY, INSIDE THE BUDGET. The bound is a
+   * counted loop rather than a literal second call now, because one retry left a double truncation
+   * (one in twenty-five) falling through to a week her sentence never touched — and the founder's
+   * ruling is that this call does not fail. A deterministic refusal breaks out at once: a second
+   * call against a wall we built is a bill, not a chance.
    *
-   * The model names the lifts it wanted and could not find; this is the only place that fact is
-   * ever visible. Counted, not acted on — nothing downstream reads it into her week — so a gap in
-   * the catalogue stops being a week quietly worse than the one that was meant, and becomes a name
-   * with a number beside it.
-   *
-   * ⚠️ FIRE-AND-FORGET, AND IT MUST BE. A telemetry write may never delay a programme or fail one:
-   * `track` swallows its own errors, and the `void` here says the answer does not wait for it.
+   * ⚠️ AND ONLY IF THE BUDGET CAN AFFORD IT. An attempt needs room to answer (4 s is under the
+   * fastest measured reply); with less than that left, running out is the honest reason.
    */
-  if (week.missing.length > 0) {
-    void track(BUILD_EVENTS.catalogueGap, { wanted: week.missing, days: her.daysPerWeek });
+  while (attempts < PLAN_BUILD_ATTEMPTS && left() > 4_000) {
+    attempts += 1;
+    if (attempts > 1) void track(BUILD_EVENTS.truncated, { daysPerWeek: her.daysPerWeek, reason: last, attempt: attempts });
+    const reply = await within(ask1());
+    if (!reply) {
+      last = 'too_slow';
+      break;
+    }
+    if (!reply.ok) {
+      last = reply.reason;
+      if (!RETRYABLE.has(last)) break;
+      continue;
+    }
+
+    let json: unknown;
+    try {
+      json = JSON.parse(reply.text);
+    } catch {
+      last = 'not_json';
+      continue;
+    }
+    const week = readCoachWeek(json);
+    if (!week) {
+      last = 'nothing_said';
+      continue;
+    }
+
+    /*
+     * ⛔ THE CATALOGUE'S OWN SHOPPING LIST (founder 2026-08-29): *"אם כן נוסיף עוד תרגילים ככל
+     * שנצטרך."*
+     *
+     * The model names the lifts it wanted and could not find; this is the only place that fact is
+     * ever visible. Counted, not acted on — nothing downstream reads it into her week — so a gap in
+     * the catalogue stops being a week quietly worse than the one that was meant, and becomes a name
+     * with a number beside it.
+     *
+     * ⚠️ FIRE-AND-FORGET, AND IT MUST BE. A telemetry write may never delay a programme or fail one:
+     * `track` swallows its own errors, and the `void` here says the answer does not wait for it.
+     */
+    if (week.missing.length > 0) {
+      void track(BUILD_EVENTS.catalogueGap, { wanted: week.missing, days: her.daysPerWeek });
+    }
+    return done({ ok: true, week, attempts, ms: Date.now() - startedAt });
   }
-  return { ok: true, week };
+  return done({ ok: false, reason: last, attempts, ms: Date.now() - startedAt });
 }

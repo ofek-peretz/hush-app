@@ -75,7 +75,21 @@ export function sessionTrained(session: Session, day: ProgramDay | undefined | n
    * in it — so the performed side must draw the same line: four logged warm-up bridges must never
    * carry a six-set session over a ten-set threshold. `isApproach` is that line everywhere.
    */
-  const done = session.items?.length ?? session.sets.filter((x) => !x.isApproach).length;
+  /*
+   * ⛔ A PRESUMED SET COUNTS ONLY UNDER HER WORD (2026-09-07 — the session runs itself).
+   *
+   * The clock writes sets she never touched (`presumed`, see `domain/setEvidence`). Whether those
+   * count toward "she trained the workout" — and therefore toward the free-trial burn, the week's
+   * DONE chip, the Health write and the workout-count milestones — is decided by the one signal
+   * the clock cannot fake: she said she was done (`Session.finishedByAthlete`). Under her word,
+   * every set the plan passed through is hers. Without it — a salvage, a session abandoned in a
+   * locker — only the sets she actually stood behind are counted. The same rule for `items`, which
+   * mirror the mark.
+   */
+  const underHerWord = session.finishedByAthlete === true;
+  const done = session.items
+    ? session.items.filter((i) => i.kind !== 'reps' || !i.presumed || underHerWord).length
+    : session.sets.filter((x) => !x.isApproach && (!x.presumed || underHerWord)).length;
   if (session.prescribed != null && session.prescribed > 0) {
     return done >= Math.ceil(session.prescribed * WORKOUT_TRAINED_FRACTION);
   }

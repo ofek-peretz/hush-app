@@ -208,50 +208,27 @@ describe('⛔ the rail says which set she is on, in words as well as in marks', 
   });
 });
 
-describe('⛔ her sets are drawn as a thing that can be counted', () => {
-  it('the open lift is a CONTAINER — it has a ground of its own, and the strokes beside it do not', () => {
-    // Containment is the cue that survives a glance. Without it, "these four belong together" is
-    // implied by a gap, and a gap among ten marks reads as four more lifts.
+/*
+ * ════ ⛔ THE TRACK IS GONE (founder, 2026-09-07) ════
+ *
+ * *"יש גם פס התקדמות במסך האימון וגם את מספר התרגיל ואיזה סט. צריך לבחור מה מהם נשאר. אני חושב
+ * שעדיף להוריד את פס ההתקדמות הזה."*
+ *
+ * The three clauses that stood here measured the strokes and the pips — their containment, their
+ * alpha, their two heights. The drawing they measured is deleted, by his choice between two
+ * statements of one fact; the WRITTEN position (the clauses above) is the instrument. What this
+ * block pins now is that the drawing stays gone: no hairline stroke, no pip, nothing with a height
+ * and a translucent fill inside the rail — only the sentence.
+ */
+describe('⛔ the position is written, not drawn (2026-09-07)', () => {
+  it('draws no track and no pips — nothing in the rail has a height and a translucent fill', () => {
     const row = rail(draw(makeSession()));
-    // Host nodes only: react-test-renderer returns the composite AND the host for every `View`, so
-    // an un-filtered `findAll` counts each drawn thing twice.
-    const opened = row.findAll(
-      (n) => typeof n.type === 'string'
-        && flat(n.props.style).backgroundColor != null
-        && flat(n.props.style).paddingHorizontal != null,
+    const marks = row.findAll(
+      (n) => typeof n.type === 'string' && typeof flat(n.props.style).height === 'number' && /^rgba/.test(String(flat(n.props.style).backgroundColor ?? '')),
       { deep: true },
     );
-    expect(opened.length).toBe(1);
-  });
-
-  it('⛔ a set she has NOT done outweighs a lift she has not reached — the exact regression', () => {
-    /*
-     * This is the measurement the founder's complaint reduces to. It was `0.14` for a pending SET
-     * against `0.12` for a pending LIFT: two hundredths of alpha carrying the whole distinction,
-     * which on glass is no distinction. The sets she has left are the entire question the rail is
-     * being asked, so they are the marks that must survive being looked at quickly.
-     */
-    const row = rail(draw(makeSession()));
-    const fills = row
-      .findAll((n) => typeof n.type === 'string' && typeof flat(n.props.style).backgroundColor === 'string', { deep: true })
-      .map((n) => flat(n.props.style));
-    /* PENDING only — a done mark and the live one are opaque by design (moss, cream), and the
-       comparison worth defending is between the two things that have NOT happened yet. */
-    const rgba = (s: Record<string, unknown>) => /^rgba/.test(s.backgroundColor as string);
-    const pendingPip = fills.filter((s) => s.height === 8 && rgba(s)).map((s) => alphaOf(s.backgroundColor as string));
-    const pendingStroke = fills.filter((s) => s.height === 3 && rgba(s)).map((s) => alphaOf(s.backgroundColor as string));
-    expect(pendingPip.length).toBeGreaterThan(0);
-    expect(pendingStroke.length).toBeGreaterThan(0);
-    expect(Math.max(...pendingPip)).toBeGreaterThan(Math.max(...pendingStroke) * 1.5);
-  });
-
-  it('a set is a PIP and a lift is a STROKE — two families, so the nesting is drawn not implied', () => {
-    const row = rail(draw(makeSession()));
-    const heights = row
-      .findAll((n) => typeof flat(n.props.style).height === 'number', { deep: true })
-      .map((n) => flat(n.props.style).height as number);
-    // Round versus flat: the pip's radius is half its height, the stroke's is not.
-    expect(new Set(heights).size).toBeGreaterThan(1);
+    expect(marks).toEqual([]);
+    expect(textOf(draw(makeSession()))).toContain(tg('workout.setOfM', { n: 2, m: 4 }));
   });
 });
 
@@ -284,6 +261,21 @@ describe('⛔ between sets, the rest card says the set — the lift is where she
     })));
     expect(said).toContain(tg('workout.upNextNewLift').toUpperCase());
     expect(said).toContain('Lat Pulldown');
+  });
+  it('a load that MOVED mid-lift is stated on the card, with its step — and a load that holds says nothing (2026-09-08)', () => {
+    const rows = [{ exerciseId: 'bb_bench_press', setIndex: 0, actualWeight: 34, actualReps: 8, isApproach: false, persistedAt: new Date().toISOString() }];
+    const eased = textOf(draw(resting({
+      loggedSets: rows,
+      nextTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 31.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+    })));
+    expect(eased).toContain('31.5');
+    expect(eased).toContain('−2.5');
+    const held = textOf(draw(resting({
+      loggedSets: rows,
+      nextTarget: { exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+    })));
+    expect(held).not.toContain('−');
+    expect(held).not.toContain(' kg'); // no figure at all — the bar she left is the bar she returns to
   });
 });
 

@@ -137,12 +137,19 @@ describe('and it reaches the stage', () => {
      * the move was worth making — the previous is now in the SAME UNITS as the figure it sits
      * under, so the comparison needs no arithmetic. It used to say `32.5` above a field saying `7`.
      */
+    /*
+     * ⛔ REWRITTEN AGAIN 2026-09-07 (founder: *"עיצוב יפה שיראה מה היה בפעם הקודמת"*). The two
+     * in-field lines became ONE strip under the fields — every set of her last session on this
+     * lift, `load×reps` per set, the set she is on lit. The clause is the same and is asserted the
+     * same way: her actual figures, per SET, in the field's own units.
+     */
     const f = flow();
-    expect(f).toContain('const prevReps =');
-    expect(f).toContain('const prevLoad =');
-    /* Per SET, by position — not the lift's average and not the load it finished on. */
-    expect(f).toContain('lastTime.reps[prevSetIdx]');
-    expect(f).toContain('lastTime.loads?.[prevSetIdx]');
+    expect(f).toContain('const lastSets =');
+    /* Per SET, by position — every set she did, `loads[i]` beside `reps[i]`. */
+    expect(f).toContain('lastTime.reps.map((reps, i) =>');
+    expect(f).toContain('lastTime.loads?.[i]');
+    /* …and the set she is on now is the lit one. */
+    expect(f).toContain('const now = i === prevSetIdx;');
     /* ⛔ AND IN THE FIELD'S OWN UNITS — `displayWeight` into hers, `equipmentValue` into what she
        hangs on one end. Dropping either one puts a second scale back on the screen. */
     expect(f).toMatch(/equipmentValue\(session\.currentExerciseId, displayWeight\(/);
@@ -156,9 +163,9 @@ describe('and it reaches the stage', () => {
      * can never disagree about whether last time is being shown.
      */
     const f = flow();
-    expect(f).toContain('const prevReps = !isWarmupSet && lastTime');
-    expect(f).toMatch(/const prevLoad =[\s\S]{0,8}!isWarmupSet && lastTime/);
+    expect(f).toMatch(/const lastSets =[\s\S]{0,8}!isWarmupSet && lastTime/);
   });
+
 
 
   it('the session computes it, excluding the live session by id', () => {

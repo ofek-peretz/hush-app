@@ -83,6 +83,12 @@ export interface TrainingRun {
   sets: PerformedSet[];
 }
 
+/*
+ * HOW SHE LOGS: every set by hand, with her real reps. (The `confirmed` / `silent` athletes of
+ * 2026-09-07 — the clock presuming every set — went with the automatic set, founder 2026-09-09.)
+ * The scoreboard (`sets`) reads her REAL reps — it measures her body against the engine's forecast.
+ */
+
 /**
  * Train one virtual athlete for `weeks` weeks on the real seam.
  *
@@ -211,6 +217,7 @@ export async function train(p: Person, weeks: number): Promise<TrainingRun> {
         // the iron, and the between-session mathematics (Loop 2) reads the sets as performed.
         plan = carryWeightForward(plan as never, live.globalIndex, load) as never;
       }
+
 
       await db.appendCompletedSession(session);
       await fixtureModel.sessionEarned!({ startedAtMs: Date.parse(session.startedAt) }); // folds the occurrence

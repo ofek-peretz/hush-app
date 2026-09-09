@@ -236,8 +236,16 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
      * ⚠️ AND THE DECLARATION IS STILL SAVED on an authored week — the guard stops the REBUILD, not
      * the record of what she said. That is the contract `saveLibrary` already keeps, and it is why
      * both return a boolean instead of throwing: what she is told about her week is the caller's job.
+     *
+     * ⚠️ 5 → 4 on 2026-09-07, AND THE LAW DID ITS JOB AGAIN, in the other direction. `declareSwap`
+     * no longer REBUILDS at all: the founder saw the rebuild from the outside — *"כאשר מחליפים
+     * תרגיל עוד תרגילים מתחלפים אוטומטית"* — because a fresh assembly pass re-deals every seat it
+     * is free to deal. A swap is an EDIT of the seats holding the lift she named (`replaceLift`,
+     * the builder's verb), on any week including one she brought, at her own tap — the same
+     * authority as `saveBuiltProgram`. No `generateProgram`, so no gate to count.
      */
-    expect(gates.length).toBe(5); // reportPain · updateProfileInfo · answerEaseCheck · saveLibrary · declareSwap
+    expect(gates.length).toBe(4); // reportPain · updateProfileInfo · answerEaseCheck · saveLibrary
+
     for (const g of gates) {
       const after = STORE.slice(g.index!, g.index! + 400);
       // The very next statement is the build — nothing may sit between the guard and what it guards.

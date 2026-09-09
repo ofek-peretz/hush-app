@@ -12,7 +12,9 @@
  *
  * ── ⚠️ AND IT NEEDED NO NEW STORED FIELD, WHICH IS WHY IT IS A READ AND NOT A WRITE ─────────────
  * Every set already carries what it was PRESCRIBED (`recommendedWeight`) and what she PERFORMED
- * (`actualWeight`). The store's order is documented and ratified (Rev 8, `sessionStore.completeSet`):
+ * (`actualWeight`). The order below was the store's under Rev 8; since the 2026-08-26 ruling the
+ * touch stage runs step 1 only, and step 2 runs on the VOICE surface (`voiceConductor`, spec §6) —
+ * so a correction this module derives comes from a spoken session, never a tapped one (2026-09-09):
  *
  *   1. `carryWeightForward(plan, idx, performedWeight)` — the weight she actually lifted becomes the
  *      baseline for the rest of the exercise. *"A set completed at exactly the prescription is a

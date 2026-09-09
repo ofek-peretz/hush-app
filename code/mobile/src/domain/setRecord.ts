@@ -24,6 +24,7 @@
 //
 
 import type { Session } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 
 /** Her heaviest logged weight on a lift, across history — or null when the lift has no past.
  *  Working sets only, ≥1 real rep, the live session excluded (its sets are the candidates). */
@@ -36,7 +37,7 @@ export function priorPeakKg(
   for (const s of history) {
     if (excludeSessionId && s.id === excludeSessionId) continue;
     for (const x of s.sets) {
-      if (x.exerciseId !== exerciseId || x.isApproach) continue;
+      if (x.exerciseId !== exerciseId || !isEvidenceSet(x)) continue;
       if (x.actualWeight == null || x.actualReps < 1) continue;
       if (peak == null || x.actualWeight > peak) peak = x.actualWeight;
     }
@@ -59,12 +60,12 @@ export function isRecordSet(weightKg: number | null, reps: number, prior: number
  * live peak folded in, the record speaks exactly once: on the set that struck it.
  */
 export function livePeakKg(
-  sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean }[],
+  sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean; presumed?: boolean }[],
   exerciseId: string,
 ): number | null {
   let peak: number | null = null;
   for (const x of sets) {
-    if (x.exerciseId !== exerciseId || x.isApproach) continue;
+    if (x.exerciseId !== exerciseId || !isEvidenceSet(x)) continue;
     if (x.actualWeight == null || x.actualReps < 1) continue;
     if (peak == null || x.actualWeight > peak) peak = x.actualWeight;
   }

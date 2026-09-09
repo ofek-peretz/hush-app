@@ -33,6 +33,7 @@ import type { Profile, Session } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
 import { startingWeight, type LoadProfile } from '@/domain/startingLoad';
 import { currentWeekOpen } from '@/domain/weekCadence';
+import { isEvidenceSet } from '@/domain/setEvidence';
 
 export type MilestoneFamily = 'count' | 'tonnage' | 'club' | 'engine' | 'weeks';
 
@@ -221,8 +222,15 @@ function chronological(sessions: Session[]): Session[] {
  */
 const countsAsWorkout = (s: Session): boolean => s.trained !== false;
 
+/**
+ * Kilos she moved — EVIDENCE sets only (`domain/setEvidence`, 2026-09-07). A presumed set is the
+ * prescription copied across, and a tonnage club struck on numbers she may never have lifted is a
+ * milestone she would not believe. The same predicate excludes the warm-up bridge, the line every
+ * other tonnage reader in the product (`sessionMetrics`, the poster, the Log) already drew — this
+ * was the one reader still counting the road as the work.
+ */
 const sessionTonnage = (s: Session): number =>
-  s.sets.reduce((sum, x) => sum + (x.actualWeight ?? 0) * x.actualReps, 0);
+  s.sets.reduce((sum, x) => sum + (isEvidenceSet(x) ? (x.actualWeight ?? 0) * x.actualReps : 0), 0);
 
 // ─────────────────────────── derivation ───────────────────────────
 
@@ -284,7 +292,8 @@ export function earnedMilestones(sessions: Session[], profile?: MilestoneProfile
     const peakActual = new Map<string, number>();
     const peakPrescribed = new Map<string, number>();
     for (const x of s.sets) {
-      if (x.actualWeight != null && x.actualReps >= 1) {
+      // A club is struck on a set she stood behind — never on one the clock wrote for her.
+      if (x.actualWeight != null && x.actualReps >= 1 && isEvidenceSet(x)) {
         const cur = peakActual.get(x.exerciseId);
         if (cur == null || x.actualWeight > cur) peakActual.set(x.exerciseId, x.actualWeight);
       }

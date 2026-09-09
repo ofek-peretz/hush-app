@@ -23,6 +23,7 @@ import {
   type AthleteModeState,
 } from '@/state/machines/athleteMode';
 import { fixtureModel } from '@/data/api/fixtureModel';
+import { moveLift, replaceLift } from '@/domain/planBuilder';
 import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry, refreshTelemetryOptOut } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
@@ -300,6 +301,8 @@ interface AppApi extends AppState {
      *  the weekly note re-schedules itself onto the new day. No rebuild: the week's CONTENT is
      *  untouched, only the boundary walks. */
     weekOpensDow?: number;
+    /** The voice coach (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md). Absent = on; it still speaks only with earbuds. */
+    voiceSpec?: boolean;
   }) => Promise<boolean>;
   /**
    * ════ SHE TOLD THE COACH SOMETHING ABOUT HERSELF, AND THE APP WRITES IT DOWN ════
@@ -1310,6 +1313,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
              what she sets. */
           ...(fields.bodyMap != null ? { bodyMap: fields.bodyMap } : {}),
           ...(fields.repBandByMuscle != null ? { repBandByMuscle: fields.repBandByMuscle } : {}),
+          ...(fields.voiceSpec != null ? { voiceSpec: fields.voiceSpec } : {}),
         };
         // The room: null clears to the full-gym default (the key leaves the profile), a list sets it.
         if (fields.equipment === null) delete profile.equipment;
@@ -1501,15 +1505,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         else declared[anchor] = toExerciseId;
         await db.savePreferences({ ...prefs, declaredSubs: declared });
         void track('swap_declared', { from: anchor, to: toExerciseId, cleared: anchor === toExerciseId });
-        // ⛔ A week she brought is not ours to rewrite — the same guard every rebuild passes.
-        if (!engineMayRebuild(await db.loadProgram().catch(() => state.program))) return false;
-        const rebuilt = await model.generateProgram(programProfile(state.profile)).catch((e) => {
-          void track('engine_error', { op: 'generateProgram', message: String(e) });
-          return null;
+        /*
+         * ════ ⛔ ONE ROW CHANGES, AND ONLY THAT ROW (founder, 2026-09-07) ════
+         *
+         * *"כאשר מחליפים תרגיל עוד תרגילים מתחלפים אוטומטית בתוכנית הזאת ואני לא מבין מדוע כי זה
+         * לא צריך להיות כך."*
+         *
+         * He was not imagining it. This verb used to answer a swap by REGENERATING THE WEEK —
+         * `model.generateProgram` on the body map's road — on the argument that a substitution
+         * "changes which lifts her week is made of". It does; but the assembler is not a formatter,
+         * and a fresh pass re-deals every seat it is free to deal: a lift she never touched came
+         * back as a different lift, on a different day, because a scoring tie broke the other way.
+         * From her side: she swapped one exercise and three others moved.
+         *
+         * So the swap is now an EDIT, not a rebuild. Every seat holding the lift she pointed at
+         * takes the one she named — `replaceLift`, the builder's own verb, which refuses a duplicate
+         * within a day and leaves every other seat byte-for-byte where it was. Her loads survive
+         * (v5 keys them to the exercise, S-29). The DECLARATION above is still written, so the next
+         * week the engine writes on its own honours it the way it always did.
+         *
+         * ⚠️ AND IT APPLIES TO A WEEK SHE BROUGHT OR BUILT TOO. The rebuild guard protected an
+         * authored week from being REGENERATED; there is no regeneration here, and editing one row
+         * of her own week at her own tap is exactly what the plan builder lets her do. Her tap is
+         * the authority — the same law as `saveBuiltProgram`.
+         */
+        const program = await db.loadProgram().catch(() => state.program);
+        if (!program) return false;
+        let next = program;
+        program.days.forEach((day, di) => {
+          day.slots.forEach((slot, si) => {
+            if (slot.exerciseId === fromExerciseId) next = replaceLift(next, di, si, toExerciseId);
+          });
         });
-        if (!rebuilt) return false;
-        await db.saveProgram(rebuilt);
-        dispatch({ type: 'PROGRAM_UPDATED', program: rebuilt, recents: state.recents });
+        if (next === program) return false;
+        await db.saveProgram(next);
+        dispatch({ type: 'PROGRAM_UPDATED', program: next, recents: state.recents });
         return true;
       },
 
@@ -1537,13 +1567,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       async reorderExercise(dayId, fromIndex, toIndex) {
         /*
-         * ⛔ NOTHING TO REORDER. This moved a slot within a generated `ProgramDay`. The coach writes
-         * the order it wants and there is no local structure to rearrange behind its back — if she
-         * wants a different order she can say so, which is a better door than a drag that had to be
-         * inferred.
+         * ⛔ SHE DRAGS A ROW, AND THE WEEK ON DISK MOVES WITH IT (founder, 2026-09-07).
+         *
+         * This was a stub — *"nothing to reorder … if she wants a different order she can say so"*
+         * — written when the coach wrote the week and there was a coach to say it to. There is not:
+         * the week on disk is the engine's or hers, `loadWeekPlan` presents it, and the drag on the
+         * pre-workout card is the door. `moveLift` is the builder's own verb: it moves the seat and
+         * breaks any superset mark the move disturbs, exactly as the builder's chevrons do.
+         *
+         * ⚠️ ON AN ENGINE WEEK THIS ORDER LIVES UNTIL THE ENGINE NEXT WRITES A WEEK — the weekly
+         * rebuild deals its own order, as it deals its own lifts. A week she built or brought is
+         * never rebuilt, so there her order is permanent.
          */
-        void dayId; void fromIndex; void toIndex;
+        const program = await db.loadProgram().catch(() => state.program);
+        if (!program) return;
+        const di = program.days.findIndex((d) => d.id === dayId);
+        if (di < 0) return;
+        const next = moveLift(program, di, fromIndex, toIndex);
+        if (next === program) return;
+        await db.saveProgram(next);
+        dispatch({ type: 'PROGRAM_UPDATED', program: next, recents: state.recents });
+        void track('exercise_reordered', { dayId, from: fromIndex, to: toIndex });
       },
+
 
       async reorderWorkouts(fromIndex, toIndex) {
         /*

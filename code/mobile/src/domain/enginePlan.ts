@@ -67,7 +67,10 @@ function sessionOf(day: ProgramDay, byExercise: Map<string, SetTarget>, band: [n
     return {
       kind: 'reps' as const,
       ex: slot.exerciseId,
-      reps: fixed ? ([fixed, fixed] as [number, number]) : bandOf(target, band),
+      /* The seat's own band (the model's per-lift range, 2026-09-07) outranks the profile fallback;
+         once the fold has run the TARGET carries it too (`bandOf` in `fixtureModel`). */
+      reps: fixed ? ([fixed, fixed] as [number, number]) : bandOf(target, slot.repBand ?? band),
+
       /*
        * ⚠️ NULL IS A REAL ANSWER HERE AND IT IS NOT "BODYWEIGHT". A lift she has never performed
        * has no load until her first set decides it (S-38), and `recommendedWeight` is null for

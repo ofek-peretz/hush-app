@@ -38,7 +38,7 @@
 //
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { I18nManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { font, stage, color } from '@/design/tokens';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
@@ -101,7 +101,13 @@ export function NumberPad({ onKey, decimal }: Props) {
 
 const styles = StyleSheet.create({
   pad: { alignSelf: 'stretch', gap: 6 },
-  row: { flexDirection: 'row', gap: 6 },
+  /*
+   * ⛔ A KEYPAD IS NOT PROSE (founder 2026-09-08, mid-workout: "המקלדת מימין לשמאל"). Under
+   * `forceRTL` a plain `row` lays 1-2-3 out as 3-2-1 — every phone keypad on earth runs 1-2-3
+   * left to right in every language, and a mirrored one is a keypad she has to LOOK at. The same
+   * LTR-island lesson as the wheel: RN flips `row`, so the row is un-flipped by hand.
+   */
+  row: { flexDirection: I18nManager.isRTL ? 'row-reverse' : 'row', gap: 6 },
   /*
    * ⚠️ `flex: 1` PER KEY, NOT A FIXED WIDTH. The stage is 338 points on a 390 phone and 300 on the
    * narrowest one the product supports; a fixed key would leave a ragged edge on one of them, and a

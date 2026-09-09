@@ -115,6 +115,32 @@ describe('salvageOrphanSession — credit', () => {
     expect(await db.loadHistory()).toHaveLength(0);
   });
 
+  /*
+   * THE SESSION RUNS ITSELF (2026-09-07): the clock writes `presumed` sets she never touched. A
+   * salvage has nobody's word behind it, so it keeps only the sets she actually logged.
+   */
+  it('⛔ a crash keeps only what she said — presumed sets are dropped before the verdict', async () => {
+    const real = [set(0), set(1), set(2)]; // 3 of 8 — under half by her own hand
+    const clock = [3, 4, 5, 6, 7].map((i) => ({ ...set(i), presumed: true as const }));
+    await db.saveActiveSession({ ...orphan(0), sets: [...real, ...clock] });
+    const result = await salvageOrphanSession();
+
+    expect(result.trained).toBe(false); // the clock's five rows do not finish her workout
+    const [saved] = await db.loadHistory();
+    expect(saved.sets).toHaveLength(3);
+    expect(saved.sets.some((s) => s.presumed)).toBe(false);
+    expect(saved.finishedByAthlete).toBeUndefined(); // a salvage never carries her word
+  });
+
+  it('⛔ a crash whose every row was the clock\'s is not a workout at all', async () => {
+    await db.saveActiveSession({ ...orphan(0), sets: [0, 1, 2, 3, 4, 5].map((i) => ({ ...set(i), presumed: true as const })) });
+    const result = await salvageOrphanSession();
+
+    expect(result.trained).toBe(false);
+    expect(await db.loadHistory()).toHaveLength(0); // never saved
+    expect(await db.loadActiveSession()).toBeNull(); // but the orphan is cleared
+  });
+
   it('an EMPTY crash (zero sets) is not a workout at all', async () => {
     await db.saveActiveSession(orphan(0));
     const result = await salvageOrphanSession();

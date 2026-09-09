@@ -218,7 +218,8 @@ export function AboutYou({ navigation }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 5 }}
+      progress={{ index: 2, total: 4 }}
+
       /*
        * ⛔ THE BODY OF THIS STEP IS TWO HORIZONTAL WHEELS, so it cannot also be a step you leave
        * with a horizontal drag (founder 2026-07-13): every attempt to set a bodyweight would drag

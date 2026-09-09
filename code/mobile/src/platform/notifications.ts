@@ -548,26 +548,9 @@ export const notifierStub: Notifier = {
   async syncGapCatch() {},
   async syncTrialLast() {},
   async kilometre() {},
-  async watchWorkoutSaved(workoutName) {
-    try {
-      if (!(await hasNotificationPermission())) return;
-      await Notifications.scheduleNotificationAsync({
-        // One stable id: if two records reconcile in one sync burst, the newest replaces the
-        // oldest rather than stacking two banners for one glance at the phone.
-        identifier: 'hush.watch_workout_saved',
-        content: {
-          title: tg('notifications.watchSavedTitle'),
-          body: tg('notifications.watchSavedBody', { name: workoutName }),
-          data: buildPayload('watch_workout_saved'),
-        },
-        trigger: null, // now — the save already happened
-      });
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'watch_workout_saved' });
-    } catch {
-      // never throw — reconciliation must not care whether a banner could be shown
-    }
-  },
-
+  // A no-op like its siblings (code review 2026-09-09): this carried a verbatim copy of the real
+  // scheduler, so the "stub" the tests and web swap in actually posted a banner.
+  async watchWorkoutSaved() {},
   async cancelRetiredNotes() {},
   async cancelAll() {},
 };

@@ -18,6 +18,7 @@
 // 
 
 import type { Session, SetLog } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import type { WeeklyPlanLift } from '@/engine/weeklyView';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 
@@ -60,7 +61,7 @@ function repsOf(session: Session, exerciseId: string): SetLog[] {
   // Working sets only — a warm-up bridge (`isApproach`) would put its half weight in `sets[0]`
   // and its 5·3 reps at the head of the chain, and the case would argue from the road instead of
   // the work (2026-08-24).
-  return session.sets.filter((s) => s.exerciseId === exerciseId && !s.isApproach);
+  return session.sets.filter((s) => s.exerciseId === exerciseId && isEvidenceSet(s));
 }
 
 /**

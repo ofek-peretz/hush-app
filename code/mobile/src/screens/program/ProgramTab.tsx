@@ -25,9 +25,9 @@
 
 //
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { plannedMinutes } from '@/domain/duration';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -50,6 +50,9 @@ import { exerciseMotion } from '@/motion/registry';
 import type { FigureSex } from '@/motion/types';
 import { bidi } from '@/i18n/bidi';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
+import { engineReceipt, type EngineReceipt } from '@/domain/engineReceipt';
+import { displayWeight, unitLabel } from '@/domain/schedule';
+import { exerciseDisplayName } from '@/data/exercises';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<HomeTabsParamList, 'Program'>,
@@ -111,13 +114,49 @@ export interface ProgramTabViewProps {
   /** True while this tab is not the visible one — every card's body holds its pose, no clock runs. */
   motionPaused?: boolean;
   onDay: (workoutId: string) => void;
-  onLibrary: () => void;
+  /** The engine's receipt over her log (2026-09-07) — null or no decisions draws nothing. */
+  receipt?: EngineReceipt | null;
+  /** The edit door — at the TOP of the tab (founder 2026-09-07). The library door is gone from here. */
   onBuild: () => void;
 }
 
-export function ProgramTabView({ workouts, units, settled, figure, motionPaused, onDay, onLibrary, onBuild }: ProgramTabViewProps) {
+/** Where the eye rests on a scrolling list — a little above centre, where the card she stopped on sits. */
+const FOCUS_FRACTION = 0.42;
+
+export function ProgramTabView({ workouts, units, settled, figure, motionPaused, onDay, onBuild, receipt = null }: ProgramTabViewProps) {
   const { t } = useCopy();
   const insets = useSafeAreaInsets();
+  /*
+   * ════ ⛔ THE CARD SHE IS LOOKING AT IS THE ONE THAT MOVES (founder, 2026-09-07) ════
+   *
+   * *"כשאני גולל במסך הזה רק האימון הראשון הסרטון פעיל. אני מבין שזה בשביל לא להריץ כמה סרטונים
+   * במקביל אבל למה לא פשוט כשגוללים עבור כל תוכנית אז שהסרטון שלה יופעל."*
+   *
+   * The one-clock law below stands — ONE figure moves at a time — and the founder is not arguing
+   * with it; he is arguing with WHICH one. "The next workout" was the week's grammar; on a
+   * scrolling tab it meant every card she scrolled to stood still while one she had scrolled past
+   * kept performing to nobody. So the clock follows the eye: each card reports where it sits
+   * (`onLayout`), the list reports how far she has scrolled, and the card under the focus line —
+   * a little above the centre of the viewport, where a stopped scroll leaves the thing you were
+   * looking at — is the one that performs. Before any layout has landed (the first frame) the
+   * next workout performs, exactly as before, so the tab never opens still.
+   *
+   * ⚠️ `scrollEventThrottle={48}` — a rig-build per frame is the cost the law is about, and the
+   * performer only changes when the focus line crosses a card edge, so a coarse scroll clock loses
+   * nothing visible and spends nothing on frames where nothing changes.
+   */
+  const frames = useRef<Record<string, { y: number; h: number }>>({});
+  const [focusY, setFocusY] = useState<number | null>(null);
+  const viewportH = useRef(0);
+  const onCardLayout = useCallback((id: string, e: LayoutChangeEvent) => {
+    frames.current[id] = { y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height };
+  }, []);
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setFocusY(e.nativeEvent.contentOffset.y + viewportH.current * FOCUS_FRACTION);
+  }, []);
+  const onViewportLayout = useCallback((e: LayoutChangeEvent) => {
+    viewportH.current = e.nativeEvent.layout.height;
+  }, []);
   /*
    * ⛔ ONE CLOCK ON THIS TAB TOO (founder 2026-09-02 + `DayInMotion`'s own law).
    *
@@ -135,13 +174,36 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
    * A day whose lifts have no rigs cannot perform (the hero draws nothing there), so the stage
    * passes over it to the first day that can — otherwise one unrigged day would silence the tab.
    */
-  const performingId = useMemo(
+  const nextId = useMemo(
     () => workouts.find((w) => !w.done && w.rows.some((r) => !!exerciseMotion(r.exerciseId)))?.id ?? null,
     [workouts],
   );
+  const performingId = useMemo(() => {
+    if (focusY == null) return nextId;
+    const canPerform = (w: (typeof workouts)[number]) => w.rows.some((r) => !!exerciseMotion(r.exerciseId));
+    // The card under the focus line, else the nearest card to it — never nothing while a card can move.
+    let best: string | null = null;
+    let bestDist = Infinity;
+    for (const w of workouts) {
+      const f = frames.current[w.id];
+      if (!f || !canPerform(w)) continue;
+      const dist = focusY < f.y ? f.y - focusY : focusY > f.y + f.h ? focusY - (f.y + f.h) : 0;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = w.id;
+      }
+    }
+    return best ?? nextId;
+  }, [focusY, workouts, nextId]);
   return (
     <View style={styles.root}>
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 28 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={48}
+        onLayout={onViewportLayout}
+      >
         {/*
           ✦ IT ARRIVES (2026-08-27). `Arrive` was built for the founder's largest note — a screen
           should ARRIVE, not appear (2026-08-12).
@@ -160,6 +222,57 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
             <Icon name="layers" size={16} color={color.textMuted} />
             <Text style={styles.noteText}>{t('program.stationNote')}</Text>
           </View>
+
+          {/*
+            ════ THE RECEIPT (founder, 2026-09-07 — the plan's fourth part) ════
+            *"הדבר שאימון לבד לא נותן: מאמן שמסיק בין סשן לסשן, עם נימוק, ומראה מה היה קורה בלעדיו."*
+
+            The product sells decisions, and decisions are invisible — nobody can see the weight
+            she did not lift. `engineReceipt` counts them off her own log (every set carries the
+            engine's word at the moment of the set) and, when two plans have had time to part, puts
+            the fixed plan's figure next to the engine's on her most-worked lift. Every number is
+            either logged or the named rule's own arithmetic — the voice law, kept. It stood only on
+            the paywall; the week she is about to train is where it earns its place. Silent until
+            there is a decision to count: a first week has no receipt, and says nothing.
+          */}
+          {receipt && receipt.decisions > 0 ? (
+            <View style={styles.receipt}>
+              <Legend size={17} track={0.18} style={styles.receiptLegend}>{t('program.receiptLegend')}</Legend>
+              <Text style={styles.receiptLine}>
+                {t('program.receiptDecisions', { count: receipt.decisions, raises: receipt.raises, holds: receipt.holds, eases: receipt.eases })}
+              </Text>
+              {receipt.counterfactual ? (
+                <Text style={styles.receiptLine}>
+                  {t(receipt.counterfactual.engineKg > receipt.counterfactual.fixedKg ? 'paywall.receiptAhead' : 'paywall.receiptBehind', {
+                    lift: bidi(exerciseDisplayName(receipt.counterfactual.exerciseId)),
+                    fixed: displayWeight(receipt.counterfactual.fixedKg, units),
+                    engine: displayWeight(receipt.counterfactual.engineKg, units),
+                    unit: unitLabel(units),
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/*
+            ⛔ THE EDIT DOOR IS THE FIRST THING ON THE TAB (founder, 2026-09-07): *"למה שינוי התוכנית
+            מופיע למטה? אם נכנסתי למסך הזה כנראה שאני כן רוצה לעשות עריכה וזה אמור להיות בראש המסך."*
+            It stood under the week with the library beside it; the library door is DELETED from
+            this tab (its screen keeps a quiet door on the builder's chooser, off the Program tab),
+            and the one door left is the first row, before the week it edits.
+          */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('program.buildRow')}
+            onPress={onBuild}
+            style={({ pressed }) => [styles.editDoor, pressed && styles.cardPressed]}
+          >
+            <View style={styles.cardHeadText}>
+              <Text style={styles.editDoorTitle}>{t('program.buildRow')}</Text>
+              <Text style={styles.dayMeta}>{t('program.buildSub')}</Text>
+            </View>
+            <Icon name="pencil" size={18} color={color.accent} strokeWidth={2} />
+          </Pressable>
         </Arrive>
 
         {settled && workouts.length === 0 ? <Text style={styles.empty}>{t('program.emptyWeek')}</Text> : null}
@@ -170,6 +283,7 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
             accessibilityRole="button"
             accessibilityLabel={w.name}
             onPress={() => onDay(w.id)}
+            onLayout={(e) => onCardLayout(w.id, e)}
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           >
             <View style={styles.cardHead}>
@@ -219,39 +333,6 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
           </Pressable>
         ))}
 
-        {/* ⛔ DOORS, NOT WORKOUTS (design review 2026-09-01). The two action cards below shared
-            the workout cards' exact dress, so the list read as six peers — four sessions and two
-            impostors. A small accent legend parts the content from its actions; the doors keep
-            their chevrons, which the workout cards do not carry. */}
-        <Legend tone="accent" style={styles.doorsLegend}>{t('program.doorsLegend')}</Legend>
-        {/* THE BUILDER'S DOOR (founder 2026-08-25): full authorship of the week. This tab's
-            doctrine holds — the verb routes to the surface that owns it. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('program.buildRow')}
-          onPress={onBuild}
-          style={({ pressed }) => [styles.card, styles.libraryRow, pressed && styles.cardPressed]}
-        >
-          <View style={styles.cardHeadText}>
-            <Text style={styles.dayName}>{t('program.buildRow')}</Text>
-            <Text style={styles.dayMeta}>{t('program.buildSub')}</Text>
-          </View>
-          <Icon name="chevronRight" size={18} color={color.textMuted} />
-        </Pressable>
-
-        {/* The library — where "which exercises are mine" is declared (S-77 / refusals / picks). */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('program.libraryRow')}
-          onPress={onLibrary}
-          style={({ pressed }) => [styles.card, styles.libraryRow, pressed && styles.cardPressed]}
-        >
-          <View style={styles.cardHeadText}>
-            <Text style={styles.dayName}>{t('program.libraryRow')}</Text>
-            <Text style={styles.dayMeta}>{t('program.librarySub')}</Text>
-          </View>
-          <Icon name="chevronRight" size={18} color={color.textMuted} />
-        </Pressable>
       </ScrollView>
     </View>
   );
@@ -267,6 +348,8 @@ export function ProgramTab({ navigation }: Props) {
   const [plan, setPlan] = useState<CoachPlan | null>(null);
   const [settled, setSettled] = useState(false);
   const [doneIds, setDoneIds] = useState<string[]>([]);
+  /** The engine's receipt over her whole log — see the strip below the station note (2026-09-07). */
+  const [receipt, setReceipt] = useState<EngineReceipt | null>(null);
 
   // Re-read on every focus: a swap declared on the pre-workout card, a workout finished, a week
   // rolled — all of it must be on this map the moment she comes back to it. The done marks are
@@ -282,6 +365,7 @@ export function ProgramTab({ navigation }: Props) {
     ]).then(([p, history, weekOpenMs]) => {
       if (!alive) return;
       setPlan(p);
+      setReceipt(engineReceipt(history));
       const since = weekOpenMs ?? 0;
       setDoneIds(
         history
@@ -320,8 +404,8 @@ export function ProgramTab({ navigation }: Props) {
          `useIsFocused` answer Today passes down, for the same rAF-does-not-care reason. */
       motionPaused={!isFocused}
       onDay={(workoutId) => navigation.navigate('PreWorkout', { workoutId })}
-      onLibrary={() => navigation.navigate('ExerciseLibrary')}
       onBuild={() => navigation.navigate('PlanBuilder')}
+      receipt={receipt}
     />
   );
 }
@@ -348,6 +432,11 @@ const styles = StyleSheet.create({
     color: color.textMuted,
     textAlign: 'left',
   },
+  /* The receipt (2026-09-07): a legend and one or two lines, in the same quiet ink as the note above. */
+  /* The same 30-point inset the note above keeps — seen edge-to-edge on glass, 2026-09-08. */
+  receipt: { gap: 6, marginHorizontal: 30, marginTop: 10, marginBottom: 14 },
+  receiptLegend: { color: color.textMuted },
+  receiptLine: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 24, color: color.textSecondary, textAlign: 'left' },
 
   empty: {
     fontFamily: font.sans,
@@ -411,6 +500,20 @@ const styles = StyleSheet.create({
   // Numerals only — the mono never carries a word (monoCarriesNoWords), and never Hebrew.
   liftFigure: { fontFamily: font.mono, fontSize: textScale.base, lineHeight: 24, color: color.textSecondary, textAlign: 'right' },
 
-  libraryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  doorsLegend: { marginTop: 14, marginBottom: 2 },
+  /* The edit door: a row in the accent's wash, first on the tab, dressed unlike the workout cards
+     so it reads as the one ACTION above a list of days. */
+  editDoor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginHorizontal: 20,
+    marginTop: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: color.accentWash,
+  },
+  editDoorTitle: { fontFamily: font.sansSemibold, fontSize: 20, lineHeight: 26, color: color.textPrimary, textAlign: 'left' },
+
 });

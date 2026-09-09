@@ -14,6 +14,8 @@ import { rungsForHeadroom, rungOutOfReach, bootstrapPerRung } from './repsPerRun
 import { LOOP1_CONFIRM_MISS } from './constants';
 
 const MAX_CORRECTIONS = 2; // S-13
+/** On a lift she has never done: one more, because the cold-start load is a guess (2026-09-08). */
+const MAX_CORRECTIONS_FIRST_TIME = 3;
 
 export interface Loop1Input {
   currentLoad: number | null; // the load THIS set was done at
@@ -43,6 +45,14 @@ export interface Loop1Input {
    * `LOOP1_CONFIRM_MISS`+ reps never waits.
    */
   prevMiss?: 'up' | 'down' | null;
+  /**
+   * ════ THE FIRST TIME ON A LIFT (founder 2026-09-08, the voice spec §4 "מנוע (מאושר)") ════
+   * A lift with no evidence in her history has nothing for F-20 to protect and only this session's
+   * sets to correct in — so every miss moves the load from the first set, without a second witness,
+   * and the cap is three corrections rather than two. The cold-start load was never meant to be
+   * right, only corrected fast (`domain/startingLoad`); this is the fast.
+   */
+  firstTime?: boolean;
 }
 
 export interface Loop1Result {
@@ -54,17 +64,19 @@ export interface Loop1Result {
 
 /** Decide the next set's load from the set just performed. Pure. */
 export function correctInSession(inp: Loop1Input): Loop1Result {
-  const { currentLoad, band, repsJustDone, correctionsSoFar, isLastSet, meta, perRung, railCeiling, prevMiss } = inp;
+  const { currentLoad, band, repsJustDone, correctionsSoFar, isLastSet, meta, perRung, railCeiling, prevMiss, firstTime } = inp;
   const none: Loop1Result = { nextLoad: currentLoad, corrected: false, direction: 'none' };
 
-  // S-51: bodyweight has no load to correct. S-13: no correction after the last set, or past the cap.
+  // S-51: bodyweight has no load to correct. S-13: no correction after the last set, or past the cap
+  // (three on a first-time lift — see `firstTime`).
   if (meta.bodyweight || currentLoad == null) return none;
-  if (isLastSet || correctionsSoFar >= MAX_CORRECTIONS) return none;
+  if (isLastSet || correctionsSoFar >= (firstTime ? MAX_CORRECTIONS_FIRST_TIME : MAX_CORRECTIONS)) return none;
 
   if (repsJustDone > band.hi) {
     // F-20 — the second witness: a 1-rep overshoot on a lone set is wobble, not headroom. It waits
     // for the next set to agree before the load moves; an overshoot of LOOP1_CONFIRM_MISS+ acts alone.
-    if (repsJustDone - band.hi < LOOP1_CONFIRM_MISS && prevMiss !== 'up') return none;
+    // A first-time lift has no history for the witness to defend, and acts at once.
+    if (!firstTime && repsJustDone - band.hi < LOOP1_CONFIRM_MISS && prevMiss !== 'up') return none;
     // S-28 · the same law, on the in-session door. If the next rung is a big jump (no micro-loading)
     // and her measured reps-per-rung says it lands her under Tlo, the load may not move — "T is hers,
     // so the engine may not quietly raise it." Leaving Loop 1 free to prescribe the unreachable rung
@@ -86,7 +98,7 @@ export function correctInSession(inp: Loop1Input): Loop1Result {
   if (repsJustDone < band.lo) {
     // F-20 — symmetric: one set one rep short (the founder's own 7-then-8, finding #3) does not
     // renegotiate the bar. Two reps short is a grinding set and corrects immediately, as ever.
-    if (band.lo - repsJustDone < LOOP1_CONFIRM_MISS && prevMiss !== 'down') return none;
+    if (!firstTime && band.lo - repsJustDone < LOOP1_CONFIRM_MISS && prevMiss !== 'down') return none;
     // S-12 / S-15: below Tlo → drop, so the remaining sets can meet the contract. `'down'` is not
     // decoration: a drop that lands short leaves her under the weight that just beat her, with at
     // most one correction left to escape it, so the rounding goes the other way (see the note on

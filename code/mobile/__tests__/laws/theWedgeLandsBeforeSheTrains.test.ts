@@ -81,7 +81,20 @@ describe('⛔ the reason exists before she has trained once', () => {
     expect(read('src/domain/enginePlan.ts')).toContain('`say` is left absent');
   });
 
-  it('⛔ and the door is on BOTH surfaces she can reach it from', () => {
+  /*
+   * ════ ⛔ THE DOOR IS CLOSED ON BOTH SURFACES (founder, 2026-09-07) ════
+   *
+   * *"במסך הבית כשלוחצים על תרגיל מופיע 'למה זה כאן' — אני רוצה להוריד את זה, אין בזה צורך. אני רק
+   * רוצה שלחיצה על הכרטיס תפתח את המסך שמציג את עריכת האימון."*
+   *
+   * The clause below asserted the opposite — that `WhyHereSheet` and `liftPlacement` are wired on
+   * Home AND on the pre-workout card. They were, he used them, and he does not want them. The
+   * REASON still exists (`domain/whyLiftIsHere`, tested above, and the sheet renders in the
+   * gallery); what is gone is the row that opened it. A Home row opens the day's card; a card row
+   * opens the load's case when the engine moved it, and the form clip otherwise. The clause now
+   * pins the ruling the way it pinned its predecessor.
+   */
+  it('⛔ the WHY-HERE sheet is wired on NEITHER surface — a row is a door onto the day (2026-09-07)', () => {
     /*
      * ⛔ THE HALF THAT WAS BROKEN FOR MOST OF THIS PRODUCT'S LIFE. The row opened its reason only
      * when the engine had MOVED the load — which needs two programmes to compare, so in her first
@@ -89,9 +102,11 @@ describe('⛔ the reason exists before she has trained once', () => {
      */
     expect(read('src/components/PlanLifts.tsx')).toContain('onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId)');
     for (const f of ['src/screens/plan/PreWorkoutScreen.tsx', 'src/screens/home/Home.tsx']) {
-      expect(read(f)).toContain('WhyHereSheet');
-      expect(read(f)).toContain('liftPlacement');
+      expect(read(f)).not.toContain('WhyHereSheet');
+      expect(read(f)).not.toContain('liftPlacement');
     }
+    // A Home row opens the day's card — the one room that holds the swap, the drag and the clip.
+    expect(read('src/screens/home/Home.tsx')).toMatch(/onForm=\{\(\) => \{\s*if \(todayId\) navigation\.navigate\('PreWorkout', \{ workoutId: todayId \}\);/);
   });
 
   it('⛔ …and the sheet the week opens is where that table lives', () => {
@@ -120,8 +135,8 @@ describe('⛔ the reason exists before she has trained once', () => {
     const sheet = read('src/screens/plan/PreWorkout.tsx');
     expect(sheet).toContain('PlanLifts');
     expect(sheet).toMatch(/onWhy=\{/);
-    expect(read('src/screens/plan/PreWorkoutScreen.tsx')).toContain('liftPlacement');
     // …and Today does NOT, which is what stops the duplication coming back.
+
     expect(read('src/screens/home/HomeView.tsx')).not.toContain('<PlanLifts');
   });
 

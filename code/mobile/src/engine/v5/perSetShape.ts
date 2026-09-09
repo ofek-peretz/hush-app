@@ -217,7 +217,10 @@ export function decayFactors(history: SessionRecord[], setCount: number): number
 
   const raw: number[] = [1];
   let previous = 1;
-  const evidenced = setCount;
+  // Every position is fitted from the ONE pooled rate (see above), so every position has evidence
+  // and the mean below runs over all of them. (`evidenced` was a per-position leftover that always
+  // equalled `setCount`; the note beneath is kept because the rule it states still binds if a
+  // per-position fit ever returns.)
   for (let i = 1; i < setCount; i += 1) {
     const f = Math.min(previous, Math.max(0, 1 - rate * i));
     raw.push(f);
@@ -245,7 +248,7 @@ export function decayFactors(history: SessionRecord[], setCount: number): number
    * last fitted one — a five-set slot on a lift fitted to three positions would otherwise drag its
    * own centre down by repeating the smallest factor twice.
    */
-  const mean = raw.slice(0, evidenced).reduce((a, b) => a + b, 0) / evidenced;
+  const mean = raw.reduce((a, b) => a + b, 0) / raw.length;
   if (!(mean > 0)) return ones;
   return raw.map((f) => f / mean);
 }

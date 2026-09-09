@@ -272,8 +272,11 @@ export interface HomeViewProps {
   /** Muscles whose rest window has run out and are still waiting on her answer (S-32b's sibling). */
   easeChecks?: string[];
   onEaseAnswer?: (muscle: string, answer: 'recovered' | 'tender' | 'hurts') => void;
-  /** Open one lift's form clip — a tap on the lift's row. */
+  /** A tap on a lift's row. Since 2026-09-07 it opens the DAY's card (`PreWorkout`) — the room
+   *  holding the swap, the drag, the clip and the load's case — never a sheet of its own. The
+   *  name is kept so the fixtures that hand one in stay honest about what they hand. */
   onForm: (exerciseId: string) => void;
+
   /** The selected workout is already trained this week: it can be READ, never started again
    *  (founder 2026-07-11). The act is what the gate belongs on — the plan still shows. */
   dayDone?: boolean;

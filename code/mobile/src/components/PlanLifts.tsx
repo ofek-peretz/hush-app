@@ -27,6 +27,8 @@ import { useCopy } from '@/i18n/useCopy';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { color, font, radius, textScale, directionTone, type LoadDirection } from '@/design/tokens';
 import { MotionThumb } from '@/motion/render/MotionThumb';
+import { ReorderRows } from '@/components/ReorderRows';
+
 import { exerciseMotion } from '@/motion/registry';
 import type { FigureSex } from '@/motion/types';
 
@@ -99,13 +101,19 @@ export interface PlanLiftsProps {
    * fact, one pool, one sheet — see `db.OwnedPreferences.declaredSubs`.
    */
   onSwap?: (exerciseId: string) => void;
+  /**
+   * ⛔ THE ROWS CAN BE DRAGGED INTO A NEW ORDER (founder 2026-09-07): *"אפשר לגרור ולשנות את סדר
+   * התרגילים."* Present ⇒ every row grows a grip at its end and reports `(from, to)` on a drop;
+   * absent (a finished day, a fixture) ⇒ the table is exactly what it was. `onDragging` lets the
+   * host freeze the scroll it sits in while a row is in the air — see `ReorderRows`.
+   */
+  onReorder?: (from: number, to: number) => void;
+  onDragging?: (dragging: boolean) => void;
 }
 
-export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap }: PlanLiftsProps) {
+export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReorder, onDragging }: PlanLiftsProps) {
   const { t } = useCopy();
-  return (
-    <View style={styles.plan}>
-      {lifts.map((lift, i) => (
+  const rows = lifts.map((lift, i) => (grip: React.ReactNode = null, lifted = false) => (
         <Pressable
           key={`${lift.exerciseId}_${i}`}
           accessibilityRole="button"
@@ -118,6 +126,7 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap }: PlanL
             // block of facts rather than a list that trails off.
             i === lifts.length - 1 && styles.planRowLast,
             pressed && styles.pressedDim,
+            lifted && styles.planRowLifted,
           ]}
         >
           {/*
@@ -214,6 +223,7 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap }: PlanL
                 <Icon name="swap" size={17} color={color.textMuted} strokeWidth={1.6} />
               </Pressable>
             ) : null}
+            {grip}
           </View>
 
           {/* The prescription, on the end edge — one column down the whole sheet. */}
@@ -240,9 +250,21 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap }: PlanL
             </View>
           )}
         </Pressable>
-      ))}
-    </View>
-  );
+  ));
+  if (onReorder) {
+    return (
+      <ReorderRows
+        style={styles.plan}
+        items={lifts.map((l, i) => ({ key: `${l.exerciseId}_${i}`, movable: true }))}
+        onMove={onReorder}
+        {...(onDragging ? { onDragging } : {})}
+        gripColor={color.textMuted}
+        gripLabel={t('program.reorderGrip')}
+        renderItem={(_item, i, grip, lifted) => rows[i](grip, lifted)}
+      />
+    );
+  }
+  return <View style={styles.plan}>{rows.map((row) => row())}</View>;
 }
 
 /* ───────────────────────────────────────────────────────── the figure, assembled in one place */
@@ -430,6 +452,8 @@ const styles = StyleSheet.create({
      docblock about. */
   planFigures: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
   planRowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.10)' },
+  /* In the air: the row takes a raised ground so it reads as lifted off the table, not slid along it. */
+  planRowLifted: { backgroundColor: color.surface2, borderRadius: radius.md, borderTopColor: 'transparent' },
   planLeft: { flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12 },
   /* ⛔ 17 → 22 (founder, 2026-08-12: *"תציג את התוכנית … ותעצב את זה בגדול וברור"*). With the
      per-muscle allocation off the sheet above it, the LIFTS are the sheet — and they were set at

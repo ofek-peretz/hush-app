@@ -13,6 +13,7 @@
  * is worth marking, and the other two are struck below.
  */
 import type { Profile, Experience, Capability } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { BAR_KG, emptyBarKg } from '@/engine/loadMath';
 import { loadFloor } from '@/engine/v5/grid';
 import { STARTING_INCREMENT } from '@/engine/v5/constants';
@@ -205,7 +206,7 @@ export const MIN_SCALE_LIFTS = 3;
 export const PERSONAL_SCALE_FLOOR = 0.5;
 
 export function personalScale(
-  history: readonly { sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean }[] }[],
+  history: readonly { sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean; presumed?: boolean }[] }[],
   profile: LoadProfile,
   exerciseById: (id: string) => Exercise | undefined,
   /** Her Tlo — what "a working load" means to her. The ratio is taken at the same rep target B-1 is. */
@@ -216,7 +217,7 @@ export function personalScale(
   const best = new Map<string, number>();
   for (const s of history)
     for (const log of s.sets) {
-      if (log.isApproach || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
+      if (!isEvidenceSet(log) || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
       const e1rm = epley(log.actualWeight, log.actualReps);
       if (e1rm > (best.get(log.exerciseId) ?? 0)) best.set(log.exerciseId, e1rm);
     }

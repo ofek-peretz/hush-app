@@ -146,7 +146,9 @@ export function weeklyTargets(
          * The donor is not charged for a transfer that does not happen: `break` leaves its target
          * whole, so a mark with no room left costs the rest of her week nothing.
          */
-        if (out[m] + DAY_ONE_EX_DIVISOR > WEEKLY_SETS_CEILING + DAY_ONE_EX_DIVISOR) break;
+        // i.e. the marked muscle may sit at most ONE block above the ceiling after this transfer
+        // (`out[m] + D <= CEILING + D` is `out[m] <= CEILING`; written plainly since 2026-09-09).
+        if (out[m] > WEEKLY_SETS_CEILING) break;
         out[donor] -= DAY_ONE_EX_DIVISOR;
         given[donor] = (given[donor] ?? 0) + DAY_ONE_EX_DIVISOR;
         out[m] += DAY_ONE_EX_DIVISOR;

@@ -19,6 +19,7 @@
 // 
 
 import type { CardioActivity, Session, Units } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { sessionDurationMs, sessionEnergyKcal, sessionHasLoggedWork, sessionTonnageKg } from '@/domain/sessionMetrics';
 import { muscleOf } from '@/data/exercises';
@@ -88,7 +89,7 @@ export function recordCardFromHistory(history: Session[], units: Units): ShareRe
     for (const x of s.sets ?? []) {
       // A warm-up bridge (`isApproach`) is neither a best nor where she started — reading it as
       // "began at 30 kg" would overstate every gain the card celebrates (2026-08-24).
-      if (x.isApproach) continue;
+      if (!isEvidenceSet(x)) continue;
       if (x.actualWeight == null || x.actualReps < 1) continue;
       const peak = priorPeak.get(x.exerciseId);
       if (peak == null || x.actualWeight > peak) priorPeak.set(x.exerciseId, x.actualWeight);
@@ -99,7 +100,7 @@ export function recordCardFromHistory(history: Session[], units: Units): ShareRe
   // The heaviest set of each lift IN the latest session (weight, and the reps that carried it).
   const latestPeak = new Map<string, { weight: number; reps: number }>();
   for (const x of latest.sets ?? []) {
-    if (x.isApproach) continue; // same line — a record is struck on work, never on the bridge to it
+    if (!isEvidenceSet(x)) continue; // same line — a record is struck on work, never on the bridge to it, never on a presumed set
     if (x.actualWeight == null || x.actualReps < 1) continue;
     const cur = latestPeak.get(x.exerciseId);
     if (cur == null || x.actualWeight > cur.weight) latestPeak.set(x.exerciseId, { weight: x.actualWeight, reps: x.actualReps });

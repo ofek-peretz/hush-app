@@ -86,7 +86,7 @@ export function decideVolume(inp: VolumeInput): VolumeResult {
      *
      * The floor is a floor, not a target: never go under it, and never climb to it on a failure.
      */
-    if (sets <= minSets) return { sets: Math.min(sets, minSets), decision: 'at_floor' }; // S-35/36: assembly acts
+    if (sets <= minSets) return { sets, decision: 'at_floor' }; // S-35/36: assembly acts — never up to the floor
     return { sets: sets - 1, decision: 'cut' };
   }
 

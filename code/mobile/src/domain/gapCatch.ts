@@ -37,6 +37,7 @@
 //
 
 import type { CardioActivity, Session } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -111,7 +112,7 @@ export function gapCatchPlan(
   let fact: GapCatch['fact'] = null;
   // `last` is null for an athlete whose whole record is runs — the note arms with no fact.
   for (const log of last?.sets ?? []) {
-    if (log.isApproach || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
+    if (!isEvidenceSet(log) || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
     if (!fact || log.actualWeight > fact.loadKg) fact = { exerciseId: log.exerciseId, loadKg: log.actualWeight };
   }
   return { fireAtMs, laterFireAtMs: laterAtMs, fact };

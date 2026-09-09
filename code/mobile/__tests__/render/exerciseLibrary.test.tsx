@@ -126,9 +126,12 @@ const texts = (r: ReactTestRenderer): string[] =>
     .map((n) => (Array.isArray(n.props.children) ? n.props.children.join('') : String(n.props.children)));
 
 describe('⛔ she can reach it, or it is not a feature', () => {
-  it('the Program tab has a door to it — its true home since the tab shipped (You’s copy left 2026-08-23)', () => {
-    expect(read('screens/program/ProgramTab.tsx')).toMatch(/navigate\('ExerciseLibrary'\)/);
+  it('the builder’s chooser has a door to it — off the Program tab’s face since 2026-09-07 (founder: "תמחק את הפקד הזה"), never in You (2026-08-23)', () => {
+    expect(read('screens/plan/PlanBuilder.tsx')).toMatch(/navigate\('ExerciseLibrary'\)/);
+    expect(read('screens/program/ProgramTab.tsx')).not.toMatch(/ExerciseLibrary/);
+    expect(read('screens/profile/ProfileSheet.tsx')).not.toMatch(/navigate\('ExerciseLibrary'\)/);
   });
+
 
   it('and the stack registers the screen behind it', () => {
     expect(read('app/Root.tsx')).toMatch(/name="ExerciseLibrary"/);

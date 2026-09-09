@@ -105,7 +105,7 @@ describe('the last step builds, it does not chat', () => {
      * a line, which is still the coach path), so truthiness would silently demote her to the local
      * assembler for saying nothing.
      */
-    expect(src).toContain('!authored && coachAsk != null ? await askTheModel() : null');
+    expect(src).toContain('!authored && coachAsk != null && !skipCoach ? await askTheModel() : null');
 
     /*
      * 3 · AND A WEEK SHE ALREADY HAS IS NEVER ASKED FOR AGAIN. `authored` reads it off disk; a
@@ -199,7 +199,10 @@ describe('⛔ the intake never freezes', () => {
      * body fills in one beat now, so a week with more muscles in it costs nothing.
      *
      * What is left is three things, and each is bounded by something that is itself a law:
-     *   · the WAIT — at most `PLAN_BUILD_BUDGET_MS`, and never less than the opening beat;
+     *   · the WAIT — at most `PLAN_BUILD_BUDGET_MS`, and never less than the opening beat
+     *     (⚠️ that is the budget for an athlete who wrote NOTHING; a sentence buys the longer
+     *     `PLAN_BUILD_SAID_MS`, by the founder's 2026-09-09 ruling that the build does not fail,
+     *     and the drawing loops for as long as it takes — `theModelWritesAWeekSheCanEdit` §4);
      *   · the FILL — `beatFor(the busiest muscle a week could hold)`, the animation's arithmetic;
      *   · the NAME — `REVEAL_MS`.
      */
@@ -319,7 +322,7 @@ describe('the ordering that a first run always breaks', () => {
     expect(src).toContain('asked ?? (await model.generateProgram(profile))');
     // …and an `authored` arrival never asks the model either: a call over a week she already wrote
     // is money spent re-answering a settled question, and a second week that could disagree.
-    expect(src).toContain('coachAsk != null ? await askTheModel() : null');
+    expect(src).toContain('coachAsk != null && !skipCoach ? await askTheModel() : null');
     // …and the read is from DISK, never from a `Program` carried in a navigation param — a second
     // copy of the week is a second thing that can disagree with what she trains.
     expect(src).not.toMatch(/route\.params\.program|params\.built/);
@@ -393,7 +396,8 @@ describe('the ordering that a first run always breaks', () => {
      */
     const ready = read('src/screens/onboarding/ProgramCreated.tsx');
     expect(ready).not.toContain('<PlanWeek');
-    expect(ready).toContain('programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER)');
+    /* `program.title` joined the call on 2026-09-09 — the author's own name for the week leads. */
+    expect(ready).toContain('programmeName(program.days, inputs.bodyMap, CANONICAL_MUSCLE_ORDER, program.title)');
   });
 });
 
@@ -452,7 +456,10 @@ describe('the wait is honest', () => {
      * whole; both draw DASHED rows until a real lift exists.
      */
     expect(src).toContain('PLACEHOLDER_MUSCLES');
-    expect(src).toContain('PLACEHOLDER_MUSCLES.slice(0, shownMuscles).map((m) => ({ muscle: m, lifts: waitingRows }))');
+    /* The walk loops since 2026-09-09 (`cycle`), so the placeholders come off a rotation of the same
+       list — still the catalogue's muscles, still dashed rows, nothing invented. */
+    expect(src).toContain('placeholders().map((m) => ({ muscle: m, lifts: waitingRows }))');
+    expect(src).toContain('return PLACEHOLDER_MUSCLES.slice(0, shownMuscles);');
     expect(src).toContain("const waitingRows = [{ name: '' }, { name: '' }];");
     // …and the real rows only ever come from the assembled programme.
     expect(src).toContain('buildMusclesFromProgram(program, profile.repBand');
@@ -487,7 +494,7 @@ describe('the wait is honest', () => {
     expect(building()).toContain("t('ob.buildingRetry')");
     for (const loc of ['en', 'he']) {
       const copy = JSON.parse(read(`src/i18n/locales/${loc}.json`)) as { ob: Record<string, string> };
-      for (const k of ['buildingTitle', 'buildingFailedTitle', 'buildingFailedSub', 'buildingRetry']) {
+      for (const k of ['buildingTitle', 'buildingFailedTitle', 'buildingFailedSub', 'buildingRetry', 'buildingOfflineTitle', 'buildingBusyTitle', 'buildingWithoutCoach']) {
         expect({ loc, k, there: !!copy.ob[k] }).toEqual({ loc, k, there: true });
       }
     }

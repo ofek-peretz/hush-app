@@ -15,7 +15,7 @@
 import React, { useEffect, useState } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
 // the programme can never disagree about what she chose.
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -39,7 +39,10 @@ import * as haptics from '@/platform/haptics';
 import { setLocale, currentLocale } from '@/i18n';
 import { notifier } from '@/platform/notifications';
 import { reloadApp } from '@/app/reload';
-import { nativeWatchPairing } from '@/platform/watch/watchTransportNative';
+import { nativeWatchPairing, lastWatchPublish } from '@/platform/watch/watchTransportNative';
+import { audioSession } from '@/platform/voice/audioSession';
+import { coachVoice } from '@/platform/voice/coachVoice';
+import { voiceCapture } from '@/platform/voice/voiceCapture';
 import { recordFile } from '@/platform/recordFile';
 import { cloud } from '@/platform/cloud';
 import { readRecord, recordFileName, restoreVerdict } from '@/domain/record';
@@ -583,7 +586,18 @@ export function ProfileSheet({ navigation }: Props) {
             if (!w.activated) return t('profile.watchActivating');
             if (!w.paired) return t('profile.watchNotPaired');
             if (!w.appInstalled) return t('profile.watchNotInstalled');
-            return t('profile.watchLinked');
+            /* ⛔ AND WHAT THE PHONE LAST SENT (founder 2026-09-08, two photographs of a wrist saying
+               `badframe` with nothing on the phone to hold against them): the last frame's bytes and
+               sequence, and the first refusal after it — the OS's, or the phone's own parser's
+               (`invalid_json: …`). Both ends of the pipe now testify on their own screens. */
+            const last = lastWatchPublish();
+            if (!last) return t('profile.watchLinked');
+            if (last.ok) return t('profile.watchLastFrame', { bytes: last.bytes, seq: last.seq });
+            // The phone's own decoder refused the frame and the module sent the older parser's
+            // serialisation instead (2026-09-08): the wrist got a clean frame, and THIS is the reason.
+            return last.reason?.startsWith('invalid_json')
+              ? t('profile.watchLastRepaired', { bytes: last.bytes, seq: last.seq, reason: last.reason })
+              : t('profile.watchLastRefused', { bytes: last.bytes, seq: last.seq, reason: last.reason ?? '' });
           })()}
         />
         {/*
@@ -598,6 +612,24 @@ export function ProfileSheet({ navigation }: Props) {
           sub={t('profile.reminderSub')}
           control={<Switch checked={reminderOn} onChange={() => void onReminderToggle()} accessibilityLabel={t('profile.reminderRow')} />}
         />
+        {/*
+          THE VOICE COACH (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md, 2026-09-08). ON by default —
+          and still silent without earbuds, which is the gate that matters. This switch is for the
+          athlete who has earbuds in and wants the screens alone; the screens are exactly the same
+          either way.
+        */}
+        <Row
+          label={t('profile.voiceRow')}
+          sub={t('profile.voiceSub')}
+          control={
+            <Switch
+              checked={p?.voiceSpec !== false}
+              onChange={() => void app.updateProfileInfo({ voiceSpec: p?.voiceSpec === false })}
+              accessibilityLabel={t('profile.voiceRow')}
+            />
+          }
+        />
+        {p?.voiceSpec !== false ? <VoiceGateLine /> : null}
         {/*
           THE WIRE'S SWITCH (2026-09-01, audit finding 4). GDPR wants an opt-out for behavioural
           analytics and the privacy text now promises one; this is it. It gates only the wire —
@@ -828,6 +860,23 @@ function RoomSheet({
   );
 }
 
+/**
+ * ════ WHAT THE VOICE'S GATE SAYS RIGHT NOW (founder, 2026-09-09: *"הקול באימון לא עובד"*) ════
+ *
+ * The voice is silent by design behind three gates — the build has a mouth and an ear, and earbuds
+ * are on the output route (spec §0.1) — and a silent gate looks exactly like a broken one. This
+ * line reads the gates live, so the athlete (and the founder on a gym floor) can tell "no earbuds"
+ * from "no engine" without a debugger. It draws nothing on the stage; the stage stays what it was.
+ */
+function VoiceGateLine() {
+  const { t } = useCopy();
+  const capable = Platform.OS === 'ios' && coachVoice.available() && voiceCapture.available() && audioSession.available();
+  const [headset, setHeadset] = useState(() => audioSession.headsetConnected());
+  useEffect(() => audioSession.onRouteChange(setHeadset), []);
+  const line = !capable ? t('profile.voiceGateMissing') : headset ? t('profile.voiceGateOn') : t('profile.voiceGateNoHeadset');
+  return <Text style={styles.voiceGate}>{line}</Text>;
+}
+
 function Row({
   label,
   sub,
@@ -983,6 +1032,8 @@ const styles = StyleSheet.create({
   // Deleting an account is not a load coming down — it takes the CLAY (see `alert` in tokens).
   rowDanger: { color: alert.stage },
   rowSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
+  /* The voice gate's live line, under its row — the row's own quiet voice, one step in. */
+  voiceGate: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: -6, marginBottom: 10, textAlign: 'left' },
 
   // membership card
   memberCard: {

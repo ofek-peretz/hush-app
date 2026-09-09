@@ -3,8 +3,12 @@
  *
  * The pure `correctInSession` (loop1.ts) decides the next set's load from the set just performed;
  * this thin layer sources its inputs from the catalogue and applies the result to the remaining sets
- * of the current exercise. It runs at the ONE place the phone and the watch both pass through
- * (sessionStore.completeSet), so a correction reaches both surfaces from a single call.
+ * of the current exercise.
+ *
+ * ⚠️ WHO CALLS IT (corrected 2026-09-09). It no longer runs in `sessionStore.completeSet` — the
+ * founder's 2026-08-26 ruling made the touch stage a LOGGER (only `carryWeightForward` survives
+ * there). Its one production caller is the voice conductor (`platform/voice/voiceConductor`, spec
+ * §6), which speaks the verdict and applies it under `applyLoop1`.
  */
 
 import { exerciseMeta } from '@/engine/catalog';
@@ -98,6 +102,8 @@ export function applyLoop1<T extends LiveStep>(
   /** F-20 — the previous WORKING set's performed reps on this lift, this session (warm-up bridges and
    *  approach sets excluded), or null when this was the first. The second witness for a 1-rep miss. */
   prevReps?: number | null,
+  /** The lift has no evidence in her history: every miss moves, from set 1, cap 3 (`Loop1Input.firstTime`). */
+  firstTime?: boolean,
 ): Loop1Applied<T> {
   const cur = plan.find((s) => s.globalIndex === completedGlobalIndex);
   const noop: Loop1Applied<T> = { plan, corrected: false, direction: 'none', nextLoad: performedLoad };
@@ -128,6 +134,7 @@ export function applyLoop1<T extends LiveStep>(
     perRung: cur.target.perRung ?? null,
     railCeiling, // L11 — an in-session raise is bounded by her own record (S-11, "always inside the rail")
     prevMiss,
+    firstTime,
   });
   if (!r.corrected || r.nextLoad == null) return noop;
 

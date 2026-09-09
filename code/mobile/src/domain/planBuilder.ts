@@ -217,7 +217,32 @@ export function moveLift(p: Program, dayIdx: number, from: number, to: number): 
 }
 
 /** Swap one lift for another, keeping its seat and its set count. */
+/**
+ * A rep range written on ONE seat (founder 2026-09-07 — the model's per-lift band, see
+ * `buildPrompt` at `REPS_MIN`). Stored on the slot; the engine's `bandOf` reads it ahead of her
+ * profile band, and every scheme that prints `sets×lo–hi` prints this one. Clamped to the sane
+ * bounds and refused when low > high; `null` clears it back to her own band.
+ */
+export const BAND_MIN = 2;
+export const BAND_MAX = 30;
+export function setLiftBand(p: Program, dayIdx: number, slotIdx: number, band: [number, number] | null): Program {
+  const day = p.days[dayIdx];
+  if (!day || slotIdx < 0 || slotIdx >= day.slots.length) return p;
+  const out = cloneProgram(p);
+  const slot = out.days[dayIdx].slots[slotIdx];
+  if (band == null) {
+    delete slot.repBand;
+    return out;
+  }
+  const lo = Math.round(band[0]);
+  const hi = Math.round(band[1]);
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo < BAND_MIN || hi > BAND_MAX || lo > hi) return p;
+  slot.repBand = [lo, hi];
+  return out;
+}
+
 export function replaceLift(p: Program, dayIdx: number, slotIdx: number, toId: string): Program {
+
   const day = p.days[dayIdx];
   const ex = exerciseById(toId);
   if (!day || !ex || slotIdx < 0 || slotIdx >= day.slots.length) return p;

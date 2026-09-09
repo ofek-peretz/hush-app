@@ -144,17 +144,36 @@ describe('the cardio lock card', () => {
   });
 });
 
-describe('the read-only contract is untouched', () => {
+describe('⛔ the lock screen is a control — and only for the three verbs the stage has (founder, 2026-09-08)', () => {
   /**
-   * §8.5 ratifies this activity as READ-ONLY, and the Live Activity BUTTONS are the founder's own
-   * open decision ("do not build and do not re-raise"). The canonical 6.2 card's third row IS a
-   * 46 pt action row — which is most of why ours reads short beside Spotify's. Reclaiming that
-   * height for DATA is the whole of C.20; reclaiming it for controls would be answering a question
-   * that is not mine.
+   * §8.5 ratified this activity as READ-ONLY and the buttons were the founder's own open decision
+   * ("do not build and do not re-raise"). He raised it himself on 2026-09-08: *"להזין סט כשהמסך
+   * סגור וגם מנוחה של קיצור או הוספת 15 שניות."* The action row the canonical 6.2 card always
+   * had is drawn now — and the law turns with the ruling: the STRENGTH card may carry exactly the
+   * three verbs (`HushLockIntents.swift`) plus, since the same evening (*"להזין ישירות מהלייב
+   * אקטיביטי את המשקל והחזרות"*), the one stepper key that turns a figure — nothing else may be
+   * tappable, and the CARDIO card stays read-only (a run is recorded, never controlled from a card).
    */
-  it('no button, intent or tap target has appeared on either card', () => {
+  it('the strength card carries the three verbs and the stepper key, and no other tap target', () => {
+    const strength = source.slice(0, source.indexOf('struct HushCardioLiveActivity'));
+    for (const intent of ['HushCompleteSetIntent', 'HushAddRestIntent', 'HushEndRestIntent']) {
+      expect(strength).toContain(`Button(intent: ${intent}())`);
+    }
+    // The fourth button is the stepper's key — one struct, drawn four times (− + on load and reps).
+    expect(strength).toContain('Button(intent: HushAdjustFigureIntent(field: field, delta: delta))');
+    // The fifth is the voice's "מוכן" (spec §3.2), drawn only while the loading dialogue is open.
+    expect(strength).toContain('Button(intent: HushSetReadyIntent())');
+    expect(strength.indexOf('if state.awaitingReady')).toBeLessThan(strength.indexOf('HushSetReadyIntent()'));
+    // Five buttons in CODE (the header comment names the API once).
+    const code = strength.split(String.fromCharCode(10)).filter((l) => !l.trim().startsWith("//")).join(String.fromCharCode(10));
+    expect((code.match(/Button\(intent:/g) ?? []).length).toBe(5);
+    expect((code.match(/Button\(/g) ?? []).length).toBe(5);
+    expect(strength).not.toContain('onTapGesture');
+  });
+  it('the cardio card is untouched — no button, intent or tap target', () => {
+    const cardio = source.slice(source.indexOf('struct HushCardioLiveActivity'));
     for (const forbidden of ['Button(', 'AppIntent', 'LiveActivityIntent', 'onTapGesture']) {
-      expect(source).not.toContain(forbidden);
+      expect(cardio).not.toContain(forbidden);
     }
   });
 });

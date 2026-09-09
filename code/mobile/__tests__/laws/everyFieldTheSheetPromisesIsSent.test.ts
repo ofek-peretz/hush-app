@@ -83,20 +83,22 @@ const SHEET: { type: string; rare?: string[] }[] = [
   { type: 'FactPerformed' },
   { type: 'FactOccurrence', rare: ['effort'] },
   { type: 'FactLift', rare: ['effort'] },
-  { type: 'FactSet', rare: ['edited', 'rest'] },
+  { type: 'FactSet', rare: ['edited', 'rest', 'presumed'] },
 ];
 
 /** One athlete with a real record: a lift done twice, effort answered, a set corrected, rest taken. */
 function sheet(): string {
-  const set = (setIndex: number, w: number, r: number, edited = false) => ({
+  const set = (setIndex: number, w: number, r: number, edited = false, presumed = false) => ({
     exerciseId: 'bb_bench_press', setIndex, recommendedWeight: w, recommendedReps: 8,
     actualWeight: w, actualReps: r, edited, restBeforeS: 95,
     persistedAt: `2026-08-01T10:0${setIndex}:00.000Z`,
+    // The session clock's mark (2026-09-07) — a set nobody stood behind, sent as such.
+    ...(presumed ? { presumed: true as const } : {}),
   });
   const session = (day: number, w: number) => ({
     id: `s${day}`, programDayId: 'd1', startedAt: `2026-07-${20 + day}T10:00:00.000Z`,
     state: 'SAVED' as const, earlyFinish: false, trained: true,
-    sets: [set(0, w, 9), set(1, w, 8, true)],
+    sets: [set(0, w, 9), set(1, w, 8, true), set(2, w, 8, false, true)],
     effort: [{ exerciseId: 'bb_bench_press', level: 'about_right' as const, at: `2026-07-${20 + day}T10:30:00.000Z` }],
   });
   const history = [session(1, 30), session(8, 32.5)];
@@ -123,7 +125,7 @@ describe('every field the sheet declares is filled in and sent', () => {
     // ⚠️ `effort` was here and is gone: the mid-workout question that produced it was deleted by
     // the founder (2026-08-02), so the field would now be one the sheet declares and nothing ever
     // fills — the exact defect this law exists to catch, arriving from the other direction.
-    for (const field of ['edited', 'rest']) {
+    for (const field of ['edited', 'rest', 'presumed']) {
       expect({ field, sent: json.includes(`"${field}"`) }).toEqual({ field, sent: true });
     }
   });

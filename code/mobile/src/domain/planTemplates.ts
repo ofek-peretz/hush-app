@@ -27,7 +27,7 @@
 //
 
 import type { Program } from '@/data/local/models';
-import { addDay, addLift, blankDraft, renameDay, setLiftSets, togglePair } from '@/domain/planBuilder';
+import { addDay, addLift, blankDraft, renameDay, setLiftBand, setLiftSets, togglePair } from '@/domain/planBuilder';
 
 export interface TemplateLift {
   ex: string;
@@ -43,6 +43,9 @@ export interface TemplateLift {
    * lift's `sets` above is overruled by the first's when the two are coupled).
    */
   pair?: boolean;
+  /** A rep range the sheet's author wrote for this lift (the model, 2026-09-07 — see `buildPrompt`
+   *  at `REPS_MIN`). Absent on every shelf: a shelf takes her own band, as it always has. */
+  reps?: [number, number];
 }
 export interface TemplateDay {
   /** i18n suffix under `builder.templates.dayNames.` — resolved AT materialization, because a
@@ -536,7 +539,9 @@ export function materializeTemplate(tpl: PlanTemplate, dayName: (nameKey: string
     day.lifts.forEach((l, li) => {
       d = addLift(d, di, l.ex);
       d = setLiftSets(d, di, li, l.sets);
+      if (l.reps) d = setLiftBand(d, di, li, l.reps);
     });
+
     /*
      * ⚠️ THE PAIRS GO ON AFTER THE WHOLE DAY STANDS, and in seat order. `togglePair` syncs the
      * partner's set count, so a pair written while the day is still being filled would be undone by

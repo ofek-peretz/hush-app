@@ -45,6 +45,7 @@
 // 
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -150,7 +151,7 @@ function setsOf(exerciseId: string, session: Session | null): number {
  *  bridge (`isApproach`) is excluded, exactly as `sessionMetrics.sessionTonnageKg` excludes it, so
  *  this poster and the Log row can never state two different tonnes for one workout. */
 function sessionTonnes(sets: readonly SetLog[]): number {
-  const kg = sets.reduce((sum, s) => sum + (s.isApproach ? 0 : (s.actualWeight ?? 0) * s.actualReps), 0);
+  const kg = sets.reduce((sum, s) => sum + (isEvidenceSet(s) ? (s.actualWeight ?? 0) * s.actualReps : 0), 0);
   return Math.round(kg / 100) / 10;
 }
 

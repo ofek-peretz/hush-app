@@ -28,6 +28,7 @@ import { retainedAfterGap, daysSinceLastSession, lastSessionStartMs } from './de
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
 import { RECENCY_WINDOW_SESSIONS, SETS_MIN, STARTING_INCREMENT } from './constants';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { track } from '@/platform/telemetry';
 
 export type SeedFor = (exerciseId: string) => number | null;
@@ -78,7 +79,7 @@ export function observedLoads(exerciseId: string, sessions: Session[], equipment
   const grain = equipment ? STARTING_INCREMENT[equipment] || 0.5 : 0.5;
   const seen = new Set<number>();
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualWeight > 0) {
+    if (log.exerciseId === exerciseId && isEvidenceSet(log) && log.actualWeight != null && log.actualWeight > 0) {
       seen.add(Math.round(log.actualWeight / grain) * grain);
     }
   }
@@ -91,7 +92,8 @@ export function observedLoads(exerciseId: string, sessions: Session[], equipment
  * completed set — the rail is inactive there by definition, and the athlete's own eyes are the guard
  * (S-49). Legacy approach sets are excluded, exactly as everywhere else (S-60).
  *
- * The between-session loop has always clamped to this (`applyRail`, loop2). Loop 1 did not, though
+ * The between-session loop clamps to its own rail (`applyRail`, loop2 — which reads capacity at
+ * Tlo; see the note inside for why THIS one reads the bar). Loop 1 did not clamp at all, though
  * S-11 says a raise is "always inside the rail" and S-14 calls the rail absolute — so a single
  * implausible rep count could push a mid-session prescription to a load she has never approached.
  * Computed at the façade because the rail is a fact about her HISTORY, which the pure loop-1 core
@@ -103,12 +105,22 @@ export function railCeilingFor(exerciseId: string, bandLo: number, sessions: Ses
   // F-8: the rail is a MEASURED statistic, so it reads only the recency window — her most recent
   // sessions of THIS lift. An unsorted `startedAt` is treated as oldest (it cannot win the window).
   const recent = sessions
-    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null))
+    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && isEvidenceSet(l) && l.actualWeight != null))
     .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
     .slice(0, RECENCY_WINDOW_SESSIONS);
+  /*
+   * ⚠️ THE NUMBER ON THE BAR, DELIBERATELY — NOT LOOP 2's CAPACITY READING (settled 2026-09-09).
+   * `loop2.railRecord` converts a completed set to capacity-at-Tlo (`demonstratedAtTlo`), and this
+   * façade was described as "the same ceiling". It is not, and the difference is measured, not
+   * stylistic: `theProgrammeSurvivesTheMonths` runs ten weeks of the live loop through this rail,
+   * and reading capacity here pushed the man-80-kg athlete to 29.2% of settled sets under target
+   * against the law's 25% bound. A between-session raise is judged again next occurrence; a
+   * mid-session raise is on the bar ninety seconds later with no second look, so the LIVE rail
+   * stays one rung above a load she has actually completed at ≥ Tlo. Two rails, two questions.
+   */
   let best: number | null = null;
   for (const s of recent) for (const log of s.sets) {
-    if (log.exerciseId !== exerciseId || log.isApproach) continue;
+    if (log.exerciseId !== exerciseId || !isEvidenceSet(log)) continue;
     if (log.actualWeight == null || log.actualReps < bandLo) continue;
     if (best == null || log.actualWeight > best) best = log.actualWeight;
   }
@@ -119,23 +131,36 @@ export function railCeilingFor(exerciseId: string, bandLo: number, sessions: Ses
 function bestDemonstratedLoad(exerciseId: string, band: Band, sessions: Session[]): number | null {
   let best: number | null = null;
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId === exerciseId && !log.isApproach && log.actualWeight != null && log.actualReps >= band.lo && (best == null || log.actualWeight > best)) best = log.actualWeight;
+    if (log.exerciseId === exerciseId && isEvidenceSet(log) && log.actualWeight != null && log.actualReps >= band.lo && (best == null || log.actualWeight > best)) best = log.actualWeight;
   }
   return best;
 }
 
-/** Working SetPerfs for an exercise from a set of sessions. Legacy Build-#33 approach sets are
- *  excluded from the fold (Rev 8 deleted the mechanism; the mark survives only on old logs). */
+/**
+ * Working SetPerfs for an exercise from a set of sessions — the ONE adapter every loop's evidence
+ * enters through. Legacy Build-#33 approach sets are excluded from the fold (Rev 8 deleted the
+ * mechanism; the mark survives only on old logs).
+ *
+ * ⛔ AND A PRESUMED SET IS NOT HERE EITHER (2026-09-07, `domain/setEvidence`). Its reps ARE the
+ * prescription, so folding it would have Loop 2 find every set on the band floor and raise for ever.
+ * An occurrence whose sets were all presumed therefore folds as EMPTY — and `sets.length === 0 →
+ * continue` below is the standing rule that an untrained lift HOLDS. No news is a hold, not a raise
+ * and not a stall. Presence (Loop 3's `performedByEx`) is counted from the raw logs, not from here.
+ */
 function setPerfs(exerciseId: string, sessions: Session[]): SetPerf[] {
   const out: SetPerf[] = [];
   for (const s of sessions) for (const log of s.sets) {
-    if (log.exerciseId !== exerciseId || log.isApproach) continue;
+    if (log.exerciseId !== exerciseId || !isEvidenceSet(log)) continue;
     out.push({ load: log.actualWeight, reps: log.actualReps, restBeforeS: log.restBeforeS });
   }
   return out;
 }
 
 // ───────────────────────────── init ─────────────────────────────
+/** The init value of `ExerciseState.sets`, which nothing reads as a constraint (see `types.ts`). It
+ *  was `Math.max(SETS_MIN, 4)` — a live-looking clamp that always answered 4 (2026-09-09). */
+const VESTIGIAL_SLOT_SETS = 4;
+
 function initExercise(exerciseId: string, band: Band, history: Session[], seedFor: SeedFor): ExerciseState {
   const meta = metaWithGrid(exerciseId, history);
   const demonstrated = meta.bodyweight ? null : bestDemonstratedLoad(exerciseId, band, history);
@@ -144,7 +169,8 @@ function initExercise(exerciseId: string, band: Band, history: Session[], seedFo
     : demonstrated != null
       ? snapDown(demonstrated, meta.equipment, meta.observedLoads)
       : seedFor(exerciseId); // no history → the seed; Loop 1 corrects it from her first set (Rev 8)
-  return { exerciseId, load, band, sets: Math.max(SETS_MIN, 4), history: [] };
+  // `sets` is VESTIGIAL (types.ts) — the programme slot decides; the value is only ever its init.
+  return { exerciseId, load, band, sets: VESTIGIAL_SLOT_SETS, history: [] };
 }
 
 // ───────────────────────────── state io ─────────────────────────────
@@ -812,7 +838,7 @@ export function perRungForV5(exerciseId: string, history: Session[]): number | n
   // not all-time. (The pure core windows on `state.history`; the façade must window the raw history it
   // flattens, or an old form/gym years ago would still weigh on today's slope.)
   const recent = history
-    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && !l.isApproach && l.actualWeight != null))
+    .filter((s) => s.sets.some((l) => l.exerciseId === exerciseId && isEvidenceSet(l) && l.actualWeight != null))
     .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
     .slice(0, RECENCY_WINDOW_SESSIONS);
   // ONE RECORD PER SESSION — not one bag of every set.
@@ -851,6 +877,22 @@ export function explainChange(c: ChangeEntry): Explanation {
   // narrated by direction ("I added a set to your chest work" / "I trimmed a set").
   if (c.kind === 'volume' && c.muscle) {
     const muscle = c.muscle; // raw muscle name — consistent with the English lift names in this copy
+    /*
+     * ⛔ A TOTAL BROUGHT BACK TO HER HOUR IS NOT A CUT (code review 2026-09-09). `decideVolume`
+     * returns `capped` when a persisted total sits above what her minutes now hold (she moved from
+     * six days to three) and says in its own words that this "is not a punishment and not a cut" —
+     * and this narrated it by direction as "kept coming up short, so I trimmed a set", a claim
+     * about work she never failed. The decision rides the entry; the letter reads it.
+     */
+    if (c.decision === 'capped') {
+      return {
+        slotId: c.exerciseId, pattern: '' as never,
+        observation: L('volumeCapped.observation', { muscle }),
+        conclusion: L('volumeCapped.conclusion'),
+        action: L('volumeCapped.action', { muscle }),
+        text: L('volumeCapped.text', { muscle }),
+      };
+    }
     const up = c.setsTo > c.setsFrom;
     return {
       slotId: c.exerciseId, pattern: '' as never,

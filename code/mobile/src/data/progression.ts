@@ -9,6 +9,7 @@
 // 
 
 import { exercisesForCapability } from './exercises';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import { FEMALE_UPPER_FACTOR, FEMALE_LOWER_FACTOR } from '@/domain/startingLoad';
 import type { Capability, PortraitSnapshot, Profile, Session } from './local/models';
 
@@ -53,7 +54,7 @@ export function computePortrait(
     for (const session of history) {
       let touched = false;
       for (const set of session.sets) {
-        if (!exIds.has(set.exerciseId) || set.actualWeight == null) continue;
+        if (!exIds.has(set.exerciseId) || set.actualWeight == null || !isEvidenceSet(set)) continue;
         best = Math.max(best, epley1rm(set.actualWeight, set.actualReps));
         touched = true;
       }

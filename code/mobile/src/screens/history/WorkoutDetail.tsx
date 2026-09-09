@@ -258,6 +258,9 @@ export function WorkoutDetailView({
                             </Text>
                           ) : null}
                           {w != null ? <Text style={styles.chipNum}>{`${w}×${set.actualReps}`}</Text> : <Text style={styles.chipNum}>{`×${set.actualReps}`}</Text>}
+                          {/* The clock's mark, kept in the record she reads back (2026-09-07): a set
+                              nobody stood behind is drawn as the plan's number, and says so. */}
+                          {set.presumed ? <Text style={styles.chipTag}>{t('workout.presumedCell')}</Text> : null}
                         </View>
                       );
                     })}
@@ -394,6 +397,8 @@ const styles = StyleSheet.create({
      and the chip is a reading; the COLOUR comes from `directionTone` at the call site, so this row
      can never hold an opinion about direction the rest of the app does not share. */
   chipMark: { fontFamily: font.monoMedium, fontSize: 17, lineHeight: 22, marginEnd: 3, textAlign: 'left' },
+  /* "counted as written" beside a presumed set's figures — a word, so sans, and the chip's quietest ink. */
+  chipTag: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, marginStart: 6, textAlign: 'left' },
 
   footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
 });

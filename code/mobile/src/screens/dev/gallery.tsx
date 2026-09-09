@@ -372,6 +372,8 @@ const restFixture = {
   nextExercise: { id: 'bb_bench_press', name: 'Bench Press', muscle: 'Chest', equipment: 'barbell' },
   nextTarget: { exerciseId: 'bb_bench_press', setIndex: 2, recommendedWeight: 31.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
   correction: { exerciseId: 'bb_bench_press', direction: 'down', from: 34, to: 31.5, reps: 5, band: [8, 10] },
+  // The set she just did, so the card can say the bar MOVED (34 → 31.5) and by how much.
+  loggedSets: [{ exerciseId: 'bb_bench_press', setIndex: 1, recommendedWeight: 34, recommendedReps: 8, actualWeight: 34, actualReps: 5, edited: false, persistedAt: new Date().toISOString() }],
 } as unknown as React.ContextType<typeof SessionContext>;
 
 /** 2.4b · TRANSITION REST — the crossing from Bench Press to Overhead Press. */
@@ -397,6 +399,31 @@ const crossingFixture = {
   nextTarget: { exerciseId: 'bb_overhead_press', setIndex: 0, recommendedWeight: 22.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
   nextSetLabel: { n: 1, m: 4 },
   correction: null,
+} as unknown as React.ContextType<typeof SessionContext>;
+
+/** The bench's three rows, hers — the board's fixture (2.4r) shows a lift already done. */
+const benchRows = [0, 1, 2].map((i) => ({
+  exerciseId: 'bb_bench_press', setIndex: i, recommendedWeight: 34, recommendedReps: 8,
+  actualWeight: 34, actualReps: 8, edited: false,
+  persistedAt: new Date(Date.now() - (3 - i) * 150_000).toISOString(),
+}));
+
+/** 2.4r · the board, from a live set two lifts in. */
+const boardFixture = {
+  ...(sessionFixture as unknown as Record<string, unknown>),
+  currentExerciseId: 'bb_overhead_press',
+  currentExercise: EXERCISES.find((e) => e.id === 'bb_overhead_press')!,
+  currentTarget: { exerciseId: 'bb_overhead_press', setIndex: 0, recommendedWeight: 22.5, recommendedReps: 8, repBandLo: 8, repBandHi: 10 },
+  setLabel: { n: 1, m: 4 },
+  setsSoFar: [],
+  loadsSoFar: [],
+  lastTime: null,
+  loggedSets: benchRows,
+  sessionExerciseIds: ['bb_bench_press', 'bb_overhead_press', 'bb_row', 'db_curl'],
+  aheadExerciseIds: ['bb_row', 'db_curl'],
+  sessionSetCounts: { bb_bench_press: 3, bb_overhead_press: 4, bb_row: 3, db_curl: 3 },
+  movableExerciseIds: ['bb_row', 'db_curl'],
+  exerciseProgress: { index: 1, total: 4 },
 } as unknown as React.ContextType<typeof SessionContext>;
 
 /**
@@ -1651,8 +1678,12 @@ function preWorkout(p: {
         lifts={p.lifts as never}
         onForm={noop}
         onWhy={noop}
+        /* The drag (2026-09-07): offered on a day still ahead, exactly as the screen offers it. */
+        {...(p.done ? {} : { onReorder: noop })}
+
         onStart={noop}
         onClose={noop}
+
       />
     </InApp>
   );
@@ -2417,6 +2448,13 @@ export const GALLERY: GalleryEntry[] = [
   { id: '2.2t', label: 'straight into the next lift', of: '2.2', status: 'live', note: 'a superset: the line under the position is the only thing that tells her the missing rest is deliberate', render: () => mount(SessionFlow, undefined, supersetFixture) },
   { id: '2.4', label: 'Rest', status: 'live', render: () => mount(SessionFlow, undefined, restFixture) },
   { id: '2.4b', label: 'transition rest', of: '2.4', status: 'live', render: () => mount(SessionFlow, undefined, crossingFixture) },
+  /*
+   * ════ THE BOARD (founder, 2026-09-07) ════ The session map with a lift one press from starting
+   * (2.4r — press the menu disc). `2.4p` (the rest after a set the clock wrote) and `2.4q` (the
+   * crossing's "as written?" ask) are DELETED with the clock's presumption (founder, 2026-09-09):
+   * no set is written by time, so neither state can exist.
+   */
+  { id: '2.4r', label: 'the board — press the menu disc', of: '2.4', status: 'live', note: 'a lift still ahead is one press from now; a lift left after two sets waits at the end of the order', render: () => mount(SessionFlow, undefined, boardFixture) },
   /* ⛔ `2.4e` (crossing into a run) IS DELETED (founder, 2026-08-12) — it followed the item-stage
      cull: the run it crossed into was `DistanceStage`'s, and those entries went with it. The
      crossing card itself still states a distance correctly; it gets an entry back when the cardio
@@ -3018,15 +3056,33 @@ export const GALLERY: GalleryEntry[] = [
    */
   { id: '4.4', label: 'The week — every day, every lift', status: 'live', note: 'the only chooser now — the "אימון אחר" door left Home, and a row here opens the same pre-workout card it opened', render: () => (
     <InApp><UnderTabs active={1}>
-      <ProgramTabView workouts={programWeek()} units="kg" settled figure="female" onDay={noop} onLibrary={noop} onBuild={noop} />
+      <ProgramTabView workouts={programWeek()} units="kg" settled figure="female" onDay={noop} onBuild={noop} />
+
     </UnderTabs></InApp>
   ) },
-  { id: '4.5', label: 'Who writes the week — intake step 3/3', status: 'live', note: 'three doors: the MODEL writes it (2026-08-29, and it lands in the editor below), a blank sheet, or a proven shelf. Eleven shelves now, covering 3-4-5 days', render: () => (
+  /* THE RECEIPT (founder, 2026-09-07 — the plan's fourth part): the engine's decisions counted off her
+     log, and the fixed plan beside the engine once they have parted. The figures are the shape
+     `engineReceipt` returns — a month of bench: fourteen decisions, one lift eight sessions in. */
+  { id: '4.4b', label: 'the receipt', of: '4.4', status: 'live', note: 'above the week, under the station note — silent on a first week', render: () => (
+    <InApp><UnderTabs active={1}>
+      <ProgramTabView
+        workouts={programWeek()}
+        units="kg"
+        settled
+        figure="female"
+        onDay={noop}
+        onBuild={noop}
+        receipt={{ decisions: 14, raises: 6, holds: 7, eases: 1, counterfactual: { exerciseId: 'bb_bench_press', occurrences: 8, fixedKg: 77.5, engineKg: 65 } }}
+      />
+    </UnderTabs></InApp>
+  ) },
+  { id: '4.5', label: 'The ask — intake step 3/3', status: 'live', note: 'the ONE screen where she talks to the model, and since 2026-09-07 the ONLY door in the intake (founder: "רק החלק של בנה תוכנית עבורי"). Her sentence leads, over three lines; the days and the session length follow', render: () => (
     <InApp><PlanBuilderView {...builderProps} draft={null} intake offerDoors advice={[]} onLetHushBuild={noop} /></InApp>
   ) },
-  { id: '4.5a', label: 'the ask — what do you want from the week?', of: '4.5', status: 'live', note: 'the ONE screen where she talks to the model (founder 2026-08-29). A full step, not the sheet it replaced; the line sits on a RULE and may be left empty', render: () => (
-    <InApp><PlanBuilderView {...builderProps} draft={null} intake offerDoors advice={[]} onLetHushBuild={noop} previewAsking /></InApp>
+  { id: '4.5a', label: 'the ask — off the Program tab', of: '4.5', status: 'live', note: 'the same step without the intake chrome: reached from the doors on the Program tab, where the blank sheet and the shelves still stand', render: () => (
+    <InApp><PlanBuilderView {...builderProps} draft={null} offerDoors advice={[]} onLetHushBuild={noop} previewAsking /></InApp>
   ) },
+
   /*
    * ⛔ THE WAIT IS THE PROGRAM TAB'S, NOT THE INTAKE'S — corrected 2026-08-30 on an onboarding
    * sweep, and the entry was asserting a state the product had stopped having.

@@ -19,6 +19,7 @@
 // 
 
 import type { Session } from '@/data/local/models';
+import { isEvidenceSet } from '@/domain/setEvidence';
 
 export const REPORT_WINDOW_WEEKS = 12;
 export const REPORT_MIN_WEEKS = 9; // must have trained the exercise in ≥9 of the 12 weeks
@@ -220,7 +221,7 @@ export function standingRecord(sessions: Session[]): StandingRecord {
     if (s.sets.length === 0) continue; // a session with nothing in it never happened
     if (s.trained !== false) workouts += 1;
     for (const log of s.sets) {
-      if (log.isApproach) continue; // a warm-up bridge is not the record — same line as the Log's tonnage
+      if (!isEvidenceSet(log)) continue; // a warm-up bridge is not the record, a presumed set is not a measurement — same line as the Log's tonnage
       sets += 1;
       kg += (log.actualWeight ?? 0) * log.actualReps;
     }

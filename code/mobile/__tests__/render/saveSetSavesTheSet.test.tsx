@@ -287,7 +287,19 @@ describe('the stage’s dials record the set', () => {
    * nobody typed. Nothing here is selected until she selects it (`nothing is chosen until she
    * chooses`), which is `theAppNeverAnswersForHer` applied to the one number the engine reads back.
    */
-  describe('the band is offered as answers, and she is still the one answering', () => {
+  /*
+   * ════ ⛔ THE BAND CELLS ARE GONE (founder, 2026-09-07) ════
+   *
+   * *"צריך להוריד את האפשרויות של 8, 9, 10 חזרות בלחיצה אוטומטית ולהשאיר את האפשרות ללחוץ על המשקל
+   * או על החזרות ולהקליד את המשקל והחזרות שבוצעו."*
+   *
+   * The block that stood here pinned the 2026-08-31 tap-cost answer: the coach's band laid out as
+   * one-press cells at the foot. He used it and ruled against it, so the block now pins the
+   * opposite — no count is one press away; every count is TYPED through the reps field — and the
+   * one thing that must survive the reversal: the reps field is still a door, the pad still opens,
+   * and a typed count still writes through `editCurrentSet`.
+   */
+  describe('no count is offered — both figures are typed (2026-09-07)', () => {
     const draw2 = () => {
       const editCurrentSet = jest.fn();
       const session = makeSession(async () => ({ ended: false, correction: null, unlockedPortrait: false }));
@@ -303,29 +315,20 @@ describe('the stage’s dials record the set', () => {
         { deep: false },
       );
 
-    it('the whole band is on the foot — 8, 9 and 10 for an 8–10 prescription', () => {
+    it('⛔ no band cell stands on the foot — not 8, not 9, not 10', () => {
       const { r } = draw2();
-      expect(counts(r).map((n) => String(n.props.accessibilityLabel))).toEqual([
-        `8 ${tg('workout.repsUnit')}`,
-        `9 ${tg('workout.repsUnit')}`,
-        `10 ${tg('workout.repsUnit')}`,
-      ]);
+      expect(counts(r)).toEqual([]);
+      expect(r.root.findAll((n) => n.props?.accessibilityLabel === tg('workout.otherCount'), { deep: true })).toEqual([]);
     });
 
-    it('⛔ nothing is chosen until she chooses — and then it writes through the one door', () => {
+    it('⛔ the reps field opens the pad, and a typed count writes through the one door', () => {
       const { r, editCurrentSet } = draw2();
-      expect(counts(r).some((n) => n.props.accessibilityState?.selected)).toBe(false);
-      act(() => counts(r)[1].props.onPress());
-      expect(editCurrentSet).toHaveBeenCalledWith(expect.objectContaining({ reps: 9 }));
-      expect(counts(r)[1].props.accessibilityState?.selected).toBe(true);
-    });
-
-    it('⛔ and there is always a way past the band — six because she failed, twelve because she flew', () => {
-      const { r, editCurrentSet } = draw2();
-      const other = r.root.find(
-        (n) => n.props?.accessibilityRole === 'button' && n.props?.accessibilityLabel === tg('workout.otherCount'),
+      const field = r.root.find(
+        (n) =>
+          n.props?.accessibilityRole === 'button' &&
+          String(n.props?.accessibilityLabel ?? '').startsWith(`${tg('workout.repsUnit')} ·`),
       );
-      act(() => other.props.onPress());
+      act(() => field.props.onPress());
       const key = r.root.find(
         (n) => n.props?.accessibilityRole === 'button' && n.props?.accessibilityLabel === '6' && typeof n.props?.onPress === 'function',
       );
@@ -333,6 +336,7 @@ describe('the stage’s dials record the set', () => {
       expect(editCurrentSet).toHaveBeenCalledWith(expect.objectContaining({ reps: 6 }));
     });
   });
+
 
   /**
    * ════════════════════════════════════════════════════════════════════════════════════════════
@@ -350,8 +354,18 @@ describe('the stage’s dials record the set', () => {
    * at a bar, out of breath. Pressing the act with no count opens the field instead — the one thing
    * still owed — which is why this asserts BOTH halves.
    */
-  describe('the act cannot log a set nobody counted', () => {
-    it('⛔ pressing Complete Set with an empty count does not complete anything', async () => {
+  /*
+   * ════ ⛔ SUPERSEDED (founder, 2026-09-07 — the session runs itself) ════
+   *
+   * The clause above was right for a diary, and the diary is over: the set is presumed done as
+   * written when its time runs out (`domain/sessionClock`), and the act is her word on it in one
+   * press. The guess the old rule feared is no longer a guess — the RECORD carries the clock's
+   * mark (`presumed`), her press removes it, and nothing reads a presumed set as her performance
+   * (`domain/setEvidence`). So the act completes an untouched screen, the field shows the
+   * prescription in the muted ink until she types, and the pad is the door for a deviation.
+   */
+  describe('the act logs the set as written, and the field says what will be written', () => {
+    it('⛔ pressing Complete Set on an untouched screen completes the set — as written, no override', async () => {
       const completeSet = jest.fn(async () => ({ ended: false, correction: null, unlockedPortrait: false }));
       const r = draw(makeSession(completeSet));
       press(r, tg('workout.completeSet'));
@@ -359,19 +373,25 @@ describe('the stage’s dials record the set', () => {
         jest.advanceTimersByTime(4000);
         await Promise.resolve();
       });
-      expect(completeSet).not.toHaveBeenCalled();
+      expect(completeSet).toHaveBeenCalledTimes(1);
+      expect(completeSet).toHaveBeenCalledWith(); // no override — the prescription, marked as hers by the press
     });
 
-    it('…it opens the count instead — the pad is up, on the one thing still owed', () => {
+    it('…the field shows the prescription until she types, and says it is "as written"', () => {
       const r = draw(makeSession(async () => ({ ended: false, correction: null, unlockedPortrait: false })));
-      const digits = () =>
-        r.root.findAll(
-          (n) => n.props?.accessibilityRole === 'button' && /^[0-9]$/.test(String(n.props?.accessibilityLabel ?? '')),
-          { deep: false },
-        );
-      expect(digits()).toHaveLength(0);
-      press(r, tg('workout.completeSet'));
-      expect(digits()).toHaveLength(10);
+      const field = r.root.find(
+        (n) =>
+          n.props?.accessibilityRole === 'button' &&
+          String(n.props?.accessibilityLabel ?? '').startsWith(`${tg('workout.repsUnit')} ·`),
+      );
+      expect(String(field.props.accessibilityLabel)).toContain('8'); // the prescription's floor
+      expect(String(field.props.accessibilityLabel)).toContain(tg('workout.asWritten'));
+      // …and no pad is up: nobody asked her for anything.
+      const digits = r.root.findAll(
+        (n) => n.props?.accessibilityRole === 'button' && /^[0-9]$/.test(String(n.props?.accessibilityLabel ?? '')),
+        { deep: false },
+      );
+      expect(digits).toHaveLength(0);
     });
 
     it('…and once she has said a number, the same press records it', async () => {

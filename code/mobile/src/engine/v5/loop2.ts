@@ -79,16 +79,23 @@ function isRepeatedStall(history: SessionRecord[], currentLoad: number | null, b
  * by `worstReps` — the occurrence's WORST set — so one high mis-key among several sets does not move
  * the move at all. This raises a ceiling; it never prescribes a load.
  */
+/**
+ * What one completed set proves she can lift AT Tlo — the rail's unit of evidence. Exported so the
+ * live rail (`v5Engine.railCeilingFor`) reads sets with the same eyes as this loop: until
+ * 2026-09-09 it took the raw bar number, which is the exact reading the note above measured as a
+ * brake. F-16: past the end of the load–rep continuum the extra reps are read at the edge.
+ */
+export function demonstratedAtTlo(load: number, reps: number, lo: number): number {
+  return loadForReps(epley(load, Math.min(reps, EPLEY_VALID_REPS)), lo);
+}
+
 function railRecord(history: SessionRecord[], band: Band): number | null {
   let best: number | null = null;
   for (const rec of history.slice(0, RECENCY_WINDOW_SESSIONS)) {
     for (const s of rec.sets) {
       if (s.isApproach || s.load == null || s.load <= 0) continue;
       if (s.reps < band.lo) continue;
-      // What that set proves she can lift AT Tlo. F-16: past the end of the load–rep continuum the
-      // extra reps are not evidence about iron, so they are read at the edge.
-      const reps = Math.min(s.reps, EPLEY_VALID_REPS);
-      const atTlo = loadForReps(epley(s.load, reps), band.lo);
+      const atTlo = demonstratedAtTlo(s.load, s.reps, band.lo);
       if (best == null || atTlo > best) best = atTlo;
     }
   }

@@ -59,6 +59,28 @@ describe('a coach session, which has no programme day', () => {
     expect(sessionTrained(session(1), null)).toBe(true);
   });
 
+  /*
+   * THE SESSION RUNS ITSELF (2026-09-07, `domain/setEvidence`): the clock writes `presumed` sets.
+   * Whether they count toward "she trained the workout" is decided by the one thing the clock
+   * cannot fake — her word that she finished (`finishedByAthlete`).
+   */
+  it('⛔ presumed sets count only under her word', () => {
+    const twelve = { prescribed: 12 };
+    const presumed = (n: number) => Array.from({ length: n }, (_, i) => ({ ...set(i), presumed: true as const }));
+    // Two she typed, six the clock wrote. She pressed finish → all eight are hers → TRAINED.
+    expect(sessionTrained(session(0, { ...twelve, finishedByAthlete: true, sets: [set(0), set(1), ...presumed(6)] }), null)).toBe(true);
+    // The same rows with nobody's word behind them (a salvage) → only the two she typed count.
+    expect(sessionTrained(session(0, { ...twelve, sets: [set(0), set(1), ...presumed(6)] }), null)).toBe(false);
+    // …and `items` mirror the mark, so a coach session answers identically through its canonical record.
+    const items = (n: number, presumedFrom: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        kind: 'reps' as const, ex: 'bb_bench_press', block: 1, round: 1, position: 1, load: 40, reps: 8, at: '2026-08-01T18:00:00.000Z',
+        ...(i >= presumedFrom ? { presumed: true as const } : {}),
+      }));
+    expect(sessionTrained(session(0, { ...twelve, sets: [], items: items(8, 2), finishedByAthlete: true }), null)).toBe(true);
+    expect(sessionTrained(session(0, { ...twelve, sets: [], items: items(8, 2) }), null)).toBe(false);
+  });
+
   it('still refuses a session with no work at all', () => {
     expect(sessionTrained(session(0, { prescribed: 12 }), null)).toBe(false);
   });

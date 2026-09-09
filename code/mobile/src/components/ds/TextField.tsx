@@ -14,7 +14,8 @@
 
 import { legendVoice } from '@/design/monoVoice';
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, type TextInputProps, type ViewStyle } from 'react-native';
+import { View, Text, TextInput, StyleSheet, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+
 import { line, color, font, textScale, tracking, trackingPx } from '@/design/tokens';
 
 interface Props extends Omit<TextInputProps, 'style'> {
@@ -36,9 +37,12 @@ interface Props extends Omit<TextInputProps, 'style'> {
    * was.
    */
   leading?: React.ReactNode;
+  /** The input's own voice, when the default 30-point single-answer size is wrong — a sentence
+   *  field (the intake's ask, 2026-09-07) reads at 22 over three lines. Composed over the default. */
+  inputStyle?: TextStyle;
 }
 
-export function TextField({ label, block, style, leading, onFocus, onBlur, ...input }: Props) {
+export function TextField({ label, block, style, leading, inputStyle, onFocus, onBlur, ...input }: Props) {
   const [focused, setFocused] = useState(false);
   /* Face AND tracking, from the string — see the note at the label. */
   const labelVoice = legendVoice(label ?? '', textScale['2xs'], tracking.legend);
@@ -89,7 +93,7 @@ export function TextField({ label, block, style, leading, onFocus, onBlur, ...in
           // v7 1.2: the caret is moss — selectionColor carries it on iOS, cursorColor on Android.
           selectionColor={color.accent}
           cursorColor={color.accent}
-          style={styles.input}
+          style={[styles.input, inputStyle]}
         />
       </View>
     </View>

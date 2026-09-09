@@ -40,15 +40,15 @@ const working = { weight: 34, reps: 9, n: 2, m: 4, band: [8, 10] };
 
 describe('1 · every working set gets the capture', () => {
   it('banded, band-less, mid-lift, last set, record — all speak', () => {
-    expect(beatSpeaksFor(working, null)).toBe(true);
-    expect(beatSpeaksFor({ ...working, band: undefined }, null)).toBe(true);
-    expect(beatSpeaksFor({ ...working, n: 4, m: 4 }, null)).toBe(true);
-    expect(beatSpeaksFor({ ...working, record: true }, null)).toBe(true);
+    expect(beatSpeaksFor(working)).toBe(true);
+    expect(beatSpeaksFor({ ...working, band: undefined })).toBe(true);
+    expect(beatSpeaksFor({ ...working, n: 4, m: 4 })).toBe(true);
+    expect(beatSpeaksFor({ ...working, record: true })).toBe(true);
   });
 
   it('a warm-up bridge never does, whatever it wears', () => {
-    expect(beatSpeaksFor({ ...working, warmup: true }, null)).toBe(false);
-    expect(beatSpeaksFor({ ...working, warmup: true, record: true, n: 4, m: 4 }, null)).toBe(false);
+    expect(beatSpeaksFor({ ...working, warmup: true })).toBe(false);
+    expect(beatSpeaksFor({ ...working, warmup: true, record: true, n: 4, m: 4 })).toBe(false);
   });
 });
 
@@ -97,12 +97,12 @@ describe('4 · one predicate, all three askers', () => {
      * ⚠️ THE PREDICATE IS THE SUBJECT HERE, NOT THE CONSTANT. On 2026-08-26 the lift-close grew an
      * animation (`SetRing` — the last arc sweeping, then the bloom leaving the ring), so the two
      * beats no longer hold the stage for the same length of time and the ternary picks between
-     * them. What must never change is the GUARD: `beatSpeaksFor(confirm, null)` decides whether
+     * them. What must never change is the GUARD: `beatSpeaksFor(confirm)` decides whether
      * there is a dwell at all, exactly as the render guard decides whether there is a beat at all.
      * The 2026-08-16 flash bugs were three askers answering apart; a second dwell VALUE is not a
      * second asker.
      */
-    expect(flow()).toContain('beatSpeaksFor(confirm, null) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0');
+    expect(flow()).toContain('beatSpeaksFor(confirm) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0');
     /* And the beat and the dwell ask ONE question about which of the two is up — the same shape of
        mistake, one level down, is what `closesTheLift` exists to make impossible. */
     expect(flow()).toContain('function closesTheLift(');
@@ -110,6 +110,6 @@ describe('4 · one predicate, all three askers', () => {
   });
 
   it('…and so does the wrist, which is where the divergence was visible', () => {
-    expect(flow()).toContain('if (!beatSpeaksFor(beat, null)) return;');
+    expect(flow()).toContain('if (!beatSpeaksFor(beat)) return;');
   });
 });

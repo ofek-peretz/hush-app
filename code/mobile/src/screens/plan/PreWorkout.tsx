@@ -95,6 +95,8 @@ export interface PreWorkoutProps {
    * hour of being allowed to look. Absent on a finished day — the container already gates it.
    */
   onSwap?: (exerciseId: string) => void;
+  /** Drag a row to a new seat — see `PlanLifts.onReorder`. Absent on a finished day. */
+  onReorder?: (from: number, to: number) => void;
   onStart: () => void;
   onClose: () => void;
   /**
@@ -132,6 +134,8 @@ export function PreWorkoutView(props: PreWorkoutProps) {
   const { t } = useCopy();
   /* Past the fold the head carries the workout's name — see the sticky head note in the render. */
   const [scrolled, setScrolled] = React.useState(false);
+  /* A row in the air must not fight the sheet's own scroll for the finger — see `ReorderRows`. */
+  const [dragging, setDragging] = React.useState(false);
   const changed = props.changes != null && props.changes > 0;
   const totalSets = React.useMemo(() => props.lifts.reduce((n, l) => n + (l.sets || 0), 0), [props.lifts]);
   // ⚠️ The note that stood here described the per-muscle allocation and its `muscleOf` lookup — both
@@ -173,7 +177,7 @@ export function PreWorkoutView(props: PreWorkoutProps) {
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} scrollEnabled={!dragging}>
           {/* The name is the screen. It is the coach's word for the day, so it takes the serif. */}
           <Text style={styles.title} accessibilityRole="header" numberOfLines={3}>
             {bidi(props.name)}
@@ -249,7 +253,11 @@ export function PreWorkoutView(props: PreWorkoutProps) {
 
           {props.budgetNote ? <Text style={styles.budgetNote}>{props.budgetNote}</Text> : null}
 
-          <Arrive order={1} after={SHEET_SETTLE}><Legend size={17} track={0.2} style={styles.liftsLegend}>{t('program.sheetTheLifts')}</Legend></Arrive>
+          <Arrive order={1} after={SHEET_SETTLE} style={styles.liftsHead}>
+            <Legend size={17} track={0.2} style={styles.liftsLegend}>{t('program.sheetTheLifts')}</Legend>
+            {/* The grip is taught once, quietly, where the grips are (founder 2026-09-07). */}
+            {props.onReorder ? <Text style={styles.liftsHint}>{t('program.reorderHint')}</Text> : null}
+          </Arrive>
 
           {/*
             ⛔ NO PARAGRAPH HERE (founder 2026-08-05). A block of the coach's prose stood above this
@@ -257,7 +265,15 @@ export function PreWorkoutView(props: PreWorkoutProps) {
             table underneath, which is the thing his copy law is about.
           */}
           <Arrive order={2} after={SHEET_SETTLE}>
-            <PlanLifts lifts={props.lifts} units={props.units} figure={props.figure} onForm={props.onForm} onWhy={props.onWhy} onSwap={props.onSwap} />
+            <PlanLifts
+              lifts={props.lifts}
+              units={props.units}
+              figure={props.figure}
+              onForm={props.onForm}
+              onWhy={props.onWhy}
+              onSwap={props.onSwap}
+              {...(props.onReorder ? { onReorder: props.onReorder, onDragging: setDragging } : {})}
+            />
           </Arrive>
         </ScrollView>
 
@@ -350,7 +366,11 @@ const styles = StyleSheet.create({
      became when its graphic was deleted around it, and it then rendered the second-largest figure
      on the set screen at the platform default for a week. */
 
+  liftsHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   liftsLegend: { marginTop: 30, marginBottom: 2 },
+  liftsHint: { fontFamily: font.sans, fontSize: 17, color: stage.ink2, textAlign: 'left' },
+
+
 
   root: { flex: 1, backgroundColor: color.bg },
   safe: { flex: 1 },

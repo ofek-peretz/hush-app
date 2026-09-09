@@ -85,7 +85,7 @@ describe('4 · the rest keeps its full background discipline', () => {
   });
 
   it('and the OS-level backstops armed against the same absolute end', () => {
-    expect(flow()).toContain('restHaptics.arm(endAtRef.current)');
+    expect(flow()).toContain('restHaptics.arm(endAtRef.current, session.restAlert ?? undefined)');
   });
 });
 
@@ -117,6 +117,7 @@ describe('5 · the Live Activity rides the event path, not a screen timer', () =
 
   it('the STRENGTH activity was already event-driven — the store’s state effect, not a timer', () => {
     const store = read('src/state/stores/sessionStore.tsx');
-    expect(store).toContain('void liveActivity.update(mirror)');
+    // …and since 2026-09-08 the lock extras ride with every publish — still the effect, still no timer.
+    expect(store).toContain('void liveActivity.update(mirror, lock)');
   });
 });

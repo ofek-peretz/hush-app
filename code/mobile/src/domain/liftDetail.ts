@@ -21,6 +21,7 @@
 // 
 
 import type { EngineV5State } from '@/data/local/db';
+import { isEvidenceSet } from '@/domain/setEvidence';
 import type { CoachDecision } from './coachLog';
 import type { Session } from '@/data/local/models';
 import { earnedMilestones, type EarnedMilestone, type MilestoneProfile } from '@/domain/milestones';
@@ -80,7 +81,7 @@ export function liftClimb(sessions: Session[], exerciseId: string): LiftClimb {
   for (const s of sessions) {
     for (const log of s.sets) {
       if (log.exerciseId !== exerciseId) continue;
-      if (log.isApproach) continue; // a warm-up bridge is not a climb point — a bridges-only day draws nothing
+      if (!isEvidenceSet(log)) continue; // a warm-up bridge is not a climb point, and a presumed set is the prescription — neither draws
       const atMs = Date.parse(log.persistedAt || s.startedAt);
       if (!Number.isFinite(atMs)) continue;
       const value = mode === 'load' ? log.actualWeight : log.actualReps;

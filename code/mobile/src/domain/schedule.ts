@@ -42,10 +42,21 @@ export function sessionDayName(session: Session): string {
   return session.programDayName || 'Workout';
 }
 
+/** One conversion constant for the whole app — three different literals (2.2046226, 2.20462) and
+ *  three roundings lived in `SessionFlow` alone until 2026-09-09, one of them in the sheet that
+ *  writes to the record. */
+export const LB_PER_KG = 2.2046226;
+
 /** kg<->lb display. Stored values are kg; display follows the athlete's setting (§10.1). */
 export function displayWeight(kg: number | null, units: Units): number | null {
   if (kg == null) return null;
-  return units === 'lb' ? Math.round(kg * 2.2046226) : kg;
+  return units === 'lb' ? Math.round(kg * LB_PER_KG) : kg;
+}
+
+/** The inverse, for a figure she dialled in her units → the kilograms the record stores. Two
+ *  decimals: a 2.5 lb step is 1.13 kg, and a tenth would round two adjacent detents together. */
+export function kgFromDisplay(value: number, units: Units): number {
+  return units === 'lb' ? Math.round((value / LB_PER_KG) * 100) / 100 : value;
 }
 
 export function unitLabel(units: Units): string {

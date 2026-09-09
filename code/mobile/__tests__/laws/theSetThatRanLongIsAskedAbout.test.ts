@@ -217,6 +217,8 @@ describe('1 · it asks — it never infers', () => {
     expect(store).toContain('dwellS:'); // measured…
     // …and never spent: the rest banked for the next set is what the REST screen measured, gated by
     // the rest floor, with no dwell term anywhere in it.
+    // (2026-09-09: the clock no longer starts rests of its own — every rest is hers — and still no
+    // dwell term. See `noSetIsWrittenByTime`.)
     expect(store).toMatch(/pendingRestSRef\.current = isRestSample\(tookS\) \? tookS : null/);
     expect(store).not.toMatch(/pendingRestSRef\.current = [^;]*dwell/i);
     expect(store).not.toMatch(/restStartedAtRef\.current = [^;]*presentedAt/i);
