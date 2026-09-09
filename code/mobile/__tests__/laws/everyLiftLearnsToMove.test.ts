@@ -176,7 +176,9 @@ import { exerciseById } from '@/data/exercises';
    builders; donkey_kick (the quadruped), db_pullover (the supine long-arm sweep) and
    cable_upright_row (the folding front-view pull) author the three mechanisms their families
    lacked. Choice-only in the catalogue, fully demonstrated — the standing condition. */
-const RIGGED_FLOOR = 136;
+/* 136 → 138 (2026-09-10): the bodyweight-only room's quad lifts — bw_squat (the goblet's upright
+   solve, empty hands forward) and split_squat (the lunge family, both feet planted, no implement). */
+const RIGGED_FLOOR = 138;
 
 const rigs = Object.entries(EXERCISE_MOTION);
 

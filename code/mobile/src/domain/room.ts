@@ -38,10 +38,18 @@ export function inRoom(ex: Pick<Exercise, 'equipment' | 'bodyweight'>, equipment
   return equipment.includes(ex.equipment);
 }
 
-/** Normalise a control's answer for storage: the FULL room stores as absent (the parity default),
- *  an empty answer is not a room and also stores as absent — you cannot declare away your body. */
+/**
+ * Normalise a control's answer for storage: the FULL room stores as absent (the parity default).
+ *
+ * ⛔ THE EMPTY ANSWER IS A ROOM (2026-09-10, the formula report). It used to fold back to absent —
+ * "you cannot declare away your body" — which was true and also meant a bodyweight-only room could
+ * not be said at all: every switch off was the full gym. A living room with nothing in it is the
+ * most common room there is, and the catalogue now holds a quad lift and a split for it. `[]`
+ * stores as `[]`: every family off, bodyweight (never a switch) still there, and `inRoom` admits
+ * exactly the bodyweight shelf. A muscle the shelf cannot serve keeps the assembler's fallback.
+ */
 export function roomForStorage(picked: readonly EquipmentFamily[]): EquipmentFamily[] | undefined {
   const clean = ROOM_FAMILIES.filter((f) => picked.includes(f));
-  if (clean.length === 0 || clean.length === ROOM_FAMILIES.length) return undefined;
+  if (clean.length === ROOM_FAMILIES.length) return undefined;
   return clean;
 }

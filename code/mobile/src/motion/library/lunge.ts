@@ -385,6 +385,29 @@ export const curtsyLungeRig = lunge({
   ticksLeft: 26,
 });
 
+/*
+ * split_squat (2026-09-10, the bodyweight-only room) — the reverse lunge's bottom without the step:
+ * both feet planted the whole rep, rear heel up on the ball, and the body sinks BETWEEN them. No
+ * implement: the hands ride at the hips. It is the unilateral quad lift a room with nothing in it
+ * still has, and the one a beginner learns before she is handed a dumbbell.
+ */
+export const splitSquatRig = lunge({
+  id: 'split_squat',
+  /* The rear foot is planted for the WHOLE rep, so it stands closer than a lunge steps (46u behind
+     the front plant, not 66): at the reverse lunge's distance the rear shank measured 50.9 against a
+     canonical 37 at the top — a leg that cannot reach the floor from a locked hip. `softTop` is the
+     bulgarian's own allowance for the same fact: the rear leg never fully locks in a split stance. */
+  rearAnchor: { x: 150, y: FLOOR_Y - ATHLETE.ankleH - 2 },
+  rearBend: -1,
+  frontAnkle: FRONT_PLANT,
+  bottomKneeDeg: BOTTOM_KNEE,
+  shinLeanDeg: SHIN_LEAN,
+  leanDeg: 5,
+  softTop: 3,
+  implement: 'bodyweight',
+  ticksLeft: 26,
+});
+
 export const bulgarianSplitSquatRig = lunge({
   id: 'bulgarian_split_squat',
   /*

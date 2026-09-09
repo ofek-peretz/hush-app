@@ -400,6 +400,9 @@ export const EXERCISES: Exercise[] = [
   { id: 'leg_press', station: 'leg_press', name: 'Leg Press', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat_supported', support: 'supported', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 80, bwScaled: true, cues: ['Feet mid-platform.', 'Knees track your toes.', "Don't lock out hard."] },
   { id: 'hack_squat', name: 'Hack Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat_supported', support: 'guided', equipment: 'machine', loadStyle: 'plate_loaded', tier: 'compound', baseKg: 50, bwScaled: true, cues: ['Back flat on the pad.', 'Sit down and back.', 'Drive through the heels.'] },
   { id: 'goblet_squat', name: 'Goblet Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'dumbbell', tier: 'compound', baseKg: 16, cues: ['Hold it at your chest.', 'Sit straight down.', 'Drive up.'] },
+  // The bodyweight-only room's quad lifts (2026-09-10): a room with nothing in it still squats and splits.
+  { id: 'bw_squat', name: 'Bodyweight Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'squat', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Arms out in front.', 'Sit straight down.', 'Drive up through the heels.'], synonyms: ['air squat', 'bodyweight squat'] },
+  { id: 'split_squat', name: 'Split Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Feet planted, one in front.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['static lunge'] },
   { id: 'bulgarian_split_squat', name: 'Bulgarian Split Squat', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Back foot elevated.', 'Drop straight down.', 'Drive through the front heel.'], synonyms: ['split squat'] },
   { id: 'walking_lunge', name: 'Walking Lunge', capability: 'knee_dominant', muscle: 'Quads', pattern: 'lunge', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 10, cues: ['Long step.', 'Knee tracks the toes.', 'Push off the front foot.'], synonyms: ['lunge'] },
   { id: 'leg_extension', name: 'Leg Extension', capability: 'knee_dominant', muscle: 'Quads', pattern: 'knee_extension', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Extend fully.', 'Lower under control.'] },
@@ -578,7 +581,17 @@ export const CHOICE_ONLY_IDS: ReadonlySet<string> = new Set([
   'decline_bb_press', 'db_fly', 'smith_incline_press', 'low_cable_fly',
   'db_pullover', 'close_grip_pulldown', 'meadows_row', 'cable_upright_row',
   'curtsy_lunge', 'db_sumo_squat', 'smith_hip_thrust', 'frog_pump', 'donkey_kick',
+  /*
+   * The bodyweight-only room's quad lifts (2026-09-10). In a gym they are a CHOICE — the leg press
+   * is what the audited rotation hands a beginner, and admitting these to every pool moved the
+   * week-balance board — but in a room with nothing in it they are the only quad work there is, so
+   * `pickExercises` admits them there and nowhere else (`BODYWEIGHT_ROOM_ONLY_IDS`).
+   */
+  'bw_squat', 'split_squat',
 ]);
+
+/** The choice-only lifts a BODYWEIGHT-ONLY room may have assigned — the shelf's own quad work. */
+export const BODYWEIGHT_ROOM_ONLY_IDS: ReadonlySet<string> = new Set(['bw_squat', 'split_squat']);
 
 export function isChoiceOnly(id: string): boolean {
   return CHOICE_ONLY_IDS.has(id);

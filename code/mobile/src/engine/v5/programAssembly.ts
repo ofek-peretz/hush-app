@@ -21,7 +21,7 @@ import { weeklyTargets, assignRegionDays, regionOf } from './assembler';
 import { stanceOf } from './bodyMap';
 import type { BodyMap } from './bodyMap';
 import { CANONICAL_MUSCLE_ORDER, SETS_MIN, SETS_MAX } from './constants';
-import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
+import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, BODYWEIGHT_ROOM_ONLY_IDS, type Exercise, type MuscleGroup, type SwapPattern } from '@/data/exercises';
 // S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
 // this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
@@ -298,9 +298,12 @@ export function pickExercises(
    * Handing it back would be the app overruling her report to keep the shape tidy.
    */
   const banned = forbiddenFor(muscle, profile?.painEases, nowMs);
+  /* A room with NOTHING in it (2026-09-10) — `equipment: []`, distinct from absent (full gym). */
+  const bodyweightOnly = profile?.equipment != null && profile.equipment.length === 0;
   const universe = exercisesForMuscle(muscle as MuscleGroup)
-    // One question for every pool: regressions AND the choice-only shelf stay hers to ask for.
-    .filter((e) => engineMayAssign(e.id))
+    // One question for every pool: regressions AND the choice-only shelf stay hers to ask for —
+    // except the shelf's own quad work, which the bodyweight-only room may be handed unasked.
+    .filter((e) => engineMayAssign(e.id) || (bodyweightOnly && BODYWEIGHT_ROOM_ONLY_IDS.has(e.id)))
     .filter((e) => !banned.has(e.pattern));
   /*
    * ⛔ THE ROOM (2026-09-01, audit 06). Lifts her room cannot hold are out — a home lifter with two
@@ -312,7 +315,14 @@ export function pickExercises(
    * away is the smaller wrong. Absent `profile.equipment` = full gym = this filter never fires.
    */
   const roomed = universe.filter((e) => inRoom(e, profile?.equipment));
-  const all = roomed.length > 0 ? roomed : universe;
+  /*
+   * ⛔ EXCEPT IN A ROOM WITH NOTHING IN IT (2026-09-10). The fallback above hands a home lifter the
+   * catalogue lead when her furniture cannot serve a muscle, because the swap menu is one tap
+   * away. In a bodyweight-only room the swap menu is empty too — every substitute needs iron she
+   * does not own — so the fallback would write a barbell curl into a living room. The muscle rests
+   * instead, and the week is built from the shelf she actually has (a chin-up trains the biceps).
+   */
+  const all = roomed.length > 0 ? roomed : bodyweightOnly ? [] : universe;
   if (all.length === 0) return [];
   // Lifts whose floor she can actually load lead; the rest stay available behind them, so a muscle
   // is never emptied by the check — a pool of only-too-heavy lifts still yields its catalogue lead.

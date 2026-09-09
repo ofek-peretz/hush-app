@@ -35,7 +35,7 @@ const FLOOR_Y = 193;
 interface SquatVariantParams {
   id: string;
   carryDX: number;
-  implement: 'front_rack' | 'goblet' | 'smith';
+  implement: 'front_rack' | 'goblet' | 'smith' | 'bodyweight';
   /** The planted foot slid forward of the balance line — the Smith's stance. See `squatCore`. */
   footDX?: number;
 }
@@ -73,6 +73,13 @@ function squatVariant(p: SquatVariantParams): Rig {
          hands (audit, 2026-09-03). */
       elbow = { x: shoulder.x - 1, y: shoulder.y + 22 };
       hand = { x: carry.x, y: carry.y + 9 };
+    } else if (p.implement === 'bodyweight') {
+      /* No implement: the arms reach FORWARD, near-horizontal, as the counterbalance every
+         unloaded squat uses — the one cue the bodyweight squat has that the goblet does not. The
+         virtual carry (shoulder + 8) still runs the balance solve, so the trunk stands as upright
+         as the goblet's; the hands simply hold nothing. (2026-09-10, the bodyweight-only room.) */
+      elbow = { x: shoulder.x + 14, y: shoulder.y + 3 };
+      hand = { x: shoulder.x + 27, y: shoulder.y + 4 };
     } else {
       /* "ELBOWS HIGH" — the front rack's one cue, and the elbow sat 12u BELOW the shoulder, the
          upper arm 50° under the horizontal: the exact fault the cue warns against. The elbow is
@@ -149,6 +156,9 @@ function squatVariant(p: SquatVariantParams): Rig {
         ...plateGhost(carry),
         { kind: 'circle', c: pose.j.head, r: pose.headR, fill: 'ink1' },
       ];
+    } else if (p.implement === 'bodyweight') {
+      /* Nothing in the hands, nothing to draw: the body is the load. */
+      front = [];
     } else {
       /* Goblet at the sternum. */
       /*
@@ -210,6 +220,9 @@ function squatVariant(p: SquatVariantParams): Rig {
 
 export const frontSquatRig = squatVariant({ id: 'front_squat', carryDX: 5, implement: 'front_rack' });
 export const gobletSquatRig = squatVariant({ id: 'goblet_squat', carryDX: 8, implement: 'goblet' });
+/* The bodyweight squat (2026-09-10): the goblet's upright solve with empty, forward-reaching hands
+   — the lift a bodyweight-only room leads its quads with. */
+export const bwSquatRig = squatVariant({ id: 'bw_squat', carryDX: 8, implement: 'bodyweight' });
 /* carryDX −4.5, the back squat's own correction: the bar rides the TRAPEZIUS SHELF behind the neck,
    not the shoulder joint. At 0 the bar dot sat exactly over the joint with the head drawn directly
    above it, and read as passing through the neck — see `bbBackSquat.BAR_BEHIND_SHOULDER`.

@@ -25,11 +25,11 @@ import { legExtension, seatedLegCurl } from './library/kneeMachine';
 import { hackSquatRig, legPressCalfRaiseRig, legPressRig, singleLegPressRig } from './library/legPress';
 import { assistedPullUpRig, chinUpRig, pullUpRig } from './library/pullUp';
 import { frogPumpRig, gluteBridgeRig, hipThrustRig, machineHipThrustRig, singleLegHipThrustRig, smithHipThrustRig } from './library/thrust';
-import { bulgarianSplitSquatRig, curtsyLungeRig, reverseLungeRig, walkingLungeRig } from './library/lunge';
+import { bulgarianSplitSquatRig, curtsyLungeRig, reverseLungeRig, splitSquatRig, walkingLungeRig } from './library/lunge';
 import { cableFlyRig, dbFlyRig, inclineDbFlyRig, lowCableFlyRig, pecDeckRig, rearDeltFlyRig, reversePecDeckRig } from './library/fly';
 import { bbShrugRig, dbShrugRig } from './library/shrug';
 import { cableCrunchRig, machineCrunchRig, sitUpRig } from './library/crunch';
-import { dbSumoSquatRig, frontSquatRig, gobletSquatRig, smithSquatRig } from './library/squatVariants';
+import { bwSquatRig, dbSumoSquatRig, frontSquatRig, gobletSquatRig, smithSquatRig } from './library/squatVariants';
 import { cableFrontRaise, dbFrontRaise } from './library/frontRaise';
 import { seatedCalfRaiseRig, seatedDbCalfRaiseRig } from './library/calfBent';
 import { dbOverheadTricepsExt, overheadTricepsExt, skullcrusher } from './library/overheadTriceps';
@@ -76,7 +76,7 @@ const RIGS: Rig[] = [
   // thrust + bridge
   hipThrustRig, machineHipThrustRig, singleLegHipThrustRig, gluteBridgeRig,
   // lunge
-  bulgarianSplitSquatRig, walkingLungeRig, reverseLungeRig,
+  bulgarianSplitSquatRig, walkingLungeRig, reverseLungeRig, splitSquatRig,
   // fly + rear_delt
   pecDeckRig, cableFlyRig, inclineDbFlyRig, rearDeltFlyRig, reversePecDeckRig,
   // shrug
@@ -84,7 +84,7 @@ const RIGS: Rig[] = [
   // crunch
   sitUpRig, cableCrunchRig, machineCrunchRig,
   // squat (completed)
-  frontSquatRig, gobletSquatRig, smithSquatRig,
+  frontSquatRig, gobletSquatRig, smithSquatRig, bwSquatRig,
   // front_raise
   dbFrontRaise, cableFrontRaise,
   // calf_bent

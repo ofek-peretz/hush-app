@@ -13,6 +13,7 @@ import { inRoom, roomForStorage, ROOM_FAMILIES } from '@/domain/room';
 import { pickExercises } from '@/engine/v5/programAssembly';
 import { swapCandidates } from '@/domain/swapPool';
 import { exerciseById } from '@/data/exercises';
+import { fixtureModel } from '@/data/api/fixtureModel';
 
 describe('inRoom', () => {
   it('absent list = full gym — everything passes', () => {
@@ -34,10 +35,42 @@ describe('inRoom', () => {
 });
 
 describe('roomForStorage', () => {
-  it('the full room and the empty answer both store as absent — the parity default', () => {
+  it('the full room stores as absent — the parity default; the EMPTY room is a room (bodyweight only, 2026-09-10)', () => {
     expect(roomForStorage(ROOM_FAMILIES)).toBeUndefined();
-    expect(roomForStorage([])).toBeUndefined();
+    expect(roomForStorage([])).toEqual([]);
     expect(roomForStorage(['dumbbell', 'machine'])).toEqual(['dumbbell', 'machine']);
+  });
+
+  it('a bodyweight-only room gets bodyweight quads, chest and back — nothing to buy', () => {
+    for (const muscle of ['Quads', 'Chest', 'Back'] as const) {
+      const picked = pickExercises(muscle, 2, undefined, {}, { equipment: [] });
+      expect(picked.length).toBeGreaterThan(0);
+      for (const id of picked) {
+        const ex = exerciseById(id);
+        expect(ex.bodyweight || ex.equipment === 'bodyweight').toBe(true);
+      }
+    }
+    expect(pickExercises('Quads', 2, undefined, {}, { equipment: [] })).toContain('bw_squat');
+  });
+
+  it('a bodyweight-only room never writes iron into a living room — a muscle the shelf cannot serve rests', () => {
+    // No bodyweight biceps lift exists; the swap menu would be empty too, so the muscle rests.
+    expect(pickExercises('Biceps', 2, undefined, {}, { equipment: [] })).toEqual([]);
+    // …while a listed room still falls back to the catalogue lead (the swap menu can help there).
+    expect(pickExercises('Calves', 2, undefined, {}, { equipment: ['cable'] }).length).toBeGreaterThan(0);
+  });
+
+  it('a whole bodyweight-only WEEK is built from the shelf alone', async () => {
+    const program = await fixtureModel.generateProgram({
+      sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 3, repBand: '8-12', healthConnected: false, equipment: [],
+    } as never);
+    const lifts = program.days.flatMap((d) => d.slots.map((s) => s.exerciseId));
+    expect(lifts.length).toBeGreaterThan(6);
+    for (const id of lifts) {
+      const ex = exerciseById(id)!;
+      expect({ id, bodyweight: ex.bodyweight || ex.equipment === 'bodyweight' }).toEqual({ id, bodyweight: true });
+    }
+    expect(lifts).toContain('bw_squat');
   });
 });
 
