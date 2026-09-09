@@ -31,7 +31,7 @@ const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', r
 const full: Profile = {
   sex: 'female', weightKg: 62, age: 34, experience: 'intermediate',
   daysPerWeek: 4, workoutMinutes: 60,
-  units: 'kg', goal: 'build_muscle', healthConnected: false,
+  units: 'kg', healthConnected: false,
 };
 
 describe('what the coach cannot work without', () => {

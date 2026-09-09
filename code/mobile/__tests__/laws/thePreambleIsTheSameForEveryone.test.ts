@@ -22,11 +22,11 @@ import type { Profile, Program, Session, SetLog } from '@/data/local/models';
  */
 
 const dana: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
+  sex: 'female', weightKg: 62, units: 'kg',
   daysPerWeek: 4, repBand: '8-10', workoutMinutes: 55, healthConnected: false, name: 'Dana Levi',
 };
 const yossi: Profile = {
-  sex: 'male', weightKg: 95, units: 'lb', goal: 'get_stronger',
+  sex: 'male', weightKg: 95, units: 'lb',
   daysPerWeek: 2, repBand: '6-8', workoutMinutes: 90, healthConnected: true, name: 'Yossi Cohen',
 };
 

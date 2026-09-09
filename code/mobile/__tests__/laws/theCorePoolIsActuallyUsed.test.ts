@@ -39,7 +39,7 @@ import type { Profile, Session } from '@/data/local/models';
 jest.setTimeout(300000);
 
 const athlete = (over = {}): Profile => ({
-  units: 'kg', goal: 'build_muscle', healthConnected: false,
+  units: 'kg', healthConnected: false,
   sex: 'female', weightKg: 62, daysPerWeek: 4, repBand: '8-10', ...over,
 } as Profile);
 

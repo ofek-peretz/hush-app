@@ -28,7 +28,7 @@ jest.mock('@/platform/coach/coachClient', () => ({
 const { askCoach } = require('@/platform/coach/coachClient') as { askCoach: jest.Mock };
 
 const profile: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
+  sex: 'female', weightKg: 62, units: 'kg',
   daysPerWeek: 4, repBand: '8-10', healthConnected: false,
 };
 const program: Program = { id: 'p', frequency: 4, days: [] };

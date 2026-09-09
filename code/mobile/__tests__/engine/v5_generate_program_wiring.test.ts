@@ -16,7 +16,7 @@ import { db } from '@/data/local/db';
 import type { Profile } from '@/data/local/models';
 
 const profile = (over: Partial<Profile>): Profile => ({
-  units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false, ...over,
+  units: 'kg', daysPerWeek: 4, healthConnected: false, ...over,
 });
 const musclesIn = (p: { days: { slots: { exerciseId: string }[] }[] }) =>
   new Set(p.days.flatMap((d) => d.slots.map((s) => muscleOf(s.exerciseId))));

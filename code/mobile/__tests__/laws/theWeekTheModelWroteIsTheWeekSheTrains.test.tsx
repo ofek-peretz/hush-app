@@ -51,7 +51,7 @@ const inputs = {
   age: 30,
   experience: 'intermediate',
   units: 'kg',
-  goal: 'build_muscle',
+  
   daysPerWeek: 4,
   workoutMinutes: 60,
   healthConnected: false,

@@ -157,7 +157,7 @@ export function ConnectHealth({ navigation, route }: Props) {
      */
     const inputs: OnboardingInputs = {
       // Hush is hypertrophy-first for everyone (register Part 9 §A) — the goal question is gone.
-      goal: 'build_muscle',
+
       /*
        * ⛔ ZERO MEANS NOBODY HAS ASKED HER. This was a literal `4` once and it decided the founder's
        * week unasked — *"he decides by himself that he'll do 4 workouts for me."* The fallback stays

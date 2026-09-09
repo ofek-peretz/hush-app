@@ -56,7 +56,7 @@ const REPLY = {
 /** The state an outage leaves behind: a finished session, and an update that never came. */
 async function anOutageHappened(trouble: string): Promise<void> {
   await db.clearAll();
-  await db.saveProfile({ sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 3, healthConnected: false });
+  await db.saveProfile({ sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 3, healthConnected: false });
   await db.appendCompletedSession(session);
   await db.saveCoachUpdate({ at: '2026-08-02T18:45:00.000Z', outcome: 'waiting', sessionId: 's-lost', trouble } as never);
 }

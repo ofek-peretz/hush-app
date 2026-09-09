@@ -30,7 +30,7 @@ import type { Profile } from '@/data/local/models';
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
-const profile: Profile = { sex: 'male', units: 'kg', goal: 'build_muscle', daysPerWeek: 2, healthConnected: false };
+const profile: Profile = { sex: 'male', units: 'kg', daysPerWeek: 2, healthConnected: false };
 const facts = coachFacts({ profile, plan: null, history: [], language: 'he' });
 
 /** What the coach actually returned when asked to hold — prose and reason, no programme. */

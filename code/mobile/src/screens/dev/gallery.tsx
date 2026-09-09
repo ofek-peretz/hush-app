@@ -545,7 +545,7 @@ function AfterSessionProbe() {
 
   const run = async () => {
     setState('asking…');
-    await db.saveProfile({ sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false });
+    await db.saveProfile({ sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 4, repBand: '8-10', healthConnected: false });
     const set = (i: number) => ({
       exerciseId: 'bb_bench_press', setIndex: i, recommendedWeight: 30, recommendedReps: 8,
       actualWeight: 30, actualReps: 12, edited: false, restBeforeS: 120,
@@ -660,7 +660,7 @@ function installProbe() {
   if (!__DEV__) return;
   (globalThis as unknown as { __probe?: unknown }).__probe = async (message: string, language = 'en') => {
     const facts = coachFacts({
-      profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
+      profile: { sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 4, repBand: '8-10', healthConnected: false },
       plan: null,
       history: [],
       language,

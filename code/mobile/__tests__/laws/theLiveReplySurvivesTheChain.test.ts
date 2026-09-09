@@ -38,7 +38,7 @@ import { buildPlanFromCoach, restAfterStep } from '@/state/stores/sessionStore';
 import type { Profile } from '@/data/local/models';
 
 const profile: Profile = {
-  name: 'Maya', sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
+  name: 'Maya', sex: 'female', weightKg: 62, units: 'kg',
   daysPerWeek: 3, healthConnected: false, repBand: '8-10', workoutMinutes: 60,
 };
 

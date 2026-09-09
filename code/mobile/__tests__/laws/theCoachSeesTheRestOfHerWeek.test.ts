@@ -33,7 +33,7 @@ import type { Profile, CardioActivity } from '@/data/local/models';
 import type { ExternalWorkout } from '@/platform/health/healthModel';
 
 const profile: Profile = {
-  sex: 'male', weightKg: 78, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: true,
+  sex: 'male', weightKg: 78, units: 'kg', daysPerWeek: 4, healthConnected: true,
 };
 
 const MATCH: ExternalWorkout = {

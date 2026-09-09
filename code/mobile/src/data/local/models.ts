@@ -18,7 +18,24 @@ export type Capability =
 
 export type Units = 'kg' | 'lb';
 
-export type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness' | 'toning';
+/**
+ * ⛔ DELETED 2026-09-10 — `Goal` WAS A FOUR-WAY ENUM THAT DECIDED NOTHING.
+ *
+ * `type Goal = 'get_stronger' | 'build_muscle' | 'general_fitness' | 'toning'` was stored on every
+ * profile and read by **no engine or domain decision anywhere** — a grep found the declaration, the
+ * writes (all of them the literal `'build_muscle'`, because the question left onboarding on
+ * 2026-06-30) and one telemetry event reporting a constant as if it were her answer. Fat loss,
+ * strength and general fitness all ran the same machine, and the field said otherwise on disk.
+ *
+ * What replaced it is better than the enum ever was: **her own words**. `goalText` is the sentence
+ * she types on the builder, the model reads it, and it writes a REP RANGE per seat (`Slot.repBand`)
+ * — which the fold obeys (`slotBandOf`), the prescription obeys, and since B-11 the rest obeys too.
+ * A four-way picker cannot say "twelve weeks to a half marathon"; a sentence can, and the whole
+ * week now follows it.
+ *
+ * An old record on disk still carries the key. Nothing reads it, and an extra key decodes to
+ * nothing — the same way every other retired field left (`experience`, `workoutMinutes`).
+ */
 
 /** Engine v5 — the athlete's declared rep band (T). Never asked; default '8-12' (measured 2026-09-10, `repBand.DEFAULT_REP_BAND`).
  *  It is a floor and a ceiling: Tlo is the target, Thi the "too light" mark. See the register S-6. */
@@ -61,7 +78,6 @@ export interface Profile {
    *  older profiles → falls back to memberSince (see domain/profileAge). */
   ageUpdatedAt?: string;
   units: Units;
-  goal: Goal;
   /**
    * THE VOICE COACH (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md, 2026-09-08). Absent means ON:
    * the spec's whole point is that the phone stays in the pocket, so the voice is the default and
@@ -77,9 +93,9 @@ export interface Profile {
   /**
    * ⛔ HER OWN WORDS, from onboarding (founder 2026-08-04, taking the chat out of the front door).
    *
-   * Distinct from `goal`, which is an ENUM the product settled long ago (hypertrophy-first, one
-   * value). This is the sentence she typed — "twelve weeks to a half marathon", "get my shoulder
-   * working again" — and it is what the coach's whole programme is answerable to.
+   * The ONLY goal the product carries since 2026-09-10 — the four-way `Goal` enum that used to sit
+   * beside it decided nothing and is deleted. This is the sentence she typed — "twelve weeks to a
+   * half marathon", "get my shoulder working again" — and the coach's whole programme answers to it.
    *
    * `limitsText` is the same shape for what hurts or is refused. Both are prose on purpose: they are
    * the two things a form cannot hold, which is why they survived the chat being deleted.
@@ -151,7 +167,6 @@ export interface Profile {
 
 /** Everything onboarding gathers before building the first program (§4.2–4.6). */
 export interface OnboardingInputs {
-  goal: Goal;
   /** Her own words — see `Profile.goalText`. The two things a form cannot hold. */
   goalText?: string;
   limitsText?: string;

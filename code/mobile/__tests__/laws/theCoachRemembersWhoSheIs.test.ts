@@ -42,7 +42,7 @@ import { db } from '@/data/local/db';
 import type { Profile } from '@/data/local/models';
 
 const profile: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
+  sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 4, healthConnected: false,
 };
 
 const reply = (body: Record<string, unknown>) => JSON.stringify({ say: 'Noted.', ...body });

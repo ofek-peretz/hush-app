@@ -60,7 +60,7 @@ const inputs = (over: any = {}) => ({
   sex: 'female',
   weightKg: 62,
   units: 'kg',
-  goal: 'build_muscle',
+  
   daysPerWeek: 4,
   healthConnected: false,
   ...over,

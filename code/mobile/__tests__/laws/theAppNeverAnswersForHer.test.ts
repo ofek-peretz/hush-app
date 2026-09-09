@@ -36,7 +36,7 @@ import type { Profile } from '@/data/local/models';
 const beforeSheHasSaidAnything: Profile = {
   sex: 'female',
   units: 'kg',
-  goal: 'build_muscle',
+  
   daysPerWeek: 0,
   healthConnected: false,
 };

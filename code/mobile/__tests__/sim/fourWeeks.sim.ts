@@ -63,7 +63,7 @@ const HER: Profile = {
   daysPerWeek: 4,
   workoutMinutes: 60,
   units: 'kg',
-  goal: 'build_muscle',
+  
   healthConnected: false,
   repBand: '8-10',
   goalText: 'Get visibly stronger and put some size on my shoulders and back.',

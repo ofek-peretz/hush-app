@@ -45,7 +45,7 @@ jest.mock('@/platform/coach/coachClient', () => ({
 const { askCoach } = require('@/platform/coach/coachClient') as { askCoach: jest.Mock };
 
 const profile: Profile = {
-  sex: 'female', units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
+  sex: 'female', units: 'kg', daysPerWeek: 4, healthConnected: false,
 };
 
 const reply = (body: Record<string, unknown>) => JSON.stringify({ say: 'Noted.', ...body });

@@ -31,7 +31,7 @@ const LIFTS = ['bb_bench_press', 'lat_pulldown', 'db_row', 'bb_back_squat', 'hip
 
 const HER: Profile = {
   sex: 'female', age: 34, weightKg: 62, experience: 'intermediate', daysPerWeek: 4,
-  workoutMinutes: 60, units: 'kg', goal: 'build_muscle', healthConnected: false,
+  workoutMinutes: 60, units: 'kg', healthConnected: false,
 };
 
 /** A year of training: 4 sessions a week × 52 weeks, 18 sets each. */

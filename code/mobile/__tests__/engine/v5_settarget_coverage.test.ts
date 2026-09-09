@@ -17,7 +17,7 @@ import { db } from '@/data/local/db';
 import type { Profile, Program } from '@/data/local/models';
 
 const profile = (over: Partial<Profile>): Profile => ({
-  units: 'kg', goal: 'build_muscle', daysPerWeek: 2, healthConnected: false, ...over,
+  units: 'kg', daysPerWeek: 2, healthConnected: false, ...over,
 });
 
 /** A programme with a 5-set bench slot — exactly what distributeMuscleSets emits for a grown muscle. */

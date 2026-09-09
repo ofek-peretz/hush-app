@@ -39,7 +39,7 @@ describe('cardioPerformed — record admission', () => {
 describe('agedProfile — age is asked once and kept current by the app', () => {
   const base: Profile = {
     units: 'kg',
-    goal: 'build_muscle',
+    
     daysPerWeek: 4,
     healthConnected: false,
     age: 30,

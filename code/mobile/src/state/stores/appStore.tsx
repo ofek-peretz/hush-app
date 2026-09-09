@@ -809,7 +809,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // Anchor for the yearly age auto-advance (domain/profileAge).
           ...(inputs.age != null ? { ageUpdatedAt: new Date().toISOString() } : {}),
           units: inputs.units,
-          goal: inputs.goal,
+
           experience: inputs.experience,
           daysPerWeek: inputs.daysPerWeek,
           healthConnected: inputs.healthConnected,
@@ -890,7 +890,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // `experience` shipped here as a permanent undefined — its question left the intake long
         // ago (audit P5). The event now carries only what is actually asked; `workoutMinutes` is
         // answered again since 2026-09-01 and worth counting.
-        void track('onboarding_completed', { goal: inputs.goal, daysPerWeek: inputs.daysPerWeek, workoutMinutes: inputs.workoutMinutes, healthConnected: inputs.healthConnected });
+        void track('onboarding_completed', { daysPerWeek: inputs.daysPerWeek, workoutMinutes: inputs.workoutMinutes, healthConnected: inputs.healthConnected });
         // THE WEEKLY RECEIPT IS THE ONLY RECURRING PUSH (founder 2026-07-29). A quarterly-report
         // note used to be armed here too; it was not on the founder's list of what may ever fire,
         // and the screen that announced it no longer promises it. The twelve-week window is still

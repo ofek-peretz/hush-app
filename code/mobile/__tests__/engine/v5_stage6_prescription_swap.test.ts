@@ -12,7 +12,7 @@ import { db } from '@/data/local/db';
 import { resetV5 } from '@/engine/v5/v5Engine';
 import type { Profile } from '@/data/local/models';
 
-const base: Profile = { units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false };
+const base: Profile = { units: 'kg', daysPerWeek: 4, healthConnected: false };
 
 describe('Stage 6 · v5 owns the prescription', () => {
   beforeEach(async () => { await db.clearAll(); await resetV5(); });

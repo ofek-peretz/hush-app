@@ -104,7 +104,7 @@ function sheet(): string {
   const history = [session(1, 30), session(8, 32.5)];
   return JSON.stringify(
     coachFacts({
-      profile: { sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false },
+      profile: { sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 4, healthConnected: false },
       plan: null,
       history,
       justFinished: history[1],

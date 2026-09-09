@@ -15,7 +15,7 @@ import { exerciseById } from '@/data/exercises';
 import type { Profile, Session, ProgramDay } from '@/data/local/models';
 import type { MuscleGroup } from '@/data/exercises';
 
-const base: Profile = { units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false, repBand: '8-10' };
+const base: Profile = { units: 'kg', daysPerWeek: 4, healthConnected: false, repBand: '8-10' };
 
 beforeEach(async () => { await db.clearAll(); });
 

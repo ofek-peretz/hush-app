@@ -23,7 +23,7 @@ import type { Profile, Program, Session, SetLog } from '@/data/local/models';
  */
 
 const profile: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle',
+  sex: 'female', weightKg: 62, units: 'kg',
   daysPerWeek: 4, repBand: '8-10', healthConnected: false,
 };
 

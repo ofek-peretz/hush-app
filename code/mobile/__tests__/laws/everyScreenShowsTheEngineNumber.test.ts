@@ -65,7 +65,7 @@ async function buildAthlete(): Promise<Built> {
   };
 
   const profile: Profile = {
-    units: 'kg', goal: 'build_muscle', healthConnected: false,
+    units: 'kg', healthConnected: false,
     sex: 'female', weightKg: 60, daysPerWeek: 3, workoutMinutes: 55, repBand: '8-10',
     memberSince: '2026-01-05T00:00:00.000Z',
   };

@@ -5,7 +5,9 @@
  * visible — every command passes, every suite is green, and a fixture can quietly claim a type
  * while holding values that type forbids. For as long as it was true it hid, in one day's work:
  *
- *   · `goal: 'hypertrophy'` and `repBand: '8-12'` on nine `Profile` fixtures. Neither value exists.
+ *   · `goal: 'hypertrophy'` and `repBand: '8-12'` on nine `Profile` fixtures. Neither value existed
+ *     at the time. (`'8-12'` is the DEFAULT band since 2026-09-10 and `goal` is deleted outright —
+ *     the example is kept as it was found, because what it demonstrates is the hole, not the values.)
  *   · `state: 'completed'` on nine `Session` fixtures. `SessionState` is `'ACTIVE' | 'SAVED'`.
  *   · `loadSetup(ex, …)` handed an `Exercise` where the signature takes an id STRING — so every
  *     iteration of `theOpeningLoadIsLoadable` fell through a `continue` and **that law asserted

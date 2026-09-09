@@ -62,7 +62,7 @@ describe('roomForStorage', () => {
 
   it('a whole bodyweight-only WEEK is built from the shelf alone', async () => {
     const program = await fixtureModel.generateProgram({
-      sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 3, repBand: '8-12', healthConnected: false, equipment: [],
+      sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 3, repBand: '8-12', healthConnected: false, equipment: [],
     } as never);
     const lifts = program.days.flatMap((d) => d.slots.map((s) => s.exerciseId));
     expect(lifts.length).toBeGreaterThan(6);

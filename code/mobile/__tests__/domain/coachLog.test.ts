@@ -14,7 +14,7 @@ import type { Profile, Program } from '@/data/local/models';
  */
 
 const profile: Profile = {
-  sex: 'female', weightKg: 62, units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false,
+  sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 4, healthConnected: false,
 };
 const program: Program = { id: 'p', frequency: 4, days: [] };
 

@@ -52,7 +52,7 @@ const PEOPLE: { who: string; profile: Profile }[] = [
     profile: {
       name: 'Maya', sex: 'female', age: 34, weightKg: 62, startWeightKg: 62,
       experience: 'intermediate', daysPerWeek: 4, workoutMinutes: 60, units: 'kg',
-      goal: 'build_muscle', healthConnected: false, repBand: '8-10',
+      healthConnected: false, repBand: '8-10',
       goalText: 'Get visibly stronger and put some size on my shoulders and back.',
       limitsText: 'Left shoulder — it clicks and aches on overhead pressing. Nothing else.',
     },
@@ -62,7 +62,7 @@ const PEOPLE: { who: string; profile: Profile }[] = [
     profile: {
       name: 'Tom', sex: 'male', age: 27, weightKg: 78, startWeightKg: 78,
       experience: 'beginner', daysPerWeek: 3, workoutMinutes: 45, units: 'kg',
-      goal: 'build_muscle', healthConnected: false,
+      healthConnected: false,
       goalText: 'Put on size, mostly arms and chest.', limitsText: 'Nothing.',
     },
   },
@@ -71,7 +71,7 @@ const PEOPLE: { who: string; profile: Profile }[] = [
     profile: {
       name: 'Dana', sex: 'female', age: 41, weightKg: 68, startWeightKg: 68,
       experience: 'advanced', daysPerWeek: 5, workoutMinutes: 75, units: 'kg',
-      goal: 'build_muscle', healthConnected: false,
+      healthConnected: false,
       goalText: 'Legs and back — I want to be visibly bigger by winter.',
       limitsText: 'Lower back gets sore after heavy deadlifts.',
     },

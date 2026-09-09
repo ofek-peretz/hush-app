@@ -498,7 +498,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       age: inputs.age,
       experience: inputs.experience,
       units: inputs.units,
-      goal: inputs.goal,
+
       daysPerWeek: inputs.daysPerWeek,
       workoutMinutes: inputs.workoutMinutes,
       healthConnected: inputs.healthConnected,

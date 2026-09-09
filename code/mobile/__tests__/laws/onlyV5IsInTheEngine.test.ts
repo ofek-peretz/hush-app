@@ -44,7 +44,7 @@ import type { Profile } from '@/data/local/models';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const base: Profile = { units: 'kg', goal: 'build_muscle', daysPerWeek: 4, healthConnected: false, repBand: '8-10' };
+const base: Profile = { units: 'kg', daysPerWeek: 4, healthConnected: false, repBand: '8-10' };
 
 beforeEach(async () => { await db.clearAll(); });
 

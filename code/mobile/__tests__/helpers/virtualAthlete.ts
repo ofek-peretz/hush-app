@@ -111,7 +111,7 @@ export async function train(p: Person, weeks: number): Promise<TrainingRun> {
   };
 
   const profile: Profile = {
-    units: 'kg', goal: 'build_muscle', healthConnected: false,
+    units: 'kg', healthConnected: false,
     sex: p.sex, weightKg: p.weightKg, daysPerWeek: p.days, workoutMinutes: p.minutes, repBand: '8-12',
   };
   await db.saveProfile(profile);
