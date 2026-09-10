@@ -1,158 +1,152 @@
 {
   "common": {
     "back": "חזרה",
-    "close": "סגור"
+    "delete": "מחיקה",
+    "close": "סגור",
+    "minShort": "דק׳",
+    "vocative": "{{name}},",
+    "cancel": "ביטול"
   },
   "weekly": {
-    "eyebrow": "השבוע",
+    "tonneUnit": "טון",
+    "eyebrow": "המראה",
     "title": "מה השתנה",
     "weekTitle": "שבוע {{n}}",
-    "intro_one": "התוכנית שלך לשבוע, במשקלים החדשים. תרגיל אחד השתנה — הקש עליו כדי לראות מה ראיתי.",
-    "intro_other": "התוכנית שלך לשבוע, במשקלים החדשים. {{count}} תרגילים השתנו — הקש על כל אחד כדי לראות מה ראיתי.",
-    "steady": "הכול נשאר יציב השבוע — תמשיך להגיע והעבודה תצטבר.",
+    "statWorkouts": "אימונים",
+    "statMoved": "הונף",
+    "statKcal": "קלוריות",
+    "statSets": "סטים",
+    "standingLegend": "מאז היום הראשון",
     "setsUnit": "סטים",
     "repsUnit": "חזרות",
+    "liftAdded": "חדש בתוכנית שלך השבוע.",
+    "liftDropped": "יוצא מהתוכנית לעת עתה.",
     "newExercise": "תרגיל חדש",
     "swapped": "הוחלף",
     "done": "סיום",
     "observation": "מה ראיתי",
     "conclusion": "מה זה אומר",
-    "action": "מה עשיתי"
-  },
-  "auth": {
-    "wordmark": "Hush",
-    "tagline": "להתאמן.\nבשקט.",
-    "apple": "המשך עם Apple",
-    "google": "המשך עם Google",
-    "legal": "תנאים · פרטיות"
-  },
-  "consent": {
-    "title": "לפני שמתחילים.",
-    "body": "Hush מאמן אותך לפי הנתונים שתתעד כאן. אני שומר אותם כדי להפעיל את האימון שלך ולהשתפר. אפשר לייצא או למחוק אותם בכל רגע.",
-    "agree": "אני מסכים",
-    "decline": "אני לא מסכים",
-    "legal": "תנאים · פרטיות"
-  },
-  "nameEntry": {
-    "title": "איך לקרוא לך?",
-    "label": "השם שלך",
-    "placeholder": "שם",
-    "continue": "המשך",
-    "skip": "דילוג"
-  },
-  "connectHealth": {
-    "title": "חיבור ל-Health",
-    "body": "Hush קוראת את הדופק, הקלוריות והמרחק בריצות ובהליכות שתתעד — כך שהמאמץ אמיתי, לא משוער. בכל מקרה תענה על כמה שאלות קצרות בהמשך.",
-    "optional": "אופציונלי. אפשר לשנות בכל עת.",
-    "continue": "המשך",
-    "skip": "דילוג"
-  },
-  "manualInfo": {
-    "title": "כמה פרטים מהירים.",
-    "age": "גיל",
-    "sex": "מין",
-    "male": "זכר",
-    "female": "נקבה",
-    "other": "אחר",
-    "height": "גובה",
-    "weight": "משקל",
-    "continue": "המשך"
-  },
-  "goal": {
-    "eyebrow": "למה אתה מתאמן",
-    "buildMuscle": "בניית שריר",
-    "increaseStrength": "הגדלת כוח",
-    "stayConsistent": "שמירה על עקביות",
-    "continue": "המשך",
-    "getStronger": "להתחזק",
-    "generalFitness": "כושר כללי",
-    "toning": "חיטוב"
-  },
-  "experience": {
-    "eyebrow": "הניסיון שלך",
-    "beginner": "מתחיל",
-    "beginnerDesc": "חדש באימוני כוח, או בתחילת הדרך.",
-    "intermediate": "בינוני",
-    "intermediateDesc": "מתאמן בעקביות, מכיר את הבסיס.",
-    "advanced": "מתקדם",
-    "advancedDesc": "מנוסה, עם הרמות חזקות.",
-    "continue": "המשך"
-  },
-  "daysPerWeek": {
-    "eyebrow": "כמה ימים בשבוע",
-    "continue": "המשך"
-  },
-  "programCreated": {
-    "title": "התוכנית\nמוכנה",
-    "subtitle": "{{days}} ימים · נבנתה עבורך."
-  },
-  "aboutYou": {
-    "continue": "המשך"
+    "action": "מה עשיתי",
+    "intro_one": "קראתי את האימונים שלך מהשבוע שעבר ושיניתי תרגיל אחד. הקש עליו כדי לראות למה.",
+    "intro_female_one": "קראתי את האימונים שלך מהשבוע שעבר ושיניתי תרגיל אחד. הקישי עליו כדי לראות למה.",
+    "intro_two": "קראתי את האימונים שלך מהשבוע שעבר ושיניתי שני תרגילים. הקש על כל אחד כדי לראות למה.",
+    "intro_female_two": "קראתי את האימונים שלך מהשבוע שעבר ושיניתי שני תרגילים. הקישי על כל אחד כדי לראות למה.",
+    "intro_other": "קראתי את האימונים שלך מהשבוע שעבר ושיניתי {{count}} תרגילים. הקש על כל אחד כדי לראות למה.",
+    "intro_female_other": "קראתי את האימונים שלך מהשבוע שעבר ושיניתי {{count}} תרגילים. הקישי על כל אחד כדי לראות למה.",
+    "evidenceLegend": "ההוכחה",
+    "evidenceIntro": "השבוע לא שיניתי כלום — התוכנית עובדת, וזה מה שהיא עשתה עד עכשיו.",
+    "evidenceClose": "אני קורא כל סט שאתה מרים ומעדכן את התוכנית לפי מה שהראית. השבוע לא היה צורך לשנות דבר.",
+    "evidenceClose_female": "אני קוראת כל סט שאת מרימה ומעדכנת את התוכנית לפי מה שהראית. השבוע לא היה צורך לשנות דבר.",
+    "evidenceEmpty": "לא שיניתי כלום השבוע. אחרי כמה אימונים אני קובע את המשקלים הבאים שלך בסוף כל אימון, ומראה לך כאן את כל השבוע בכל שבת.",
+    "evidenceEmpty_female": "לא שיניתי כלום השבוע. אחרי כמה אימונים אני קובעת את המשקלים הבאים שלך בסוף כל אימון, ומראה לך כאן את כל השבוע בכל שבת.",
+    "whyLink": "למה?",
+    "whyWord": "למה",
+    "introTop_one": "שינוי אחד השבוע — {{shown}} החשובים ביותר:",
+    "introTop_two": "שני שינויים השבוע — {{shown}} החשובים ביותר:",
+    "introTop_other": "{{count}} שינויים השבוע — {{shown}} החשובים ביותר:",
+    "viewAll_one": "הצג את השינוי",
+    "viewAll_two": "הצג את שני השינויים",
+    "viewAll_other": "הצג את כל {{count}} השינויים",
+    "volumeRowName": "{{muscle}}, נפח",
+    "unchangedNote": "שאר התרגילים נשארו כפי שהם.",
+    "askBackTitle": "{{muscle}} מחוץ לתוכנית. להחזיר?",
+    "askLegend": "שאלה אחת, פעם אחת",
+    "askIntro": "עובדות השבוע למעלה. עוד דבר אחד לפני שאתה הולך — אשאל את זה רק הפעם.",
+    "askIntro_female": "עובדות השבוע למעלה. עוד דבר אחד לפני שאת הולכת — אשאל את זה רק הפעם.",
+    "askSince": "לא באימונים כבר זמן מה",
+    "askNote": "תענה או תדלג — כך או כך זה אף פעם לא מעכב את השבוע שלך, ולא נשאל שוב.",
+    "askNote_female": "תעני או תדלגי — כך או כך זה אף פעם לא מעכב את השבוע שלך, ולא נשאל שוב.",
+    "askBackBody": "כל מה שנצבר שמור. לחיצה אחת ואני ממשיך בדיוק מאיפה שהפסקת.",
+    "askBackBody_female": "כל מה שנצבר שמור. לחיצה אחת ואני ממשיכה בדיוק מאיפה שהפסקת.",
+    "askBackYes": "להחזיר",
+    "askBackNo": "להשאיר בחוץ",
+    "signature": "— hush",
+    "shareWeek": "שיתוף השבוע"
   },
   "home": {
-    "slideToStart": "החלק כדי להתחיל",
-    "greeting": "{{part}} טוב.",
-    "greetingNamed": "{{part}} טוב, {{name}}.",
-    "morning": "בוקר",
-    "afternoon": "צהריים",
-    "evening": "ערב",
-    "restTitle": "התאוששות.",
-    "restSub": "כל האימונים השבוע הושלמו. התאוששות היא חלק מהתוכנית — Hush ממתינה כדי שההסתגלות תשלים פער. אין מה לעשות היום.",
-    "metadata": "{{exercises}} תרגילים · {{sets}} סטים · ~{{min}} דק׳",
+    "restTitle": "השבוע הושלם.",
+    "restSub": "שריר נבנה בימים כאלה. שום דבר לא מתוכנן — זו התוכנית עובדת.",
     "recovery": "התאוששות",
+    "sessionsLabel": "אימונים",
+    "loadsUp": "עומסים עלו",
+    "nextLabel": "הבא",
     "nextWorkout": "האימון הבא",
+    "upNext": "הבא בתור",
+    "briefChangesShort_one": "שינוי אחד",
+    "briefChangesShort_two": "שני שינויים",
+    "briefChangesShort_other": "{{count}} שינויים",
     "weekLabel": "שבוע {{n}}",
+    "programEyebrow": "שבוע {{week}} · {{done}} מתוך {{total}}",
     "weekComplete": "שבוע {{n}} הושלם",
-    "weekStat": "שבוע",
-    "restDaysTaken": "ימי מנוחה שנלקחו",
-    "viewProgress": "צפייה בהתקדמות",
-    "exerciseCount": "{{n}} תרגילים",
-    "loadsUp": "{{n}} עומסים עולים השבוע",
-    "nextSessionOpens": "האימון הבא נפתח",
-    "nextSession": "האימון הבא",
     "begin": "התחל {{name}}",
-    "chooseAnother": "בחירת אימון אחר",
-    "readyWhenYouAre": "מתי שתהיה מוכן, {{name}}.",
-    "readyAnon": "מתי שתהיה מוכן.",
-    "loadsSet": "המשקלים להערב מוכנים — כל מה שנותר הוא להרים.",
+    "begin_female": "התחילי {{name}}",
+    "continueWorkout": "המשך {{name}}",
+    "continueWorkout_female": "המשיכי {{name}}",
     "openTraining": "אימון חופשי",
     "programLegend": "תוכנית",
-    "hubThisWeek": "השבוע",
-    "hubThisWeekSub": "{{done}} בוצעו · {{remaining}} נותרו",
+    "briefSteady": "קראתי את האימונים שלך מהשבוע שעבר. השבוע התוכנית נשארת כפי שהיא.",
+    "briefRaisedOne": "העליתי לך את {{lift}} ל-{{load}} {{unit}}.",
+    "briefRaisedMany": "העליתי משקל ב-{{n}} תרגילים — {{lift}} עולה ל-{{load}} {{unit}}.",
+    "briefMatchedOne": "התאמתי את המשקל ב{{lift}} למה שהראית בפועל.",
+    "briefMatchedMany": "התאמתי {{n}} משקלים למה שהראית בפועל.",
+    "briefTuned": "כיווננתי סטים וחזרות ב-{{n}} תרגילים.",
+    "briefSwappedOne": "החלפתי תרגיל אחד — {{lift}}.",
+    "briefSwappedMany": "החלפתי {{n}} תרגילים.",
+    "briefOpen": "מה השתנה ולמה",
+    "briefNew": "חדש",
     "hubHistory": "היסטוריה",
     "hubHistorySub": "כל אימון שהושלם",
     "hubProgress": "התקדמות",
-    "hubProgressSub": "מאז שהתחלת"
-  },
-  "recovery": {
-    "sunShort": "א׳",
-    "sunday": "יום ראשון"
+    "hubProgressSub": "מאז שהתחלת",
+    "restNext": "השבוע הבא שלך נפתח בשבת בערב",
+    "cardioCta": "אירובי",
+    "briefChanges_one": "שינוי אחד השבוע",
+    "briefChanges_two": "שני שינויים השבוע",
+    "briefChanges_other": "{{count}} שינויים השבוע",
+    "briefNoChanges": "אין שינויים השבוע",
+    "planMinutes": "{{min}} דק׳",
+    "planShape_one": "תרגיל אחד · {{min}} דקות",
+    "planShape_two": "שני תרגילים · {{min}} דקות",
+    "planShape_other": "{{lifts}} תרגילים · {{min}} דקות",
+    "trialLeft_one": "אימון אחד נותר בתקופת הניסיון",
+    "trialLeft_two": "2 אימונים נותרו בתקופת הניסיון",
+    "trialLeft_other": "{{count}} אימונים נותרו בתקופת הניסיון",
+    "undoSwap": "להשאיר את {{lift}}",
+    "undoSwapA11y": "להשאיר את {{lift}} — ביטול ההחלפה",
+    "planShapeNoTime_one": "תרגיל אחד",
+    "planShapeNoTime_two": "שני תרגילים",
+    "planShapeNoTime_other": "{{lifts}} תרגילים",
+    "weekMeter": "{{done}} מתוך {{total}} אימונים",
+    "todayLabel": "היום",
+    "trainSomethingElse": "אימון אחר",
+    "weekSheetTitle": "השבוע שלך",
+    "liveTitle": "השבוע שלך עד כה",
+    "nextMarkLabel": "הציון הבא",
+    "trialSpent": "ארבעה־עשר האימונים מאחוריך. המנוי ממשיך מהמקום שעצרת."
   },
   "cardio": {
     "legend": "אימון חופשי",
     "title": "ריצה או הליכה",
     "recordedNotCoached": "מתועד, ללא הנחיה",
-    "introPre": "Hush מאמן את ההרמות שלך. את הריצות שלך הוא פשוט ",
-    "introRecords": "מתעד",
-    "introPost": " — בלי יעדים, בלי ציונים. המאמץ שלך.",
     "mode": "מצב",
     "run": "ריצה",
     "walk": "הליכה",
-    "goalLegend": "יעד אישי · רשות",
+    "goalLegend": "יעד אישי",
     "goalOpen": "חופשי",
     "goalDistance": "מרחק",
     "goalTime": "זמן",
-    "goalOpenNote": "בלי יעד. זוז כמה שתרצה — Hush שומר את היומן כך או כך.",
     "targetDistance": "מרחק יעד",
     "targetTime": "זמן יעד",
     "startRun": "התחל ריצה",
+    "startRun_female": "התחילי ריצה",
     "startWalk": "התחל הליכה",
-    "gpsNote": "‏GPS ודופק מתחברים כשתתחיל",
-    "starting": "מתחיל",
-    "go": "צא",
-    "running": "רץ",
-    "walking": "הולך",
-    "elapsed": "חלף",
+    "startWalk_female": "התחילי הליכה",
+    "gpsNote": "‏GPS מתחבר כשאתה יוצא לדרך",
+    "gpsNote_female": "‏GPS מתחבר כשאת יוצאת לדרך",
+    "startingLegend": "מתחיל · ריצה",
+    "startingLegend_female": "מתחילה · ריצה",
+    "go": "קדימה",
+    "elapsed": "זמן",
     "distance": "מרחק",
     "pace": "קצב",
     "perKm": "‏/ק״מ",
@@ -160,8 +154,9 @@
     "heart": "דופק",
     "paused": "מושהה",
     "resume": "המשך",
-    "finishSave": "סיים ושמור",
+    "resume_female": "המשיכי",
     "pause": "השהה",
+    "pause_female": "השהי",
     "recorded": "תועד",
     "runLogged": "הריצה נרשמה.",
     "walkLogged": "ההליכה נרשמה.",
@@ -172,89 +167,279 @@
     "splitsPerKm": "פיצולים · לכל ק״מ",
     "fastest": "המהיר ביותר",
     "walkTag": "הליכה",
-    "savedNote": "נשמר ביומן שלך. Hush לא נותן ציון לריצות שלך ותוכנית ההרמות שלך לא מושפעת — זה שלך לשמור.",
+    "savedNote": "נשמר ביומן שלך. אני לא נותן ציונים לריצות, ותוכנית הכוח שלך לא מושפעת — זה שלך.",
+    "savedNote_female": "נשמר ביומן שלך. אני לא נותנת ציונים לריצות, ותוכנית הכוח שלך לא מושפעת — זה שלך.",
     "done": "סיום",
+    "shareStory": "שיתוף לסטורי",
+    "longestEver": "המרחק הארוך ביותר שלך.",
     "viewInHistory": "הצג בהיסטוריה",
     "readOnlyRecord": "רשומה לקריאה בלבד",
     "km": "ק״מ",
-    "kcal": "קק״ל",
-    "bpm": "פעימות"
+    "kcal": "קלוריות",
+    "bpm": "bpm",
+    "gpsAcquiring": "מאתר GPS",
+    "gpsOff": "אין גישה למיקום — נשמר זמן בלבד",
+    "minUnit": "דק׳",
+    "routeLegend": "מסלול",
+    "endLegend": "סיום",
+    "endTitleRun": "לסיים כאן את הריצה?",
+    "endTitleWalk": "לסיים כאן את ההליכה?",
+    "endBody": "המרחק, הזמן והמסלול נשמרים ביומן שלך.",
+    "keepGoing": "להמשיך",
+    "finish": "סיים ושמור",
+    "finish_female": "סיימי ושמרי",
+    "readySub": "מתועד לצד ההרמות שלך.",
+    "readyTitle": "קרדיו",
+    "startCardio": "התחל קרדיו",
+    "startCardio_female": "התחילי קרדיו",
+    "liveLegend": "קרדיו",
+    "metresUnit": "מ׳",
+    "kmOrdinal": "ק״מ {{n}}",
+    "targetEnd": "{{km}} ק״מ",
+    "bandEnd": "1,000 מ׳",
+    "hrShort": "דופק",
+    "timeShort": "זמן",
+    "avgHrShort": "דופק ממוצע",
+    "logLabel": "יומן",
+    "recordTitle": "קרדיו",
+    "kilometres": "קילומטרים",
+    "recordFooter": "מתועד, ללא הנחיה. שום דבר כאן לא נוגע במוט.",
+    "kmMomentLabel": "קילומטר {{km}}",
+    "kmMomentQuickest": "המהיר ביותר בריצה זו",
+    "motionOff": "מדידת התנועה כבויה — שמור את הטלפון עליך",
+    "motionOff_female": "מדידת התנועה כבויה — שמרי את הטלפון עלייך",
+    "motionWaiting": "סופר את הצעדים שלך — שמור את הטלפון עליך",
+    "motionWaiting_female": "סופרת את הצעדים שלך — שמרי את הטלפון עלייך",
+    "outside": "בחוץ",
+    "treadmill": "הליכון",
+    "outsideNote": "מרחק וקצב מה-GPS.",
+    "treadmillNote": "מרחק לפי הצעדים שלך — שמור את הטלפון עליך.",
+    "treadmillNote_female": "מרחק לפי הצעדים שלך — שמרי את הטלפון עלייך.",
+    "lastRun": "הריצה האחרונה שלך · {{km}} ק״מ · {{date}}"
   },
   "ob": {
     "continue": "המשך",
-    "skip": "דילוג",
-    "apple": "המשך עם Apple",
-    "google": "המשך עם Google",
-    "signinTagline": "מאמן כוח שמחזיק בהחלטות, כדי שאתה תחזיק באימון.",
-    "signinLegal": "בהמשך אתה מסכים להתחיל את ההגדרה. אפשר לעצור בכל רגע.",
-    "consentLegend": "לפני שמתחילים",
-    "consentTitle": "תנאים ופרטיות",
-    "consentSub": "Hush מקבלת החלטות אימון בשמך. כדי לעשות זאת באחריות, היא צריכה את הסכמתך לאופן השימוש בנתונים שלך.",
-    "consentCard": "נתוני האימון שלך שייכים לך. הם משמשים רק כדי לבנות את ההמלצות שלך. הם לעולם לא נמכרים.",
-    "consentAccept": "אישור והמשך",
-    "consentDecline": "דחייה",
-    "nameLegend": "אופציונלי",
-    "nameTitle": "איך Hush תפנה אליך?",
-    "nameSub": "משמש רק לפנייה אליך. אפשר להשאיר ריק כדי להישאר אנונימי.",
-    "nameLabel": "שם",
+    "continue_female": "המשיכי",
+    "apple": "כניסה עם Apple",
+    "google": "כניסה עם Google",
+    "signinTagline": "רק להתאמן.\nכל השאר עליי.",
+    "signinAffirm": "כל משקל כאן הגיע מסט שבאמת הרמת.",
+    "signinTrialFact": "{{n}} האימונים הראשונים, בתוך {{d}} יום — חינם, בלי כרטיס.",
+    "signinSaveFact": "התוכנית שלך בנויה. חשבון שומר אותה שלך — בטלפון הזה ובבא אחריו.",
+    "signinSaveFactAfterWorkout": "האימון הראשון שלך נשמר. חשבון שומר אותו שלך — בטלפון הזה ובבא אחריו.",
+    "signinNotNow": "לא עכשיו",
     "namePlaceholder": "השם שלך",
+    "nameLegend": "שם",
     "healthLegend": "אופציונלי",
     "healthTitle": "חיבור נתוני בריאות",
-    "healthSub": "Hush קוראת דופק, קלוריות ומרחק עבור הריצות וההליכות שתתעד. אופציונלי, וניתן לשינוי בהמשך.",
     "healthCardTitle": "Apple Health",
-    "healthCardSub": "דופק · קלוריות · מרחק",
-    "healthConnect": "חיבור",
+    "healthConnect": "לחבר",
+    "healthCardSub": "לא מחובר",
+    "healthHr": "דופק",
+    "healthHrSub": "כמה קשה עבדת, תוך כדי",
+    "healthKcal": "קלוריות",
+    "healthKcalSub": "נמדדות, לא מוערכות",
+    "healthKm": "קילומטרים",
+    "healthKmSub": "המרחק האמיתי של הריצה",
+    "healthHelper": "לריצות ולהליכות שאתה מתעד. האימון שלך רץ על דבר אחד: מה שאתה מרים.",
+    "healthHelper_female": "לריצות ולהליכות שאת מתעדת. האימון שלך רץ על דבר אחד: מה שאת מרימה.",
     "healthSkip": "דילוג לעת עתה",
     "bodyLegend": "עליך",
-    "bodyTitle": "נתוני גוף",
-    "bodySub": "Hush צריכה את אלה כדי לכייל את משקלי ההתחלה. מספרים בלבד — שום דבר פומבי.",
-    "sex": "מין",
-    "age": "גיל",
-    "height": "גובה",
+    "bodyTitle": "עליך",
+    "bodySub": "לרשומה שלך. המשקלים שלך מגיעים מהסט הראשון.",
     "weight": "משקל",
+    "weightWith": "משקל · {{unit}}",
+    "daysLabel": "אימונים בשבוע",
+    "buildReading": "קורא את מה שסיפרת לי",
+    "buildReading_female": "קוראת את מה שסיפרת לי",
+    "buildChoosing": "בוחר את התרגילים שלך",
+    "buildChoosing_female": "בוחרת את התרגילים שלך",
+    "buildYourProgramme": "התוכנית שלך",
+    "weightLabel": "משקל גוף",
+    "buildSummary": "{{muscles}} שרירים · {{lifts}} תרגילים",
+    "buildingAround": "בונה סביב",
+    "minutesLabel": "דקות לאימון",
+    "minutesUnit": "דק׳",
     "female": "נקבה",
     "male": "זכר",
-    "goalLegend": "המטרה שלך",
-    "goalTitle": "למה אתה מתאמן?",
-    "goalSub": "זה קובע איך Hush מתעדפת עומס, נפח והתקדמות.",
-    "goalMuscle": "בניית שריר",
-    "goalMuscleDesc": "מיקוד בהיפרטרופיה ובגדילת שריר",
-    "goalStrength": "הגדלת כוח",
-    "goalStrengthDesc": "התקדמות כבדה יותר בתרגילים המורכבים המרכזיים",
-    "goalLean": "חיטוב",
-    "goalLeanDesc": "רזה ומוגדר — משקלים מתונים, יותר חזרות",
-    "goalConsistent": "שמירה על עקביות",
-    "goalConsistentDesc": "התקדמות מאוזנת, בנויה להיות בת‑קיימא",
-    "expLegend": "הרקע שלך",
-    "expTitle": "כמה זמן אתה מתאמן?",
-    "expSub": "כנות כאן הופכת את השבועות הראשונים למדויקים. Hush מתכווננת מהר בכל מקרה.",
-    "expBeginner": "מתחיל · פחות משנה",
-    "expBeginnerDesc": "חדש לאימון מובנה — Hush מתחילה בזהירות",
-    "expIntermediate": "בינוני · 1–3 שנים",
-    "expIntermediateDesc": "מרגיש בנוח עם התרגילים המרכזיים והתקדמות יציבה",
-    "expAdvanced": "מתקדם · 3+ שנים",
-    "expAdvancedDesc": "שנים של אימון עקבי וטכניקה מלוטשת",
-    "daysLegend": "השבוע שלך",
-    "daysTitle": "כמה אימונים בשבוע?",
-    "daysSub": "Hush תעצב חלוקה שמתאימה בדיוק לזה — בלי ימים מבוזבזים, בלי הגזמה.",
+    "trainLegend": "האימון שלך",
+    "trainTitle": "השבוע שלך",
+    "trainSub": "אני בונה את השבוע שלך סביב זה",
+    "daysSection": "כמה אימונים תתאמן בשבוע?",
+    "daysSection_female": "כמה אימונים תתאמני בשבוע?",
     "daysUnit": "אימונים / שבוע",
     "daysBuild": "בנה את התוכנית שלי",
+    "mapLegend": "מה לאמן",
+    "mapTitle": "מה לאמן?",
+    "mapSub": "הכל דלוק. אפשר לבחור עד שני שרירים שאוביל איתם.",
+    "mapEmphasis": "אני מוביל עם שני שרירים — {{n}} מתוך 2 נבחרו.",
+    "mapEmphasis_female": "אני מובילה עם שני שרירים — {{n}} מתוך 2 נבחרו.",
+    "stanceOff": "כבוי",
+    "stanceNormal": "רגיל",
+    "stanceEmphasis": "מוביל",
+    "daysBuild_female": "בני את התוכנית שלי",
     "buildLegend": "רגע אחד",
     "buildTitle": "בונה את התוכנית שלך",
-    "buildStep1": "מכייל משקלי התחלה",
-    "buildStep2": "מעצב את החלוקה שלך",
-    "buildStep3": "מחלק נפח שבועי",
-    "buildStep4": "קובע יעדי התקדמות",
-    "readyLegend": "מוכן",
+    "buildStep1": "קורא את המפה שלך",
+    "buildStep1_female": "קוראת את המפה שלך",
+    "buildStep2": "קובע כמה כל שריר מקבל",
+    "buildStep2_female": "קובעת כמה כל שריר מקבל",
+    "buildStep3": "מעצב את השבוע סביב זה",
+    "buildStep3_female": "מעצבת את השבוע סביב זה",
+    "buildStep4": "מוצא את משקלי הפתיחה שלך",
+    "buildStep4_female": "מוצאת את משקלי הפתיחה שלך",
+    "readyLegend": "הכול מוכן",
     "readyTitle": "התוכנית שלך מוכנה.",
-    "readySub": "מיקוד {{focus}} · {{days}} אימונים בשבוע.",
-    "readyOwnership": "‏Hush מחליטה על המשקלים.\nאתה מחליט על התרגילים.",
-    "readyNote": "‏Hush מוסיפה משקל רק כשהאימונים האחרונים שלך הרוויחו אותו — יציב, אף פעם לא ניחוש.",
-    "readyCta": "לאימון הבא שלי",
-    "focusStrength": "כוח",
-    "focusHypertrophy": "היפרטרופיה",
-    "focusConsistency": "עקביות",
-    "focusLean": "חיטוב"
+    "readyBuilt": "התוכנית שלך מוכנה, {{name}}.",
+    "readyBuiltNoName": "התוכנית שלך מוכנה.",
+    "readySub": "{{days}} אימונים בשבוע.",
+    "readyBody": "יוצאים לדרך. מכאן אני מנהל את זה בשבילך: בסוף כל אימון אני קובע את המשקלים הבאים שלך ואומר לך למה. בכל שבת אני מראה לך את כל השבוע במקום אחד.",
+    "readyBody_female": "יוצאים לדרך. מכאן אני מנהלת את זה בשבילך: בסוף כל אימון אני קובעת את המשקלים הבאים שלך ואומרת לך למה. בכל שבת אני מראה לך את כל השבוע במקום אחד.",
+    "readyWorkouts": "אימונים",
+    "readyFree": "חינם",
+    "readyCancel": "בלי כרטיס אשראי ובלי חיוב — עד ש־{{n}} האימונים מאחוריך, או עד שעברו {{d}} יום.",
+    "readyPrice": "אחריהם: {{price}} לחודש. אפשר לבטל בכל רגע.",
+    "readyPriceUnknown": "אחריהם: מנוי חודשי — המחיר מוצג לפני כל חיוב, ואפשר לבטל בכל רגע.",
+    "readyHowTitle": "איך ארבעה־עשר האימונים עובדים",
+    "readyLearnYou": "אני לומד אותך",
+    "readyLearnYou_female": "אני לומדת אותך",
+    "readyLearnRange": "1–{{n}}",
+    "readyLearnSub": "המשקלים האלה הם מדידה — כל סט מכוונן אותם.",
+    "readyKnowYou": "אני מכיר אותך",
+    "readyKnowYou_female": "אני מכירה אותך",
+    "readyKnowRange": "{{from}}–{{to}}",
+    "readyKnowSub": "נקבע מהחזרות שלך.",
+    "readySignature": "— hush",
+    "readyCta": "התוכנית שלי",
+    "signinLegalPre": "ההמשך מהווה אישור ל",
+    "signinLegalTerms": "תנאי השימוש והפרטיות",
+    "signinLegalPost": ".",
+    "healthCardOn": "מחובר",
+    "bodySub_female": "המשקל שלך קובע נקודת פתיחה. הסט הראשון שלך יקבע את השאר.",
+    "mapBudgetFull": "{{a}} ו{{b}} מחזיקים את זה. כבה אחד כדי להעביר.",
+    "mapUpperOnly": "השבוע שלך הוא עבודת פלג גוף עליון.",
+    "mapLowerOnly": "השבוע שלך הוא עבודת פלג גוף תחתון.",
+    "mapNothingOn": "שום דבר לא דלוק — הדלק אחד ואבנה לך שבוע.",
+    "mapNothingOn_female": "שום דבר לא דלוק — הדליקי אחד ואבנה לך שבוע.",
+    "regionUpper": "עליון",
+    "regionLower": "תחתון",
+    "mapEditSub": "הכל דלוק חוץ ממה שכיבית. בחר עד שניים שאוביל איתם — והקש על שריר כדי לקבוע את החזרות שאתה אוהב בו.",
+    "mapBandLegend": "טווח חזרות",
+    "mapBandOpen": "{{muscle}} — קביעת טווח חזרות",
+    "mapSub_female": "הכל דלוק. כבי מה שלא בא לך, ובחרי עד שניים שאוביל איתם.",
+    "mapEditSub_female": "הכל דלוק חוץ ממה שכיבית. בחרי עד שניים שאוביל איתם — והקישי על שריר כדי לקבוע את החזרות שאת אוהבת בו.",
+    "mapBudgetFull_female": "{{a}} ו{{b}} מחזיקים את זה. כבי אחד כדי להעביר.",
+    "viewFront": "חזית",
+    "viewBack": "גב",
+    "mapEditing": "עורכת",
+    "mapLead": "מוביל",
+    "mapHistoryKept": "ההיסטוריה נשמרת, תמיד",
+    "mapBandNeverOverride": "שלך — אני אף פעם לא דורס את זה",
+    "mapBandNeverOverride_female": "שלך — אני אף פעם לא דורסת את זה",
+    "mapFront": "קדמי",
+    "mapBack": "אחורי",
+    "mapZone": "{{muscle}}, {{stance}}",
+    "mapBandMine": "שלך — אני אף פעם לא דורס אותו",
+    "mapBandMine_female": "שלך — אני אף פעם לא דורסת אותו",
+    "mapBandLine": "כל תרגיל {{muscle}} ינחת מעכשיו ב־{{band}}.",
+    "mapOffLine": "אשאיר את {{muscle}} מחוץ לשבוע שלך. כל מה שהרווחת נשמר.",
+    "mapNormalLine": "{{muscle}} יושב בשבוע שלך כמו כל השאר.",
+    "weightLegend": "משקל גוף",
+    "weightTitle": "כמה אתה שוקל?",
+    "weightTitle_female": "כמה את שוקלת?",
+    "aboutTitle": "קצת עליך",
+    "age": "גיל",
+    "experience": "כמה זמן אתה מתאמן",
+    "expNew": "חדש בזה",
+    "expSome": "שנה־שנתיים",
+    "expYears": "שנים",
+    "weekLegend": "השבוע שלך",
+    "weekTitle": "מי כותב אותו?",
+    "weekSub": "אני אכתוב אותו עכשיו לפי מה שתבקש, או שתיקח את העט — דף ריק, או תוכנית מוכחת שתשנה בה כל דבר.",
+    "weekSub_female": "אני אכתוב אותו עכשיו לפי מה שתבקשי, או שתיקחי את העט — דף ריק, או תוכנית מוכחת שתשני בה כל דבר.",
+    "weekEngine": "בנה תוכנית עבורי",
+    "weekAskOptional": "אפשר גם להשאיר ריק — אבנה לפי הימים והזמן.",
+    "askTitle_female": "מה את רוצה מהשבוע?",
+    "askTitle": "מה אתה רוצה מהשבוע?",
+    "askSub": "אני אכתוב אותו עכשיו — לפי מה שתספר לי, הימים ואורך האימון. ואפשר לשנות בו הכל אחר כך.",
+    "askSub_female": "אני אכתוב אותו עכשיו — לפי מה שתספרי לי, הימים ואורך האימון. ואפשר לשנות בו הכל אחר כך.",
+    "weekAskPlaceholder": "מטרה, ענף ספורט, הציוד שיש לך, פציעה, תאריך שאתה מתכונן אליו — כל מה שהתוכנית צריכה להיבנות סביבו",
+    "weekAskPlaceholder_female": "מטרה, ענף ספורט, הציוד שיש לך, פציעה, תאריך שאת מתכוננת אליו — כל מה שהתוכנית צריכה להיבנות סביבו",
+    "weekAskLegend": "סביב מה לבנות את השבוע?",
+    "weekBlankTag": "דף ריק. אתה בוחר כל תרגיל וכל סט.",
+    "weekBlankTag_female": "דף ריק. את בוחרת כל תרגיל וכל סט.",
+    "weekEngineTag_female": "נכתבת עכשיו, בשבילך — לפי הימים והמטרה שתגידי לי. ואפשר לשנות בה הכל אחר כך.",
+    "weekEngineTag": "נכתבת עכשיו, בשבילך — לפי הימים והמטרה שתגיד לי. ואפשר לשנות בה הכל אחר כך.",
+    "weekEngineBusy": "בונה לך תוכנית...",
+    "weekEngine_female": "בני תוכנית עבורי",
+    "weekBlank": "אני אבנה מאפס",
+    "weekMine": "זאת התוכנית שלי",
+    "daysPerWeek": "ימים בשבוע",
+    "sessionLength": "אורך אימון",
+    "minutesShort": "{{min}} דק׳",
+    "experience_female": "כמה זמן את מתאמנת",
+    "expNew_female": "חדשה בזה",
+    "forLegend": "בשביל מה",
+    "forTitle": "בשביל מה אתה מתאמן?",
+    "forPlaceholder": "במילים שלך",
+    "forChipMuscle": "לבנות שריר",
+    "forChipStrong": "להתחזק",
+    "forChipBack": "לחזור אחרי הפסקה",
+    "limitsLegend": "דבר אחד אחרון",
+    "limitsTitle": "יש משהו שתעדיף שאאמן סביבו?",
+    "limitsPlaceholder": "או ספר לי במילים שלך",
+    "limitsChipNone": "שום דבר",
+    "limitsChipKnee": "ברך",
+    "limitsChipShoulder": "כתף",
+    "limitsChipBack": "הגב",
+    "limitsChipNeck": "צוואר",
+    "limitsChipCalves": "תאומים",
+    "buildingLegend": "בונה",
+    "buildingTitle": "קורא את מה שסיפרת לי.",
+    "buildingTitle_female": "קוראת את מה שסיפרת לי.",
+    "forTitle_female": "בשביל מה את מתאמנת?",
+    "limitsPlaceholder_female": "או ספרי לי במילים שלך",
+    "buildingDays": "{{n}} ימים בשבוע.",
+    "buildingMinutes": "{{n}} דקות לאימון.",
+    "buildingFor": "בשביל: {{what}}",
+    "buildingFailedLegend": "לא נבנה",
+    "buildingFailedTitle": "לא הגעתי למאמן.",
+    "buildingFailedSub": "שום דבר לא אבד — כל מה שסיפרת שמור.",
+    "buildingOfflineTitle": "אין חיבור לרשת.",
+    "buildingBusyTitle": "המאמן עמוס עכשיו.",
+    "buildingWithoutCoach": "להמשיך בלי המאמן",
+    "buildingRetry": "שאל שוב",
+    "buildingRetry_female": "שאלי שוב",
+    "healthSub": "אני מציג אותם. הם לא קובעים משקל.",
+    "healthSub_female": "אני מציגה אותם. הם לא קובעים משקל.",
+    "limitsTitle_female": "יש משהו שתעדיפי שאאמן סביבו?",
+    "mapSameRegion": "{{a}} כבר מוביל בחצי הזה של הגוף. מוביל אחד לכל חצי — שעה אחת לא יכולה לשרת שניים.",
+    "mapFullBodyWeek": "ב-{{n}} ימים כל אימון מאמן הכל, ולכן מוביל שני בא על חשבון הראשון. {{a}} מחזיק בזה.",
+    "signinFailedNetwork": "אין חיבור. החשבון שלך במקום — תחזור לכאן כשיש חיבור.",
+    "signinFailedProvider": "Apple לא אישרה את זה. לך שוב, או השתמש בכפתור השני.",
+    "signinFailedProvider_female": "Apple לא אישרה את זה. לכי שוב, או השתמשי בכפתור השני.",
+    "signinFailedGoogle": "Google לא אישרה את זה. לך שוב, או השתמש בכפתור השני.",
+    "signinFailedGoogle_female": "Google לא אישרה את זה. לכי שוב, או השתמשי בכפתור השני.",
+    "sexLegend": "מין",
+    "mapEmphasisOne": "אני מוביל עם שריר אחד — {{n}} מתוך 1 נבחר.",
+    "mapEmphasisOne_female": "אני מובילה עם שריר אחד — {{n}} מתוך 1 נבחר.",
+    "mapSubOne": "הכול דלוק. בחר אחד להוביל איתו.",
+    "mapSubOne_female": "הכול דלוק. בחרי אחד להוביל איתו.",
+    "sexNeeded": "צריך לבחור כדי להמשיך.",
+    "signinFailedNetwork_female": "אין חיבור. החשבון שלך במקום — תחזרי לכאן כשיש חיבור.",
+    "healthRings": "הטבעות שלך",
+    "healthRingsSub": "כל אימון שנגמר נכתב חזרה — השעה שלך נספרת.",
+    "readyCoachMissed": "השבוע הזה נבנה בלי המאמן — מה שכתבת לא הגיע אליו.",
+    "readyCoachRetry": "לשלוח למאמן שוב"
+  },
+  "start": {
+    "legend": "שתי דרכים להתחיל",
+    "title": "איפה מתחילים?",
+    "buildTitle": "תבנה לי תוכנית",
+    "buildNote": "שלושה מסכים קצרים, ואז אתה אומר לי במילים שלך סביב מה לבנות — ואני כותב את השבוע.",
+    "buildNote_female": "שלושה מסכים קצרים, ואז את אומרת לי במילים שלך סביב מה לבנות — ואני כותבת את השבוע.",
+    "bringTitle": "כבר יש לי אחת",
+    "bringNote": "מספיק לצלם. אני אקרא, אשאיר בדיוק כמו שנכתב, וארוץ על המשקלים מהסטים שלך."
   },
   "menu": {
     "title": "תפריט",
@@ -267,56 +452,126 @@
     "button": "בחירת אימון"
   },
   "calibration": {
-    "framing": "האימונים הראשונים הם בשבילי, כדי ללמוד אותך. המשקלים מתחילים קל — זה מכוון.",
+    "framing": "{{n}} האימונים הראשונים שלך הם בשבילי, כדי ללמוד אותך. המשקלים מתחילים קל — זה מכוון.",
     "stillLearning": "עדיין לומד את זה"
   },
   "workout": {
     "bodyweight": "משקל גוף",
     "completeSet": "סיים סט",
-    "editResult": "עריכת תוצאה",
+    "completeSet_female": "סיימי סט",
     "reps": "× {{reps}}",
     "setOfM": "סט {{n}} מתוך {{m}}",
+    "warmupOfM": "חימום · {{n}} מתוך {{m}}",
+    "recordStruck": "שיא אישי",
     "coachingUp": "עלייה של {{delta}} מהשבוע שעבר. אתה מוכן לזה.",
+    "coachingUp_female": "עלייה של {{delta}} מהשבוע שעבר. את מוכנה לזה.",
     "coachingHold": "יש לך את זה.",
+    "distance": "מרחק",
     "exerciseBusy": "התרגיל תפוס",
     "nextExercise": "התרגיל הבא",
     "focusOn": "להתמקד ב",
     "formGuide": "מדריך טכניקה",
-    "ready": "מוכן",
+    "ready": "אפשר להתחיל",
     "demoDone": "סיום",
+    "tapAnywhere": "הקש בכל מקום לסגירה",
+    "tapAnywhere_female": "הקישי בכל מקום לסגירה",
     "equipmentOccupied": "הציוד תפוס",
     "reasonIncrease": "עלייה של {{delta}} מהפעם הקודמת. הרווחת את זה.",
     "reasonDecrease": "ירידה של {{delta}} היום. שלושה אימונים קשים ברצף — זו הבחירה החכמה.",
     "exerciseCount": "תרגיל {{n}} / {{N}}",
+    "restLearned": "מנוחה · נלמדה",
+    "upNextNewLift": "תרגיל חדש",
     "rest": "מנוחה",
     "paused": "מושהה",
-    "setLogged": "סט {{n}} מתוך {{m}} נרשם",
-    "recorded": "נרשם. Hush מעדכנת את ההמלצה הבאה שלך.",
+    "liftDone": "{{lift}} — סיימנו.",
+    "liftDonePlain": "התרגיל הזה נגמר.",
     "vsLast": "מול האימון הקודם",
+    "repsEmpty": "עוד לא נרשם",
+    "prevShort": "בפעם הקודמת",
+    "backToPlanned": "התוכנית ביקשה {{w}} — לחזור אליה",
+    "otherCount": "מספר אחר",
     "repsUnit": "חזרות",
-    "setsAnd": "{{sets}} סטים · × {{reps}}",
     "upNext": "הבא בתור",
     "form": "טכניקה",
     "looping": "בלולאה",
     "illustration": "איור",
-    "formCue1": "התייצב, כווץ את השכמות, שמור על עמוד שדרה ניטרלי.",
-    "formCue2": "הובל עם המרפקים אחורה; עצור רגע בשיא הכיווץ.",
-    "formCue3": "שלוט בירידה — בערך שתי שניות.",
     "swapAction": "החלפה",
     "swapExercise": "החלפת תרגיל",
     "startNextSet": "התחל סט הבא",
+    "startNextSet_female": "התחילי את הסט הבא",
     "startNamed": "התחל {{name}}",
+    "startNamed_female": "התחילי {{name}}",
     "addSeconds": "+15 שנ׳",
     "saveComplete": "שמור והשלם סט",
+    "saveComplete_female": "שמרי והשלימי סט",
     "actualWeight": "משקל בפועל",
     "actualReps": "חזרות בפועל",
-    "editDone": "סיום"
+    "editDone": "סיום",
+    "setSaveFailed": "הסט הזה לא נשמר. השלם אותו שוב.",
+    "finishFailed": "הסיום לא הושלם. הסטים שהשלמת שמורים.",
+    "lastSession": "פעם שעברה",
+    "setCaptured": "סט {{n}} נרשם",
+    "sessionMap": "מפת האימון",
+    "mapReorderHint": "החזק וגרור תרגיל שעוד לפניך כדי לשנות את הסדר. מה שכבר בוצע נשאר במקומו.",
+    "mapTapHint": "הקש על תרגיל שעוד לפניך כדי להתחיל אותו עכשיו. החזק וגרור כדי לשנות סדר. מה שכבר בוצע נשאר במקומו.",
+    "mapTapHint_female": "הקישי על תרגיל שעוד לפנייך כדי להתחיל אותו עכשיו. החזיקי וגררי כדי לשנות סדר. מה שכבר בוצע נשאר במקומו.",
+    "mapNow": "עכשיו",
+    "startNow": "להתחיל עכשיו",
+    "actualWeightWith": "משקל בפועל · {{unit}}",
+    "pauseAction": "השהיית אימון",
+    "correctedUp": "עשית {{reps}}. הטווח שלך נגמר ב־{{edge}}, אז הוספתי משקל.",
+    "correctedDown": "עשית {{reps}}. הטווח שלך מתחיל ב־{{edge}}, אז הורדתי משקל.",
+    "reasonUp": "עברת את הטווח שלך",
+    "reasonDown": "הותאם לסטים הנקיים שלך",
+    "reasonHold": "בתוך הטווח שלך",
+    "bw": "גוף",
+    "itemStart": "התחל",
+    "itemStart_female": "התחילי",
+    "itemStop": "עצור",
+    "itemStop_female": "עצרי",
+    "itemDone": "סיימתי",
+    "itemCarrying": "נושא {{load}} ק\"ג",
+    "itemCarrying_female": "נושאת {{load}} ק\"ג",
+    "superset": "סופרסט",
+    "loadUpBy": "עלייה של {{delta}}{{unit}}",
+    "loadDownBy": "ירידה של {{delta}}{{unit}}",
+    "bodyweightShort": "גוף",
+    "bandWord": "גומייה",
+    "setsDone_one": "סט אחד",
+    "setsDone_other": "{{count}} סטים",
+    "setsDone_two": "שני סטים",
+    "hold": "החזקה",
+    "nextTime": "בפעם הבאה",
+    "addWarmup": "+ חימום · {{n}} סטים",
+    "addWarmupOne": "+ סט חימום",
+    "setRunningLong": "עבר יותר זמן מסט רגיל שלך כאן.",
+    "voiceSilentPermission": "המאמן בקול שקט: אין הרשאה למיקרופון ולזיהוי דיבור.",
+    "voiceOpenSettings": "להגדרות",
+    "voiceSilentNoEngine": "המאמן בקול לא זמין בגרסה הזו.",
+    "voiceSilentNoHeadset": "המאמן בקול מדבר דרך אוזניות. חבר אותן והוא מתחיל.",
+    "voiceSilentNoHeadset_female": "המאמן בקול מדבר דרך אוזניות. חברי אותן והוא מתחיל.",
+    "oneMoreSet": "+1 סט",
+    "platesASide": "בכל צד",
+    "noteOnStage": "הערה",
+    "finishAsk": "זה היה הסט האחרון. סיימת?",
+    "repsFirst": "כמה חזרות עשית? הקש מספר — ואז סיים סט.",
+    "emptyEntry": "שדה ריק לא נרשם — הקש מספר.",
+    "emptyEntry_female": "שדה ריק לא נרשם — הקישי מספר.",
+    "asWritten": "לפי התוכנית",
+    "presumedCell": "נחשב כמו שכתוב",
+    "repsFirst_female": "כמה חזרות עשית? הקישי מספר — ואז סיימי סט.",
+    "knowRest": "המנוחה שלך כאן היא {{n}} שנ׳",
+    "knowExec": "הסט שלך כאן לוקח בערך {{n}} שנ׳",
+    "knowPeak": "הכי כבד שלך כאן: {{n}}{{unit}}",
+    "knowSessions": "עבדת על זה {{n}} פעמים"
   },
   "finishSheet": {
-    "legend": "סיום מוקדם",
-    "body": "לסיים את האימון עכשיו? הסטים שהושלמו נשמרים. Hush תיקח בחשבון את האימון המקוצר בהמלצה הבאה.",
-    "save": "סיים ושמור",
-    "keep": "המשך אימון"
+    "legend": "סיום אימון",
+    "body": "כל מה שעשית עד עכשיו נשמר, ונשקלל בבניית תוכנית האימון הבאה שלך.",
+    "save": "סיים אימון",
+    "save_female": "סיימי אימון",
+    "keep": "חזרה לאימון",
+    "title": "לסיים כאן את האימון?"
   },
   "reasonSheet": {
     "header": "למה {{weight}}",
@@ -325,6 +580,19 @@
     "hold": "נשארים כאן — האימונים האחרונים שלך מעידים על עייפות, לא חולשה.",
     "decrease": "ירידה של {{delta}} היום. שלושה אימונים קשים ברצף — זו הבחירה החכמה."
   },
+  "freeLog": {
+    "title": "אימון חופשי",
+    "lede": "אימון שעשית בלעדיי שייך לרשומה שלך. הוא נספר במספרים שלך — ולעולם לא משנה את התוכנית.",
+    "pickLift": "בחר תרגיל",
+    "pickLift_female": "בחרי תרגיל",
+    "searchLift": "חיפוש תרגיל",
+    "addSet": "הוסף סט",
+    "addSet_female": "הוסיפי סט",
+    "removeSet": "הסרת סט",
+    "removeHint": "לחיצה ארוכה על סט מסירה אותו.",
+    "save": "שמור ברשומה",
+    "save_female": "שמרי ברשומה"
+  },
   "editResult": {
     "done": "סיום",
     "save": "שמירה",
@@ -332,14 +600,64 @@
     "repsLabel": "חזרות"
   },
   "pauseSheet": {
-    "legend": "אימון",
-    "title": "האימון מושהה",
-    "body": "הסטים שהשלמת נשמרו. סיים עכשיו ו‑Hush יקרא את האימון המקוצר אל ההמלצה הבאה שלך.",
-    "resume": "המשך אימון",
+    "legend": "מושהה",
+    "title": "קח את הזמן שאתה צריך.",
+    "title_female": "קחי את הזמן שאת צריכה.",
+    "resume": "להמשיך",
     "showExercise": "הצג תרגיל",
     "finishEarly": "סיים מוקדם",
+    "finishEarly_female": "סיימי מוקדם",
     "finishWorkout": "סיים אימון",
-    "endWorkout": "סיים אימון"
+    "finishWorkout_female": "סיימי אימון",
+    "endWorkout": "סיים אימון",
+    "endWorkout_female": "סיימי אימון",
+    "endSession": "לסיים את האימון"
+  },
+  "why": {
+    "legendChanged": "למה זה השתנה",
+    "legendHeld": "למה זה נשאר",
+    "legendEased": "למה זה ירד",
+    "titleUp": "החזרות שלך קבעו את זה.",
+    "titleHold": "החזרות שלך החזיקו את זה.",
+    "titleDown": "החזרות שלך ביקשו פחות.",
+    "held": "נשאר",
+    "bandInside": "כל חזרה נחתה בתוך הטווח שלך",
+    "bandShort": "בתוך הטווח — אבל לא בקצה העליון",
+    "bandBelow": "החזרות ירדו מתחת לטווח, פעמיים",
+    "lastSession": "האימון הקודם",
+    "today": "היום",
+    "decidedFrom": "נקבע מהסטים שלך בלבד"
+  },
+  "whyHere": {
+    "legend": "למה זה כאן",
+    "titleMarked": "ביקשת יותר {{muscle}}.",
+    "titleEssential": "העבודה על ה{{muscle}} שלך מתחילה בתנועה הזאת.",
+    "titlePlain": "זו עבודת ה{{muscle}} שלך.",
+    "setsToday": "סטים היום",
+    "weekly": "{{sets}} סטים של {{muscle}} לאורך השבוע",
+    "trains": "מאמן את ה{{muscle}}",
+    "alsoWorks": "מניע גם את ה{{muscles}}",
+    "essential": "אחת מהתנועות ש{{muscle}} לעולם לא מתוכנן בלעדיהן",
+    "marked": "סימנת את השריר הזה להוביל",
+    "firstTime": "עוד לא התאמנת בזה — הסט הראשון שלך יקבע את המשקל",
+    "doseMet": "{{floor}} סטים בשבוע הם המינימום שמגדל שריר. לזה יש {{sets}}.",
+    "doseShort": "{{floor}} סטים בשבוע הם המינימום שמגדל שריר. לזה יש {{sets}}, והשעה שלך היא הסיבה.",
+    "decidedFrom": "נקבע ממפת הגוף שלך ומהשעה שנתת"
+  },
+  "budgetNote": {
+    "over": "האימון הזה בערך {{min}} דקות — יותר מ-{{budget}} שביקשת. כל שריר כאן נשאר עם תרגיל אחד, אז לא היה מה להוריד.",
+    "short": "האימון הזה בערך {{min}} דקות. מה שהשארת דלוק לא מחזיק אימון ארוך יותר — אפשר להחזיר שריר, או לבקש פחות דקות."
+  },
+  "weekNotice": {
+    "over": "{{day}} חורג מ-{{budget}} דקות. כל שריר בו נשאר עם תרגיל אחד, אז לא היה מה להוריד.",
+    "thinOne": "פעמיים בשבוע לא ממש מספיקות לכל מה שהשארת דלוק — ה{{muscle}} מתחת ל-{{floor}} סטים. יום שלישי, או שריר אחד כבוי, יסגרו את זה.",
+    "thinMany_one": "פעמיים בשבוע לא מספיקות לכל מה שהשארת דלוק — שריר אחד מתחת ל-{{floor}} סטים. יום שלישי, או שריר או שניים כבויים, יסגרו את זה.",
+    "thinMany_two": "פעמיים בשבוע לא מספיקות לכל מה שהשארת דלוק — שני שרירים מתחת ל-{{floor}} סטים. יום שלישי, או שריר או שניים כבויים, יסגרו את זה.",
+    "thinMany_other": "פעמיים בשבוע לא מספיקות לכל מה שהשארת דלוק — {{count}} שרירים מתחת ל-{{floor}} סטים. יום שלישי, או שריר או שניים כבויים, יסגרו את זה.",
+    "shortOne": "{{day}} יוצא מתחת ל-{{floor}} דקות. מה שהשארת דלוק לא מחזיק אימון ארוך יותר.",
+    "shortMany_one": "אימון אחד שלך יוצא מתחת ל-{{floor}} דקות. מה שהשארת דלוק לא מחזיק אימונים ארוכים יותר — פחות ימים יעשו כל אחד מלא יותר.",
+    "shortMany_two": "שניים מהאימונים שלך יוצאים מתחת ל-{{floor}} דקות. מה שהשארת דלוק לא מחזיק אימונים ארוכים יותר — פחות ימים יעשו כל אחד מלא יותר.",
+    "shortMany_other": "{{count}} מהאימונים שלך יוצאים מתחת ל-{{floor}} דקות. מה שהשארת דלוק לא מחזיק אימונים ארוכים יותר — פחות ימים יעשו כל אחד מלא יותר."
   },
   "whyLoad": {
     "legend": "למה המשקל הזה",
@@ -347,26 +665,27 @@
     "verdictDown": "הותאם",
     "verdictHold": "נשמר",
     "trigger": "למה המשקל הזה",
-    "lineUp": "האימונים האחרונים שלך עברו את קצה הטווח כאן, אז Hush העלה את המשקל ב‑{{delta}} {{unit}}.",
-    "lineDown": "הסטים האחרונים שלך היו מתחת לטווח, אז Hush התאים את המשקל למה שאתה מרים נקי — ושמר כל סט.",
-    "lineHold": "בדיוק על המטרה — חזק, אבל Hush שמר על המשקל עד שהאות יתבהר.",
-    "note": "‏Hush אף פעם לא משנה משקל על סמך אימון אחד. הוא קורא את הדפוס ואז פועל — התפקיד שלך הוא רק להרים.",
-    "got": "הבנתי"
+    "learning": "קבעתי את זה לפי הנתונים שלך. הסטים הראשונים שלך יחליפו את זה.",
+    "lineUp": "עברת את קצה הטווח בפעם הקודמת, אז הוספתי {{delta}} {{unit}}.",
+    "lineDown": "היית מתחת לטווח בפעם הקודמת, אז התאמתי את המשקל למה שהרמת נקי — ושמרתי על כל הסטים.",
+    "lineHold": "נחתת בתוך הטווח שלך. מעבר לקצה העליון — המשקל עולה.",
+    "note": "כל משקל כאן הגיע מסט שבאמת הרמת.",
+    "got": "הבנתי",
+    "learningTitle": "עוד לא מכיר אותך."
   },
   "rest": {
-    "ready": "מוכן"
-  },
-  "transition": {
-    "chooseAnother": "הקש כדי לבחור אחר",
-    "switchedTo": "הוחלף ל-{{exercise}}."
+    "ready": "אפשר להתחיל"
   },
   "pause": {
     "resume": "המשך אימון",
+    "resume_female": "המשיכי אימון",
     "showExercise": "הערות טכניקה",
-    "finishEarly": "סיים מוקדם"
+    "finishEarly": "סיים מוקדם",
+    "finishEarly_female": "סיימי מוקדם"
   },
   "finishConfirm": {
     "finish": "סיים אימון",
+    "finish_female": "סיימי אימון",
     "cancel": "ביטול"
   },
   "technique": {
@@ -376,32 +695,152 @@
     "message": "כל הכבוד"
   },
   "complete": {
+    "tonneUnit": "טון",
     "saved": "נשמר",
     "completeWord": "הושלם.",
     "savedWord": "נשמר.",
-    "body": "אימון נקי. {{count}} הרמות התקדמו. ההתאוששות נרשמה — ההמלצה הבאה שלך כבר עודכנה.",
-    "bodyOne": "אימון נקי. הרמה אחת התקדמה. ההתאוששות נרשמה — ההמלצה הבאה שלך כבר עודכנה.",
-    "bodyZero": "אימון נקי. ההתאוששות נרשמה — ההמלצה הבאה שלך כבר עודכנה.",
-    "bodyEarly": "האימון נשמר. Hush תיקח בחשבון את האימון המקוצר בהמלצה הבאה שלך.",
     "duration": "משך",
-    "sets": "סטים",
-    "progressed": "התקדמו",
-    "volume": "נפח",
+    "kcal": "קלוריות",
     "logged": "נרשם",
-    "thatsTheWork": "זאת העבודה.",
-    "resultBody": "{{workout}} · {{lifts}} תרגילים · כל סט נרשם.",
+    "holds": "נשאר על",
+    "decisionsWord_one": "החלטה",
+    "decisionsWord_two": "החלטות",
+    "decisionsWord_other": "החלטות",
+    "decisionsFrom": "מהאימון הזה",
+    "decisionsCount_one": "החלטה אחת מהאימון הזה",
+    "decisionsCount_two": "שתי החלטות מהאימון הזה",
+    "decisionsCount_other": "{{count}} החלטות מהאימון הזה",
+    "finishWorkout": "סיום אימון",
+    "newBest": "שיא חדש",
+    "setsLabel": "סטים",
+    "movedShort": "הונפו",
+    "everythingHeld": "כל תרגיל נחת בדיוק איפה שביקשנו. שום דבר לא היה צריך לזוז — וככה בדיוק אימון אמור להיראות.",
+    "volumeUp": "סט נוסף ל{{muscle}}",
+    "volumeDown": "סט אחד פחות ל{{muscle}}",
     "topSet": "הסט המוביל",
-    "reading": "‏Hush קורא את האימון שלך · {{sets}} סטים",
+    "reading": "קורא את האימון שלך · {{sets}} סטים",
+    "scanLegend": "קורא את האימון שלך",
+    "scanTitle": "כל סט, מאומת.",
+    "scanReading": "קורא…",
+    "scanFooter": "קובע את המשקלים הבאים שלך…",
+    "setsCount_one": "סט אחד",
+    "setsCount_two": "שני סטים",
+    "setsCount_other": "{{n}} סטים",
     "tapSkip": "הקש לדילוג",
-    "saturday": "כל סט מזין את עדכון יום שבת. Hush כבר קורא את {{week}} מאיך שהתאמנת.",
-    "weekN": "שבוע {{n}}",
+    "tapSkip_female": "הקישי לדילוג",
     "done": "סיום",
-    "viewRecord": "צפייה ברשומת האימון"
+    "viewRecord": "צפייה ברשומת האימון",
+    "notStartedLegend": "לא התחיל",
+    "notStartedTitle": "האימון לא התחיל",
+    "notStartedBody": "לא הושלמו תרגילים. שום דבר לא נשמר — אפשר להתחיל מחדש בכל רגע.",
+    "partialTitle": "אימון חלקי נשמר.",
+    "partialSavedShort": "אימון חלקי נשמר",
+    "stillOpen": "נרשם. האימון הזה נשאר ברשימת השבוע — תשלים אותו כשתהיה מוכן.",
+    "stillOpen_female": "נרשם. האימון הזה נשאר ברשימת השבוע — תשלימי אותו כשתהיי מוכנה.",
+    "caloriesEst": "הערכת קלוריות",
+    "moved": "הונף",
+    "shareStory": "שיתוף לסטורי",
+    "togetherWith": "יחד עם {{names}}"
+  },
+  "milestones": {
+    "legend": "אבן דרך",
+    "measured": "נמדד",
+    "gallery": "אבני דרך",
+    "next": "הבא",
+    "toGo": "עוד {{amount}}",
+    "continue": "המשך",
+    "continue_female": "המשיכי",
+    "workoutsCaption": "אימונים",
+    "weeksCaption": "שבועות",
+    "weeksTitle": "שבוע אחרי שבוע.",
+    "weeksSub": "{{n}} שבועות של אימון.",
+    "tonnesCaption": "טון",
+    "countTitle": "המשכת להגיע.",
+    "countSub": "{{n}} אימונים מאז היום הראשון.",
+    "tonnageName_250000": "פסל החירות.",
+    "tonnageName_500000": "מטוס A380 בהמראה.",
+    "tonnageName_1000000": "רכבת משא.",
+    "tonnageName_2500000": "ספינת קרב.",
+    "tonnageName_5000000": "חמשת אלפים טון.",
+    "tonnageName_10000000": "מגדל אייפל.",
+    "tonnageSub": "סך הכול הזזת {{tons}} טון.",
+    "clubTitle": "{{exercise}} · {{weight}} {{unit}}.",
+    "club_60": "מועדון הפלטה האחת.",
+    "club_100": "מועדון שתי הפלטות.",
+    "club_140": "מועדון שלוש הפלטות.",
+    "club_180": "מועדון ארבע הפלטות.",
+    "club_220": "מועדון חמש הפלטות.",
+    "club_260": "מועדון שש הפלטות.",
+    "firstRaiseTitle": "ההעלאה הראשונה.",
+    "firstRaiseSub": "העליתי לך את המשקל — על סמך מה שהראית.",
+    "doubledTitle": "הכפלת.",
+    "doubledSub": "{{exercise}} — פי שניים מנקודת ההתחלה שלך."
+  },
+  "share": {
+    "builtOnFacts": "נשען על עובדות",
+    "recordEyebrow": "שיא אישי חדש",
+    "recordReps": "× {{reps}} חזרות · +{{delta}} מהפעם הקודמת",
+    "recordRepsOnly": "× {{reps}} חזרות",
+    "recordContext": "זה התחיל ב-{{weight}} {{unit}}.",
+    "weekEyebrow": "שבוע {{n}} · הושלם",
+    "weekEyebrowNoNum": "השבוע · הושלם",
+    "weekTitle_one": "אימון אחד. שבוע של עבודה.",
+    "weekTitle_two": "שני אימונים. שבוע של עבודה.",
+    "weekTitle_other": "{{count}} אימונים. שבוע של עבודה.",
+    "weekMoved": "{{unit}} שהוזזו",
+    "weekSpent": "קלוריות שנשרפו",
+    "weekVsLast": "מול השבוע שעבר",
+    "sheetTitle": "שיתוף הכרטיס",
+    "shareAction": "שיתוף…",
+    "done": "סיום",
+    "unavailable": "שיתוף אינו זמין במכשיר הזה.",
+    "shareRecord": "שיתוף השיא",
+    "shareWeek": "שיתוף השבוע",
+    "sessionEyebrow": "אימון הושלם",
+    "cardioEyebrow": "קרדיו",
+    "cardioLongest": "המרחק הארוך שלך",
+    "sessionMinutes": "דק׳ אימון",
+    "together": "יחד עם {{names}}",
+    "findLine": "ב-App Store"
+  },
+  "load": {
+    "perSide": "{{plates}} בכל צד",
+    "bar": "מוט {{weight}} {{unit}}",
+    "useBar": "השתמש במוט {{weight}} {{unit}}",
+    "useBar_female": "השתמשי במוט {{weight}} {{unit}}",
+    "perHand": "לכל יד",
+    "aSide": "בכל צד",
+    "pinLabel": "פין",
+    "totalWord": "סה\"כ",
+    "setPin": "כוון את הפין ל-{{weight}}",
+    "setPin_female": "כווני את הפין ל-{{weight}}",
+    "remembered": "נזכור את המשקל הזה בפעם הבאה"
+  },
+  "firstGym": {
+    "legend_one": "הראשון שלך",
+    "legend_two": "שני הראשונים שלך",
+    "legend_other": "{{count}} הראשונים שלך",
+    "title_one": "האימון הזה, אני לומד אותך.",
+    "title_female_one": "האימון הזה, אני לומדת אותך.",
+    "title_two": "שני האימונים האלה, אני לומד אותך.",
+    "title_female_two": "שני האימונים האלה, אני לומדת אותך.",
+    "title_other": "{{count}} האימונים האלה, אני לומד אותך.",
+    "title_female_other": "{{count}} האימונים האלה, אני לומדת אותך.",
+    "body": "כל סט מלמד אותי את המספרים האמיתיים שלך. הרם מה שמרגיש נכון — אני קורא מה שהרמת וקובע את המשקל הבא במקום.",
+    "body_female": "כל סט מלמד אותי את המספרים האמיתיים שלך. הרימי מה שמרגיש נכון — אני קוראת מה שהרמת וקובעת את המשקל הבא במקום.",
+    "chipPlates": "צלחות",
+    "chipDumbbells": "משקולות יד",
+    "chipPins": "פינים",
+    "footnote": "מה שיש בחדר הכושר שלך — אני לומד תוך כדי שימוש.",
+    "footnote_female": "מה שיש בחדר הכושר שלך — אני לומדת תוך כדי שימוש.",
+    "got": "בוא נתחיל",
+    "got_female": "בואי נתחיל"
   },
   "portrait": {
     "tab": "דיוקן",
     "stillTakingShape": "עדיין מתגבש.",
     "lockedBody": "אני לומד איך הגוף שלך זז. עוד {{remaining}} אימונים ואראה לך מה אני רואה.",
+    "lockedBody_female": "אני לומדת איך הגוף שלך זז. עוד {{remaining}} אימונים ואראה לך מה אני רואה.",
     "sessionsCount": "{{done}} מתוך {{total}} אימונים",
     "headline": "מה הגוף שלך יכול",
     "threeMonths": "שלושה חודשים",
@@ -409,11 +848,10 @@
     "now": "עכשיו",
     "gotIt": "הבנתי",
     "compareThreeMonths": "השוואה לשלושה חודשים אחורה",
-    "insightStrongest": "אני בונה סביב ה{{pattern}} שלך. זה הכי חזק שלך.",
     "stillLearning": "עדיין לומד",
     "start": "התחלה",
     "compare": "השוואה לנקודת ההתחלה",
-    "compareProof": "ה{{capability}} שלך עבר מהכי חלש ל{{state}}.",
+    "compareProof": "{{capability}} — מהכי חלש ל{{state}}.",
     "seeYourBody": "ראה את הגוף שלך",
     "later": "אחר כך",
     "stateStrongest": "הכי חזק שלך",
@@ -444,41 +882,22 @@
     "Shoulders": "כתפיים",
     "Quads": "רגליים",
     "Calves": "תאומים",
-    "Hamstrings": "ירך אחורי",
+    "Hamstrings": "ירך אחורית",
     "Glutes": "ישבן",
     "Core": "בטן"
   },
-  "replacement": {
-    "title": "החלפת {{exercise}}",
-    "searchPlaceholder": "חיפוש תרגילים",
-    "sectionRecommended": "מומלצים",
-    "sectionYours": "התרגילים שלך",
-    "sectionAll": "כל תרגילי ה{{capability}}",
-    "noResults": "אין התאמות בקטגוריה הזו.",
-    "use": "השתמש ב{{exercise}}",
-    "yoursNow": "{{exercise}} שלך עכשיו."
-  },
   "program": {
-    "title": "תוכנית",
-    "lockExercise": "נעל את התרגיל הזה",
-    "unlockExercise": "בטל את הנעילה של התרגיל הזה",
-    "lockIntro": "נעל תרגיל כדי לשמור אותו בתוכנית — Hush לא יחליף אותו. המשקל עדיין שלך.",
-    "locked": "נעול",
-    "sessionsDone": "אימונים בוצעו",
-    "momentum_one": "אימון אחד מפריד בינך לשבוע מלא — שמור על המומנטום.",
-    "momentum_other": "{{count}} אימונים מפרידים בינך לשבוע מלא — שמור על המומנטום.",
-    "weekDone": "שבוע מלא. כל האימונים בוצעו.",
-    "thisWeek": "השבוע",
-    "weekLegend": "שבוע {{n}} · {{freq}}× / שבוע",
-    "weekLegendSplit": "שבוע {{n}} · {{split}} · {{freq}}×",
-    "remaining": "נותרו",
-    "completedMeter": "הושלמו",
-    "exCount": "{{n}} תרגילים",
+    "sheetLifts": "תרגילים",
+    "sheetSets": "סטים",
+    "sheetMin": "דקות",
+    "sheetTheLifts": "התרגילים",
+    "reorderHint": "החזק וגרור כדי לשנות סדר",
+    "reorderGrip": "שינוי סדר",
+    "sheetMovedTitle": "האימון הזה זז.",
+    "sheetMovedBody": "הוא כבר לא בשבוע שלך. במסך היום נמצא האימון העדכני.",
     "setsReps": "{{sets}} סטים · {{reps}} חזרות",
-    "perWeek": "{{n}} ימים / שבוע",
-    "weekProgress": "{{done}} מתוך {{total}} השבוע",
-    "dayMeta": "{{exercises}} תרגילים · ~{{min}} דק׳",
-    "completedThisWeek": "הושלמו השבוע",
+    "dayMeta": "{{exercises}} תרגילים · {{min}} דקות",
+    "doorsLegend": "לשנות את התוכנית",
     "upNext": "הבא בתור",
     "setAsNext": "הגדר כהבא",
     "doneChip": "בוצע",
@@ -493,7 +912,20 @@
     "moveDown": "הזז למטה",
     "done": "בוצע",
     "perExercise": "{{weight}} · {{sets}} × {{reps}}",
-    "perExerciseBw": "משקל גוף · {{sets}} × {{reps}}"
+    "perExerciseBw": "משקל גוף · {{sets}} × {{reps}}",
+    "doneThisWeek": "בוצע השבוע",
+    "tabTitle": "התוכנית שלך",
+    "stationNote": "כל אימון מסודר לפי תחנות — התוכנית משאירה אותך על אותו ציוד עד שמסיימים איתו, בלי לחצות את חדר הכושר הלוך ושוב.",
+    "receiptLegend": "הקבלה",
+    "receiptDecisions_one": "החלטה אחת על המשקלים שלך עד עכשיו — {{raises}} עלו, {{holds}} נשארו, {{eases}} ירדו.",
+    "receiptDecisions_two": "שתי החלטות על המשקלים שלך עד עכשיו — {{raises}} עלו, {{holds}} נשארו, {{eases}} ירדו.",
+    "receiptDecisions_other": "{{count}} החלטות על המשקלים שלך עד עכשיו — {{raises}} עלו, {{holds}} נשארו, {{eases}} ירדו.",
+    "emptyWeek": "עוד אין תוכנית. בסיום ההיכרות השבוע נבנה בשבילך.",
+    "buildRow": "בנה את התוכנית שלך",
+    "buildSub": "כתוב את השבוע בעצמך — אני שומר על השעון והמשקלים",
+    "buildSub_female": "כתבי את השבוע בעצמך — אני שומרת על השעון והמשקלים",
+    "libraryRow": "ספריית התרגילים",
+    "librarySub": "לבחור את התרגילים שהתוכנית נבנית איתם, או לפסול כאלה."
   },
   "swap": {
     "title": "החלפת תרגיל",
@@ -501,13 +933,189 @@
     "samePattern": "{{pattern}} · אותו דפוס",
     "current": "{{equipment}} · נוכחי",
     "close": "סגירה",
-    "body": "הציוד תפוס? בחר חלופה לאותה קבוצת שרירים. Hush שומרת על התקדמות העומס שלך.",
+    "body": "כל אפשרות כאן מאמנת את אותו שריר. בחר את התחנה שפנויה.",
     "currentSub": "נוכחי · מומלץ",
-    "currentBadge": "נוכחי"
+    "currentBadge": "נוכחי",
+    "swappedTo": "הוחלף ל-{{name}}",
+    "undo": "ביטול",
+    "restored": "חזרנו ל-{{name}}",
+    "sameMovement": "{{equipment}} · אותה תנועה",
+    "differentWay": "מאמן אותו בדרך אחרת",
+    "none": "אין תרגיל אחר שמאמן את זה באותה צורה. נשארים עם זה.",
+    "body_female": "כל אפשרות כאן מאמנת את אותו שריר. בחרי את התחנה שפנויה.",
+    "moved": "התקדמת — התרגיל הזה כבר מאחוריך.",
+    "moved_female": "התקדמת — התרגיל הזה כבר מאחורייך."
+  },
+  "builder": {
+    "title": "בנה את התוכנית שלך",
+    "subtitle": "השבוע שלך, ביד שלך. אני שומר על השעון, המשקלים והעצות.",
+    "subtitle_female": "השבוע שלך, ביד שלך. אני שומרת על השעון, המשקלים והעצות.",
+    "doorsBody": "קח את העט. התחל מהשבוע שבניתי ושנה כל דבר, או התחל מדף ריק. בכל מקרה אני ממשיך לשמור על הזמן, לזרוע משקלים ולקדם כל תרגיל — אני רק מפסיק לשכתב את המבנה.",
+    "doorsBody_female": "קחי את העט. התחילי מהשבוע שבניתי ושני כל דבר, או התחילי מדף ריק. בכל מקרה אני ממשיכה לשמור על הזמן, לזרוע משקלים ולקדם כל תרגיל — אני רק מפסיקה לשכתב את המבנה.",
+    "fromEngine": "התחל מהטיוטה שלי",
+    "fromEngine_female": "התחילי מהטיוטה שלי",
+    "fromBlank": "התחל מדף ריק",
+    "fromBlank_female": "התחילי מדף ריק",
+    "pair": "צמד לסופרסט עם התרגיל הבא",
+    "unpair": "פרק את הסופרסט",
+    "superset": "סופרסט",
+    "pairDo": "צמד",
+    "pairHint": "צמד שני תרגילים לסופרסט: מבצעים אותם לסירוגין, עם מנוחה אחת אחרי שניהם — פחות זמן, אותו נפח.",
+    "templates": {
+      "groupSplit": "לפי חלוקה",
+      "groupEquipment": "לפי הציוד שיש לך",
+      "groupGoal": "לפי דגש",
+      "legend": "או התחל ממדף מוכח",
+      "legend_female": "או התחילי ממדף מוכח",
+      "meta": "{{days}} ימים · עד {{min}} דקות",
+      "dayNames": {
+        "push": "דחיפה",
+        "pull": "משיכה",
+        "legs": "רגליים",
+        "upperA": "עליון A",
+        "lowerA": "תחתון A",
+        "upperB": "עליון B",
+        "lowerB": "תחתון B",
+        "fullA": "כל הגוף A",
+        "fullB": "כל הגוף B",
+        "fullC": "כל הגוף C",
+        "strengthA": "כוח A",
+        "strengthB": "כוח B",
+        "strengthC": "כוח C",
+        "glutesA": "ישבן A",
+        "glutesB": "ישבן B",
+        "glutesC": "ישבן C",
+        "upper": "עליון",
+        "lower": "תחתון",
+        "chest": "חזה",
+        "back": "גב",
+        "shoulders": "כתפיים",
+        "arms": "ידיים",
+        "chestTriceps": "חזה ויד אחורית",
+        "backBiceps": "גב ויד קדמית",
+        "shouldersAbs": "כתפיים ובטן"
+      },
+      "ppl": {
+        "name": "דחיפה · משיכה · רגליים",
+        "tag": "החלוקה שכל העולם מריץ. שלושה ימים נקיים."
+      },
+      "upper_lower": {
+        "name": "עליון / תחתון",
+        "tag": "ארבעה ימים, כל שריר פעמיים בשבוע — הקצב שמצמיח."
+      },
+      "full_body": {
+        "name": "כל הגוף ×3",
+        "tag": "שלושה אימונים שלמים. הכי הרבה תוצאה לשעה."
+      },
+      "machines": {
+        "name": "מכונות בלבד",
+        "tag": "בלי מוטות ובלי ספסלים — מסלול בטוח בחדר עמוס."
+      },
+      "home_dumbbells": {
+        "name": "משקולות יד בבית",
+        "tag": "זוג משקולות וספסל — שבוע שלם בלי חדר כושר."
+      },
+      "bodyweight": {
+        "name": "משקל גוף",
+        "tag": "מתח, מקבילים ורצפה. בלי ציוד בכלל."
+      },
+      "big_five": {
+        "name": "החמישייה הגדולה",
+        "tag": "סקוואט, לחיצה, דדליפט, כתפיים, חתירה — כוח בסיס."
+      },
+      "glutes_legs": {
+        "name": "ישבן ורגליים בדגש",
+        "tag": "שלושה ימים סביב הישבן והירכיים."
+      },
+      "ppl_ul": {
+        "name": "דחיפה · משיכה · רגליים + עליון/תחתון",
+        "tag": "חמישה ימים, כל שריר פעמיים. השבוע שהעולם מריץ ברצינות."
+      },
+      "bro_split": {
+        "name": "שריר ליום",
+        "tag": "חמישה ימים, אימון שלם לכל קבוצה — כולל כתפיים וידיים בנפרד."
+      },
+      "body_part_4": {
+        "name": "חלוקה קלאסית ×4",
+        "tag": "חזה, גב, כתפיים ורגליים. ארבעה ימים ישר לעניין."
+      }
+    },
+    "dayName": "שם האימון",
+    "dayNamed": "אימון {{letter}}",
+    "minutes": "{{min}} דק׳",
+    "addLift": "הוסף תרגיל",
+    "addLift_female": "הוסיפי תרגיל",
+    "showDemo": "הצג את התרגיל",
+    "removeLift": "הסר תרגיל",
+    "removeDay": "הסר יום",
+    "addDay": "הוסף אימון",
+    "addDay_female": "הוסיפי אימון",
+    "stationOrder": "סדר לפי ציוד",
+    "sets": "סטים",
+    "inDay": "כבר ביום הזה",
+    "searchPlaceholder": "חפש תרגיל",
+    "noMatches": "אין תרגילים תואמים",
+    "dayYours": "שלך",
+    "dayEngine": "שלי",
+    "hybridNote": "ימים שערכת — שלך וקבועים; את השאר אני ממשיך להתאים.",
+    "hybridNote_female": "ימים שערכת — שלך וקבועים; את השאר אני ממשיכה להתאים.",
+    "adviceTitle": "הקריאה שלי",
+    "adviceNote": "עצות, לא חוקים. התוכנית שלך.",
+    "advice": {
+      "session_short": "{{day}} יוצא בערך {{min}} דק׳ — מתחת לרצפת {{floor}} הדקות. קצר יכול להיות בחירה.",
+      "session_long": "{{day}} יוצא בערך {{min}} דק׳ — מעבר לשעה של {{max}} דקות.",
+      "under_dose": "{{muscle}} מקבל {{sets}} סטים שבועיים — מתחת ל-{{floor}} שמצמיחים שריר.",
+      "under_dose_grouped": "{{muscles}} — כל אחד מקבל פחות מ-{{floor}} הסטים השבועיים שמצמיחים שריר.",
+      "over_ceiling": "{{muscle}} מקבל {{sets}} סטים שבועיים — מעל תקרת ה-{{ceiling}}.",
+      "trained_once": "{{muscle}} מתאמן ביום אחד בלבד. פעם אחת יכולה להיות בחירה — פעמיים בדרך כלל מצמיח יותר.",
+      "trained_once_grouped": "{{muscles}} — כל אחד מתאמן ביום אחד בלבד. פעמיים בדרך כלל מצמיח יותר.",
+      "push_pull": "הדחיפות עולות על המשיכות הרבה מעבר ליחס מאמן. שקול עוד עבודת גב."
+    },
+    "save": "שמור כתוכנית שלי",
+    "needsALift": "הוסף לפחות תרגיל אחד לאימון אחד — אין לי מה לשמור עדיין.",
+    "needsALift_female": "הוסיפי לפחות תרגיל אחד לאימון אחד — אין לי מה לשמור עדיין.",
+    "revert": "החזר לי את העט",
+    "revertBody": "אבנה שבוע חדש מהפרופיל שלך. התוכנית שבנית נשארת שמורה עד אז — הפעולה מחליפה אותה.",
+    "revertYes": "בנה מחדש איתי",
+    "aiReview": "חוות דעת המאמן",
+    "aiBusy": "שואל...",
+    "review": {
+      "busy": "קורא את התוכנית שלך...",
+      "apply": "החל",
+      "applied": "הוחל",
+      "clean": "אין מה לשנות — התוכנית מחזיקה.",
+      "add": "הוסף {{ex}} ליום {{day}}",
+      "add_female": "הוסיפי {{ex}} ליום {{day}}",
+      "remove": "הסר {{ex}} מיום {{day}}",
+      "sets": "{{ex}} ל-{{n}} סטים",
+      "swap": "החלף {{ex}} ב-{{to}}",
+      "swap_female": "החליפי {{ex}} ב-{{to}}",
+      "pair": "צמד {{ex}} עם {{to}} לסופרסט",
+      "pair_female": "צמדי {{ex}} עם {{to}} לסופרסט",
+      "fail": {
+        "not_configured": "המאמן לא מוגדר בגרסה הזו.",
+        "offline": "אין חיבור. התוכנית שלך לא נגעה.",
+        "timed_out": "למאמן לקח יותר מדי זמן. נסה שוב עוד רגע.",
+        "timed_out_female": "למאמן לקח יותר מדי זמן. נסי שוב עוד רגע.",
+        "refused": "המאמן לא הצליח לסקור את התוכנית.",
+        "rate_limited": "יותר מדי בקשות ברצף — נסה שוב עוד רגע.",
+        "rate_limited_female": "יותר מדי בקשות ברצף — נסי שוב עוד רגע.",
+        "upstream": "המאמן לא זמין כרגע.",
+        "empty": "המאמן לא ענה דבר. נסה שוב.",
+        "empty_female": "המאמן לא ענה דבר. נסי שוב.",
+        "not_json": "התשובה חזרה לא קריאה. נסה שוב.",
+        "not_json_female": "התשובה חזרה לא קריאה. נסי שוב.",
+        "nothing_said": "התשובה חזרה לא קריאה. נסה שוב.",
+        "nothing_said_female": "התשובה חזרה לא קריאה. נסי שוב."
+      }
+    }
   },
   "equipment": {
     "barbell": "מוט",
-    "dumbbell": "משקולות יד",
+    "fixed_barbell": "מוט קבוע",
+    "dumbbell": "משקולות יד",
+    "kettlebell": "קטלבל",
+    "band": "גומייה",
     "machine": "מכונה",
     "cable": "כבל",
     "bodyweight": "משקל גוף"
@@ -515,28 +1123,117 @@
   "report": {
     "title": "ההתקדמות שלך",
     "subtitle": "ההרמות החזקות שלך, אז ועכשיו.",
-    "empty": "תמשיך להתאמן — ההתקדמות שלך תופיע כאן.",
+    "empty": "כוח הוא הדבר היחיד שנראה רק במבט לאחור. תתאמן, ואראה לך כמה רחוק הגעת.",
     "totalAdded": "סך הכוח שנוסף",
-    "acrossLifts": "ב-{{count}} הרמות",
+    "startingPoint": "נקודת הפתיחה שלך",
+    "startingPointSub": "מכאן אתה מתחיל — כל התקדמות מכאן נמדדת ביחס לנקודה הזו.",
+    "startingPointSub_female": "מכאן את מתחילה — כל התקדמות מכאן נמדדת ביחס לנקודה הזו.",
+    "acrossLifts_one": "בהרמה אחת",
+    "acrossLifts_two": "בשתי הרמות",
+    "acrossLifts_other": "ב-{{count}} הרמות",
     "initialPeak": "התחלת ב-{{value}} {{unit}}",
     "best": "עכשיו {{value}} {{unit}}",
-    "weekRange": "שבועות {{from}}–{{to}}"
+    "weekRange": "שבועות {{from}}–{{to}}",
+    "repsUnit": "חזרות",
+    "emptyTitle": "עוד לא נמדד דבר.",
+    "workingAt": "עובד כרגע עם {{value}} {{unit}} — פגשתי אותך במקום שבו אתה נמצא.",
+    "empty_female": "כוח הוא הדבר היחיד שנראה רק במבט לאחור. תתאמני, ואראה לך כמה רחוק הגעת.",
+    "workingAt_female": "עובדת כרגע עם {{value}} {{unit}} — פגשתי אותך במקום שבו את נמצאת."
   },
   "progress": {
+    "tonneUnit": "טון",
     "title": "התקדמות",
-    "legend": "כל הזמנים"
+    "legend": "כל הזמנים",
+    "viewHistory": "כל האימונים",
+    "tabLifts": "משקולות",
+    "tabLog": "יומן",
+    "claimAll": "כל תרגיל שאימנת כבד יותר מהיום שבו פגשתי אותו.",
+    "claimSome": "{{risen}} מתוך {{lifts}} התרגילים שלך כבדים יותר מכפי שפגשתי אותם.",
+    "claimNone": "עוד שום דבר לא זז. הסימן הראשון הוא מה שכל השאר נמדד מולו.",
+    "everyLift": "כל תרגיל",
+    "raises_one": "שיא אישי אחד",
+    "raises_two": "שני שיאים אישיים",
+    "raises_other": "{{count}} שיאים אישיים",
+    "workoutsWeeks": "{{workouts}} אימונים · {{weeks}} שבועות",
+    "allTimeMilestones": "אבני דרך — כל הזמנים",
+    "volWeekOne": "שבוע 1",
+    "volThisWeek": "השבוע",
+    "badgeLifted": "הורם",
+    "badgeWorkouts": "אימונים",
+    "badgeBurned": "נשרף",
+    "badgeRaises": "שיאים אישיים",
+    "badgeCardio": "קרדיו",
+    "unitTonnes": "טון",
+    "unitDone": "בוצעו",
+    "unitKcal": "קלוריות",
+    "unitUp": "שיא",
+    "unitKm": "ק״מ",
+    "bandMeta": "טווח {{lo}}–{{hi}}",
+    "sinceMeta": "מאז {{date}}",
+    "tabMilestones": "אבני דרך",
+    "tabChanges": "כל השינויים",
+    "today": "היום",
+    "markWord": "אבן דרך",
+    "bestWord": "שיא",
+    "dir_up": "עלה",
+    "dir_down": "הותאם",
+    "dir_hold": "נשאר",
+    "momentBest": "הכי כבד שהרמת עד היום.",
+    "momentOrigin": "כאן התחלת — ניחוש ראשון וזהיר.",
+    "changeFromTo": "מ־{{from}} ל־{{to}} {{unit}}.",
+    "changeBecame": "{{exercise}}",
+    "changeWord_up": "העליתי את המשקל.",
+    "changeWord_down": "התאמתי אותו למה שהרמת.",
+    "changeWord_hold": "השארתי אותו במקומו.",
+    "changeWord_graduate": "גדלת מהתרגיל הזה — העליתי אותך לגרסה קשה יותר.",
+    "changeWord_swap": "אימצתי את התרגיל שבחרת שוב ושוב.",
+    "changeWord_rung": "המשקל הבא היה קפיצה גדולה מדי, אז השארתי אותו והוספתי חזרות.",
+    "changeWord_volume": "שיניתי כמה סטים השריר הזה נושא.",
+    "changesEmpty": "עוד לא הזזתי את התרגיל הזה.",
+    "liftEmpty": "עוד לא נמדד כלום בתרגיל הזה.",
+    "climbNeedsTwo": "העלייה מתחילה ביום השני שלך.",
+    "measuredStrength": "כוח מדוד",
+    "measuredFrom": "הערכה מתוך {{load}} {{unit}} × {{reps}}, {{date}}",
+    "noteLegend": "ההערה שלך",
+    "noteAdd": "הוספת הערה על התרגיל",
+    "notePlaceholder": "מושב 4, מוט בטיחות, אחיזה רחבה באגודל…",
+    "noteSave": "שמירה",
+    "pointLabel": "{{date}} — {{value}} {{unit}}",
+    "youAreHere": "כאן אתה נמצא",
+    "youAreHere_female": "כאן את נמצאת",
+    "dayOneTitle": "הסיפור שלך מתחיל אחרי האימון הראשון.",
+    "dayOneBody": "כל סט שתסיים נוחת כאן: המשקל שכל תרגיל נושא, הטונות שהזזת, אבני הדרך שהרווחת. אני מציג רק מה שנמדד — אז היום הדף הזה ריק, בכנות.",
+    "dayOneBody_female": "כל סט שתסיימי נוחת כאן: המשקל שכל תרגיל נושא, הטונות שהזזת, אבני הדרך שהרווחת. אני מציגה רק מה שנמדד — אז היום הדף הזה ריק, בכנות.",
+    "dayOneFirstMark": "אבן הדרך הראשונה שמחכה: ההעלאה הראשונה שלך.",
+    "momentClub": "משקל ציון־דרך בתרגיל הזה.",
+    "unitHours": "שעות",
+    "unitMinutes": "דק׳",
+    "badgeTrained": "זמן אימון",
+    "allTime": "מאז ומעולם",
+    "measuredLegend": "מה שמדדתי",
+    "knownSlope": "חזרות שאתה מחליף בדרגה אחת",
+    "knownSlopeValue": "{{n}}",
+    "knownCeiling": "התקרה שבנית",
+    "knownRest": "המנוחה שאתה באמת לוקח",
+    "knownRestValue": "{{n}} שנ׳",
+    "knownRungs": "משקלים שלימדת אותי",
+    "knownSlope_female": "חזרות שאת מחליפה בדרגה אחת",
+    "knownRest_female": "המנוחה שאת באמת לוקחת",
+    "wallTitle": "הציונים שלך"
   },
   "history": {
     "title": "היסטוריה",
     "legend": "אימונים שהושלמו",
+    "summaryLine_one": "אימון אחד · {{tonnes}} {{unit}} הורמו. כל חזרה שביצעת נמצאת כאן.",
+    "summaryLine_two": "שני אימונים · {{tonnes}} {{unit}} הורמו. כל חזרה שביצעת נמצאת כאן.",
+    "summaryLine_other": "{{sessions}} אימונים · {{tonnes}} {{unit}} הורמו. כל חזרה שביצעת נמצאת כאן.",
     "summaryLegend": "העבודה עד כה",
     "sessionsLogged": "אימונים נרשמו",
-    "summaryMoved": " הורמו לאורך {{weeks}} שבועות. כל חזרה שעשית נמצאת כאן.",
     "recordLegend": "{{date}} · רשומה לקריאה בלבד",
     "duration": "משך",
     "setsLabel": "סטים",
     "volumeLabel": "נפח",
-    "empty": "האימון הראשון שלך יופיע כאן.",
+    "empty": "כל אימון שתסיים נכתב כאן. לך ותכתוב את הראשון.",
     "count": "השלמת {{n}} אימונים.",
     "annIncreased": "העליתי לך את {{target}}.",
     "annSwapped": "החלפתי ל{{exercise}} — המתקן היה תפוס.",
@@ -544,24 +1241,70 @@
     "perSet": "{{weight}} × {{reps}}",
     "setN": "סט {{n}}",
     "dateDuration": "{{date}} · {{min}} דק׳",
-    "minutesShort": "{{min}} דק׳"
+    "minutesShort": "{{min}} דק׳",
+    "emptyTitle": "העמוד הראשון ריק.",
+    "empty_female": "כל אימון שתסיימי נכתב כאן. לכי ותכתבי את הראשון.",
+    "rowStrengthMeta": "{{lifts}} תרגילים · {{min}} דק׳",
+    "rowStrengthMetaNoTime": "{{lifts}} תרגילים",
+    "rowRaises_one": "אחד עלה",
+    "rowRaises_two": "שניים עלו",
+    "rowRaises_other": "{{count}} עלו",
+    "rowCardioMeta": "{{kcal}} קלוריות · {{hr}} דופק ממוצע",
+    "rowCardioMetaNoHr": "{{kcal}} קלוריות",
+    "rowRecorded": "תועד",
+    "logLabel": "יומן",
+    "upLabel": "עלו",
+    "freeLogDoor": "רשום אימון שעשית בלעדיי",
+    "freeLogDoor_female": "רשמי אימון שעשית בלעדיי",
+    "nextBadge": "הבא",
+    "holdsBadge": "נשאר",
+    "recordFooter": "התיעוד הוא מה שקרה. הקשה על סט מתקנת אותו — החלטות המנוע נשארות.",
+    "movedUp": "המנוע העלה את המשקל לסט הזה",
+    "movedDown": "המנוע הוריד את המשקל לסט הזה",
+    "importDoor": "הבאת יומן מאפליקציה אחרת",
+    "exportDoor": "לקחת את היומן איתך (CSV)",
+    "amendTitle": "תיקון הסט הזה",
+    "amendWeight": "משקל",
+    "amendReps": "חזרות",
+    "amendSave": "שמירת התיקון",
+    "amendedTag": "תוקן",
+    "importNoneTitle": "לא זוהה דבר",
+    "importNoneBody": "הקובץ אינו ייצוא של Strong או Hevy, או שאף שורה בו לא נקראה. הרשומה לא השתנתה.",
+    "importConfirmTitle": "היומן שלך, נקרא",
+    "importConfirmBody": "{{sessions}} אימונים, {{lifts}} תרגילים זוהו, {{from}} עד {{to}}. הם מצטרפים לרשומה שלך, והמנוע קורא אותם.",
+    "importUnmatched_one": "שם אחד לא זוהה ונשאר בחוץ.",
+    "importUnmatched_two": "שני שמות לא זוהו ונשארו בחוץ.",
+    "importUnmatched_other": "{{count}} שמות לא זוהו ונשארים בחוץ.",
+    "importKeep": "לשמור אותם"
   },
   "profile": {
     "units": "יחידות",
     "membership": "מנוי",
     "memberSince": "חבר מאז",
+    "memberSince_female": "חברה מאז",
     "healthAccess": "גישה ל-Health",
     "connected": "מחובר",
     "notConnected": "לא מחובר",
+    "watchRow": "Apple Watch",
+    "watchNoModule": "לא זמין בגרסה הזו של האפליקציה",
+    "watchActivating": "בודק חיבור…",
+    "watchNotPaired": "לא מקושר שעון לטלפון הזה",
+    "watchNotInstalled": "השעון מקושר — האפליקציה לא מותקנת עליו",
+    "watchLinked": "מקושר ומותקן",
+    "watchLastFrame": "מקושר · הפריים האחרון נשלח: {{bytes}} בייט, רצף {{seq}}",
+    "watchLastRefused": "מקושר · הפריים האחרון נדחה ({{bytes}} בייט, רצף {{seq}}): {{reason}}",
+    "watchLastRepaired": "מקושר · הפריים האחרון נשלח מתוקן ({{bytes}} בייט, רצף {{seq}}). הסיבה: {{reason}}",
     "signOut": "התנתקות",
+    "signIn": "כניסה — כדי שהרשומה תישמר גם בטלפון הבא",
     "deleteAccount": "מחיקת חשבון",
-    "version": "Hush v1.0.0",
+    "version": "hush v1.0.0",
     "deleteConfirm": "למחוק את החשבון וכל הנתונים?",
-    "signOutConfirm": "להתנתק?",
+    "signOutConfirm": "להתנתק? כל מה שבטלפון הולך איתו — כל אימון, כל מכתב, כל משקל שהרווחת. לא נשמר עותק לשחזר ממנו.",
     "cancel": "ביטול",
     "program": "תוכנית",
     "history": "היסטוריה",
-    "whatHushKnows": "מה Hush יודע",
+    "whatHushKnows": "מה אני יודע עליך",
+    "whatHushKnows_female": "מה אני יודעת עליך",
     "settings": "הגדרות",
     "appleHealth": "Apple Health",
     "healthConnect": "Health Connect",
@@ -571,23 +1314,90 @@
     "healthSection": "בריאות",
     "account": "חשבון",
     "bodyData": "נתוני גוף",
-    "goalExperience": "מטרה וניסיון",
     "healthConnectedSub": "מחובר · דופק, קלוריות, מרחק",
     "membershipPro": "Hush Pro · {{plan}}",
     "membershipProGeneric": "פרו",
-    "membershipTrial_one": "תקופת ניסיון · נותר אימון {{count}}",
-    "membershipTrial_other": "תקופת ניסיון · נותרו {{count}} אימונים",
     "membershipTrialEnded": "תקופת הניסיון הסתיימה",
     "proName": "Hush Pro",
     "badgeTrial": "ניסיון",
     "badgeActive": "פעיל",
     "badgeExpired": "פג",
-    "trialSubRest": " מתוך {{total}} אימוני ניסיון בחינם נותרו",
+    "trialSubLead": "נותרו ",
+    "trialSubRest": " מתוך {{total}} אימוני ניסיון בחינם",
     "activeSub": "{{plan}} · מתחדש אוטומטית",
     "endedSub": "תקופת הניסיון החינמית שלך הסתיימה",
-    "trialNote": "החיוב מתחיל רק אחרי שבעת אימוני הניסיון החינמיים — אף פעם לא לפני. בחר תוכנית כשתהיה מוכן.",
+    "trialNote": "החיוב מתחיל רק אחרי ארבעה־עשר אימוני הניסיון החינמיים, או אחרי שלושים יום — אף פעם לא לפני. בחר תוכנית כשתהיה מוכן.",
+    "trialNote_female": "החיוב מתחיל רק אחרי ארבעה־עשר אימוני הניסיון החינמיים, או אחרי שלושים יום — אף פעם לא לפני. בחרי תוכנית כשתהיי מוכנה.",
     "healthImporting": "דופק · קלוריות · מרחק",
-    "healthNote": "‏Hush קוראת דופק, קלוריות ומרחק עבור הריצות וההליכות שאתה מתעד. היא לעולם לא כותבת ל‑Health, ושום דבר מזה לא נוגע בתוכנית האימונים שלך."
+    "healthNote": "אני קורא דופק, קלוריות ומרחק עבור הריצות וההליכות שאתה מתעד. אני לעולם לא כותב ל-Health, ושום דבר מזה לא נוגע בתוכנית הכוח שלך.",
+    "notSet": "לא הוגדר",
+    "daysSummary": "{{n}} אימונים בשבוע",
+    "membershipTrial_one": "תקופת ניסיון · נותר אימון {{count}}",
+    "membershipTrial_two": "תקופת ניסיון · נותרו שני אימונים",
+    "membershipTrial_other": "תקופת ניסיון · נותרו {{count}} אימונים",
+    "healthNote_female": "אני קוראת דופק, קלוריות ומרחק עבור הריצות וההליכות שאת מתעדת. אני לעולם לא כותבת ל-Health, ושום דבר מזה לא נוגע בתוכנית הכוח שלך.",
+    "healthOpenSettings": "פותח את ההגדרות — ההרשאה ל-Health ניתנת שם",
+    "bodyMap": "מפת גוף",
+    "mapAllOn": "הכל דלוק",
+    "mapLeading": "מוביל עם {{muscles}}",
+    "mapOff": "{{n}} כבויים",
+    "tagline": "בנוי על עובדות.",
+    "mapSub": "מה אתה מאמן, במה אתה מוביל, ומה כואב.",
+    "programmeDoor": "הבא או שתף תוכנית",
+    "programmeDoorSub": "צלם תוכנית שכבר יש לך, או שלח למישהו את שלך.",
+    "mapSub_female": "מה את מאמנת, במה את מובילה, ומה כואב.",
+    "programmeDoor_female": "הביאי או שתפי תוכנית",
+    "programmeDoorSub_female": "צלמי תוכנית שכבר יש לך, או שלחי למישהו את שלך.",
+    "recordSection": "הרשומה שלך",
+    "cloudBacked": "מגובה אוטומטית ב־ iCloud אחרי כל אימון. מכשיר חדש מוצא את הרשומה לבד.",
+    "saveRecord": "לשמור עותק",
+    "saveRecordSub_one": "אימון אחד, וכל מה שמדדתי",
+    "saveRecordSub_other": "{{count}} אימונים, וכל מה שמדדתי",
+    "recordSaved_one": "נשמר. אימון אחד.",
+    "recordSaved_other": "נשמר. {{count}} אימונים.",
+    "restoreRecord": "לשחזר מעותק",
+    "restoreRecordSub": "לקרוא עותק בחזרה אל הטלפון הזה",
+    "recordUnavailable": "הטלפון הזה לא יכול לשמור עותק.",
+    "recordRejected_unreadable": "אני לא מצליח לקרוא את הקובץ הזה.",
+    "recordRejected_not_a_record": "הקובץ הזה הוא לא עותק שלי.",
+    "recordRejected_too_new": "העותק הזה נוצר בגרסה חדשה יותר מזו. עדכן קודם.",
+    "recordRejected_too_new_female": "העותק הזה נוצר בגרסה חדשה יותר מזו. עדכני קודם.",
+    "recordRejected_empty": "בעותק הזה אין אימונים.",
+    "recordSmaller": "בעותק הזה {{inFile}} אימונים ובטלפון הזה {{onPhone}}. שום דבר לא שונה.",
+    "recordConfirmTitle": "להחליף את מה שיש בטלפון הזה?",
+    "recordConfirmBody": "בעותק הזה {{gaining}} אימונים יותר מה־{{onPhone}} שכאן. אלה שבטלפון יוחלפו.",
+    "recordConfirmDo": "לשחזר",
+    "saveRecordSub_two": "שני אימונים, וכל מה שמדדתי",
+    "recordSaved_two": "נשמר. שני אימונים.",
+    "recordRejected_unreadable_female": "אני לא מצליחה לקרוא את הקובץ הזה.",
+    "voiceRow": "מאמן בקול",
+    "voiceSub": "באוזניות בלבד: האפליקציה אומרת את התרגיל והמשקל, שואלת כמה חזרות עשית, ורושמת. בלי אוזניות המסכים עובדים כרגיל.",
+    "voiceGateOn": "אוזניות מחוברות עכשיו — הקול ידבר באימון.",
+    "voiceGateNoHeadset": "אין אוזניות מחוברות עכשיו — הקול שקט עד שיתחברו.",
+    "voiceGateMissing": "הגרסה הזו לא כוללת מנוע דיבור וזיהוי — הקול לא זמין.",
+    "reminderRow": "תזכורת ביום אימון",
+    "reminderSub": "הודעה אחת ב-17:30, בימי האימון שלך — נלמדים מההרגלים שלך. שבוע שהושלם שוקט.",
+    "usageRow": "שיתוף נתוני שימוש",
+    "usageSub": "מדידות אנונימיות שעוזרות לי להשתפר. האימונים שלך לא עוזבים את המכשיר בשביל זה.",
+    "roomRow": "הציוד שלי",
+    "roomFull": "חדר כושר מלא",
+    "roomSome_one": "משפחת ציוד אחת",
+    "roomSome_two": "שתי משפחות ציוד",
+    "roomSome_other": "{{count}} משפחות ציוד",
+    "roomTitle": "מה יש בחדר שלך",
+    "roomSub": "התוכנית נבנית ממה שבאמת נמצא שם. משקל גוף תמיד נמצא — כל המתגים כבויים הם שבוע של משקל גוף בלבד.",
+    "roomDone": "סיום",
+    "room_barbell": "מוט ופלטות",
+    "room_fixed_barbell": "מוטות קבועים",
+    "room_dumbbell": "משקולות יד",
+    "room_kettlebell": "קטלבלס",
+    "room_band": "גומיות התנגדות",
+    "room_machine": "מכונות",
+    "room_cable": "עמדת כבלים",
+    "weekTurns": "השבוע מתחלף ביום",
+    "weekFri": "שישי",
+    "weekSat": "שבת",
+    "weekSun": "ראשון"
   },
   "settings": {
     "units": "יחידות",
@@ -600,22 +1410,157 @@
     "deleteConfirm": "למחוק את החשבון וכל הנתונים?",
     "signOutConfirm": "להתנתק?"
   },
-  "gated": {
-    "takeTheWeights": "קח את המשקולות",
-    "keepDeciding": "תמשיך להחליט",
-    "switchOff": "כבה"
-  },
   "errors": {
-    "general": "משהו השתבש. נסה שוב."
+    "general": "משהו השתבש. נסה שוב.",
+    "general_female": "משהו השתבש. נסי שוב."
   },
   "notifications": {
-    "weeklyReadyTitle": "העדכון השבועי שלך מוכן",
-    "weeklyReadyBody": "התוכנית שלך לשבוע מוכנה — {{count}} אימונים, מותאמים לאיך שהתאמנת. הקש כדי לראות מה השתנה.",
-    "weeklyReadyBodyOne": "התוכנית שלך לשבוע מוכנה — אימון אחד, מותאם לאיך שהתאמנת. הקש כדי לראות מה השתנה.",
-    "weeklyReadyBodyGeneric": "התוכנית שלך לשבוע מוכנה, מותאמת לאיך שהתאמנת. הקש כדי לראות מה השתנה.",
-    "quarterlyReportTitle": "ההתקדמות שלך מוכנה."
+    "weeklyReadyTitle": "עדכנתי את התוכנית שלך.",
+    "weeklyReadyBody": "קראתי את מה שהרמת השבוע — השבוע הבא מוכן, עם מה שהשתנה ולמה.",
+    "restWarnTitle": "עוד רגע",
+    "restWarnBody": "7 שניות — התכונן.",
+    "restDoneTitle": "המנוחה הסתיימה",
+    "restDoneBody": "קדימה.",
+    "lockWordRest": "מנוחה",
+    "lockWordNext": "הבא",
+    "lockWordPaused": "בהשהיה",
+    "lockWordLogged": "נרשם. הסיום בטלפון.",
+    "lockActDone": "סיימתי",
+    "lockActAddRest": "+15 שנ׳",
+    "lockActStart": "הסט הבא",
+    "lockWordReps": "חזרות",
+    "lockActReady": "מוכן",
+    "nextSetTitle": "סט {{n}} מתוך {{m}} · {{name}}",
+    "nextWarmupTitle": "חימום {{n}} מתוך {{m}} · {{name}}",
+    "nextSetAside": "{{value}} בכל צד",
+    "nextSetPerHand": "{{value}} בכל יד",
+    "nextSetPin": "פין {{value}}",
+    "nextSetReps_one": "חזרה אחת",
+    "nextSetReps_two": "שתי חזרות",
+    "nextSetReps_other": "{{count}} חזרות",
+    "kmTitle": "קילומטר {{km}}",
+    "kmBody": "{{pace}} — נרשם.",
+    "restWarnBody_female": "7 שניות — התכונני.",
+    "watchSavedTitle": "נשמר מהשעון",
+    "watchSavedBody": "{{name}} ברשומה שלך.",
+    "trainingTitle": "{{name}} היום",
+    "trainingBody": "התוכנית מוכנה.",
+    "trainingWeekName": "יום אימון",
+    "setNudgeTitle": "עדיין באמצע?",
+    "setNudgeBody": "הסט הזה לוקח יותר זמן מהצפוי — התוצאה עוד לא נרשמה.",
+    "gapTitle": "{{name}} עומד על {{load}}.",
+    "gapTitleNoFact": "התוכנית שלך במקום שבו עזבת אותה.",
+    "gapBody": "{{days}} ימים מהאימון האחרון שלך. שום דבר לא זז בלעדיך.",
+    "gapBody_female": "{{days}} ימים מהאימון האחרון שלך. שום דבר לא זז בלעדייך.",
+    "trialLastTitle": "אימון אחד נותר בתקופת הניסיון.",
+    "trialLastBody": "ההיסטוריה, השיאים והייצוא נשארים שלך בכל מקרה. ההחלטה מחכה במסך הבית.",
+    "gapLaterBody": "21 ימים מהאימון האחרון שלך. כשתחזור, המשקלים חוזרים איתך — מותאמים, לעולם לא מאופסים.",
+    "gapLaterBody_female": "21 ימים מהאימון האחרון שלך. כשתחזרי, המשקלים חוזרים איתך — מותאמים, לעולם לא מאופסים."
+  },
+  "voice": {
+    "openFirstSession": "זה האימון הראשון שלך. המשקלים היום הם הצעה לפי משקל הגוף, לא לפי הכוח שלך. תגיד לי מה באמת עלה על המוט, ומהסט הראשון אני מתאימה.",
+    "openFirstSession_female": "זה האימון הראשון שלך. המשקלים היום הם הצעה לפי משקל הגוף, לא לפי הכוח שלך. תגידי לי מה באמת עלה על המוט, ומהסט הראשון אני מתאימה.",
+    "openSession": "{{workout}}. {{lifts}} תרגילים, בערך {{minutes}} דקות. מתחילים ב{{first}}.",
+    "loadCalibrated": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגיד: מוכן. אם אתה רוצה משקל אחר, תגיד אותו.",
+    "loadCalibrated_female": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגידי: מוכן. אם את רוצה משקל אחר, תגידי אותו.",
+    "loadBandLift": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadBandLift_female": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגידי: מוכן.",
+    "loadBodyweightLift": "{{exercise}}. {{range}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadBodyweightLift_female": "{{exercise}}. {{range}}. {{readyWhen}}, תגידי: מוכן.",
+    "loadFirstTime": "{{exercise}}. זו הפעם הראשונה שלך בתרגיל הזה, אז המשקל הוא הצעה: {{load}}. אם זה נראה לך קל מדי או כבד מדי, תגיד משקל אחר. {{range}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadFirstTime_female": "{{exercise}}. זו הפעם הראשונה שלך בתרגיל הזה, אז המשקל הוא הצעה: {{load}}. אם זה נראה לך קל מדי או כבד מדי, תגידי משקל אחר. {{range}}. {{readyWhen}}, תגידי: מוכן.",
+    "loadChanged": "{{setLabel}}. {{direction}} ל{{load}}: {{delta}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadChanged_female": "{{setLabel}}. {{direction}} ל{{load}}: {{delta}}. {{readyWhen}}, תגידי: מוכן.",
+    "loadEcho": "{{load}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadEcho_female": "{{load}}. {{readyWhen}}, תגידי: מוכן.",
+    "calibrationStart": "אין בעיה, נתחיל קל. {{load}}. תעשה כמה חזרות שיוצא בנוח, ותגיד לי כמה. {{readyWhen}}, תגיד: מוכן.",
+    "calibrationStart_female": "אין בעיה, נתחיל קל. {{load}}. תעשי כמה חזרות שיוצא בנוח, ותגידי לי כמה. {{readyWhen}}, תגידי: מוכן.",
+    "skippedLift": "בסדר. במקום זה: {{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגיד: מוכן.",
+    "skippedLift_female": "בסדר. במקום זה: {{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגידי: מוכן.",
+    "go": "קדימה.",
+    "readyPrompt": "מוכן?",
+    "readyPrompt_female": "מוכנה?",
+    "readyFallback": "כשתהיה מוכן, תלחץ על מוכן בשעון או במסך הנעילה.",
+    "readyFallback_female": "כשתהיי מוכנה, תלחצי על מוכן בשעון או במסך הנעילה.",
+    "askDone": "סיימת את הסט? כמה חזרות עשית?",
+    "askDoneLast": "סיימת את הסט? זה הסט האחרון היום. כמה חזרות עשית?",
+    "askDoneWarmup": "סיימת את החימום?",
+    "askDoneSuperset": "סיימת את שני התרגילים? כמה חזרות ב{{first}}, וכמה ב{{second}}?",
+    "askRepsSecond": "וכמה ב{{second}}?",
+    "askReps": "כמה חזרות?",
+    "okWait": "בסדר.",
+    "askAgainSoon": "אשאל שוב עוד רגע.",
+    "sayDoneWhenDone": "תגיד סיימתי כשתסיים.",
+    "sayDoneWhenDone_female": "תגידי סיימתי כשתסיימי.",
+    "notHeard": "לא שמעתי תשובה. הסט נשאר פתוח: תגיד לי כמה חזרות כשתסיים, או תלחץ סיום במסך הנעילה או בשעון.",
+    "notHeard_female": "לא שמעתי תשובה. הסט נשאר פתוח: תגידי לי כמה חזרות כשתסיימי, או תלחצי סיום במסך הנעילה או בשעון.",
+    "didntGet": "לא הבנתי. כמה חזרות עשית?",
+    "skippedSet": "בסדר, דילגתי.",
+    "finishOnPhone": "הסיום נעשה בטלפון.",
+    "paused": "האימון מושהה. כשתרצה להמשיך, תגיד: המשך.",
+    "paused_female": "האימון מושהה. כשתרצי להמשיך, תגידי: המשך.",
+    "resumed": "ממשיכים.",
+    "echo": "{{figures}}. נרשם.",
+    "figures": "{{load}}, {{reps}}",
+    "confirmHeard": "{{figures}}, נכון?",
+    "verdictUp": "יותר מהטווח. בסט הבא נעלה ל{{load}}: {{delta}}.",
+    "verdictDown": "פחות מהטווח. בסט הבא נוריד ל{{load}}: {{delta}}.",
+    "verdictHold": "בתוך הטווח. הסט הבא באותו משקל.",
+    "nextTimeStart": "בפעם הבאה נתחיל ב{{load}}.",
+    "nextTimeLearned": "למדתי. בפעם הבאה נתחיל ב{{load}}.",
+    "rest": "מנוחה: {{duration}}.",
+    "tenSeconds": "עוד עשר שניות.",
+    "setStart": "{{setLabel}}. {{load}}. {{range}}.",
+    "setLabel": "סט {{n}} מתוך {{m}}",
+    "warmupLabel": "חימום, {{n}} מתוך {{m}}",
+    "supersetStart": "{{setLabel}}: {{first}}, ומיד אחריה {{second}}.",
+    "holdItem": "{{name}}, {{duration}}.",
+    "liftDone": "סיימת {{exercise}}. התרגיל הבא: {{next}}. מנוחה: {{duration}}.",
+    "sessionDone": "סיימת את האימון. {{lifts}} תרגילים, {{minutes}} דקות. הסיכום מחכה בטלפון.",
+    "back": "חזרתי.",
+    "range": "{{lo}} עד {{hi}} חזרות",
+    "rangeBodyweight": "{{lo}} עד {{hi}} חזרות, בלי משקל",
+    "repsFixed": "{{reps}}",
+    "loadBarbell": "{{total}}: המוט {{bar}}, ו{{side}} בכל צד",
+    "loadBarbellPlates": "{{total}}: המוט {{bar}}, ו{{side}} בכל צד — {{plates}}",
+    "loadBarOnly": "{{total}}: המוט בלבד",
+    "loadFixedBar": "מוט של {{total}}",
+    "loadPlateLoaded": "{{total}}: {{side}} בכל צד",
+    "loadDumbbell": "{{perHand}} בכל יד",
+    "loadKettlebell": "הקטלבל של {{bell}}",
+    "loadBand": "עם הגומייה",
+    "loadPin": "{{total}}: תשים את הפין על {{pin}}",
+    "loadPin_female": "{{total}}: תשימי את הפין על {{pin}}",
+    "loadBodyweight": "בלי משקל",
+    "loadBodyweightPlus": "{{total}} משקל נוסף",
+    "platesJoin": " ו",
+    "deltaAddSide": "תוסיף {{amount}} בכל צד",
+    "deltaAddSide_female": "תוסיפי {{amount}} בכל צד",
+    "deltaRemoveSide": "תוריד {{amount}} מכל צד",
+    "deltaRemoveSide_female": "תורידי {{amount}} מכל צד",
+    "deltaDumbbell": "קח {{perHand}} בכל יד",
+    "deltaKettlebell": "קח את הקטלבל של {{bell}}",
+    "deltaKettlebell_female": "קחי את הקטלבל של {{bell}}",
+    "deltaDumbbell_female": "קחי {{perHand}} בכל יד",
+    "deltaPin": "תעביר את הפין ל{{pin}}",
+    "deltaPin_female": "תעבירי את הפין ל{{pin}}",
+    "deltaFixed": "קח את המוט של {{total}}",
+    "deltaFixed_female": "קחי את המוט של {{total}}",
+    "readyBarbell": "כשהמוט טעון",
+    "readyFixed": "כשהמוט ביד",
+    "readyDumbbell": "כשהמשקולות ביד",
+    "readyKettlebell": "כשהקטלבל ביד",
+    "readyBand": "כשהגומייה במקום",
+    "readyPin": "כשהפין במקום",
+    "readyPlate": "כשהמכונה טעונה",
+    "readyBodyweight": "כשאתה במקום",
+    "readyBodyweight_female": "כשאת במקום",
+    "up": "עולים",
+    "down": "יורדים"
   },
   "watch": {
+    "editResult": "עריכת תוצאה",
+    "setHeading": "סט",
     "next": "הבא:",
     "interEncouragement": "יש לך את זה.",
     "transitionEncouragement": "קדימה.",
@@ -634,9 +1579,9 @@
     "chooseWorkout": "בחר אימון",
     "nextWorkout": "האימון הבא",
     "begin": "התחל",
-    "recovery": "התאוששות — האימון הבא נפתח ביום שני",
+    "recovery": "התאוששות — השבוע הבא נפתח בשבת בערב",
+    "recoveryTitle": "התאוששות",
     "lifts": "{{n}} תרגילים",
-    "editResult": "עריכת תוצאה",
     "completeSet": "השלם סט",
     "save": "שמירה",
     "crownToAdjust": "סובב את הכתר",
@@ -656,9 +1601,132 @@
     "saved": "נשמר",
     "complete": "{{name}} הושלם.",
     "done": "סיום",
+    "doneLegend": "הושלם",
     "swapTitle": "החלף תרגיל",
-    "swapHint": "Hush יכייל מחדש את המשקל.",
-    "cancel": "ביטול"
+    "swapHint": "אני קובע את המשקל בשבילו.",
+    "swapHint_female": "אני קובעת את המשקל בשבילו.",
+    "cancel": "ביטול",
+    "another": "אחר",
+    "cardio": "אימון חופשי",
+    "liftsWord": "תרגילים",
+    "membershipNeeded": "המשך באייפון — המנוי שלך דורש טיפול",
+    "membershipNeeded_female": "המשיכי באייפון — המנוי שלך דורש טיפול",
+    "idleWaiting": "פתח באייפון",
+    "idleWaiting_female": "פתחי באייפון",
+    "editSet": "עריכת סט",
+    "turnCrownToSet": "סובב את הכתר",
+    "turnCrownToSet_female": "סובבי את הכתר",
+    "bodyweight": "גוף",
+    "reps": "חזרות",
+    "repsCount": "{{n}} חזרות",
+    "bodyweightQuiet": "משקל גוף",
+    "perHand": "לכל יד",
+    "pin": "פין",
+    "aSide": "לכל צד",
+    "tapWeightToEdit": "הקש על המשקל לעריכה",
+    "tapWeightToEdit_female": "הקישי על המשקל לעריכה",
+    "exLoad": "טען",
+    "exLoad_female": "טעני",
+    "exUse": "השתמש",
+    "exUse_female": "השתמשי",
+    "exDumbbells": "משקולות",
+    "exSetPin": "כוון את הפין",
+    "exSetPin_female": "כווני את הפין",
+    "exTakeBar": "קח את המוט",
+    "exTakeBar_female": "קחי את המוט",
+    "exLoaded": "טעון",
+    "exInHand": "ביד",
+    "exPinSet": "הפין כוון",
+    "exBarReady": "המוט מוכן",
+    "liftWord": "תרגיל",
+    "setWord": "סט",
+    "warmupWord": "חימום",
+    "addShort": "‎+15 שנ׳",
+    "liftDone": "{{name}}, הושלם.",
+    "correctedUp": "עשית {{reps}}, אז הוספתי משקל.",
+    "correctedDown": "עשית {{reps}}, אז הורדתי משקל.",
+    "somethingOff": "משהו לא מרגיש טוב",
+    "endConfirmTitle": "לסיים את\nהאימון?",
+    "endConfirmSub": "נשמר כמו שהוא, בנקודה הזאת.",
+    "finishConfirmTitle": "לסיים ולשמור?",
+    "keepGoing": "להמשיך",
+    "endAndSave": "לסיים ולשמור",
+    "whereIsIt": "איפה זה?",
+    "howSharp": "כמה חד?",
+    "severityTwinge": "צביטה",
+    "severityPain": "כאב אמיתי",
+    "severitySharp": "חד",
+    "gotIt": "הבנתי",
+    "easingToday": "{{muscle}} —\nהיום בהקלה.",
+    "easedSwapped": "התרגילים שלו ← הוחלפו",
+    "easedRests": "נח בינתיים",
+    "painNoted": "רשמתי: {{muscle}}.",
+    "painWhenPhoneBack": "אעדכן את המאמן ברגע שהפלאפון יחזור.",
+    "firstWorkout": "האימון הראשון",
+    "findYourWeights": "בוא נמצא\nאת המשקלים שלך.",
+    "findYourWeights_female": "בואי נמצא\nאת המשקלים שלך.",
+    "liftTillHonest": "תרים עד שזה כן — אני לומד מזה.",
+    "liftTillHonest_female": "תרימי עד שזה כן — אני לומדת מזה.",
+    "start": "התחל",
+    "start_female": "התחילי",
+    "yourPace": "הקצב שלך",
+    "kilometreSplit": "קילומטר {{n}} · פיצול",
+    "perKm": "‏/ק״מ",
+    "quickestThisRun": "המהיר בריצה הזאת",
+    "loggedBackToRun": "נרשם · חזרה לריצה",
+    "nowLegend": "עכשיו",
+    "backToYourSet": "חזרה לסט שלך",
+    "metricKgSets": "ק״ג · סטים",
+    "controlsLegend": "השהיה · סיום",
+    "pause": "השהה",
+    "pause_female": "השהי",
+    "metricElapsed": "זמן",
+    "metricHeart": "דופק",
+    "metricPace": "קצב",
+    "metricKcal": "קק״ל",
+    "bpm": "bpm",
+    "reading": "קורא את האימון שלך",
+    "reading_female": "קוראת את האימון שלך",
+    "thatsTheWork": "זאת\nהעבודה.",
+    "milestone": "ציון דרך",
+    "metricTime": "זמן",
+    "metricSets": "סטים",
+    "metricMinShort": "דק׳",
+    "metricKcalShort": "קק״ל",
+    "metricTonnesShort": "טון",
+    "metricUpShort": "הונף",
+    "metricUp": "הונפו",
+    "undo": "ביטול",
+    "openTraining": "אימון חופשי",
+    "run": "ריצה",
+    "walk": "הליכה",
+    "running": "רץ",
+    "running_female": "רצה",
+    "walking": "הולך",
+    "walking_female": "הולכת",
+    "finishSave": "לסיים ולשמור",
+    "metricKm": "ק״מ",
+    "recordedLegend": "תועד",
+    "continueOnPhone_female": "המשיכי באייפון",
+    "chooseWorkout_female": "בחרי אימון",
+    "begin_female": "התחילי",
+    "completeSet_female": "השלימי סט",
+    "crownToAdjust_female": "סובבי את הכתר",
+    "ready_female": "מוכנה",
+    "skipRest_female": "דלגי על המנוחה",
+    "startNextLift_female": "התחילי תרגיל הבא",
+    "startNextSet_female": "התחילי סט הבא",
+    "endWorkout_female": "סיימי אימון",
+    "resume_female": "המשיכי",
+    "swapTitle_female": "החליפי תרגיל",
+    "easedForYou": "הוקל בשבילך",
+    "raisedForYou": "הועלה בשבילך",
+    "loggedResting": "נרשם · במנוחה",
+    "startCardio": "התחל אימון חופשי",
+    "startCardio_female": "התחילי אימון חופשי",
+    "recordedNotCoached": "מתועד לצד האימונים שלך.",
+    "cardioSaved": "אימון חופשי · נשמר",
+    "thatsTheDistance": "זה המרחק."
   },
   "language": {
     "title": "שפה",
@@ -667,45 +1735,106 @@
     "restartNote": "כדי להחיל את כיוון הכתב (RTL) במלואו, פתח מחדש את האפליקציה."
   },
   "paywall": {
-    "eyebrow": "מנוי",
-    "title": "להמשיך להתאמן עם Hush.",
-    "body": "שבעת האימונים הראשונים שלך היו חינם. Hush Pro ממשיך להחליט על המשקלים.",
-    "benefitProgram": "כל משקל וכל התקדמות, נקבעים עבורך.",
-    "benefitAdapts": "סקירה שבועית של מה השתנה, ולמה.",
-    "benefitPortrait": "כל ההיסטוריה וההתקדמות שלך, נשמרות.",
+    "title": "היה תענוג להתאמן איתך.",
+    "case": "{{lift}} — {{delta}} {{unit}} יותר מאז שהתחלנו.",
+    "caseOthers_one": "ועוד תרגיל אחד עלה.",
+    "caseOthers_two": "ועוד שני תרגילים עלו.",
+    "caseOthers_other": "ועוד {{count}} תרגילים עלו.",
+    "recordYours": "ההיסטוריה, השיאים והרשומה נשארים שלך — עם או בלי מנוי.",
     "annual": "שנתי",
     "monthly": "חודשי",
-    "bestValue": "הכי משתלם",
     "perYear": "/שנה",
     "perMonth": "/חודש",
-    "billedYearly": "חיוב שנתי",
-    "billedMonthly": "חיוב חודשי",
-    "onlyBilled": "החיוב מתבצע רק אחרי שבעת אימוני הכיול החינמיים שלך.",
+    "billedMonthly": "בחיוב חודשי",
     "freeTrial": "{{period}} חינם",
+    "trialPeriod": {
+      "day_one": "יום",
+      "day_two": "יומיים",
+      "day_many": "{{count}} ימים",
+      "day_other": "{{count}} ימים",
+      "week_one": "שבוע",
+      "week_two": "שבועיים",
+      "week_many": "{{count}} שבועות",
+      "week_other": "{{count}} שבועות",
+      "month_one": "חודש",
+      "month_two": "חודשיים",
+      "month_many": "{{count}} חודשים",
+      "month_other": "{{count}} חודשים",
+      "year_one": "שנה",
+      "year_two": "שנתיים",
+      "year_many": "{{count}} שנים",
+      "year_other": "{{count}} שנים"
+    },
     "subscribe": "הצטרפות",
     "subscribePlan": "הצטרפות · {{plan}}",
     "working": "רגע אחד",
-    "restore": "שחזור רכישות",
+    "restore": "שחזור רכישה",
     "legal": "החיוב מתבצע דרך מזהה ה‑Apple שלך. המנוי מתחדש אוטומטית עד שתבטל אותו בהגדרות.",
+    "legal_female": "החיוב מתבצע דרך מזהה ה‑Apple שלך. המנוי מתחדש אוטומטית עד שתבטלי אותו בהגדרות.",
     "legalDynamic": "המחירים מתעדכנים בזמן אמת מה‑App Store. {{plan}} מתחדש אוטומטית ב‑{{price}}{{cadence}}, ומחויב דרך מזהה ה‑Apple שלך עד לביטול בהגדרות.",
     "unavailable": "החנות אינה זמינה. בדוק את החיבור ופתח שוב.",
-    "error": "הפעולה לא הושלמה. הכרטיס שלך לא חויב."
+    "error": "הפעולה לא הושלמה. הכרטיס שלך לא חויב.",
+    "savePct": "חסוך {{pct}}%",
+    "savePct_female": "חסכי {{pct}}%",
+    "trialDone": "אימון {{n}} · תקופת הניסיון הסתיימה",
+    "trialLeft": "אימון {{done}} מתוך {{n}}",
+    "keepTraining": "בוא נמשיך להתאמן",
+    "keepTraining_female": "בואי נמשיך להתאמן",
+    "later": "לא עכשיו",
+    "billedOnce": "{{price}} בחיוב אחד לשנה",
+    "perMonthShort": "/חודש",
+    "perYearShort": "/שנה",
+    "unavailable_female": "החנות אינה זמינה. בדקי את החיבור ופתחי שוב.",
+    "file_one": "יש אצלי עובדה אחת שנמדדה על ההרמות שלך — והיא שלך.",
+    "file_two": "יש אצלי שתי עובדות שנמדדו על ההרמות שלך — והן שלך.",
+    "file_other": "יש אצלי {{count}} עובדות שנמדדו על ההרמות שלך — המנוחות, המדרגות והתקרות.",
+    "receiptAhead": "תוכנית של מדרגה בכל אימון הייתה משאירה את {{lift}} על {{fixed}} {{unit}}. אצלי — {{engine}} {{unit}}, לפי מה שנמדד.",
+    "receiptBehind": "תוכנית של מדרגה בכל אימון הייתה מציבה את {{lift}} על {{fixed}} {{unit}} היום. ההוראה שלי — {{engine}} {{unit}}, מה שהראית לי.",
+    "restoreNone": "לא נמצא מנוי ב-Apple ID הזה. אם נרשמת עם חשבון אחר, יש להתחבר אליו בהגדרות ולשחזר שוב.",
+    "pendingNote": "הבקשה נשלחה למארגן המשפחה. ברגע שתאושר, האימונים ייפתחו מעצמם."
   },
   "explain": {
-    "progressReps": {
-      "text": "{{ex}} קרוב לקצה העליון של הטווח, אז הוספתי חזרה לכל סט.",
-      "observation": "{{ex}} משתפר וקרוב לקצה העליון של הטווח.",
-      "conclusion": "עוד חזרה לכל סט באה לפני תוספת משקל.",
-      "action": "קבעתי יעד של {{reps}} חזרות."
-    },
     "progressLoad": {
-      "text": "{{ex}} הגיע לקצה העליון של הטווח עם עוד כוח, אז הוספתי {{delta}} ק\"ג.",
-      "textVariation": "{{ex}} הגיע לקצה העליון של הטווח עם עוד כוח, אז העברתי אותך לווריאציה קשה יותר.",
-      "observation": "{{ex}} הגיע לקצה העליון של הטווח עם מרווח.",
-      "conclusion": "הוא מוכן לעוד משקל.",
-      "conclusionVariation": "הוא מוכן לווריאציה קשה יותר.",
+      "text": "הגעת לקצה העליון של הטווח עם עוד כוח, אז הוספתי {{delta}} ק\"ג.",
+      "textVariation": "אתה מחזיק בקצה העליון של הטווח — תחזיק שם, והווריאציה הקשה יותר תגיע.",
+      "observation": "הגעת לקצה העליון של הטווח עם מרווח.",
+      "conclusion": "יש שם כוח לעוד משקל.",
+      "conclusionVariation": "החזקה עקבית בקצה העליון מזכה בווריאציה קשה יותר.",
       "action": "הוספתי {{delta}} ק\"ג.",
-      "actionVariation": "העברתי אותך לווריאציה קשה יותר."
+      "actionVariation": "השארתי את היעד בקצה העליון של הטווח.",
+      "observationMet": "עמדת ביעד בכל סט.",
+      "textMet": "עמדת ביעד בכל סט, אז הוספתי {{delta}} ק\"ג.",
+      "textVariation_female": "את מחזיקה בקצה העליון של הטווח — תחזיקי שם, והווריאציה הקשה יותר תגיע."
+    },
+    "graduate": {
+      "text": "לקחת את {{from}} עד לאן שהחזרות מאפשרות, אז העליתי אותך ל־{{ex}}.",
+      "observation": "לקחת את {{from}} עד לאן שהחזרות מאפשרות.",
+      "conclusion": "גדלת מעבר אליו — הווריאציה הקשה יותר היא הצעד הבא.",
+      "action": "העברתי אותך ל-{{ex}}."
+    },
+    "volumeUp": {
+      "text": "העבודה על {{muscle}} מתקדמת, אז הוספתי סט כדי לתת לה יותר.",
+      "observation": "העבודה על {{muscle}} מתקדמת במאמץ מלא.",
+      "conclusion": "יותר נפח נותן לה יותר על מה לגדול.",
+      "action": "הוספתי סט לעבודה על {{muscle}}."
+    },
+    "volumeDown": {
+      "text": "העבודה על {{muscle}} המשיכה לבוא חסרה, אז גזמתי סט כדי לשמור אותה בת-ביצוע.",
+      "observation": "העבודה על {{muscle}} המשיכה לבוא חסרה.",
+      "conclusion": "פחות סטים שומר אותה בת-ביצוע.",
+      "action": "גזמתי סט מהעבודה על {{muscle}}."
+    },
+    "volumeCapped": {
+      "text": "העבודה על {{muscle}} נשאה יותר סטים ממה שהשבוע שלך מכיל עכשיו, אז החזרתי אותה למה שנכנס בדקות שלך — שום דבר שעשית לא היה חסר.",
+      "observation": "העבודה על {{muscle}} נשאה יותר סטים ממה שהשבוע שלך מכיל עכשיו.",
+      "conclusion": "הדקות שלך קובעות את התקרה, לא יעד.",
+      "action": "החזרתי את העבודה על {{muscle}} למה שנכנס בשבוע שלך."
+    },
+    "rungOutOfReach": {
+      "text": "עמדת בכל הסטים, אבל המשקל הבא במכון הוא קפיצה גדולה מדי, אז מוסיפים חזרות עד שהוא בהישג יד.",
+      "observation": "עמדת בכל הסטים.",
+      "conclusion": "המשקל הבא במכונה הזו הוא קפיצה גדולה מדי מכאן.",
+      "action": "השארתי את המשקל. מוסיפים חזרות עד שהבא בתור בהישג יד — ואם יש במכונה קפיצה קטנה יותר, אפשר פשוט להעמיס אותה ואני אלמד את המדרגה."
     },
     "reprice": {
       "text": "בשבוע שעבר {{ex}} ירד מתחת למתוכנן, אז קבעתי אותו ל-{{load}} ק\"ג והשארתי את הסטים שלך כפי שהם.",
@@ -715,58 +1844,2110 @@
       "action": "קבעתי אותו ל-{{load}} ק\"ג והשארתי את הסטים שלך כפי שהם.",
       "actionBw": "התאמתי אותו ליכולת שהדגמת והשארתי את הסטים שלך כפי שהם."
     },
-    "leverVol": {
-      "text": "{{ex}} נשאר יציב, אז הוספתי סט ליותר גירוי.",
-      "observation": "{{ex}} נשאר יציב במאמץ מלא.",
-      "conclusion": "עוד סטים נותנים לו יותר גירוי.",
-      "action": "העליתי אותו ל-{{sets}} סטים."
-    },
-    "leverLoad": {
-      "text": "{{ex}} נתקע עם נפח מלא, אז הוספתי {{delta}} ק\"ג כדי לשבור את התקיעה.",
-      "textStep": "{{ex}} נתקע עם נפח מלא, אז העליתי את המשקל כדי לשבור את התקיעה.",
-      "observation": "{{ex}} נתקע עם הנפח המלא שלו.",
-      "conclusion": "עלייה קטנה במשקל שוברת את התקיעה.",
-      "action": "הוספתי {{delta}} ק\"ג.",
-      "actionStep": "העליתי את המשקל."
-    },
-    "leverRange": {
-      "text": "{{ex}} נתקע עם נפח מלא, אז שיניתי את הטווח ל-{{lo}} עד {{hi}} ושמרתי על התרגיל.",
-      "observation": "{{ex}} נתקע עם הנפח המלא שלו.",
-      "conclusion": "טווח חזרות חדש שומר על אותו תרגיל בתנועה.",
-      "action": "קבעתי את הטווח ל-{{lo}} עד {{hi}}."
-    },
-    "patientHold": {
-      "text": "{{ex}} יציב, אז אני מחזיק אותו ובודק שוב לפני שאדחוף.",
-      "observation": "{{ex}} יציב כרגע.",
-      "conclusion": "אני מחזיק ובודק שוב לפני שאדחוף.",
-      "action": "אני מחזיק השבוע ובודק העלאה קטנה בקרוב.",
-      "actionHold": "אני מחזיק אותו השבוע."
-    },
     "swap": {
       "text": "המקום הזה החטיא במשך כמה שבועות בזמן שהתרגילים האחרים שלך החזיקו, אז החלפתי אותו ל-{{ex}}.",
       "observation": "המקום הזה החטיא במשך כמה שבועות בזמן שהתרגילים האחרים שלך החזיקו.",
       "conclusion": "התרגיל הוא מה שצריך לשנות.",
       "action": "העברתי את המקום ל-{{ex}}."
     },
-    "deload": {
-      "text": "הורדתי את המשקל ואת הנפח כדי שתוכל להמשיך להתאמן בבטחה.",
-      "observation": "סימנת משהו שצריך להתאמן סביבו.",
-      "conclusion": "אני מוריד את המשקל ואת הנפח כדי שתתאמן בבטחה.",
-      "action": "הקלתי אותו ל-{{load}} ק\"ג ו-{{sets}} סטים.",
-      "actionBw": "הקלתי אותו למשקל גוף ו-{{sets}} סטים."
+    "detrain": {
+      "observation": "לא היית ב{{ex}} תקופה.",
+      "conclusion": "כוח נסוג כשמפסיקים — פחות ממה שרובם חוששים, אבל נסוג.",
+      "action": "הורדתי את {{ex}} כדי שהאימון הראשון בחזרה יהיה כזה שתסיים.",
+      "action_female": "הורדתי את {{ex}} כדי שהאימון הראשון בחזרה יהיה כזה שתסיימי.",
+      "text": "לא היית ב{{ex}} תקופה, אז הורדתי את המשקל — האימון הראשון בחזרה הוא כזה שתסיים, לא כזה שיגמור אותך.",
+      "text_female": "לא היית ב{{ex}} תקופה, אז הורדתי את המשקל — האימון הראשון בחזרה הוא כזה שתסיימי, לא כזה שיגמור אותך."
     },
-    "absence": {
-      "text": "אחרי יותר משבוע של הפסקה, הקלתי את המשקל בכ-עשרה אחוזים ואנחנו בונים מחדש.",
-      "observation": "עבר יותר משבוע בלי אימון.",
-      "conclusion": "אני חוזר בהדרגה כדי לבנות מחדש בבטחה.",
-      "action": "הקלתי בכ-עשרה אחוזים ל-{{load}} ק\"ג.",
-      "actionBw": "חזרתי למשקל גוף."
+    "deloadStart": {
+      "observation": "רוב התרגילים שלך נחתו מתחת לרצפת החזרות פעמיים ברצף, בלי שהמשקל עלה.",
+      "conclusion": "הדפוס הזה אומר שהגוף צריך שבוע קל — לא עוד טחינה.",
+      "action": "הורדתי את {{ex}} לשבוע קל אחד. המשקל הרגיל חוזר ברגע שהוא נגמר.",
+      "text": "רוב התרגילים שלך פספסו את רצפת החזרות פעמיים ברצף, אז השבוע קל בכוונה — {{ex}} הוגדר קל יותר, והמשקל הרגיל חוזר ברגע שהשבוע נגמר."
     },
-    "adherenceHold": {
-      "text": "החזקתי הכול וקיצצתי את הנפח כדי שאפשר יהיה לסיים את השבוע הזה.",
-      "observation": "השבוע שעבר לא קרה במלואו.",
-      "conclusion": "אני מחזיק הכול ומקצץ נפח כדי שהשבוע הזה יהיה בר-השלמה.",
-      "action": "קיצצתי אותו ל-{{sets}} סטים."
+    "deloadEnd": {
+      "observation": "השבוע הקל שלך הסתיים.",
+      "conclusion": "ההתאוששות נצברה — ממשיכים בדיוק מאיפה שעצרנו.",
+      "action": "החזרתי את {{ex}} למשקל הקבוע שלו.",
+      "text": "השבוע הקל נגמר — {{ex}} חזר למשקל הקבוע שלו, בדיוק איפה שהשארת אותו."
+    },
+    "easeStart": {
+      "observationKm": "רצת {{km}} ק\"מ.",
+      "observationLong": "יצאת לריצה ארוכה.",
+      "conclusion": "הרגליים עוד נושאות את הריצה — היום מתחילים מדרגה אחת קל יותר.",
+      "action": "הורדתי את {{ex}} מדרגה אחת לאימון הזה. אם הסטים הראשונים יגידו אחרת — אני מעלה מיד בחזרה.",
+      "textKm": "רצת {{km}} ק\"מ, אז {{ex}} מתחיל היום מדרגה אחת קל יותר — הרגליים עוד נושאות את הריצה, ואם הסטים הראשונים יגידו אחרת אני מעלה מיד בחזרה.",
+      "textLong": "יצאת לריצה ארוכה, אז {{ex}} מתחיל היום מדרגה אחת קל יותר — הרגליים עוד נושאות אותה, ואם הסטים הראשונים יגידו אחרת אני מעלה מיד בחזרה."
+    },
+    "easeEnd": {
+      "observation": "האימון הזה מאחוריך.",
+      "conclusion": "הריצה נספגה — שום דבר לא נגרר הלאה.",
+      "action": "החזרתי את {{ex}} למשקל הקבוע שלו.",
+      "text": "האימון הקל מאחוריך — {{ex}} חזר למשקל הקבוע שלו."
     }
+  },
+  "profileEdit": {
+    "legend": "חשבון",
+    "title": "עריכת הפרטים",
+    "sub": "שינוי כאן מעדכן את תוכנית האימון השבועית.",
+    "save": "שמירת שינויים",
+    "saved": "השינויים נשמרו.",
+    "savedDays": "נשמר. השבוע נבנה מחדש בהתאם.",
+    "saving": "שומר…",
+    "savedShort": "נשמר"
+  },
+  "exec": {
+    "load": "טען",
+    "load_female": "טעני",
+    "grab": "אחוז",
+    "setPin": "כוון את הפין",
+    "setPin_female": "כווני את הפין",
+    "takeBar": "קח את המוט",
+    "takeBar_female": "קחי את המוט",
+    "eachHand": "אחד בכל יד",
+    "loaded": "טעון",
+    "inHand": "ביד",
+    "pinSet": "הפין כוון",
+    "barReady": "המוט מוכן",
+    "use": "השתמש",
+    "use_female": "השתמשי",
+    "dumbbells": "משקולות {{weight}} {{unit}}"
+  },
+  "cues": {
+    "bb_bench_press": [
+      "רגליים נטועות ברצפה.",
+      "הורד לחזה בשליטה.",
+      "דחוף את המוט ישר למעלה."
+    ],
+    "incline_bb_press": [
+      "כוון את הספסל ל‑30° בערך.",
+      "הורד לחזה העליון.",
+      "דחוף למעלה ומעט אחורה."
+    ],
+    "db_bench_press": [
+      "פרקי הידיים ישרים מעל המרפקים.",
+      "הורד בשליטה.",
+      "דחוף עד יישור מלא."
+    ],
+    "incline_db_press": [
+      "כוון את הספסל ל‑30° בערך.",
+      "הורד לחזה העליון.",
+      "דחוף למעלה באופן אחיד."
+    ],
+    "machine_chest_press": [
+      "כוון את גובה המושב.",
+      "דחוף בתנועה רציפה.",
+      "החזר בשליטה."
+    ],
+    "chest_dip": [
+      "רכון מעט קדימה.",
+      "רד למתיחה עמוקה.",
+      "דחוף עד יישור מלא."
+    ],
+    "push_up": [
+      "גוף בקו ישר.",
+      "הורד את החזה לרצפה.",
+      "דחוף את הרצפה ממך."
+    ],
+    "knee_push_up": [
+      "גוף ישר מהברכיים עד הראש.",
+      "הורד את החזה לרצפה.",
+      "דחוף את הרצפה ממך."
+    ],
+    "pec_deck": [
+      "מרפקים רכים.",
+      "סגור וכווץ את החזה.",
+      "פתח לאט."
+    ],
+    "cable_fly": [
+      "רכון מעט קדימה.",
+      "חבק את הידיים פנימה.",
+      "שלוט במתיחה."
+    ],
+    "close_grip_bench": [
+      "אחיזה ברוחב הכתפיים.",
+      "מרפקים צמודים לגוף.",
+      "דחוף דרך היד האחורית."
+    ],
+    "triceps_pushdown": [
+      "מרפקים נעולים לצדי הגוף.",
+      "יישר עד הסוף.",
+      "התנגד בדרך למעלה."
+    ],
+    "overhead_triceps_ext": [
+      "מרפקים צמודים לאוזניים.",
+      "מתיחה מאחורי הראש.",
+      "יישר עד נעילה."
+    ],
+    "skullcrusher": [
+      "מרפקים מצביעים למעלה.",
+      "הורד אל המצח.",
+      "יישר עד נעילה."
+    ],
+    "bb_row": [
+      "הטיה של 45° בערך.",
+      "משוך אל הצלעות התחתונות.",
+      "שלוט בירידה."
+    ],
+    "pull_up": [
+      "התחל מתלייה מלאה.",
+      "משוך את המרפקים למטה.",
+      "סנטר מעל המוט."
+    ],
+    "chin_up": [
+      "אחיזה הפוכה, כפות אליך.",
+      "משוך את החזה אל המוט.",
+      "רד בשליטה."
+    ],
+    "lat_pulldown": [
+      "חזה גבוה.",
+      "משוך אל עצם הבריח.",
+      "שלוט במוט בדרך למעלה."
+    ],
+    "cable_row": [
+      "חזה גבוה.",
+      "משוך אל המותניים.",
+      "שחרר לאט."
+    ],
+    "db_row": [
+      "גב ישר.",
+      "חתור אל הירך.",
+      "שלוט בדרך למטה."
+    ],
+    "t_bar_row": [
+      "הטיה עם גב ישר.",
+      "משוך אל החזה.",
+      "הורד עד הסוף."
+    ],
+    "machine_row": [
+      "חזה צמוד לכרית.",
+      "משוך את המרפקים אחורה.",
+      "החזר בשליטה."
+    ],
+    "face_pull": [
+      "משוך אל המצח.",
+      "הובל עם המרפקים.",
+      "כווץ את הכתף האחורית."
+    ],
+    "rear_delt_fly": [
+      "מרפקים רכים.",
+      "פתח לצדדים.",
+      "כווץ את הכתף האחורית."
+    ],
+    "bb_curl": [
+      "מרפקים צמודים לגוף.",
+      "כופף בלי להתנדנד.",
+      "רד בשליטה."
+    ],
+    "ez_bar_curl": [
+      "אחוז בקימורי המוט.",
+      "מרפקים צמודים לגוף.",
+      "רד בשליטה."
+    ],
+    "bb_curl_21": [
+      "7 חזרות חצי תחתון בלבד.",
+      "7 חזרות חצי עליון בלבד.",
+      "7 חזרות מלאות לסיום."
+    ],
+    "cable_rope_hammer_curl": [
+      "אחיזה ניטרלית על החבל.",
+      "מרפקים צמודים לגוף.",
+      "כווץ למעלה."
+    ],
+    "spider_curl": [
+      "חזה על כרית השיפוע.",
+      "הזרועות תלויות ישר למטה.",
+      "כופף וכווץ - בלי תנופה."
+    ],
+    "rope_pushdown": [
+      "מרפקים צמודים לגוף.",
+      "פצל את החבל למטה.",
+      "התנגד בדרך למעלה."
+    ],
+    "decline_bb_press": [
+      "כוון שיפוע שלילי קל.",
+      "הורד לחזה התחתון.",
+      "דחוף עד יישור מלא."
+    ],
+    "db_fly": [
+      "שכב ישר, מרפקים רכים.",
+      "פתח רחב עד מתיחה.",
+      "קרב את המשקולות זו לזו."
+    ],
+    "smith_incline_press": [
+      "כוון שיפוע של כ‑30° מתחת למוט.",
+      "הורד לחזה העליון.",
+      "דחוף עד יישור מלא."
+    ],
+    "low_cable_fly": [
+      "קבע את הפולי למטה.",
+      "הנף מעלה ופנימה.",
+      "רד בשליטה."
+    ],
+    "db_pullover": [
+      "שכב על הספסל.",
+      "הורד מאחורי הראש.",
+      "הנף בחזרה מעל החזה."
+    ],
+    "close_grip_pulldown": [
+      "אחיזה צרה ניטרלית.",
+      "משוך אל החזה העליון.",
+      "שלוט במוט בדרך למעלה."
+    ],
+    "meadows_row": [
+      "עמוד לצד קצה המוט.",
+      "משוך מרפק גבוה ואחורה.",
+      "הורד עד מתיחה מלאה."
+    ],
+    "cable_upright_row": [
+      "אחוז במוט בגובה הירכיים.",
+      "הובל למעלה עם המרפקים.",
+      "עצור בגובה החזה."
+    ],
+    "curtsy_lunge": [
+      "צעד אחורה ובאלכסון.",
+      "הברך הקדמית בקו האצבעות.",
+      "דחוף דרך העקב הקדמי."
+    ],
+    "db_sumo_squat": [
+      "עמידה רחבה, אצבעות החוצה.",
+      "החזק את המשקולת נמוך.",
+      "ברכיים נפתחות מעל האצבעות."
+    ],
+    "smith_hip_thrust": [
+      "גב עליון על הספסל.",
+      "המוט מונח על האגן.",
+      "דחוף מעלה וכווץ."
+    ],
+    "frog_pump": [
+      "כפות רגליים צמודות, ברכיים לצדדים.",
+      "סנטר אסוף, צלעות למטה.",
+      "הקפץ את האגן וכווץ למעלה."
+    ],
+    "donkey_kick": [
+      "עמידת שש, גב ישר.",
+      "דחוף את העקב לתקרה.",
+      "כווץ — בלי לקשת את הגב."
+    ],
+    "db_curl": [
+      "בלי תנופה.",
+      "כופף וכווץ.",
+      "הורד לאט."
+    ],
+    "hammer_curl": [
+      "אחיזה ניטרלית, אגודלים למעלה.",
+      "מרפקים במקום.",
+      "שלוט בירידה."
+    ],
+    "preacher_curl": [
+      "זרועות צמודות לכרית.",
+      "כופף בלי להרים את המרפקים.",
+      "רד בשליטה."
+    ],
+    "bb_overhead_press": [
+      "כווץ את הליבה.",
+      "המוט מעל אמצע כף הרגל.",
+      "נעל מעל הראש."
+    ],
+    "db_shoulder_press": [
+      "קודם ליבה יציבה.",
+      "דחוף מעל הראש.",
+      "הורד עד גובה האוזניים."
+    ],
+    "machine_shoulder_press": [
+      "כוון את המושב.",
+      "דחוף למעלה.",
+      "שלוט בדרך למטה."
+    ],
+    "arnold_press": [
+      "התחל עם כפות אליך.",
+      "סובב תוך כדי דחיפה.",
+      "הורד בשליטה."
+    ],
+    "lateral_raise": [
+      "מרפקים רכים.",
+      "הרם עד גובה הכתפיים.",
+      "הורד לאט."
+    ],
+    "cable_lateral_raise": [
+      "הובל עם המרפק.",
+      "הרם עד גובה הכתפיים.",
+      "התנגד בדרך למטה."
+    ],
+    "bb_back_squat": [
+      "נשימה גדולה וכיווץ ליבה.",
+      "שב בין הירכיים.",
+      "עלה בדחיפה אחידה."
+    ],
+    "front_squat": [
+      "מרפקים גבוהים.",
+      "הישאר זקוף.",
+      "דחוף דרך אמצע כף הרגל."
+    ],
+    "leg_press": [
+      "כפות רגליים באמצע המשטח.",
+      "הברכיים בקו האצבעות.",
+      "בלי לנעול ברכיים בכוח."
+    ],
+    "hack_squat": [
+      "גב צמוד לכרית.",
+      "שב למטה ואחורה.",
+      "דחוף דרך העקבים."
+    ],
+    "goblet_squat": [
+      "החזק צמוד לחזה.",
+      "שב ישר למטה.",
+      "עלה בדחיפה."
+    ],
+    "kb_rdl": [
+      "קטלבל בכל יד, ידיים תלויות.",
+      "דחוף את האגן אחורה, גב ישר.",
+      "עמוד זקוף וסחט."
+    ],
+    "band_curl": [
+      "עמוד על הגומייה, רגליים מפוסקות.",
+      "מרפקים צמודים לגוף.",
+      "הורד לאט נגד הגומייה."
+    ],
+    "band_pushdown": [
+      "עגן את הגומייה מעל הדלת.",
+      "מרפקים נעולים לצדי הגוף.",
+      "יישר עד ידיים ישרות."
+    ],
+    "band_row": [
+      "עגן את הגומייה בגובה החזה.",
+      "משוך את הידיים אל המותניים.",
+      "שחרר לאט נגד הגומייה."
+    ],
+    "band_pull_apart": [
+      "ידיים ישרות בגובה הכתפיים.",
+      "מתח את הגומייה אל החזה.",
+      "כווץ את השכמות."
+    ],
+    "band_pull_through": [
+      "גומייה מעוגנת נמוך מאחוריך.",
+      "דחוף את הישבן אחורה.",
+      "סגור את האגן קדימה."
+    ],
+    "kb_swing": [
+      "היכנס לציר ירכיים, ידיים ישרות.",
+      "שחרר את האגן קדימה — הקטלבל עף.",
+      "תן לו לחזור אחורה בין הרגליים."
+    ],
+    "kb_goblet_squat": [
+      "החזק את הקטלבל בקרניים מול החזה.",
+      "שב ישר למטה בין הברכיים.",
+      "עלה בדחיפה דרך כל כף הרגל."
+    ],
+    "bw_squat": [
+      "ידיים קדימה.",
+      "שב ישר למטה.",
+      "עלה בדחיפה דרך העקבים."
+    ],
+    "split_squat": [
+      "רגליים נטועות, אחת קדימה.",
+      "רד ישר למטה.",
+      "דחוף דרך העקב הקדמי."
+    ],
+    "bulgarian_split_squat": [
+      "רגל אחורית מורמת.",
+      "רד ישר למטה.",
+      "דחוף דרך העקב הקדמי."
+    ],
+    "walking_lunge": [
+      "צעד ארוך.",
+      "הברך בקו האצבעות.",
+      "דחוף מהרגל הקדמית."
+    ],
+    "leg_extension": [
+      "שב זקוף.",
+      "יישר עד הסוף.",
+      "רד בשליטה."
+    ],
+    "standing_calf_raise": [
+      "עלה על קצות האצבעות.",
+      "עצור למעלה.",
+      "רד למתיחה מלאה."
+    ],
+    "seated_calf_raise": [
+      "ברכיים מתחת לכרית.",
+      "דחוף דרך האצבעות.",
+      "מתיחה מלאה למטה."
+    ],
+    "leg_press_calf_raise": [
+      "אצבעות על קצה המשטח.",
+      "דחוף דרך כריות כף הרגל.",
+      "שלוט במתיחה."
+    ],
+    "bb_deadlift": [
+      "המוט מעל אמצע כף הרגל.",
+      "גב ישר, ליבה נעולה.",
+      "דחוף את הרצפה ממך."
+    ],
+    "bb_rdl": [
+      "ברכיים רכות.",
+      "דחוף את הישבן אחורה.",
+      "המוט צמוד לגוף."
+    ],
+    "sumo_deadlift": [
+      "עמידה רחבה.",
+      "ברכיים החוצה.",
+      "נעל את הירכיים למעלה."
+    ],
+    "db_rdl": [
+      "ברכיים רכות.",
+      "ישבן אחורה.",
+      "המשקולות צמודות לגוף."
+    ],
+    "leg_curl": [
+      "שכב על הבטן, ירכיים צמודות למשטח.",
+      "כופף את העקבים עד הסוף.",
+      "הורד לאט."
+    ],
+    "back_extension": [
+      "ציר מהירכיים.",
+      "כווץ למעלה.",
+      "רד לאט."
+    ],
+    "hip_thrust": [
+      "גב עליון על הספסל.",
+      "דחוף דרך העקבים.",
+      "כווץ ישבן למעלה."
+    ],
+    "glute_bridge": [
+      "עקבים קרובים לישבן.",
+      "דחוף את האגן למעלה.",
+      "כווץ למעלה."
+    ],
+    "cable_pull_through": [
+      "ציר מהירכיים.",
+      "דחוף את הישבן אחורה.",
+      "סגור את האגן קדימה."
+    ],
+    "hip_abduction": [
+      "שב זקוף.",
+      "דחוף את הברכיים החוצה.",
+      "החזר בשליטה."
+    ],
+    "cable_kickback": [
+      "רכון מעט קדימה.",
+      "דחוף את העקב אחורה.",
+      "כווץ את הישבן."
+    ],
+    "cable_crunch": [
+      "האגן קבוע.",
+      "כווץ דרך הבטן.",
+      "התנגד בדרך למעלה."
+    ],
+    "machine_crunch": [
+      "חזה צמוד לכרית.",
+      "כווץ למטה דרך הבטן.",
+      "החזר בשליטה."
+    ],
+    "hanging_leg_raise": [
+      "תלייה יציבה, בלי נדנוד.",
+      "הרם רגליים בשליטה.",
+      "הורד לאט."
+    ],
+    "ab_wheel": [
+      "כווץ ליבה חזק.",
+      "גלגל רק עד איפה שיש שליטה.",
+      "משוך חזרה עם הבטן."
+    ],
+    "machine_dip": [
+      "חזה גבוה, כתפיים למטה.",
+      "דחוף את הידיות עד יישור מלא.",
+      "החזר בשליטה."
+    ],
+    "machine_lateral_raise": [
+      "כוון את המושב כך שהכריות בגובה המרפקים.",
+      "הרם עד גובה הכתפיים.",
+      "הורד לאט."
+    ],
+    "machine_hip_thrust": [
+      "גב עליון מונח על הכרית.",
+      "דחוף דרך העקבים עד יישור מלא.",
+      "כווץ את הישבן למעלה."
+    ],
+    "hip_adduction": [
+      "שב זקוף.",
+      "כווץ את הברכיים פנימה.",
+      "החזר בשליטה."
+    ],
+    "seated_leg_curl": [
+      "הכרית נמוך על הירכיים.",
+      "כופף את העקבים אל מתחת למושב.",
+      "יישר את הברכיים עד הסוף."
+    ],
+    "incline_machine_press": [
+      "כוון את הידיות לגובה החזה העליון.",
+      "דחוף למעלה ומעט פנימה.",
+      "החזר בשליטה."
+    ],
+    "cable_hip_abduction": [
+      "חבר את הרצועה לקרסול החיצוני.",
+      "הרחק את הרגל החוצה ומעט אחורה.",
+      "החזר בשליטה."
+    ],
+    "cable_hip_adduction": [
+      "חבר את הרצועה לקרסול הפנימי.",
+      "משוך את הרגל אל מעבר לקו האמצע.",
+      "התנגד בדרך החוצה."
+    ],
+    "bb_bench_press_female": [
+      "רגליים נטועות ברצפה.",
+      "הורידי לחזה בשליטה.",
+      "דחפי את המוט ישר למעלה."
+    ],
+    "incline_bb_press_female": [
+      "כווני את הספסל ל‑30° בערך.",
+      "הורידי לחזה העליון.",
+      "דחפי למעלה ומעט אחורה."
+    ],
+    "db_bench_press_female": [
+      "פרקי הידיים ישרים מעל המרפקים.",
+      "הורידי בשליטה.",
+      "דחפי עד יישור מלא."
+    ],
+    "incline_db_press_female": [
+      "כווני את הספסל ל‑30° בערך.",
+      "הורידי לחזה העליון.",
+      "דחפי למעלה באופן אחיד."
+    ],
+    "machine_chest_press_female": [
+      "כווני את גובה המושב.",
+      "דחפי בתנועה רציפה.",
+      "החזירי בשליטה."
+    ],
+    "chest_dip_female": [
+      "רכונה מעט קדימה.",
+      "רדי למתיחה עמוקה.",
+      "דחפי עד יישור מלא."
+    ],
+    "push_up_female": [
+      "גוף בקו ישר.",
+      "הורידי את החזה לרצפה.",
+      "דחפי את הרצפה ממך."
+    ],
+    "knee_push_up_female": [
+      "גוף ישר מהברכיים עד הראש.",
+      "הורידי את החזה לרצפה.",
+      "דחפי את הרצפה ממך."
+    ],
+    "pec_deck_female": [
+      "מרפקים רכים.",
+      "סגרי וכווץ את החזה.",
+      "פתחי לאט."
+    ],
+    "cable_fly_female": [
+      "רכונה מעט קדימה.",
+      "חבקי את הידיים פנימה.",
+      "שלטי במתיחה."
+    ],
+    "close_grip_bench_female": [
+      "אחיזה ברוחב הכתפיים.",
+      "מרפקים צמודים לגוף.",
+      "דחפי דרך היד האחורית."
+    ],
+    "triceps_pushdown_female": [
+      "מרפקים נעולים לצדי הגוף.",
+      "יישרי עד הסוף.",
+      "התנגדי בדרך למעלה."
+    ],
+    "overhead_triceps_ext_female": [
+      "מרפקים צמודים לאוזניים.",
+      "מתיחה מאחורי הראש.",
+      "יישרי עד נעילה."
+    ],
+    "skullcrusher_female": [
+      "מרפקים מצביעים למעלה.",
+      "הורידי אל המצח.",
+      "יישרי עד נעילה."
+    ],
+    "bb_row_female": [
+      "הטיה של 45° בערך.",
+      "משכי אל הצלעות התחתונות.",
+      "שלטי בירידה."
+    ],
+    "pull_up_female": [
+      "התחילי מתלייה מלאה.",
+      "משכי את המרפקים למטה.",
+      "סנטר מעל המוט."
+    ],
+    "chin_up_female": [
+      "אחיזה הפוכה, כפות אליך.",
+      "משכי את החזה אל המוט.",
+      "רדי בשליטה."
+    ],
+    "lat_pulldown_female": [
+      "חזה גבוה.",
+      "משכי אל עצם הבריח.",
+      "שלטי במוט בדרך למעלה."
+    ],
+    "cable_row_female": [
+      "חזה גבוה.",
+      "משכי אל המותניים.",
+      "שחררי לאט."
+    ],
+    "db_row_female": [
+      "גב ישר.",
+      "חתרי אל הירך.",
+      "שלטי בדרך למטה."
+    ],
+    "t_bar_row_female": [
+      "הטיה עם גב ישר.",
+      "משכי אל החזה.",
+      "הורידי עד הסוף."
+    ],
+    "machine_row_female": [
+      "חזה צמוד לכרית.",
+      "משכי את המרפקים אחורה.",
+      "החזירי בשליטה."
+    ],
+    "face_pull_female": [
+      "משכי אל המצח.",
+      "הובילי עם המרפקים.",
+      "כווצי את הכתף האחורית."
+    ],
+    "rear_delt_fly_female": [
+      "מרפקים רכים.",
+      "פתחי לצדדים.",
+      "כווצי את הכתף האחורית."
+    ],
+    "bb_curl_female": [
+      "מרפקים צמודים לגוף.",
+      "כופפי בלי להתנדנד.",
+      "רדי בשליטה."
+    ],
+    "ez_bar_curl_female": [
+      "אחזי בקימורי המוט.",
+      "מרפקים צמודים לגוף.",
+      "רדי בשליטה."
+    ],
+    "bb_curl_21_female": [
+      "7 חזרות חצי תחתון בלבד.",
+      "7 חזרות חצי עליון בלבד.",
+      "7 חזרות מלאות לסיום."
+    ],
+    "cable_rope_hammer_curl_female": [
+      "אחיזה ניטרלית על החבל.",
+      "מרפקים צמודים לגוף.",
+      "כווצי למעלה."
+    ],
+    "spider_curl_female": [
+      "חזה על כרית השיפוע.",
+      "הזרועות תלויות ישר למטה.",
+      "כופפי וכווצי - בלי תנופה."
+    ],
+    "rope_pushdown_female": [
+      "מרפקים צמודים לגוף.",
+      "פצלי את החבל למטה.",
+      "התנגדי בדרך למעלה."
+    ],
+    "decline_bb_press_female": [
+      "כווני שיפוע שלילי קל.",
+      "הורידי לחזה התחתון.",
+      "דחפי עד יישור מלא."
+    ],
+    "db_fly_female": [
+      "שכבי ישר, מרפקים רכים.",
+      "פתחי רחב עד מתיחה.",
+      "קרבי את המשקולות זו לזו."
+    ],
+    "smith_incline_press_female": [
+      "כווני שיפוע של כ‑30° מתחת למוט.",
+      "הורידי לחזה העליון.",
+      "דחפי עד יישור מלא."
+    ],
+    "low_cable_fly_female": [
+      "קבעי את הפולי למטה.",
+      "הניפי מעלה ופנימה.",
+      "רדי בשליטה."
+    ],
+    "db_pullover_female": [
+      "שכבי על הספסל.",
+      "הורידי מאחורי הראש.",
+      "הניפי בחזרה מעל החזה."
+    ],
+    "close_grip_pulldown_female": [
+      "אחיזה צרה ניטרלית.",
+      "משכי אל החזה העליון.",
+      "שלטי במוט בדרך למעלה."
+    ],
+    "meadows_row_female": [
+      "עמדי לצד קצה המוט.",
+      "משכי מרפק גבוה ואחורה.",
+      "הורידי עד מתיחה מלאה."
+    ],
+    "cable_upright_row_female": [
+      "אחזי במוט בגובה הירכיים.",
+      "הובילי למעלה עם המרפקים.",
+      "עצרי בגובה החזה."
+    ],
+    "curtsy_lunge_female": [
+      "צעדי אחורה ובאלכסון.",
+      "הברך הקדמית בקו האצבעות.",
+      "דחפי דרך העקב הקדמי."
+    ],
+    "db_sumo_squat_female": [
+      "עמידה רחבה, אצבעות החוצה.",
+      "החזיקי את המשקולת נמוך.",
+      "ברכיים נפתחות מעל האצבעות."
+    ],
+    "smith_hip_thrust_female": [
+      "גב עליון על הספסל.",
+      "המוט מונח על האגן.",
+      "דחפי מעלה וכווצי."
+    ],
+    "frog_pump_female": [
+      "כפות רגליים צמודות, ברכיים לצדדים.",
+      "סנטר אסוף, צלעות למטה.",
+      "הקפיצי את האגן וכווצי למעלה."
+    ],
+    "donkey_kick_female": [
+      "עמידת שש, גב ישר.",
+      "דחפי את העקב לתקרה.",
+      "כווצי — בלי לקשת את הגב."
+    ],
+    "db_curl_female": [
+      "בלי תנופה.",
+      "כופפי וכווץ.",
+      "הורידי לאט."
+    ],
+    "hammer_curl_female": [
+      "אחיזה ניטרלית, אגודלים למעלה.",
+      "מרפקים במקום.",
+      "שלטי בירידה."
+    ],
+    "preacher_curl_female": [
+      "זרועות צמודות לכרית.",
+      "כופפי בלי להרים את המרפקים.",
+      "רדי בשליטה."
+    ],
+    "bb_overhead_press_female": [
+      "כווצי את הליבה.",
+      "המוט מעל אמצע כף הרגל.",
+      "נעלי מעל הראש."
+    ],
+    "db_shoulder_press_female": [
+      "קודם ליבה יציבה.",
+      "דחפי מעל הראש.",
+      "הורידי עד גובה האוזניים."
+    ],
+    "machine_shoulder_press_female": [
+      "כווני את המושב.",
+      "דחפי למעלה.",
+      "שלטי בדרך למטה."
+    ],
+    "arnold_press_female": [
+      "התחילי עם כפות אליך.",
+      "סובבי תוך כדי דחיפה.",
+      "הורידי בשליטה."
+    ],
+    "lateral_raise_female": [
+      "מרפקים רכים.",
+      "הרימי עד גובה הכתפיים.",
+      "הורידי לאט."
+    ],
+    "cable_lateral_raise_female": [
+      "הובילי עם המרפק.",
+      "הרימי עד גובה הכתפיים.",
+      "התנגדי בדרך למטה."
+    ],
+    "bb_back_squat_female": [
+      "נשימה גדולה וכיווץ ליבה.",
+      "שבי בין הירכיים.",
+      "עלי בדחיפה אחידה."
+    ],
+    "front_squat_female": [
+      "מרפקים גבוהים.",
+      "הישארי זקופה.",
+      "דחפי דרך אמצע כף הרגל."
+    ],
+    "hack_squat_female": [
+      "גב צמוד לכרית.",
+      "שבי למטה ואחורה.",
+      "דחפי דרך העקבים."
+    ],
+    "goblet_squat_female": [
+      "החזיקי צמוד לחזה.",
+      "שבי ישר למטה.",
+      "עלי בדחיפה."
+    ],
+    "kb_rdl_female": [
+      "קטלבל בכל יד, ידיים תלויות.",
+      "דחפי את האגן אחורה, גב ישר.",
+      "עמדי זקופה וסחטי."
+    ],
+    "band_curl_female": [
+      "עמדי על הגומייה, רגליים מפוסקות.",
+      "מרפקים צמודים לגוף.",
+      "הורידי לאט נגד הגומייה."
+    ],
+    "band_pushdown_female": [
+      "עגני את הגומייה מעל הדלת.",
+      "מרפקים נעולים לצדי הגוף.",
+      "יישרי עד ידיים ישרות."
+    ],
+    "band_row_female": [
+      "עגני את הגומייה בגובה החזה.",
+      "משכי את הידיים אל המותניים.",
+      "שחררי לאט נגד הגומייה."
+    ],
+    "band_pull_apart_female": [
+      "ידיים ישרות בגובה הכתפיים.",
+      "מתחי את הגומייה אל החזה.",
+      "כווצי את השכמות."
+    ],
+    "band_pull_through_female": [
+      "גומייה מעוגנת נמוך מאחורייך.",
+      "דחפי את הישבן אחורה.",
+      "סגרי את האגן קדימה."
+    ],
+    "kb_swing_female": [
+      "היכנסי לציר ירכיים, ידיים ישרות.",
+      "שחררי את האגן קדימה — הקטלבל עף.",
+      "תני לו לחזור אחורה בין הרגליים."
+    ],
+    "kb_goblet_squat_female": [
+      "החזיקי את הקטלבל בקרניים מול החזה.",
+      "שבי ישר למטה בין הברכיים.",
+      "עלי בדחיפה דרך כל כף הרגל."
+    ],
+    "bw_squat_female": [
+      "ידיים קדימה.",
+      "שבי ישר למטה.",
+      "עלי בדחיפה דרך העקבים."
+    ],
+    "split_squat_female": [
+      "רגליים נטועות, אחת קדימה.",
+      "רדי ישר למטה.",
+      "דחפי דרך העקב הקדמי."
+    ],
+    "bulgarian_split_squat_female": [
+      "רגל אחורית מורמת.",
+      "רדי ישר למטה.",
+      "דחפי דרך העקב הקדמי."
+    ],
+    "walking_lunge_female": [
+      "צעד ארוך.",
+      "הברך בקו האצבעות.",
+      "דחפי מהרגל הקדמית."
+    ],
+    "leg_extension_female": [
+      "שבי זקופה.",
+      "יישרי עד הסוף.",
+      "רדי בשליטה."
+    ],
+    "standing_calf_raise_female": [
+      "עלי על קצות האצבעות.",
+      "עצרי למעלה.",
+      "רדי למתיחה מלאה."
+    ],
+    "seated_calf_raise_female": [
+      "ברכיים מתחת לכרית.",
+      "דחפי דרך האצבעות.",
+      "מתיחה מלאה למטה."
+    ],
+    "leg_press_calf_raise_female": [
+      "אצבעות על קצה המשטח.",
+      "דחפי דרך כריות כף הרגל.",
+      "שלטי במתיחה."
+    ],
+    "bb_deadlift_female": [
+      "המוט מעל אמצע כף הרגל.",
+      "גב ישר, ליבה נעולה.",
+      "דחפי את הרצפה ממך."
+    ],
+    "bb_rdl_female": [
+      "ברכיים רכות.",
+      "דחפי את הישבן אחורה.",
+      "המוט צמוד לגוף."
+    ],
+    "sumo_deadlift_female": [
+      "עמידה רחבה.",
+      "ברכיים החוצה.",
+      "נעלי את הירכיים למעלה."
+    ],
+    "leg_curl_female": [
+      "שכבי על הבטן, ירכיים צמודות למשטח.",
+      "כופפי את העקבים עד הסוף.",
+      "הורידי לאט."
+    ],
+    "back_extension_female": [
+      "ציר מהירכיים.",
+      "כווצי למעלה.",
+      "רדי לאט."
+    ],
+    "hip_thrust_female": [
+      "גב עליון על הספסל.",
+      "דחפי דרך העקבים.",
+      "כווצי ישבן למעלה."
+    ],
+    "glute_bridge_female": [
+      "עקבים קרובים לישבן.",
+      "דחפי את האגן למעלה.",
+      "כווצי למעלה."
+    ],
+    "cable_pull_through_female": [
+      "ציר מהירכיים.",
+      "דחפי את הישבן אחורה.",
+      "סגרי את האגן קדימה."
+    ],
+    "hip_abduction_female": [
+      "שבי זקופה.",
+      "דחפי את הברכיים החוצה.",
+      "החזירי בשליטה."
+    ],
+    "cable_kickback_female": [
+      "רכונה מעט קדימה.",
+      "דחפי את העקב אחורה.",
+      "כווצי את הישבן."
+    ],
+    "cable_crunch_female": [
+      "האגן קבוע.",
+      "כווצי דרך הבטן.",
+      "התנגדי בדרך למעלה."
+    ],
+    "machine_crunch_female": [
+      "חזה צמוד לכרית.",
+      "כווצי למטה דרך הבטן.",
+      "החזירי בשליטה."
+    ],
+    "hanging_leg_raise_female": [
+      "תלייה יציבה, בלי נדנוד.",
+      "הרימי רגליים בשליטה.",
+      "הורידי לאט."
+    ],
+    "ab_wheel_female": [
+      "כווצי ליבה חזק.",
+      "גלגלי רק עד איפה שיש שליטה.",
+      "משכי חזרה עם הבטן."
+    ],
+    "machine_dip_female": [
+      "חזה גבוה, כתפיים למטה.",
+      "דחפי את הידיות עד יישור מלא.",
+      "החזירי בשליטה."
+    ],
+    "machine_lateral_raise_female": [
+      "כווני את המושב כך שהכריות בגובה המרפקים.",
+      "הרימי עד גובה הכתפיים.",
+      "הורידי לאט."
+    ],
+    "machine_hip_thrust_female": [
+      "גב עליון מונח על הכרית.",
+      "דחפי דרך העקבים עד יישור מלא.",
+      "כווצי את הישבן למעלה."
+    ],
+    "hip_adduction_female": [
+      "שבי זקופה.",
+      "כווצי את הברכיים פנימה.",
+      "החזירי בשליטה."
+    ],
+    "seated_leg_curl_female": [
+      "הכרית נמוך על הירכיים.",
+      "כופפי את העקבים אל מתחת למושב.",
+      "יישרי את הברכיים עד הסוף."
+    ],
+    "incline_machine_press_female": [
+      "כווני את הידיות לגובה החזה העליון.",
+      "דחפי למעלה ומעט פנימה.",
+      "החזירי בשליטה."
+    ],
+    "cable_hip_abduction_female": [
+      "חברי את הרצועה לקרסול החיצוני.",
+      "הרחיקי את הרגל החוצה ומעט אחורה.",
+      "החזירי בשליטה."
+    ],
+    "cable_hip_adduction_female": [
+      "חברי את הרצועה לקרסול הפנימי.",
+      "משכי את הרגל אל מעבר לקו האמצע.",
+      "התנגדי בדרך החוצה."
+    ],
+    "incline_db_fly": [
+      "שיפוע של כ-30 מעלות.",
+      "פתח רחב עם מרפקים רכים.",
+      "קרב את המשקולות זו לזו."
+    ],
+    "incline_db_fly_female": [
+      "שיפוע של כ-30 מעלות.",
+      "פתחי רחב עם מרפקים רכים.",
+      "קרבי את המשקולות זו לזו."
+    ],
+    "incline_push_up": [
+      "ידיים על ספסל או מוט.",
+      "הגוף בקו ישר.",
+      "הורד את החזה אל המוט."
+    ],
+    "incline_push_up_female": [
+      "ידיים על ספסל או מוט.",
+      "הגוף בקו ישר.",
+      "הורידי את החזה אל המוט."
+    ],
+    "decline_push_up": [
+      "רגליים על ספסל.",
+      "הגוף בקו ישר.",
+      "הורד את החזה אל הרצפה."
+    ],
+    "decline_push_up_female": [
+      "רגליים על ספסל.",
+      "הגוף בקו ישר.",
+      "הורידי את החזה אל הרצפה."
+    ],
+    "db_overhead_triceps_ext": [
+      "מרפקים ליד האוזניים.",
+      "הורד מאחורי הראש.",
+      "יישר עד הסוף."
+    ],
+    "db_overhead_triceps_ext_female": [
+      "מרפקים ליד האוזניים.",
+      "הורידי מאחורי הראש.",
+      "יישרי עד הסוף."
+    ],
+    "triceps_kickback": [
+      "רכן קדימה, הזרוע קבועה.",
+      "יישר את המרפק אחורה.",
+      "החזר בשליטה."
+    ],
+    "triceps_kickback_female": [
+      "רכני קדימה, הזרוע קבועה.",
+      "יישרי את המרפק אחורה.",
+      "החזירי בשליטה."
+    ],
+    "bench_dip": [
+      "ידיים על קצה הספסל.",
+      "רד עד כפיפה של 90 מעלות.",
+      "דחוף חזרה עד יישור."
+    ],
+    "bench_dip_female": [
+      "ידיים על קצה הספסל.",
+      "רדי עד כפיפה של 90 מעלות.",
+      "דחפי חזרה עד יישור."
+    ],
+    "diamond_push_up": [
+      "ידיים צמודות מתחת לחזה.",
+      "המרפקים לאורך הצלעות.",
+      "דחוף את הרצפה ממך."
+    ],
+    "diamond_push_up_female": [
+      "ידיים צמודות מתחת לחזה.",
+      "המרפקים לאורך הצלעות.",
+      "דחפי את הרצפה ממך."
+    ],
+    "machine_triceps_ext": [
+      "כוון את גובה המושב.",
+      "יישר עד הסוף.",
+      "התנגד בדרך חזרה."
+    ],
+    "machine_triceps_ext_female": [
+      "כווני את גובה המושב.",
+      "יישרי עד הסוף.",
+      "התנגדי בדרך חזרה."
+    ],
+    "single_arm_pushdown": [
+      "המרפק צמוד לגוף.",
+      "יישר עד הסוף.",
+      "התנגד בדרך למעלה."
+    ],
+    "single_arm_pushdown_female": [
+      "המרפק צמוד לגוף.",
+      "יישרי עד הסוף.",
+      "התנגדי בדרך למעלה."
+    ],
+    "incline_db_row": [
+      "החזה על הספסל המשופע.",
+      "חתור אל תחתית הצלעות.",
+      "הורד עד הסוף."
+    ],
+    "incline_db_row_female": [
+      "החזה על הספסל המשופע.",
+      "חתרי אל תחתית הצלעות.",
+      "הורידי עד הסוף."
+    ],
+    "single_arm_cable_row": [
+      "חזה זקוף.",
+      "משוך אל המותן.",
+      "תן לכתף לנסוע קדימה."
+    ],
+    "single_arm_cable_row_female": [
+      "חזה זקוף.",
+      "משכי אל המותן.",
+      "תני לכתף לנסוע קדימה."
+    ],
+    "inverted_row": [
+      "המוט בגובה האגן.",
+      "הגוף בקו ישר.",
+      "משוך את החזה אל המוט."
+    ],
+    "inverted_row_female": [
+      "המוט בגובה האגן.",
+      "הגוף בקו ישר.",
+      "משכי את החזה אל המוט."
+    ],
+    "straight_arm_pulldown": [
+      "מרפקים רכים, זרועות ארוכות.",
+      "העבר את המוט אל הירכיים.",
+      "החזר לאט."
+    ],
+    "straight_arm_pulldown_female": [
+      "מרפקים רכים, זרועות ארוכות.",
+      "העבירי את המוט אל הירכיים.",
+      "החזירי לאט."
+    ],
+    "reverse_pec_deck": [
+      "החזה על הכרית.",
+      "פתח לצדדים.",
+      "כווץ את הכתף האחורית."
+    ],
+    "reverse_pec_deck_female": [
+      "החזה על הכרית.",
+      "פתחי לצדדים.",
+      "כווצי את הכתף האחורית."
+    ],
+    "bb_shrug": [
+      "זרועות ארוכות, בלי כפיפה.",
+      "הרם את הכתפיים ישר למעלה.",
+      "הורד למתיחה מלאה."
+    ],
+    "bb_shrug_female": [
+      "זרועות ארוכות, בלי כפיפה.",
+      "הרימי את הכתפיים ישר למעלה.",
+      "הורידי למתיחה מלאה."
+    ],
+    "db_shrug": [
+      "המשקולות לצדי הגוף.",
+      "הרם את הכתפיים ישר למעלה.",
+      "הורד למתיחה מלאה."
+    ],
+    "db_shrug_female": [
+      "המשקולות לצדי הגוף.",
+      "הרימי את הכתפיים ישר למעלה.",
+      "הורידי למתיחה מלאה."
+    ],
+    "incline_db_curl": [
+      "שב לאחור על הספסל המשופע.",
+      "תן לזרועות לתלות מאחור.",
+      "כופף בלי להזיז את המרפקים."
+    ],
+    "incline_db_curl_female": [
+      "שבי לאחור על הספסל המשופע.",
+      "תני לזרועות לתלות מאחור.",
+      "כופפי בלי להזיז את המרפקים."
+    ],
+    "cable_curl": [
+      "מרפקים צמודים לגוף.",
+      "כופף בלי תנופה.",
+      "התנגד בדרך למטה."
+    ],
+    "cable_curl_female": [
+      "מרפקים צמודים לגוף.",
+      "כופפי בלי תנופה.",
+      "התנגדי בדרך למטה."
+    ],
+    "concentration_curl": [
+      "המרפק נשען על פנים הירך.",
+      "כופף וכווץ.",
+      "הורד לאט."
+    ],
+    "concentration_curl_female": [
+      "המרפק נשען על פנים הירך.",
+      "כופפי וכווצי.",
+      "הורידי לאט."
+    ],
+    "reverse_curl": [
+      "אחיזה עליונה.",
+      "המרפקים קבועים.",
+      "הורד בשליטה."
+    ],
+    "reverse_curl_female": [
+      "אחיזה עליונה.",
+      "המרפקים קבועים.",
+      "הורידי בשליטה."
+    ],
+    "single_arm_cable_curl": [
+      "המרפק צמוד לגוף.",
+      "כופף וכווץ.",
+      "התנגד בדרך למטה."
+    ],
+    "single_arm_cable_curl_female": [
+      "המרפק צמוד לגוף.",
+      "כופפי וכווצי.",
+      "התנגדי בדרך למטה."
+    ],
+    "landmine_press": [
+      "עמוד זקוף, הדק את הבטן.",
+      "דחוף למעלה ומעט פנימה.",
+      "הורד אל הכתף."
+    ],
+    "landmine_press_female": [
+      "עמדי זקופה, הדקי את הבטן.",
+      "דחפי למעלה ומעט פנימה.",
+      "הורידי אל הכתף."
+    ],
+    "pike_push_up": [
+      "אגן גבוה, הראש בין הזרועות.",
+      "הורד את קודקוד הראש לרצפה.",
+      "דחוף את הרצפה ממך."
+    ],
+    "pike_push_up_female": [
+      "אגן גבוה, הראש בין הזרועות.",
+      "הורידי את קודקוד הראש לרצפה.",
+      "דחפי את הרצפה ממך."
+    ],
+    "db_front_raise": [
+      "מרפקים רכים.",
+      "הרם עד גובה הכתפיים.",
+      "הורד לאט."
+    ],
+    "db_front_raise_female": [
+      "מרפקים רכים.",
+      "הרימי עד גובה הכתפיים.",
+      "הורידי לאט."
+    ],
+    "cable_front_raise": [
+      "הכבל מגיע מאחוריך.",
+      "הרם עד גובה הכתפיים.",
+      "התנגד בדרך למטה."
+    ],
+    "cable_front_raise_female": [
+      "הכבל מגיע מאחורייך.",
+      "הרימי עד גובה הכתפיים.",
+      "התנגדי בדרך למטה."
+    ],
+    "reverse_lunge": [
+      "צעד אחורה, לא קדימה.",
+      "הורד את הברך האחורית ישר למטה.",
+      "דחוף דרך העקב הקדמי."
+    ],
+    "reverse_lunge_female": [
+      "צעדי אחורה, לא קדימה.",
+      "הורידי את הברך האחורית ישר למטה.",
+      "דחפי דרך העקב הקדמי."
+    ],
+    "step_up": [
+      "הקופסה בערך בגובה הברך.",
+      "דחוף דרך הרגל העליונה.",
+      "רד בשליטה."
+    ],
+    "step_up_female": [
+      "הקופסה בערך בגובה הברך.",
+      "דחפי דרך הרגל העליונה.",
+      "רדי בשליטה."
+    ],
+    "bodyweight_squat": [
+      "רגליים ברוחב הכתפיים.",
+      "שב ישר למטה.",
+      "דחוף למעלה דרך אמצע כף הרגל."
+    ],
+    "bodyweight_squat_female": [
+      "רגליים ברוחב הכתפיים.",
+      "שבי ישר למטה.",
+      "דחפי למעלה דרך אמצע כף הרגל."
+    ],
+    "single_leg_press": [
+      "כף רגל אחת במרכז המשטח.",
+      "הברך בכיוון הבהונות.",
+      "עצור לפני יישור מלא."
+    ],
+    "single_leg_press_female": [
+      "כף רגל אחת במרכז המשטח.",
+      "הברך בכיוון הבהונות.",
+      "עצרי לפני יישור מלא."
+    ],
+    "db_calf_raise": [
+      "כריות כפות הרגליים על מדרגה.",
+      "עלה כמה שיותר גבוה.",
+      "הורד למתיחה מלאה."
+    ],
+    "db_calf_raise_female": [
+      "כריות כפות הרגליים על מדרגה.",
+      "עלי כמה שיותר גבוה.",
+      "הורידי למתיחה מלאה."
+    ],
+    "single_leg_calf_raise": [
+      "כף רגל אחת על מדרגה.",
+      "עלה כמה שיותר גבוה.",
+      "הורד למתיחה מלאה."
+    ],
+    "single_leg_calf_raise_female": [
+      "כף רגל אחת על מדרגה.",
+      "עלי כמה שיותר גבוה.",
+      "הורידי למתיחה מלאה."
+    ],
+    "seated_db_calf_raise": [
+      "המשקולות על הברכיים.",
+      "דחוף דרך הבהונות.",
+      "מתח למטה."
+    ],
+    "seated_db_calf_raise_female": [
+      "המשקולות על הברכיים.",
+      "דחפי דרך הבהונות.",
+      "מתחי למטה."
+    ],
+    "bw_calf_raise": [
+      "עמוד זקוף.",
+      "עלה על כריות כפות הרגליים.",
+      "הורד לאט."
+    ],
+    "bw_calf_raise_female": [
+      "עמדי זקופה.",
+      "עלי על כריות כפות הרגליים.",
+      "הורידי לאט."
+    ],
+    "single_leg_rdl": [
+      "הברך העומדת רכה.",
+      "רכן קדימה, הרגל החופשית אחורה.",
+      "התרומם דרך הירך."
+    ],
+    "single_leg_rdl_female": [
+      "הברך העומדת רכה.",
+      "רכני קדימה, הרגל החופשית אחורה.",
+      "התרוממי דרך הירך."
+    ],
+    "trap_bar_deadlift": [
+      "עמוד במרכז המוט.",
+      "גב ישר, הדק את הבטן.",
+      "דחוף את הרצפה ממך."
+    ],
+    "trap_bar_deadlift_female": [
+      "עמדי במרכז המוט.",
+      "גב ישר, הדקי את הבטן.",
+      "דחפי את הרצפה ממך."
+    ],
+    "standing_leg_curl": [
+      "האגן צמוד לכרית.",
+      "כופף את העקב אל הישבן.",
+      "יישר את הברך עד הסוף."
+    ],
+    "standing_leg_curl_female": [
+      "האגן צמוד לכרית.",
+      "כופפי את העקב אל הישבן.",
+      "יישרי את הברך עד הסוף."
+    ],
+    "nordic_curl": [
+      "הקרסוליים מקובעים, האגן נעול.",
+      "רד לאט ככל שאתה יכול.",
+      "בלום עם הידיים."
+    ],
+    "nordic_curl_female": [
+      "הקרסוליים מקובעים, האגן נעול.",
+      "רדי לאט ככל שאת יכולה.",
+      "בלמי עם הידיים."
+    ],
+    "single_leg_hip_thrust": [
+      "הגב העליון על הספסל.",
+      "דחוף דרך עקב אחד.",
+      "כווץ למעלה."
+    ],
+    "single_leg_hip_thrust_female": [
+      "הגב העליון על הספסל.",
+      "דחפי דרך עקב אחד.",
+      "כווצי למעלה."
+    ],
+    "machine_kickback": [
+      "האגן צמוד לכרית.",
+      "דחוף את העקב אחורה.",
+      "החזר בשליטה."
+    ],
+    "machine_kickback_female": [
+      "האגן צמוד לכרית.",
+      "דחפי את העקב אחורה.",
+      "החזירי בשליטה."
+    ],
+    "bw_glute_bridge": [
+      "העקבים קרובים לישבן.",
+      "הרם את האגן למעלה.",
+      "כווץ למעלה."
+    ],
+    "bw_glute_bridge_female": [
+      "העקבים קרובים לישבן.",
+      "הרימי את האגן למעלה.",
+      "כווצי למעלה."
+    ],
+    "lying_leg_raise": [
+      "הגב התחתון צמוד לרצפה.",
+      "הרם את הרגליים בשליטה.",
+      "עצור לפני שהגב מתקמר."
+    ],
+    "lying_leg_raise_female": [
+      "הגב התחתון צמוד לרצפה.",
+      "הרימי את הרגליים בשליטה.",
+      "עצרי לפני שהגב מתקמר."
+    ],
+    "captains_chair_raise": [
+      "הגב צמוד לכרית.",
+      "הרם את הברכיים אל החזה.",
+      "הורד בלי נדנוד."
+    ],
+    "captains_chair_raise_female": [
+      "הגב צמוד לכרית.",
+      "הרימי את הברכיים אל החזה.",
+      "הורידי בלי נדנוד."
+    ],
+    "sit_up": [
+      "כפות הרגליים על הרצפה, ברכיים כפופות.",
+      "התרומם עד הסוף.",
+      "רד חוליה אחר חוליה."
+    ],
+    "sit_up_female": [
+      "כפות הרגליים על הרצפה, ברכיים כפופות.",
+      "התרוממי עד הסוף.",
+      "רדי חוליה אחר חוליה."
+    ],
+    "bicycle_crunch": [
+      "הגב התחתון צמוד לרצפה.",
+      "המרפק לכיוון הברך הנגדית.",
+      "לאט, לא מהר."
+    ],
+    "bicycle_crunch_female": [
+      "הגב התחתון צמוד לרצפה.",
+      "המרפק לכיוון הברך הנגדית.",
+      "לאט, לא מהר."
+    ],
+    "russian_twist": [
+      "הישען לאחור, חזה זקוף.",
+      "סובב מהצלעות.",
+      "גע ברצפה בכל צד."
+    ],
+    "cable_woodchop": [
+      "זרועות ארוכות, האגן קדימה.",
+      "סובב מהצלעות.",
+      "החזר בשליטה."
+    ],
+    "cable_woodchop_female": [
+      "זרועות ארוכות, האגן קדימה.",
+      "סובבי מהצלעות.",
+      "החזירי בשליטה."
+    ],
+    "dead_bug": [
+      "הגב התחתון צמוד לרצפה.",
+      "יד ורגל נגדיות נמתחות החוצה.",
+      "עצור לפני שהגב מתקמר."
+    ],
+    "dead_bug_female": [
+      "הגב התחתון צמוד לרצפה.",
+      "יד ורגל נגדיות נמתחות החוצה.",
+      "עצרי לפני שהגב מתקמר."
+    ],
+    "russian_twist_female": [
+      "הישעני לאחור, חזה זקוף.",
+      "סובבי מהצלעות.",
+      "געי ברצפה בכל צד."
+    ],
+    "smith_squat": [
+      "המוט על הגב העליון.",
+      "שב ישר למטה.",
+      "דחוף למעלה דרך אמצע כף הרגל."
+    ],
+    "smith_squat_female": [
+      "המוט על הגב העליון.",
+      "שבי ישר למטה.",
+      "דחפי למעלה דרך אמצע כף הרגל."
+    ],
+    "smith_bench_press": [
+      "מקם את הספסל מתחת למוט.",
+      "הורד לחזה בשליטה.",
+      "דחוף עד יישור מלא."
+    ],
+    "smith_bench_press_female": [
+      "מקמי את הספסל מתחת למוט.",
+      "הורידי לחזה בשליטה.",
+      "דחפי עד יישור מלא."
+    ],
+    "smith_overhead_press": [
+      "שב או עמוד מתחת למוט.",
+      "דחוף מעל הראש.",
+      "הורד עד גובה האוזניים."
+    ],
+    "smith_overhead_press_female": [
+      "שבי או עמדי מתחת למוט.",
+      "דחפי מעל הראש.",
+      "הורידי עד גובה האוזניים."
+    ],
+    "smith_row": [
+      "רכן קדימה בזווית של כ-45 מעלות.",
+      "משוך אל תחתית הצלעות.",
+      "שלוט בירידה."
+    ],
+    "smith_row_female": [
+      "רכני קדימה בזווית של כ-45 מעלות.",
+      "משכי אל תחתית הצלעות.",
+      "שלטי בירידה."
+    ],
+    "smith_calf_raise": [
+      "כריות כפות הרגליים על מדרגה.",
+      "עלה כמה שיותר גבוה.",
+      "הורד למתיחה מלאה."
+    ],
+    "smith_calf_raise_female": [
+      "כריות כפות הרגליים על מדרגה.",
+      "עלי כמה שיותר גבוה.",
+      "הורידי למתיחה מלאה."
+    ],
+    "good_morning": [
+      "המוט גבוה על הגב, ברכיים רכות.",
+      "דחוף את הירכיים אחורה.",
+      "התרומם דרך הירכיים."
+    ],
+    "good_morning_female": [
+      "המוט גבוה על הגב, ברכיים רכות.",
+      "דחפי את הירכיים אחורה.",
+      "התרוממי דרך הירכיים."
+    ],
+    "assisted_pull_up": [
+      "כוון את הסיוע שאתה צריך היום.",
+      "משוך את המרפקים למטה.",
+      "הסנטר מעל המוט."
+    ],
+    "assisted_pull_up_female": [
+      "כווני את הסיוע שאת צריכה היום.",
+      "משכי את המרפקים למטה.",
+      "הסנטר מעל המוט."
+    ],
+    "assisted_dip": [
+      "כוון את הסיוע שאתה צריך היום.",
+      "רכן מעט קדימה.",
+      "דחוף עד יישור מלא."
+    ],
+    "assisted_dip_female": [
+      "כווני את הסיוע שאת צריכה היום.",
+      "רכני מעט קדימה.",
+      "דחפי עד יישור מלא."
+    ]
+  },
+  "nav": {
+    "home": "בית",
+    "today": "היום",
+    "cardio": "קרדיו",
+    "progress": "התקדמות",
+    "history": "היסטוריה",
+    "settings": "הגדרות",
+    "you": "אני",
+    "program": "תוכנית"
+  },
+  "pain": {
+    "affordance": "משהו לא מרגיש טוב",
+    "whereTitle": "איפה כואב?",
+    "whereSub": "הקש על האזור — אני אף פעם לא מבקש ממך לאבחן.",
+    "whereSub_female": "הקישי על האזור — אני אף פעם לא מבקשת ממך לאבחן.",
+    "howSharp": "כמה חד?",
+    "grade_twinge": "צביטה",
+    "gradeNote_twinge": "אזהרה",
+    "grade_pain": "כאב אמיתי",
+    "gradeNote_pain": "לעצור",
+    "grade_sharp": "חד",
+    "gradeNote_sharp": "בכל חזרה",
+    "tellCoach": "ספר למאמן",
+    "tellCoach_female": "ספרי למאמן",
+    "adjusted": "הותאם · {{muscle}}",
+    "responseTitle": "הבנתי. נשמור על ה{{hurt}} ונמשיך לאמן את ה{{trained}}.",
+    "responseTitleRested": "הבנתי. עצרתי את העבודה על ה{{muscle}}, ושאר השבוע שלך נשאר.",
+    "swapWhy": "טווח קצר יותר, בלי עומס על מה שכואב",
+    "loadLegend": "משקל",
+    "wasLoad": "היה {{value}} {{unit}}",
+    "easedFor": "העבודה על ה{{muscle}} מונחת במפה שלך ל־{{days}} ימים",
+    "easedTail": " — ואז היא חוזרת מעצמה.",
+    "nothingNew": "אותה החלפה שכבר יש לך — אין מה ללמוד, ואין שום דבר קבוע. אפשר לשנות בכל רגע ב\"אני\" › מפת הגוף.",
+    "continueWith": "ממשיכים עם {{exercise}}",
+    "skipToday": "לדלג על {{muscle}} היום",
+    "gotIt": "הבנתי",
+    "title": "משהו כואב",
+    "invite": "ספר לי מה כואב ואני אקח את זה מכאן.",
+    "invite_female": "ספרי לי מה כואב ואני אקח את זה מכאן.",
+    "inviteOnLift": "ספר לי מה כואב ב{{exercise}} ואני אקח את זה מכאן.",
+    "inviteOnLift_female": "ספרי לי מה כואב ב{{exercise}} ואני אקח את זה מכאן.",
+    "resting": "במנוחה — נשארו {{n}} ימים, ואז זה חוזר מעצמו.",
+    "responseTitleTwinge": "הבנתי. ממשיכים לאמן את ה{{muscle}} — התנועה שגרמה לזה יוצאת.",
+    "twingeFor_one": "יוצאת ליום אחד, ואז היא חוזרת מעצמה.",
+    "twingeFor_two": "יוצאת ליומיים, ואז היא חוזרת מעצמה.",
+    "twingeFor_other": "יוצאת ל־{{count}} ימים, ואז היא חוזרת מעצמה.",
+    "askBack": "נגמרה המנוחה של ה{{muscle}}. איך זה מרגיש עכשיו?",
+    "answerRecovered": "חזר לגמרי",
+    "answerTender": "עדיין רגיש",
+    "answerHurts": "עדיין כואב",
+    "stanceResting": "במנוחה"
+  },
+  "notifAsk": {
+    "title": "מותר לי לומר משהו — רק כשזה חשוב?",
+    "willWeekly": "כל השבוע שלך במקום אחד בכל שבת — כל החלטה, ולמה",
+    "willRest": "נגיעה ברגע שהמנוחה נגמרת, כדי שהטלפון יישאר בכיס",
+    "willReport": "כל קילומטר ברגע שהוא נסגר, עם הקצב שלו",
+    "allow": "לאשר התראות",
+    "notNow": "לא עכשיו"
+  },
+  "onWrist": {
+    "legend": "על היד שלך",
+    "title": "לשעון שלך כבר יש אותי.",
+    "titleInstall": "השעון שלך יכול לשאת אותי.",
+    "sub": "ההתקנה שלי נעשית יחד עם האפליקציה באייפון — אין מה להגדיר ואין מה לאשר. הרם את היד ליד המתקן, והסט של היום כבר שם.",
+    "sub_female": "ההתקנה שלי נעשית יחד עם האפליקציה באייפון — אין מה להגדיר ואין מה לאשר. הרימי את היד ליד המתקן, והסט של היום כבר שם.",
+    "subInstall": "התקנה אוטומטית כבויה באייפון הזה, ולכן היד עדיין ריקה. פתח את אפליקציית Watch, מצא אותי תחת Available Apps, והתקן. זה הכול.",
+    "subInstall_female": "התקנה אוטומטית כבויה באייפון הזה, ולכן היד עדיין ריקה. פתחי את אפליקציית Watch, מצאי אותי תחת Available Apps, והתקיני. זה הכול.",
+    "cardTitle": "Apple Watch",
+    "cardLegend": "משקל · חזרות · מנוחה",
+    "noticeOn": "לשעון שלך כבר יש אותי — הסט, המנוחה, והסימון.",
+    "noticeInstall": "השעון שלך יכול לשאת אותי. פתח את אפליקציית Watch והתקן מתוך Available Apps.",
+    "noticeInstall_female": "השעון שלך יכול לשאת אותי. פתחי את אפליקציית Watch והתקיני מתוך Available Apps.",
+    "willSet": "הסט על היד שלך — המשקל, החזרות, והסימון שרושם אותם",
+    "willRest": "המנוחה יורדת שם ונוגעת בך ברגע שהיא נגמרת",
+    "willStandalone": "כל האימון רץ כשהטלפון בתיק",
+    "helper": "הדופק שלך נמדד על היד בזמן שאתה מרים, והאימון שנגמר נשמר ב-Health. הטלפון עדיין מחליט כל משקל.",
+    "helper_female": "הדופק שלך נמדד על היד בזמן שאת מרימה, והאימון שנגמר נשמר ב-Health. הטלפון עדיין מחליט כל משקל.",
+    "done": "הבנתי"
+  },
+  "comeback": {
+    "legend": "אחרי {{days}} ימים",
+    "title": "טוב לראות אותך. ממשיכים מכאן.",
+    "sub": "שום דבר כאן אינו עונש על ההיעדרות. הסט הראשון שלך יקבע מה עדיין מתאים — תרים, ואני אקרא את האמת מהמוט.",
+    "sub_female": "שום דבר כאן אינו עונש על ההיעדרות. הסט הראשון שלך יקבע מה עדיין מתאים — תרימי, ואני אקרא את האמת מהמוט.",
+    "cardLegend": "היום · המשקלים שלך",
+    "bodyweight": "משקל גוף",
+    "start": "מתחילים היום"
+  },
+  "lapsed": {
+    "todayLegend": "היום",
+    "noDay": "השבוע שלך מחכה",
+    "pausedLegend": "האימון מושהה",
+    "title": "התוכנית שלך בהמתנה. כל מה שבנית עדיין כאן.",
+    "body": "המנוי הקודם שלך הסתיים ב־{{date}}. אפשר לקרוא את כל ההיסטוריה בכל רגע — ואני אמשיך בדיוק מאיפה שעצרנו כשתהיה מוכן.",
+    "body_female": "המנוי הקודם שלך הסתיים ב־{{date}}. אפשר לקרוא את כל ההיסטוריה בכל רגע — ואני אמשיך בדיוק מאיפה שעצרנו כשתהיי מוכנה.",
+    "resume": "לחדש",
+    "resumeAt": "לחדש · {{price}}",
+    "samePrice": "אותו מחיר כמו קודם. אפשר לבטל בכל רגע.",
+    "stillYours": "עדיין שלך לקריאה",
+    "lastSession": "האימון האחרון · {{date}}",
+    "lastSessionDetail": "{{name}} · {{lifts}} תרגילים · {{moved}} {{unit}} הוזזו",
+    "bestLift": "{{exercise}} · כל הזמנים",
+    "bestLiftDetail": "שיא {{weight}} {{unit}} × {{reps}}",
+    "letters": "מכתבי השבת",
+    "lettersDetail_one": "שבוע אחד, הכול נשמר",
+    "lettersDetail_two": "שבועיים, הכול נשמר",
+    "lettersDetail_other": "{{count}} שבועות, הכול נשמר"
+  },
+  "planShare": {
+    "legend": "שיתוף התוכנית",
+    "title": "שתף את תוכנית האימון שלך.",
+    "title_female": "שתפי את תוכנית האימון שלך.",
+    "daysTag_one": "יום אחד",
+    "daysTag_two": "יומיים",
+    "daysTag_other": "{{count}} ימים",
+    "lifts_one": "תרגיל אחד",
+    "lifts_two": "שני תרגילים",
+    "lifts_other": "{{count}} תרגילים",
+    "structureOnly": "המבנה בלבד. ",
+    "structureTail": "טווחי החזרות כלולים; המשקלים שלך נשארים אצלך.",
+    "send": "לשלוח קישור לתוכנית",
+    "preview": "לראות את הכרטיס",
+    "liftsWord": "תרגילים",
+    "fromYou": "נשלח בשם {{name}} — השם שלך נוסע עם הקישור."
+  },
+  "planReceived": {
+    "sharedBy": "{{name}} שיתפה תוכנית",
+    "sharedAnon": "שותפה תוכנית",
+    "withYou": "איתך · היום",
+    "title": "{{split}} של {{name}}, נעשית שלך.",
+    "titleAnon": "{{split}}, נעשית שלך.",
+    "days": "ימים",
+    "lifts": "תרגילים",
+    "bands": "טווחי חזרות",
+    "yoursLead": "משקלי הפתיחה שלך מגיעים מהגוף שלך — לא של {{name}}.",
+    "yoursLeadAnon": "משקלי הפתיחה שלך מגיעים מהגוף שלך — לא שלהם.",
+    "yoursSub": "אתחיל מהמין ומשקל הגוף שלך, ואתקן מהסט העבודה הראשון שלך.",
+    "bandsReplaced": "טווחי החזרות שלך יוחלפו בשלהם — {{bands}} — במקום אלה שהגדרת.",
+    "adopt": "לעשות אותה שלי",
+    "decline": "לא עכשיו"
+  },
+  "weekday": {
+    "sun": "א'",
+    "mon": "ב'",
+    "tue": "ג'",
+    "wed": "ד'",
+    "thu": "ה'",
+    "fri": "ו'",
+    "sat": "שבת"
+  },
+  "weekdayLong": {
+    "sun": "יום ראשון",
+    "mon": "יום שני",
+    "tue": "יום שלישי",
+    "wed": "יום רביעי",
+    "thu": "יום חמישי",
+    "fri": "יום שישי",
+    "sat": "שבת"
+  },
+  "plan": {
+    "shapeFull": "גוף מלא",
+    "shapeSplit": "עליון / תחתון",
+    "shapeUpper": "פלג גוף עליון",
+    "shapeLower": "פלג גוף תחתון",
+    "shapePushPull": "דחיפה / משיכה",
+    "shapePushPullLegs": "דחיפה / משיכה / רגליים",
+    "shapeBodyPart": "פיצול לפי שרירים",
+    "weekDays": "{{n}} ימים בשבוע",
+    "led": "בהובלת {{muscles}}"
+  },
+  "import": {
+    "reviewTitle": "התוכנית שלך",
+    "reviewRead": "{{sessions}} אימונים · {{lifts}} תרגילים נקראו",
+    "reviewNothing": "אין מה לציין. זו התוכנית שלך והיא נשארת בדיוק כפי שנכתבה — המשקלים עליי.",
+    "reviewFound": "{{n}} דברים ששמתי לב אליהם:",
+    "findUnmatched": "לא מצאתי את «{{name}}» במאגר שלי, אז הוא עדיין לא בשבוע.",
+    "findEmptySession": "שום דבר מ«{{day}}» לא היה במאגר שלי, אז היום הזה לא נכנס לשבוע בכלל.",
+    "findSetsUnstated": "ל«{{name}}» לא רשום כמה סטים. שמתי {{n}} בינתיים.",
+    "findLongSession": "{{day}} נמשך בערך {{min}} דקות.",
+    "findManySets": "{{name}} הוא {{n}} סטים — יותר ממה שאני בדרך כלל כותב.",
+    "findUnderDose": "{{muscle}} מקבל {{n}} סטים בשבוע, מתחת למה שבדרך כלל מצמיח.",
+    "findOnceAWeek": "{{muscle}} מאומן פעם בשבוע.",
+    "keepMine": "להשאיר שלי",
+    "letUsBalance": "תאזן לי",
+    "declineImport": "לא — להמשיך עם התוכנית שביקשתי",
+    "title": "להביא תוכנית משלך",
+    "sub": "תצלם אותה, או תכתוב אותה. אקרא, אגיד לך מה שמתי לב אליו, ואשאיר אותה בדיוק כמו שהיא.",
+    "photograph": "לצלם אותה",
+    "or": "או",
+    "typePlaceholder": "דחיפה\nלחיצת חזה 4x8\nלחיצה בשיפוע 3x10\n\nמשיכה\nדדליפט 4x5",
+    "typeLabel": "התוכנית שלך",
+    "readMine": "תקרא את שלי",
+    "balanceSoon": "האיזון עוד לא נבנה — בינתיים התוכנית נשארת כפי שהיא.",
+    "fail": {
+      "nothing_given": "תן לי תמונה או כתוב אותה ואקרא.",
+      "unreachable": "לא הצלחתי להגיע לקורא. לך שוב בעוד רגע.",
+      "unreadable": "לא מצאתי שם תוכנית אימונים.",
+      "nothing_matched": "אף אחד מהתרגילים האלה לא במאגר שלי — זה הדף הנכון?",
+      "nothing_given_female": "תני לי תמונה או כתבי אותה ואקרא.",
+      "unreachable_female": "לא הצלחתי להגיע לקורא. נסי שוב בעוד רגע."
+    },
+    "sub_female": "תצלמי אותה, או תכתבי אותה. אקרא, אגיד לך מה שמתי לב אליו, ואשאיר אותה בדיוק כמו שהיא.",
+    "balancedTitle": "מאוזן",
+    "balancedNothing": "לא היה צורך לשנות כלום.",
+    "balancedCount": "{{n}} שינויים, ושום דבר אחר לא זז:",
+    "changeRemoved": "{{name}} יצא מ{{day}} — היום לא יכול היה להכיל אותו.",
+    "changeTrimmed": "{{name}}: {{from}} סטים ← {{to}}.",
+    "changeRaised": "{{name}}: {{from}} סטים ← {{to}}.",
+    "useBalanced": "להשתמש בזה",
+    "backToMine": "חזרה לשלי",
+    "alreadyHaveOne": "כבר יש לי תוכנית",
+    "phase": {
+      "reading": "קורא את התוכנית שלך…",
+      "matching": "בודק כמה תרגילים…"
+    },
+    "photographSub": "נייר, לוח מחיק או צילום מסך — ואם התוכנית על כמה עמודים, אפשר לבחור עד שלושה.",
+    "suggestLead": "שאלתי על {{n}} שלא הצלחתי לזהות:",
+    "suggestSame": "\"{{name}}\" — זה כנראה {{ours}} שלנו.",
+    "suggestAlt": "אין לי \"{{name}}\". הכי קרוב שיש לי זה {{ours}}.",
+    "suggestAccept": "קח את {{name}}",
+    "suggestAccept_female": "קחי את {{name}}"
+  },
+  "library": {
+    "title": "התרגילים שלך",
+    "sub": "בחר את התרגילים שיבואו ראשונים. סמן את אלה שאתה לא רוצה לראות.",
+    "save": "שמירה",
+    "saved": "נשמר — השבוע נבנה מחדש",
+    "countPicked": "{{n}} נבחרו",
+    "countRefused": "{{n}} נפסלו",
+    "countLifts_one": "תרגיל אחד",
+    "countLifts_two": "שני תרגילים",
+    "countLifts_other": "{{n}} תרגילים",
+    "lastLift": "זה התרגיל האחרון שנשאר ל{{muscle}}. אם תפסול אותו לא נשאר במה לאמן אותו — כבה את השריר במפת הגוף במקום.",
+    "note": "תרגיל שנבחר מקבל את המושב הראשון של אותו שריר. כמה מהם ייכנסו נקבע לפי הנפח של השריר והשעה שלך, בדיוק כמו אצלי.",
+    "stance": {
+      "refused": "להסתיר",
+      "picked": "יבוא ראשון"
+    },
+    "sub_female": "בחרי את התרגילים שיבואו ראשונים. סמני את אלה שאת לא רוצה לראות.",
+    "lastLift_female": "זה התרגיל האחרון שנשאר ל{{muscle}}. אם תפסלי אותו לא נשאר במה לאמן אותו — כבי את השריר במפת הגוף במקום.",
+    "savedNoRebuild": "נשמר. המאמן שלך כותב את השבוע, אז הוא נשאר כמו שהוא.",
+    "saveFailed": "זה לא נשמר. הקש שמירה שוב.",
+    "saveFailed_female": "זה לא נשמר. הקישי שמירה שוב.",
+    "search": "למצוא תרגיל",
+    "noMatches": "שום דבר כאן לא תואם ל\"{{q}}\"."
+  },
+  "exercise": {
+    "ab_wheel": "גלגל בטן",
+    "arnold_press": "לחיצת ארנולד",
+    "assisted_dip": "מקבילים בסיוע",
+    "assisted_pull_up": "מתח בסיוע",
+    "back_extension": "פשיטת גב תחתון",
+    "bb_back_squat": "סקוואט במוט",
+    "bb_bench_press": "לחיצת חזה במוט",
+    "bb_curl": "כפיפת מרפקים במוט",
+    "ez_bar_curl": "כפיפת מרפקים במוט EZ",
+    "bb_curl_21": "כפיפות 21 (7·7·7)",
+    "cable_rope_hammer_curl": "כפיפת פטיש בחבל",
+    "spider_curl": "ספיידר קרל",
+    "rope_pushdown": "פשיטת מרפקים בחבל",
+    "decline_bb_press": "לחיצת חזה בשיפוע שלילי",
+    "db_fly": "פרפר במשקולות יד",
+    "smith_incline_press": "לחיצת חזה בשיפוע בסמית’",
+    "low_cable_fly": "פרפר בפולי תחתון",
+    "db_pullover": "פולאובר במשקולת יד",
+    "close_grip_pulldown": "משיכת פולי עליון באחיזה צרה",
+    "meadows_row": "חתירת לנדמיין ביד אחת",
+    "cable_upright_row": "חתירה אנכית בפולי",
+    "curtsy_lunge": "מכרעים מוצלבים",
+    "db_sumo_squat": "סקוואט סומו במשקולת יד",
+    "smith_hip_thrust": "הרמת אגן בסמית’",
+    "frog_pump": "גשר צפרדע",
+    "donkey_kick": "בעיטת חמור",
+    "bb_deadlift": "דדליפט",
+    "bb_overhead_press": "לחיצת כתפיים במוט",
+    "bb_rdl": "דדליפט רומני",
+    "bb_row": "חתירה במוט",
+    "bb_shrug": "הרמת כתפיים במוט",
+    "bench_dip": "מקבילים על ספסל",
+    "bicycle_crunch": "כפיפות בטן אופניים",
+    "bulgarian_split_squat": "סקוואט בולגרי",
+    "cable_crunch": "כפיפות בטן בפולי",
+    "cable_curl": "כפיפת מרפקים בפולי",
+    "cable_fly": "פרפר בפולי",
+    "cable_front_raise": "הרמת זרוע לפנים בפולי",
+    "cable_hip_abduction": "הרחקת ירך בפולי",
+    "cable_hip_adduction": "קירוב ירך בפולי",
+    "cable_kickback": "בעיטת ישבן בפולי",
+    "cable_lateral_raise": "הרחקת כתף בפולי",
+    "cable_pull_through": "משיכה בין הרגליים בפולי",
+    "cable_row": "חתירה בפולי בישיבה",
+    "cable_woodchop": "חיתוך עץ בפולי",
+    "captains_chair_raise": "הרמת ברכיים בכיסא רומי",
+    "chest_dip": "מקבילים לחזה",
+    "chin_up": "מתח באחיזה עליונה",
+    "close_grip_bench": "לחיצת חזה באחיזה צרה",
+    "concentration_curl": "כפיפת מרפק בריכוז",
+    "db_bench_press": "לחיצת חזה במשקולות יד",
+    "db_calf_raise": "הרמת עקבים עם משקולות יד",
+    "db_curl": "כפיפת מרפקים במשקולות יד",
+    "db_front_raise": "הרמת זרועות לפנים",
+    "db_overhead_triceps_ext": "פשיטת מרפקים מעל הראש במשקולת יד",
+    "db_rdl": "דדליפט רומני במשקולות יד",
+    "db_row": "חתירה במשקולת יד",
+    "db_shoulder_press": "לחיצת כתפיים במשקולות יד",
+    "db_shrug": "הרמת כתפיים במשקולות יד",
+    "decline_push_up": "שכיבות סמיכה עם רגליים מוגבהות",
+    "diamond_push_up": "שכיבות סמיכה יהלום",
+    "face_pull": "משיכה לפנים בפולי",
+    "front_squat": "סקוואט קדמי",
+    "glute_bridge": "גשר ישבן",
+    "goblet_squat": "סקוואט גובלט",
+    "kb_goblet_squat": "סקוואט גובלט בקטלבל",
+    "kb_rdl": "דדליפט רומני בקטלבל",
+    "kb_swing": "נדנוד קטלבל",
+    "band_curl": "כפיפת מרפקים בגומייה",
+    "band_pushdown": "פשיטת מרפקים בגומייה",
+    "band_row": "חתירה בגומייה בישיבה",
+    "band_pull_apart": "פתיחת גומייה לצדדים",
+    "band_pull_through": "משיכה בין הרגליים בגומייה",
+    "bw_squat": "סקוואט משקל גוף",
+    "split_squat": "ספליט סקוואט",
+    "good_morning": "גוד מורנינג",
+    "hack_squat": "הק סקוואט",
+    "hammer_curl": "כפיפת מרפקים בפטיש",
+    "hanging_leg_raise": "הרמת רגליים בתלייה",
+    "hip_abduction": "הרחקת ירך במכונה",
+    "hip_adduction": "קירוב ירך במכונה",
+    "hip_thrust": "הרמת אגן במוט",
+    "incline_bb_press": "לחיצת חזה בשיפוע במוט",
+    "incline_db_curl": "כפיפת מרפקים בשיפוע",
+    "incline_db_fly": "פרפר בשיפוע במשקולות יד",
+    "incline_db_press": "לחיצת חזה בשיפוע במשקולות יד",
+    "incline_db_row": "חתירה בתמיכת חזה במשקולות יד",
+    "incline_machine_press": "לחיצת חזה בשיפוע במכונה",
+    "inverted_row": "חתירה הפוכה",
+    "landmine_press": "לחיצת לנדמיין",
+    "lat_pulldown": "משיכת פולי עליון",
+    "lateral_raise": "הרחקת כתפיים לצדדים",
+    "leg_curl": "כפיפת ברכיים בשכיבה",
+    "leg_extension": "פשיטת ברכיים במכונה",
+    "leg_press": "לחיצת רגליים",
+    "single_leg_press": "לחיצת רגליים ברגל אחת",
+    "leg_press_calf_raise": "הרמת עקבים במכונת לחיצת רגליים",
+    "lying_leg_raise": "הרמת רגליים בשכיבה",
+    "machine_chest_press": "לחיצת חזה במכונה",
+    "machine_crunch": "כפיפות בטן במכונה",
+    "machine_dip": "מקבילים במכונה בישיבה",
+    "machine_hip_thrust": "הרמת אגן במכונה",
+    "machine_kickback": "בעיטת ישבן במכונה",
+    "machine_lateral_raise": "הרחקת כתפיים במכונה",
+    "machine_row": "חתירה במכונה",
+    "machine_shoulder_press": "לחיצת כתפיים במכונה",
+    "machine_triceps_ext": "פשיטת מרפקים במכונה",
+    "nordic_curl": "כפיפה נורדית",
+    "overhead_triceps_ext": "פשיטת מרפקים מעל הראש",
+    "pec_deck": "פרפר במכונה",
+    "pike_push_up": "שכיבות סמיכה בזווית",
+    "preacher_curl": "כפיפת מרפקים בכיסא סקוט",
+    "pull_up": "מתח באחיזה רחבה",
+    "push_up": "שכיבות סמיכה",
+    "rear_delt_fly": "פרפר הפוך לכתף אחורית",
+    "reverse_curl": "כפיפת מרפקים באחיזה הפוכה",
+    "reverse_lunge": "מכרעים לאחור",
+    "reverse_pec_deck": "פרפר הפוך במכונה",
+    "russian_twist": "סיבוב רוסי",
+    "seated_calf_raise": "הרמת עקבים בישיבה",
+    "seated_db_calf_raise": "הרמת עקבים בישיבה עם משקולת",
+    "seated_leg_curl": "כפיפת ברכיים בישיבה",
+    "single_arm_cable_curl": "כפיפת מרפק ביד אחת בפולי",
+    "single_arm_cable_row": "חתירה ביד אחת בפולי",
+    "single_arm_pushdown": "פשיטת מרפק ביד אחת בפולי",
+    "single_leg_calf_raise": "הרמת עקב ברגל אחת",
+    "single_leg_hip_thrust": "הרמת אגן ברגל אחת",
+    "single_leg_rdl": "דדליפט רומני ברגל אחת",
+    "dead_bug": "חרק מת",
+    "sit_up": "כפיפות בטן",
+    "skullcrusher": "סקאלקראשר",
+    "smith_bench_press": "לחיצת חזה בסמית’",
+    "smith_calf_raise": "הרמת עקבים בסמית’",
+    "smith_overhead_press": "לחיצת כתפיים בסמית’",
+    "smith_row": "חתירה בסמית’",
+    "smith_squat": "סקוואט בסמית’",
+    "standing_calf_raise": "הרמת עקבים בעמידה",
+    "standing_leg_curl": "כפיפת ברך בעמידה",
+    "step_up": "עלייה על מדרגה",
+    "straight_arm_pulldown": "משיכת פולי בידיים ישרות",
+    "sumo_deadlift": "דדליפט סומו",
+    "t_bar_row": "חתירה ב־T־בר",
+    "trap_bar_deadlift": "דדליפט בטראפ בר",
+    "triceps_kickback": "בעיטת טרייספס",
+    "triceps_pushdown": "פשיטת מרפקים בפולי עליון",
+    "walking_lunge": "מכרעים בהליכה"
+  },
+  "movement": {
+    "run_outdoor": "ריצה",
+    "run_treadmill": "ריצה על הליכון",
+    "walk_treadmill": "הליכה על הליכון",
+    "walk_outdoor": "הליכה",
+    "cycle_outdoor": "רכיבה",
+    "cycle_stationary": "אופניים נייחים",
+    "row_erg": "מכונת חתירה",
+    "elliptical": "אליפטיקל",
+    "stair_climber": "מכונת מדרגות",
+    "swim": "שחייה",
+    "jump_rope": "קפיצה בחבל",
+    "plank": "פלאנק",
+    "side_plank": "פלאנק צידי",
+    "hollow_hold": "הולו הולד",
+    "dead_hang": "תלייה על מוט",
+    "farmer_carry": "הליכת איכר",
+    "sled_push": "דחיפת מזחלת",
+    "wall_sit": "ישיבת קיר",
+    "sprint": "ספרינט",
+    "shuttle_run": "ריצת מעבורת",
+    "box_jump": "קפיצה על קופסה",
+    "broad_jump": "קפיצה לרוחק",
+    "mobility": "ניידות",
+    "warm_up": "חימום",
+    "cool_down": "שחרור",
+    "skill_practice": "תרגול מיומנות"
+  },
+  "widget": {
+    "week": "{{done}} מתוך {{total}} השבוע",
+    "weekDone": "השבוע מאחוריך."
+  },
+  "together": {
+    "title": "יחד",
+    "sub": "מה ששלך — לשתף. מה שחבר שלח — להביא.",
+    "shareSession": "שיתוף האימון האחרון",
+    "shareSessionSub": "כרטיס סטורי של האימון שסגרת.",
+    "shareWeek": "שיתוף השבוע",
+    "shareWeekSub": "הימים, הטונות והשינוי מהשבוע שעבר.",
+    "sendPlan": "לשלוח את התוכנית לחבר",
+    "sendPlanSub": "הימים והתרגילים. המשקלים שלך נשארים אצלך.",
+    "bringPlan": "להביא תוכנית",
+    "bringPlanSub": "מחבר, או דף ממאמן — נקרא ונבנה סביבך.",
+    "sharedCount_one": "אימון משותף אחד ברשומה שלך.",
+    "sharedCount_two": "שני אימונים משותפים ברשומה שלך.",
+    "sharedCount_other": "{{count}} אימונים משותפים ברשומה שלך.",
+    "circleTitle": "המעגל",
+    "circleSub": "כמה אנשים שמתאמנים. כל אחד רואה עובדה אחת: כמה אימונים נסגרו השבוע. שום דבר אחר לא עובר.",
+    "circleCreate": "פתיחת מעגל",
+    "circleCreateSub": "מקבלים קוד. נותנים אותו לאנשים שלך.",
+    "circleJoin": "הצטרפות עם קוד",
+    "circleJoinSub": "שש אותיות מחבר.",
+    "circleJoinFailed": "הקוד הזה לא פתח מעגל. בדוק אותו מול החבר והזן אותו שוב.",
+    "circleJoinFailed_female": "הקוד הזה לא פתח מעגל. בדקי אותו מול החברה והזיני אותו שוב.",
+    "circleCodeLine": "הקוד של המעגל שלך: {{code}}",
+    "circleMemberWeek": "{{done}} מתוך {{planned}} השבוע",
+    "circleAlone": "תן את הקוד לאנשים שלך — הם יופיעו כאן עם השבוע שלהם.",
+    "circleAlone_female": "תני את הקוד לאנשים שלך — הם יופיעו כאן עם השבוע שלהם.",
+    "circleLeave": "עזיבת המעגל",
+    "communityTitle": "השבוע, ביניכם",
+    "communitySub": "מספר אחד לכולכם. אף אחד לא מדורג, ושום דבר אחר לא עובר.",
+    "weekTogether_one": "אימון אחד ביניכם השבוע.",
+    "weekTogether_two": "שני אימונים ביניכם השבוע.",
+    "weekTogether_other": "{{count}} אימונים ביניכם השבוע.",
+    "weekAlone": "אף אחד עוד לא התאמן השבוע.",
+    "pairTitle": "להתאמן ביחד",
+    "pairSub": "מוט אחד, בתורות. פותחים חדר במסך היום.",
+    "trainedWithNames": "עם {{name}}."
+  },
+  "pair": {
+    "title": "להתאמן ביחד",
+    "sub": "מוט אחד, בתורות. המשקלים נשארים אישיים.",
+    "open": "לפתוח חדר",
+    "openSub": "יופיע קוד, למסירה למי שלידך.",
+    "join": "להצטרף עם קוד",
+    "joinSub": "שש אותיות, ממי שלידך.",
+    "codeLabel": "הקוד שלך",
+    "alone": "החדר פתוח. אין בו עוד אף אחד.",
+    "here": "{{name}} בחדר.",
+    "hereAnon": "מישהו בחדר.",
+    "hostBegin": "להתחיל את האימון",
+    "guestWaiting": "ממתינים להתחלה של החדר.",
+    "guestReady": "{{name}} כבר באימון. {{lifts}} תרגילים, לפי הסדר.",
+    "guestReadyAnon": "החדר כבר באימון. {{lifts}} תרגילים, לפי הסדר.",
+    "guestBegin": "להתחיל",
+    "guestBeginSub": "אותם תרגילים, אותו סדר. המשקלים שלך מגיעים מהגוף שלך.",
+    "leave": "לצאת מהחדר",
+    "linkDown": "החיבור נפל. האימון ממשיך.",
+    "notFound": "הקוד הזה לא פתח שום חדר.",
+    "full": "בחדר הזה כבר שני אנשים.",
+    "unavailable": "אין לי איך לפתוח חדר עכשיו.",
+    "loadsPrivate": "לשמור את המשקלים שלי לעצמי",
+    "loadsPrivateSub": "המספר על המוט נשאר בטלפון הזה. התור עדיין עובר.",
+    "yourTurn": "התור שלך",
+    "theirTurn": "התור של {{name}}",
+    "theirTurnAnon": "התור של השותף",
+    "logAndPass": "לרשום ולהעביר ל־{{name}}",
+    "logAndPassAnon": "לרשום ולהעביר",
+    "stateLifting": "על המוט",
+    "stateResting": "במנוחה",
+    "statePaused": "בהפסקה",
+    "stateDone": "בסיום",
+    "setOf": "סט {{n}} מתוך {{m}}",
+    "barBusy": "המוט תפוס.",
+    "gone": "{{name}} לא עונה. האימון ממשיך לבד.",
+    "goneAnon": "השותף לא עונה. האימון ממשיך לבד.",
+    "swapAsk": "בקשה מ־{{name}}: {{to}} במקום {{from}}.",
+    "swapYes": "להחליף",
+    "swapNo": "להישאר על {{from}}",
+    "swapDeclined": "בלי החלפה.",
+    "swapAccepted": "שניכם על {{to}}.",
+    "recordName": "ביחד",
+    "door": "להתאמן ביחד",
+    "swapWaiting": "ממתינים ל־{{name}}.",
+    "swapWaitingAnon": "ממתינים לשותף.",
+    "leadYours": "האימון רץ על התרגילים שלך.",
+    "leadTheirs": "האימון רץ על התרגילים של {{name}}.",
+    "leadTake": "לעבור לתרגילים שלי",
+    "leadGive": "לעבור לתרגילים של {{name}}",
+    "shareInvite": "לשלוח את הקוד",
+    "inviteMessage": "בוא נתאמן ביחד. לפתוח בטלפון: {{link}} — או להקליד את הקוד {{code}}.",
+    "signIn": "להתחבר כדי לפתוח חדר",
+    "signInSub": "חדר צריך חשבון, כדי ששני הטלפונים יכירו זה את זה. לחיצה אחת.",
+    "signInFailed": "זה לא חיבר. הקוד עדיין תקף ברגע שתהיה בפנים.",
+    "lastSet": "סט אחרון",
+    "hostElsewhere": "בוחרים את האימון של היום ומתחילים משם."
+  },
+  "legal": {
+    "sheetLegend": "תנאים ופרטיות",
+    "termsTitle": "תנאי השימוש",
+    "termsBody": "hush היא תוכנית אימון אישית. היא אינה ייעוץ רפואי: לפני שינוי משמעותי בהרגלי האימון — ובמיוחד אחרי פציעה — התייעץ עם גורם מקצועי. אתה מקבל רישיון אישי להשתמש באפליקציה; התוכן, הקוד והדמויות שלה הם קניינה של hush. שימוש שמפר חוק או פוגע בשירות עלול להביא לסגירת החשבון.",
+    "termsBody_female": "hush היא תוכנית אימון אישית. היא אינה ייעוץ רפואי: לפני שינוי משמעותי בהרגלי האימון — ובמיוחד אחרי פציעה — התייעצי עם גורם מקצועי. את מקבלת רישיון אישי להשתמש באפליקציה; התוכן, הקוד והדמויות שלה הם קניינה של hush. שימוש שמפר חוק או פוגע בשירות עלול להביא לסגירת החשבון.",
+    "privacyTitle": "הפרטיות שלך",
+    "privacyBody": "האימונים, המשקלים ומפת הגוף נשמרים במכשיר שלך. גיבוי מוצפן נשמר ב-iCloud תחת ה-Apple ID שלך, כך שטלפון חדש ממשיך מאותה נקודה. בבקשה מהמאמן לבנות או לסקור שבוע, נתוני האימון הנחוצים לכך מעובדים עבורנו על ידי Google (Gemini) ואינם משמשים לאימון המודלים שלה. שימוש במוצר נמדד באמצעות PostHog תחת מזהה התקנה אקראי, לעולם לא תחת השם שלך; דוחות קריסה מגיעים ל-Sentry ללא פרטים אישיים. בהצטרפות למעגל, השם הפרטי וספירת האימונים השבועית נשמרים בשרתי Cloudflare עד עזיבה או מחיקת החשבון. שום דבר לא נמכר ולא משמש לפרסום. מחיקת החשבון, בלשונית שלך, מוחקת את מה שהשרתים שלנו מחזיקים ואת מה שבמכשיר; גיבוי ה-iCloud בשליטתך. הנתונים מעובדים באיחוד האירופי ובארה\"ב. בקשות ושאלות: ofek34458@gmail.com.",
+    "privacyBody_female": "האימונים, המשקלים והמפה שלך נשמרים על המכשיר שלך. גיבוי מוצפן נשמר ב-iCloud תחת ה-Apple ID שלך, כדי שמכשיר חדש ימשיך מאיפה שעצרת. כשאת מבקשת מהמאמן לבנות או לסקור שבוע, נתוני האימון הדרושים לכך עוברים אל השירות שלנו לעיבוד ואינם נמכרים ואינם משמשים לפרסום. דיווחי קריסה אנונימיים עוזרים לנו לתקן תקלות. מחיקת החשבון מוחקת את מה ששמרנו.",
+    "healthTitle": "נתוני בריאות",
+    "healthBody": "חיבור ל-Apple Health הוא ברשותך בלבד. דופק, קלוריות ומרחק נקראים כדי להציג אותם לצד האימון, ואימון שנגמר נכתב חזרה ל-Health. נתוני בריאות לעולם אינם עוזבים את המכשיר.",
+    "billingTitle": "מנוי וחיוב",
+    "billingBody": "ארבעה־עשר האימונים הראשונים, בתוך שלושים יום, חינם ובלי כרטיס. לאחריהם — מנוי בחיוב דרך ה-App Store, במחיר שמוצג לפני כל חיוב; ביטול בכל רגע דרך הגדרות ה-Apple ID.",
+    "updated": "עודכן: 1 בספטמבר 2026"
   }
 }

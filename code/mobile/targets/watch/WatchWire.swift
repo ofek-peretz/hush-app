@@ -10,6 +10,16 @@ import Foundation
 //   - src/platform/watch/protocol.ts (WatchStateEnvelope / WatchIntent / WatchLobby)
 
 let WATCH_PROTOCOL_VERSION = 1
+
+/// How long Begin waits for the phone before this watch runs the workout itself — and the same
+/// window the PHONE uses to decide a `start_workout` is still wanted. Mirror of protocol.ts
+/// `WATCH_START_GRACE_MS`; the two must not drift.
+///
+/// They used to: the wrist gave up at 3 seconds and the phone accepted a start at any age, because
+/// lobby intents return above its staleness gate. A phone woken from cold at t+6 s then began a
+/// second session for a workout already running here — and `WatchModel.apply` can only surrender
+/// authority before her first set. See the note on `WATCH_START_GRACE_MS`.
+let WATCH_START_GRACE_S: TimeInterval = 3
 let MIRROR_SCHEMA_VERSION = 1
 
 struct WireSwapOption: Codable, Equatable {
@@ -17,10 +27,86 @@ struct WireSwapOption: Codable, Equatable {
   var name: String
 }
 
+/// One lift the athlete PERFORMED — mirror of sessionMirror.ts `MirrorSummaryLift`. Feeds the
+/// wrist's read-back: a green check lands on every lift, with its best set beside it. Lifts that
+/// were never reached are not on the wire at all (founder 2026-07-13 — the phone's read-back walks
+/// what was DONE, and the wrist plays the same beat, not a ledger of what was missed).
+struct WireSummaryLift: Codable, Equatable {
+  var name: String
+  /// The best set of that lift, as the phone prints it: "60 × 8" / "BW × 12".
+  ///
+  /// OPTIONAL, like every field added after v1 — and for a sharper reason than usual. The watch
+  /// app installs ASYNCHRONOUSLY from the phone app, so a phone on this build can talk to a watch
+  /// on the previous one for hours. A non-optional field throws inside `decodeIfPresent` when the
+  /// key is missing, and because `summary` is a nested optional that throw takes the WHOLE FRAME
+  /// down — the wrist would miss the closing screen entirely rather than miss one line of it.
+  var best: String?
+}
+
+/// A milestone the workout just crossed — mirror of sessionMirror.ts `MirrorMilestone`.
+///
+/// COPY ONLY. The mark is earned on the phone, from the phone's history, and arrives here as a
+/// finished English sentence: there is no milestone engine on the wrist. Every field but the
+/// title is optional (and the whole struct is), because a phone one build behind sends no
+/// milestone at all — and a throw inside this nested optional would cost the wrist its entire
+/// closing screen, not just the medallion.
+struct WireMilestone: Codable, Equatable {
+  /// The engraved figure ("100", "250 t") — empty for a mark that is an event, not a number.
+  var value: String?
+  /// The tiny unit under the figure ("workouts", "tonnes").
+  var caption: String?
+  var title: String
+  var sub: String?
+}
+
 struct WireSummary: Codable, Equatable {
   var timeLabel: String
   var sets: Int
   var up: Int
+  /// Total external load moved this session, in KILOGRAMS (the phone's Σ weight × reps). The
+  /// Complete screen renders it as tonnes ("11.7 T"). Optional like every post-v1 field — a phone
+  /// one build behind sends no key and the metric simply reads "––" rather than an invented figure.
+  var volumeKg: Double?
+  /// Optional so a phone on an older mirror schema still decodes (the read-back beat simply
+  /// does not play, and the summary lands the way it always did).
+  /// The session's calories AS THE PHONE COMPUTED THEM (founder 2026-07-28). The wrist can read
+  /// HealthKit's active energy and the phone cannot, so the two used to print different figures for
+  /// one workout. The authority produces the number; this surface renders it.
+  var kcal: Int?
+  var lifts: [WireSummaryLift]?
+  /// Present only on the session that crossed it — a mark is celebrated once, on its own workout.
+  var milestone: WireMilestone?
+}
+
+/// Equipment-native load setup (kg) — how to physically load the prescribed weight, so the athlete
+/// never has to calculate on the wrist (item 11). Mirror of sessionMirror.ts `MirrorLoadSetup`.
+struct WireLoadSetup: Codable, Equatable {
+  var style: String
+  var perSide: Double?
+  var plates: [Double]?
+  var barKg: Double?
+  var perHand: Double?
+  var pin: Double?
+  var fixedBar: Double?
+}
+
+/// THE SIGNATURE MOMENT, on the wire — mirror of sessionMirror.ts `SessionMirror.correction`.
+///
+/// Loop 1 moved the NEXT set's load because of the set she just finished. The brief calls this the
+/// product's single most distinctive moment and requires it on BOTH surfaces ("the same change
+/// appears on the watch") — which matters most here: mid-workout the wrist is often the only thing
+/// she looks at, and a load changing on it with no account of why is the app doing something TO her
+/// rather than WITH her.
+///
+/// `from`/`to` are kg (the mirror's unit; the wrist formats). Present ONLY on an inter-set rest
+/// frame that just earned a correction — the phone's projection holds that guard, so this struct
+/// never needs to ask which lift it belongs to.
+struct WireCorrection: Codable, Equatable {
+  var from: Double
+  var to: Double
+  var direction: String // "up" | "down"
+  /// The reps she just did — the measured fact that moved the load, and the whole reason.
+  var reps: Int
 }
 
 /// Read-only projection of the live session (subset rendered on the watch). The
@@ -31,17 +117,49 @@ struct WireMirror: Codable, Equatable {
   var phase: String // active_set | rest_inter | rest_transition | paused | complete
   var exerciseName: String
   var exerciseGroup: String?
+  /// The CURRENT step — which during a rest is the set the athlete has just FINISHED (the phone's
+  /// machine holds `setIndex` until the rest ends). Never render this on a rest screen; render
+  /// `nextSetLabel`, which is the set they are about to do. This screen used to get it wrong and
+  /// the load beside it hid the fact.
   var setLabel: String
   var setNumber: Int?
   var setsInExercise: Int?
+  /// The current step is a WARM-UP bridge (2026-08-24): `setNumber`/`setsInExercise` count the
+  /// ramp, and the header prints the warm-up word instead of SET. Optional both ways — an older
+  /// phone never sends it, an older watch never asks.
+  var isWarmup: Bool?
+  /// The set that is COMING. Present on every rest frame; nil on an active set / the last set.
+  var nextSetLabel: String?
+  var nextSetNumber: Int?
   var nextSetsInExercise: Int?
+  /// …and whether THAT step is a warm-up bridge (rest frames).
+  var nextIsWarmup: Bool?
   var globalIndex: Int
   var totalSets: Int
   var targetWeight: Double?
   var targetReps: Int
+  /// The rep band's ceiling (floor == targetReps). Carried so the wrist draws the same 8–10
+  /// rep-range ruler the phone's stage does (WT2). Nil when the target is a single rep count.
+  var targetRepsHi: Int?
+  /*
+   * ⛔ HER OWN SETS ON THIS LIFT, AND LAST TIME'S (2026-08-04). The wrist drew four dots — filled,
+   * ringed, empty — which say HOW MANY sets are behind her and never WHAT HAPPENED in them, while
+   * the phone printed the figures. These four close that.
+   *
+   * ⚠️ ALL OPTIONAL, AND THE SCHEMA IS NOT BUMPED. `mirrorToWire` is a spread and Swift's decoder
+   * ignores keys it does not know, so a NEW phone talking to an OLD watch is a no-op, and an OLD
+   * phone talking to a new watch decodes these as nil — which draws exactly what the wrist drew
+   * before. A version bump would have made both directions a hard stop instead.
+   */
+  var setsSoFar: [Int]?
+  var loadsSoFar: [Double?]?
+  var lastReps: [Int]?
+  var lastLoadKg: Double?
   var restEndsAt: String?
   var restRemainingS: Int?
   var restTotalS: Int?
+  /// WT5 — the running rest is HER measured median on this lift (S-17), not the tier bootstrap.
+  var restIsLearned: Bool?
   var nextExerciseName: String?
   var nextExerciseGroup: String?
   var nextTargetWeight: Double?
@@ -53,10 +171,24 @@ struct WireMirror: Codable, Equatable {
   var nextLoadDeltaKg: Double?
   var liftIndex: Int?
   var liftCount: Int?
+  /// WT13c · GLANCE — her own work so far, live. The summary carries the same pair but only on the
+  /// terminal frame, so a glance mid-session had nothing of HERS to read (heart and burn come from
+  /// the OS; these are the only two figures about her lifting).
+  var liveVolumeKg: Double?
+  var liveSets: Int?
   var workoutName: String?
   var summary: WireSummary?
   var swapOptions: [WireSwapOption]?
   var nextSwapOptions: [WireSwapOption]?
+  /// Equipment-native setup (kg) for the current set's load + the upcoming exercise's first set.
+  var loadSetup: WireLoadSetup?
+  var nextLoadSetup: WireLoadSetup?
+  /// TO-LOAD (set the equipment) vs LOADED (already set) for the current set.
+  var toLoad: Bool?
+  /// The correction Loop 1 just made — see WireCorrection. Optional like every post-v1 field: a
+  /// phone one build behind sends no key, and the rest frame simply lands without the line (the
+  /// next load it shows is still the correct, corrected one).
+  var correction: WireCorrection?
 }
 
 /// One pickable workout in the Start screen's "Choose workout" overlay.
@@ -77,27 +209,185 @@ struct WireLobby: Codable, Equatable {
   var lifts: Int?
   var durationLabel: String?
   var resting: Bool?
+  /// WT7 · THE FIRST FOUR — she has never completed a workout. The lobby's ordinary face reports on
+  /// a WEEK and compares to a history; on day one both are empty, so it says what the engine is
+  /// about to DO instead.
+  var firstWorkout: Bool?
+  /// Training is behind the paywall (free sessions spent, no membership). The watch then
+  /// neither proposes a start nor runs one standalone — the purchase belongs to the phone.
+  var gated: Bool?
   var workouts: [WireLobbyWorkout]
 }
 
 /// Phone → watch envelope. `authoritySeq` is monotonic; the watch keeps the highest
 /// it has seen and ignores any envelope with a lower seq (reorder-proof). `lobby` is
-/// populated only when `mirror` is nil (pre-session).
+/// populated only when `mirror` is nil (pre-session); `plan` rides lobby envelopes
+/// and is the standalone execution data the watch stores durably.
 struct WireEnvelope: Codable {
   var v: Int
   var type: String
   var mirror: WireMirror?
   var lobby: WireLobby?
+  var plan: WirePlan?
+  /// Her copy, resolved by the phone. Rides lobby envelopes only — it changes when she changes her
+  /// language, which is almost never, and a mirror is published many times a second during a rest.
+  /// Optional like every post-v1 field: a phone one build behind sends none and the wrist keeps the
+  /// English it shipped with.
+  var copy: WireCopyPack?
   var authoritySeq: Int
+  /// Which PHONE PROCESS `authoritySeq` counts inside — mirror of protocol.ts `authorityEpoch`.
+  ///
+  /// The sequence restarts at zero every time the phone app launches, while `highestSeq` below
+  /// lives in this app's memory and outlives it. Without the epoch a relaunched phone is
+  /// indistinguishable from a flood of stale messages, and the wrist discards everything it sends
+  /// until this process happens to die. See `apply(_:)`.
+  ///
+  /// Optional, like every post-v1 field: a phone one build behind sends none, and `nil` must mean
+  /// "keep the seq-only rule", never "epoch zero" — reading it as zero would reject that phone
+  /// forever, which is the same bug wearing the other hat.
+  ///
+  /// ⛔ `Int64`, NEVER `Int` (founder 2026-09-08, the fourth wrist photograph, build 70:
+  /// `Number 1788898463… is not representable in Swift · rx:0`). Apple Watch runs arm64_32, where
+  /// `Int` is THIRTY-TWO bits and tops out at 2,147,483,647 — a millisecond epoch is thirteen
+  /// digits. `JSONDecoder` refused the WHOLE envelope for this one field, from the build that added
+  /// it (~64) until now, and the phone — a 64-bit iPhone — could never reproduce it: the same
+  /// `Int` fits there. Any other epoch-in-milliseconds this file ever carries must be `Int64` too.
+  var authorityEpoch: Int64?
+  /// The live handover this phone is holding — mirror of protocol.ts `adoptedRecordId`.
+  ///
+  /// A wrist that has handed a running workout to the phone may only let go once the phone HAS it,
+  /// and a live mirror alone does not say that: it says the phone is running something, which could
+  /// be a different workout entirely. This names the session, so the wrist's release is an exact id
+  /// match instead of an inference. `nil` is "no claim" — never "not yours".
+  var adoptedRecordId: String?
   var sentAt: String
+}
+
+// ---- Standalone plan snapshot (phone → watch) -------------------------------
+//
+// The phone owns the MODEL; the watch owns nothing but execution. The snapshot is
+// the model's output — every remaining workout of the week, fully prescribed and
+// name-resolved — so the watch can EXECUTE one with the phone absent. Mirror of
+// protocol.ts `WatchPlanSnapshot`.
+
+let WATCH_PLAN_SCHEMA_VERSION = 1
+
+struct WirePlanStep: Codable, Equatable {
+  var exerciseId: String
+  var exerciseName: String
+  var exerciseGroup: String?
+  var setIndexInExercise: Int
+  var totalSetsInExercise: Int
+  var globalIndex: Int
+  var targetWeight: Double?
+  var targetReps: Int
+  /// The TOP of her band — without it the standalone projector cannot draw the rep ruler.
+  var targetRepsHi: Int?
+  /*
+   * ⛔ WHAT SHE DID LAST TIME ON THIS LIFT (founder 2026-08-04): *"send the history for a standalone
+   * workout too."* Without these the phone-in-a-locker athlete saw dashes in the set row where a
+   * mirrored session shows last time's reps — the one asymmetry left between the two surfaces, and
+   * only she would ever have met it.
+   *
+   * ⚠️ Optional, and the plan schema is NOT bumped: an old watch ignores keys it does not know, and
+   * a new watch reading an old plan decodes nil, which draws exactly what it drew before.
+   */
+  var lastReps: [Int]?
+  var lastLoadKg: Double?
+  var blockId: String?
+  /// Advisory load-change reason ("increase" | "decrease") + magnitude (kg).
+  var reasonType: String?
+  var reasonDelta: Double?
+  var loadSetup: WireLoadSetup?
+  /// Between-sets rest (s) for this exercise (tier-based, S2). Optional on the wire —
+  /// absent (older phone build) falls back to the plan-level restInterS.
+  var restInterS: Int?
+  /// ⛔ IS `restInterS` HERS, OR THE COACH'S? (S-17) — the fact behind the "your pace" line.
+  ///
+  /// The wrist used to infer it from `restInterS != nil`, which is true of her learned median AND
+  /// of a rest the coach wrote — so a number she had never produced was labelled with her name, on
+  /// the surface she looks at most during a set. The phone sets this on her branch only.
+  ///
+  /// Optional, and NOT a schema bump (as `lastReps` was not): an older phone omits it and this
+  /// decodes `nil`, which draws exactly what it drew before.
+  var restIsLearned: Bool?
+}
+
+struct WirePlanWorkout: Codable, Equatable {
+  var id: String
+  var name: String
+  var muscles: String
+  var steps: [WirePlanStep]
+}
+
+struct WirePlan: Codable, Equatable {
+  var schema: Int
+  var planId: String
+  var generatedAt: String
+  var restInterS: Int
+  var restTransitionS: Int
+  var workouts: [WirePlanWorkout]
+}
+
+// ---- Watch-local session record (watch → phone reconciliation) --------------
+//
+// What the watch reports after executing a workout AS THE LOCAL AUTHORITY.
+// Durable in the outbox until the phone acks `recordId`; delivered at-least-once
+// (the phone de-dupes). Mirror of protocol.ts `WatchSessionRecord`.
+
+struct WireRecordSet: Codable, Equatable {
+  var exerciseId: String
+  var setIndex: Int
+  var blockId: String?
+  var recommendedWeight: Double?
+  var recommendedReps: Int
+  var actualWeight: Double?
+  var actualReps: Int
+  var completedAt: String
+}
+
+struct WireSessionRecord: Codable, Equatable {
+  var v: Int
+  var type: String // "session_record"
+  var recordId: String
+  var planId: String?
+  var workoutId: String
+  var workoutName: String
+  var startedAt: String
+  var endedAt: String
+  var earlyFinish: Bool
+  /// Active kilocalories the WRIST measured for a standalone workout — the phone has no such
+  /// sensor, so here the wrist is the authority and its number becomes the session's.
+  var kcal: Int?
+  var sets: [WireRecordSet]
 }
 
 /// Watch → phone intent. The phone de-dupes on `intentId` and rejects stale/wrong-
 /// phase/wrong-index intents — so this is a PROPOSAL, never an authoritative action.
+/// A run/walk the WRIST recorded, carried home (founder 2026-07-28). Mirrors
+/// `protocol.WatchCardioRecord` exactly — `watchWireParity` holds the two together.
+///
+/// Four honest facts and nothing else: the wrist has no GPS trace worth carrying (the route is the
+/// phone's) and no split history to replay. Every measurement is optional because the wrist may
+/// genuinely lack it — no heart-rate source, no bodyweight to bill calories against.
+struct WireCardioRecord: Codable, Equatable {
+  var v: Int
+  var type: String
+  var recordId: String
+  var gait: String
+  var startedAt: String
+  var endedAt: String
+  /// The WATCH's own pause-aware clock — never `end − start` (founder 2026-07-11: a pause stops it).
+  var durationSec: Double
+  var distanceKm: Double?
+  var avgHr: Int?
+  var kcal: Int?
+}
+
 struct WireIntent: Codable {
   var v: Int
   // complete_set | end_rest | pause | resume | finish_early | exercise_busy |
-  // select_workout | start_workout | swap_exercise | add_rest
+  // select_workout | start_workout | swap_exercise | add_rest | report_pain
   var type: String
   var intentId: String
   var issuedAt: String
@@ -107,17 +397,222 @@ struct WireIntent: Codable {
   var workoutId: String?
   var exerciseId: String?
   var seconds: Int?
+  /// The body area a `report_pain` intent flags ("Shoulder", "Lower back", …). Nil on every
+  /// other intent. The phone owns what to do with it — the wrist only names where it hurts.
+  /// WT14b — how sharp it is, in HER words. Required by the phone: a report without it is a
+  /// half-finished flow, and the engine may not choose a rest window she did not choose.
+  var severity: String?
+  var area: String?
+}
+
+/// A workout this watch is RUNNING, offered to the phone so the authority can move — mirror of
+/// protocol.ts `WatchLocalSession`.
+///
+/// ⛔ NOT AN INTENT. Every one of the eleven intents is a PROPOSAL about a session the phone is
+/// running, and the phone judges each one. This is the opposite direction: the wrist stating facts
+/// about a workout the phone knows nothing about, because it began while the phone was away.
+/// Without it, opening the phone mid-workout showed Today and offered to start the very workout she
+/// was in the middle of.
+///
+/// `recordId` is the session's identity from the moment it starts and is the same id its finished
+/// record carries, which is what makes the handover idempotent: if the record arrives anyway, the
+/// phone recognises a session it already holds.
+struct WireLocalSession: Codable {
+  var v: Int
+  var type: String // "local_session"
+  var recordId: String
+  var workoutId: String
+  var workoutName: String
+  var startedAt: String
+  var phase: String
+  var pausedFrom: String?
+  var currentIndex: Int
+  var restEndsAt: String?
+  var restTotalS: Int?
+  var steps: [WirePlanStep]
+  var sets: [WireRecordSet]
+  var sentAt: String
 }
 
 enum WatchWire {
+  /**
+   ⛔ TWO PARSERS, AND THE FRAME GOES THROUGH WHICHEVER ACCEPTS IT (founder 2026-09-08, build 69 on
+   the wrist: `wc:on` on install, `badframe` the moment the phone published — with `JSONSerialization`
+   accepting the very bytes `JSONDecoder` refused, on both devices).
+
+   `JSONDecoder` runs Swift's own scanner; `JSONSerialization` is Apple's older parser; they do not
+   agree on every document. The wrist used to trust only the first, so a frame the second read
+   perfectly was thrown away whole — for a reason nobody could see. Now, when the scanner refuses, the
+   frame is read by the older parser, SERIALISED AGAIN by it (which normalises every escape and
+   number to a form the scanner accepts), and decoded — and the scanner's own account of what it
+   refused is kept (`lastRepair`) so the diag line can say what was wrong even while the wire works.
+   */
   static func decodeEnvelope(_ json: String) -> WireEnvelope? {
     guard let data = json.data(using: .utf8) else { return nil }
-    return try? JSONDecoder().decode(WireEnvelope.self, from: data)
+    do {
+      let env = try JSONDecoder().decode(WireEnvelope.self, from: data)
+      lastRepair = nil
+      return env
+    } catch DecodingError.dataCorrupted(let ctx) where ctx.codingPath.isEmpty {
+      let why = ctx.underlyingError.map { String(describing: $0) } ?? ctx.debugDescription
+      guard let obj = try? JSONSerialization.jsonObject(with: data),
+            JSONSerialization.isValidJSONObject(obj),
+            let clean = try? JSONSerialization.data(withJSONObject: obj),
+            let env = try? JSONDecoder().decode(WireEnvelope.self, from: clean) else { return nil }
+      lastRepair = String(why.prefix(90))
+      return env
+    } catch {
+      return nil
+    }
+  }
+
+  /// The scanner's account of the last frame it refused and the older parser rescued — nil once a
+  /// frame decodes cleanly. Shown on the wrist beside `wc:on`, so the fix and its reason travel together.
+  static var lastRepair: String? = nil
+
+  /**
+   ⛔ WHY IT FAILED, NOT MERELY THAT IT DID (founder 2026-08-30, photographing `wc:badframe · rx:0`).
+
+   `decodeEnvelope` is `try?`, so every reason a frame can die — a key the phone stopped sending, a
+   float arriving where `Int` is declared, a null meeting a non-optional — arrives on the wrist as
+   the same four letters. `JSONDecoder` knows exactly which field and why, and that answer was being
+   discarded one character before it could be read.
+
+   It matters more here than almost anywhere in the product: this failure happens on a device that
+   cannot be attached to a debugger, in a pair of processes that cannot be reproduced on a
+   developer's machine, and it takes the WHOLE envelope with it — one bad leaf and the mirror, the
+   lobby, the plan and the copy pack vanish together. A screenshot of the wrist is the only
+   instrument there is, so the wrist has to be able to say something worth photographing.
+
+   Returns a short path like `lobby.muscles` or `authoritySeq`, sized for a 12-point mono line.
+   */
+  static func decodeFailureReason(_ json: String, sentLen: Int? = nil) -> String {
+    guard let data = json.data(using: .utf8) else { return "utf8" }
+    /*
+     * ⛔ THE OFFSET WAS ONE LEVEL DEEPER (founder 2026-09-08, second photograph:
+     * `wc:badframe:json:The given data was not valid`). `JSONDecoder` wraps the parser's refusal
+     * in a generic sentence and keeps the real one — "Unable to convert data to string around
+     * character 245", "Unexpected character 'x' around line 1, column 245" — in `underlyingError`.
+     * So the parser is asked DIRECTLY first: `JSONSerialization` throws the NSError whose
+     * `NSDebugDescription` names the byte. Beside it: the string's own length against the length
+     * the phone said it sent (`len`), and its first characters — a frame cut in transit, a frame
+     * that is not JSON at all, and a frame with one bad escape all read differently here.
+     */
+    do {
+      _ = try JSONSerialization.jsonObject(with: data)
+    } catch {
+      let why = (error as NSError).userInfo[NSDebugDescriptionErrorKey] as? String ?? error.localizedDescription
+      let have = json.utf8.count
+      let len = sentLen.map { $0 == have ? "len \(have)" : "len \(have)/\(String(describing: $0)) CUT" } ?? "len \(have)"
+      let head = String(json.prefix(14)).replacingOccurrences(of: "\n", with: "⏎")
+      return "json" + parseFailureSite(why, in: json) + " · \(len) · «\(head)»"
+    }
+    do {
+      _ = try JSONDecoder().decode(WireEnvelope.self, from: data)
+      return "none"
+    } catch DecodingError.keyNotFound(let key, let ctx) {
+      return "miss:" + path(ctx.codingPath + [key])
+    } catch DecodingError.typeMismatch(_, let ctx) {
+      return "type:" + path(ctx.codingPath)
+    } catch DecodingError.valueNotFound(_, let ctx) {
+      return "null:" + path(ctx.codingPath)
+    } catch DecodingError.dataCorrupted(let ctx) {
+      /*
+       * ⛔ `json` ALONE WAS THE NEXT FOUR LETTERS (founder 2026-09-08, photographing
+       * `wc:badframe:json · rx:0`). An empty coding path means the parser refused the DOCUMENT —
+       * before any field — and "json" said only that, over a payload no developer machine can see.
+       * Foundation's own account names the spot ("… around line 1, column 245." on the current
+       * parser, "… around character 245." on the older one); the wrist now shows that offset and
+       * the text either side of it, which is the difference between a photograph that says "it
+       * broke" and one that says WHERE. The one cause `JSON.stringify` output can have — a lone
+       * surrogate escape, `\uD83D` with no partner — shows up here as exactly that text.
+       */
+      guard ctx.codingPath.isEmpty else { return "bad:" + path(ctx.codingPath) }
+      /*
+       * ⛔ THE PARSER SAID YES AND THE DECODER SAID NO (founder 2026-09-08, fourth photograph, on
+       * build 69: `wc:on` on install, then `badframe:json:The given data was not valid` the moment
+       * the phone published). `JSONSerialization` accepted the same bytes a line above, so this is
+       * not a parse error in the ordinary sense — it is Swift's own scanner refusing what Apple's
+       * older parser allows, and its reason is in `underlyingError`, never in the generic sentence
+       * `JSONDecoder` wraps around it. So the underlying error is what the wrist shows, with its
+       * own location words ("index", "column") and the text around that byte.
+       */
+      let under = ctx.underlyingError.map { String(describing: $0) } ?? ctx.debugDescription
+      let have = json.utf8.count
+      let len = sentLen.map { $0 == have ? "len \(have)" : "len \(have)/\(String(describing: $0)) CUT" } ?? "len \(have)"
+      return "json" + parseFailureSite(under, in: json) + " · \(len) · «\(String(json.prefix(14)))»"
+    } catch {
+      return "err"
+    }
+  }
+
+  /// `@245«…rkout \uD83D","lifts…»` — the offset Foundation named, and the text around it, with
+  /// the JSON's own escapes left as written so a broken escape is visible as one. Empty when the
+  /// description carries no offset (then the description's first words stand in).
+  private static func parseFailureSite(_ description: String, in json: String) -> String {
+    // The current parser counts its column in BYTES of the UTF-8 it scanned; a Hebrew envelope
+    // is mostly two-byte characters, so the window is cut in bytes too and decoded lossily (a
+    // multi-byte character split at the edge becomes U+FFFD rather than a crash).
+    let bytes = Array(json.utf8)
+    guard let offset = firstInteger(after: ["column", "character", "offset", "index"], in: description) else {
+      let head = description.prefix(60).trimmingCharacters(in: .whitespaces)
+      return head.isEmpty ? "" : ":" + head
+    }
+    let at = max(0, min(bytes.count, offset))
+    let lo = max(0, at - 14), hi = min(bytes.count, at + 14)
+    let window = String(decoding: bytes[lo..<hi], as: UTF8.self)
+      .replacingOccurrences(of: "\n", with: "⏎")
+    return "@\(offset)«\(lo > 0 ? "…" : "")\(window)\(hi < bytes.count ? "…" : "")»"
+  }
+
+  /// The first integer that follows any of `words` in `text` — "column 245." → 245.
+  private static func firstInteger(after words: [String], in text: String) -> Int? {
+    let lower = text.lowercased()
+    for word in words {
+      guard let r = lower.range(of: word) else { continue }
+      let tail = lower[r.upperBound...].drop(while: { !$0.isNumber })
+      let digits = tail.prefix(while: { $0.isNumber })
+      if let n = Int(digits) { return n }
+    }
+    return nil
+  }
+
+  /// `lobby.workouts[2].name` — array indices kept, because "one of the workouts" is not an answer.
+  private static func path(_ keys: [CodingKey]) -> String {
+    let parts: [String] = keys.map { key in
+      if let i = key.intValue { return "[\(i)]" }
+      return key.stringValue
+    }
+    return parts.joined(separator: ".").replacingOccurrences(of: ".[", with: "[")
   }
 
   static func encodeIntent(_ intent: WireIntent) -> String? {
     guard let data = try? JSONEncoder().encode(intent) else { return nil }
     return String(data: data, encoding: .utf8)
+  }
+
+  /// The live handover — see `WireLocalSession`. Rides the same reachable-only channel the intents
+  /// use: a handover only matters while the phone is there to receive it, and one delivered an hour
+  /// later would describe a workout that has since ended.
+  static func encodeLocalSession(_ offer: WireLocalSession) -> String? {
+    guard let data = try? JSONEncoder().encode(offer) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  static func encodeRecord(_ record: WireSessionRecord) -> String? {
+    guard let data = try? JSONEncoder().encode(record) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  /// The cardio twin. Both ride ONE durable channel and the phone tells them apart by the `type`
+  /// field inside the JSON — no second native event, no second ack path.
+  static func encodeCardioRecord(_ record: WireCardioRecord) -> String? {
+    guard let data = try? JSONEncoder().encode(record) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  static func iso(_ date: Date) -> String {
+    ISO8601DateFormatter().string(from: date)
   }
 
   /// Parse an absolute rest-end instant (ISO-8601) into a Date for a drift-proof

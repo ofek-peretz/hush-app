@@ -1,12 +1,18 @@
-/**
+﻿/**
  * Model interface (spec §8.7). The app CONSUMES this; it never implements the
  * model. Inputs are only actual weight + actual reps per set (no RIR/effort).
  *
- * In v1 this is fulfilled by a local fixture (fixtureModel) until the existing
- * backend in `implementation/api` is wired. The interface is the contract; the
- * client code above it does not care which implementation answers.
+ * Fulfilled by `fixtureModel` — the v8 engine's local data layer — and by nothing
+ * else: the v4 HTTP implementation and its swap point were deleted on 2026-08-25
+ * (founder: the engine decides on the device). The interface remains the contract
+ * so the store never cares which implementation answers; a future remote model is
+ * one implementation away, not an archaeology dig.
  */
+
+// 
+
 import type { Capability, PortraitSnapshot, Profile, Program, SetTarget } from '@/data/local/models';
+import type { Explanation } from '@/engine/weeklyView';
 
 /** What the athlete actually did — the only model input (spec §8.7). */
 export interface ActualSet {
@@ -76,6 +82,13 @@ export interface ModelClient {
   sessionTargets(args: {
     programDayId: string;
     completedSessions: number;
+    /**
+     * The instant the prescription is FOR. Omitted in the app (it is now); supplied by simulations,
+     * which run a clock of their own. It is read for exactly one thing — how long she has been away
+     * (B-9, `engine/v5/detraining`) — and a harness that could not set it would be told its virtual
+     * athlete had detrained for however long ago its fixtures are dated.
+     */
+    nowMs?: number;
   }): Promise<SetTarget[]>;
 
   /** Post actuals for a finished (or early-finished) session. */
@@ -84,6 +97,30 @@ export interface ModelClient {
     sets: ActualSet[];
     earlyFinish: boolean;
   }): Promise<void>;
+
+  /**
+   * What the workout that started at `startedAtMs` EARNED — the loads the engine set for next time,
+   * each with the reason that earned it.
+   *
+   * v5 decides at the end of every occurrence (register L7); this folds the engine at the whistle
+   * and reads back the decisions stamped with that occurrence. `[]` means the workout changed
+   * nothing, which is a real answer (every lift held, S-24) and must be said, not papered over.
+   *
+   * OPTIONAL on the seam by design: the on-device model owns the engine, and the HTTP client is the
+   * decommissioned backend path (see launch-readiness, 2026-06-24). A required member would force a
+   * stub into `httpClient`, which is under a standing do-not-touch rule. A caller without it simply
+   * has nothing to show.
+   */
+  sessionEarned?(args: { startedAtMs: number }): Promise<Explanation[]>;
+
+  /**
+   * The ABSOLUTE next load per lift that one occurrence set — keyed by exerciseId, `{ loadFrom,
+   * loadTo }`. The Record screen (v7 3.3b) stamps "NEXT: 41" (a load moved up) or "HOLDS 44" (no
+   * entry ⇒ held at what she lifted) beside each exercise. Read-only, from the same stamped
+   * changeLog `sessionEarned` narrates; a lift absent from the map simply held. Optional for the
+   * same reason as `sessionEarned` (the decommissioned HTTP path owns no engine).
+   */
+  sessionForward?(args: { startedAtMs: number }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>>;
 
   /**
    * Per-capability relative scores + confidence + still-learning flags for the
@@ -106,19 +143,6 @@ export interface ModelClient {
   // survives refetches, reinstalls, device changes, and future week regenerations, and the
   // model honors it with priority. Fixture impls are local/no-op (dev offline).
 
-  /** Pin the athlete's EXACT exercise choice for a slot's capability (honored verbatim). */
-  setExercisePreference(args: {
-    capability: Capability;
-    fromExercise: string;
-    toExercise: string;
-    reason?: string;
-  }): Promise<void>;
-  /** Clear the pin for a capability → the model selects again. */
-  restoreExercisePreference(args: { capability: Capability }): Promise<void>;
-  /** Lock System: lock/unlock a slot (by its durable engine slotId) against engine-initiated
-   *  swaps. The lock belongs to the slot (survives regen + manual replacement); manual replacement
-   *  stays allowed. */
-  setSlotLock(args: { slotId: string; locked: boolean }): Promise<void>;
   /** Define (or remove) a persistent preferred substitute for an exercise. */
   setSubstitute(args: { primaryExercise: string; substituteExercise?: string; remove?: boolean }): Promise<void>;
   /** Define (or remove) an equipment-busy backup exercise. */
@@ -131,8 +155,4 @@ export interface ModelClient {
    *  replacement, no structure change — a temporary runtime reorder. Returns nothing (the caller
    *  re-reads the session). */
   markEquipmentOccupied(args: { blockId: string }): Promise<void>;
-
-  /** Weekly Program Container: true when the week is complete and the athlete is in Rest (the
-   *  existing Home Rest state is reused). false (and no backend) when not in rest. */
-  weeklyRest(): Promise<boolean>;
 }

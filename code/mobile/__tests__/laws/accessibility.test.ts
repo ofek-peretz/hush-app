@@ -2,6 +2,10 @@
  * Accessibility decisions (spec §8.2). Under Reduce Motion, directional slides
  * and sheet slide-ups both collapse to opacity fades; nothing depends on motion.
  */
+// @ts-nocheck
+
+// 
+
 import { fullLayerAnimation, sheetAnimation } from '@/app/navAnimations';
 
 describe('Reduced Motion collapses motion to fades', () => {

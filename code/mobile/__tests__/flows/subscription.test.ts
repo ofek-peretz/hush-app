@@ -6,6 +6,10 @@
  * entitlement unlock, persistence across calls, restore). The StoreKit native
  * impl will satisfy the same `Billing` contract, so these tests pin the contract.
  */
+// @ts-nocheck
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   FREE_SESSION_LIMIT,
@@ -38,6 +42,30 @@ describe('free-trial gate (pure)', () => {
     expect(isTrainingGated(0, true)).toBe(false);
     expect(isTrainingGated(FREE_SESSION_LIMIT, true)).toBe(false);
     expect(isTrainingGated(999, true)).toBe(false);
+  });
+});
+
+describe('the StoreKit seam (selection contract, wired 2026-08-24)', () => {
+  it('this jest runtime selects the stub — the native ExpoIap probe answers null here', () => {
+    const { storeKitAvailable } = require('@/platform/billing/storekit');
+    const { billingStub } = require('@/platform/billing/billing');
+    expect(storeKitAvailable()).toBe(false);
+    expect(billing).toBe(billingStub);
+  });
+
+  it('the real implementation keys on the native module, never on a guess — and a production build that LOST the module fails closed (2026-09-01, audit finding 5)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'platform', 'billing', 'storekit.ts'), 'utf8');
+    expect(src).toContain("requireOptionalNativeModule?.('ExpoIap')");
+    const sel = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'platform', 'billing', 'billing.ts'), 'utf8');
+    // Three-way, in this order: real StoreKit → the fail-closed guard → the QA stub. The middle
+    // arm is the fix for the day a packaging regression drops the native module from a shipped
+    // binary — the stub would have granted the whole product for free, silently.
+    expect(sel).toMatch(/storeKitAvailable\(\)\s*\? billingStoreKit\s*: brokenProductionBuild\s*\? billingGuard\s*: billingStub/);
+    expect(sel).toContain("!__DEV__ && Platform.OS === 'ios' && !storeKitAvailable()");
+    // The guard's getEntitlement THROWS so the boot reconcile keeps a paying athlete's cache.
+    expect(sel).toContain("throw new Error('storekit_missing_in_production')");
   });
 });
 

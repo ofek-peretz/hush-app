@@ -1,19 +1,17 @@
 /**
  * Billing seam — Subscription + Apple Payments (Launch Roadmap item 1).
  *
- * NATIVE STATUS: real StoreKit purchasing requires a native In-App Purchase
- * module (e.g. `react-native-iap` / Expo IAP) plus the auto-renewable products
- * configured in App Store Connect — neither of which is wired into this build yet.
- * Until they land this is a LOCAL STUB (mirroring platform/auth + platform/
- * notifications): it resolves entirely on-device so the whole flow — paywall →
- * choose plan → "purchase" → entitlement unlock → Profile status → restore —
- * runs in dev / web / TestFlight QA without any Apple infrastructure.
+ * NATIVE STATUS: WIRED (2026-08-24). `billingStoreKit` (./storekit, via `expo-iap` /
+ * StoreKit 2) is the live implementation on any iOS build that carries the native
+ * `ExpoIap` module. The LOCAL STUB below remains the implementation everywhere the
+ * native module is absent — jest, web, Expo Go, and builds older than 2026-08-24 —
+ * so the whole flow (paywall → choose plan → purchase → entitlement unlock →
+ * Profile status → restore) still runs without Apple infrastructure. The selection
+ * is a runtime probe of the binary, never a guess.
  *
- * The seam is the contract. When StoreKit is wired, replace `billingStub` with a
- * `billingStoreKit` that implements the SAME `Billing` interface (products from
- * `getProducts`, current entitlements from `getEntitlement`, a real purchase /
- * restore) and flip the `billing` export. Nothing else in the app changes —
- * callers only ever see `Billing`.
+ * Two auto-renewable products must exist in App Store Connect under the ids in
+ * ./products (`hush.pro.month`, `hush.pro.annual`) for the paywall to show real
+ * plans; an empty store answer renders the paywall's store-unavailable state.
  *
  * Entitlement is the source of truth StoreKit owns (it survives reinstall /
  * device-change via the Apple ID). The stub persists a simulated entitlement to
@@ -21,7 +19,11 @@
  * so it is NOT wiped by an app-account sign-out / delete (an Apple subscription
  * outlives the local Hush account, exactly as in production).
  */
+
+// 
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { track } from '@/platform/telemetry';
 import { BILLING_EVENTS } from '@/platform/events';
 import {
@@ -32,6 +34,8 @@ import {
   type SubscriptionProduct,
 } from './products';
 import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
+// storekit.ts imports only TYPES from this module, so the cycle is erased at runtime.
+import { billingStoreKit, storeKitAvailable } from './storekit';
 
 export type PurchaseStatus = 'purchased' | 'restored' | 'cancelled' | 'pending' | 'failed';
 
@@ -123,11 +127,52 @@ export const billingStub: Billing = {
   },
 };
 
-/**
- * Active billing implementation. Local stub until StoreKit is wired (see header).
- * Every call is safe in any environment (no native module required).
+/*
+ * ════ A PRODUCTION iOS BUILD WITHOUT STOREKIT FAILS CLOSED (2026-09-01, audit finding 5) ════
+ *
+ * The stub exists for jest, web and Expo Go — and until today it was ALSO what a shipped iOS
+ * binary fell back to if the native `ExpoIap` module failed to resolve. The stub's `purchase()`
+ * returns `purchased` unconditionally and persists a permanent entitlement: one silent packaging
+ * regression and the entire product is free, with nothing anywhere to notice.
+ *
+ * The guard refuses instead. `getEntitlement` THROWS — deliberately, because the boot reconcile's
+ * catch keeps the cached value on a throw, so a paying athlete on a broken build keeps her access
+ * while a stranger gains nothing. Purchases and restores fail plainly, the paywall renders its
+ * store-unavailable state, and the event below is the alarm the regression never had.
  */
-export const billing: Billing = billingStub;
+const brokenProductionBuild = !__DEV__ && Platform.OS === 'ios' && !storeKitAvailable();
+
+const billingGuard: Billing = {
+  async getProducts() {
+    return [];
+  },
+  async getEntitlement(): Promise<Entitlement> {
+    throw new Error('storekit_missing_in_production');
+  },
+  async purchase() {
+    return { status: 'failed' as const, entitlement: NO_ENTITLEMENT };
+  },
+  async restore() {
+    return { status: 'failed' as const, entitlement: NO_ENTITLEMENT };
+  },
+};
+
+if (brokenProductionBuild) {
+  // Loud, once, at module load — the one event that must never fire on a healthy fleet.
+  void track(BILLING_EVENTS.storeUnavailable, { reason: 'native_module_missing_in_production' });
+}
+
+/**
+ * Active billing implementation: real StoreKit when this binary carries the native
+ * module; a FAIL-CLOSED guard on a production iOS build that lost it; the local
+ * stub everywhere else (jest, web, Expo Go). Every call is safe in any
+ * environment — the probe itself never throws.
+ */
+export const billing: Billing = storeKitAvailable()
+  ? billingStoreKit
+  : brokenProductionBuild
+    ? billingGuard
+    : billingStub;
 
 /** Telemetry helper — record an entitlement transition once, fire-and-forget. */
 export function trackEntitlementChange(prev: Entitlement, next: Entitlement): void {

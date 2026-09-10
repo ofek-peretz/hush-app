@@ -1,0 +1,10 @@
+FormSpec validation — bb_row
+========================================
+RESULT: PASS — every predicate holds across the loop.
+
+
+Checks:
+  start: dead hang — arms long (elbow ~170°)
+  end: bar to the lower ribs
+  path: bar vertical ±1.5
+  invariants: torso frozen at 45° (no swing) · hips fixed · knees fixed (soft, set once) · feet planted · neutral neck (head on the spine line) · no elbow hyperextension

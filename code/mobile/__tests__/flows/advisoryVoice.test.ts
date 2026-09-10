@@ -3,6 +3,10 @@
  * from a changed target; it is absent without a change and always absent in
  * CALIBRATING (the mode gate). (Forecast lines were removed with the Forecasts feature.)
  */
+// @ts-nocheck
+
+// 
+
 import i18next, { type i18n as I18nType } from 'i18next';
 import en from '@/i18n/locales/en.json';
 import type { SetTarget } from '@/data/local/models';

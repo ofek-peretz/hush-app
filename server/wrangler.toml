@@ -1,0 +1,66 @@
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# hush-coach — the Gemini relay. See the header of `worker.ts` for what it is and why it exists.
+#
+# ⛔ THIS FILE DID NOT EXIST UNTIL 2026-08-30, AND ITS ABSENCE COST TWENTY-SEVEN DAYS.
+#
+# The settings lived only on the founder's machine, so this repo could describe a Worker it had no
+# way to ship. `wrangler deployments list --name hush-coach` said the live code was last deployed on
+# **2026-08-03** — a month of work in `worker.ts` that no athlete ever ran, including the model
+# change to 3.7, which is why every live reply still came back stamped `gemini-3.6-flash`.
+#
+# A deploy config is not project furniture. It is the difference between edited and shipped.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+name = "hush-coach"
+main = "worker.ts"
+
+# ⚠️ MATCHED TO `hush-identity`, WHICH HAS BEEN LIVE AND HEALTHY SINCE 2026-08-24 — not to today.
+# A compatibility date is a request for a specific runtime's behaviour, and moving it forward on the
+# same deploy that changes the code would blend two variables into one result.
+compatibility_date = "2026-08-01"
+
+# The `*.workers.dev` hostname the app talks to (`EXPO_PUBLIC_COACH_URL`). Stated rather than left
+# to a default, because the default flipping would take the coach off the air for every install.
+workers_dev = true
+
+# ── Cloudflare's own rate limiter ───────────────────────────────────────────────────────────────
+# No KV namespace, no dashboard, no extra command — declared here and it exists on the next deploy.
+#
+# 30 requests per 60 seconds, per install. A real athlete sends one message and waits for an answer
+# that takes several seconds; she cannot reach thirty in a minute by hand. A loop reaches it
+# immediately. That is the whole design: invisible to her, a wall to a script.
+#
+# `namespace_id` is any integer unique within this Worker — it is not a secret and not an account id.
+[[unsafe.bindings]]
+name = "COACH_LIMIT"
+type = "ratelimit"
+namespace_id = "1"
+simple = { limit = 30, period = 60 }
+
+# ── REAL AUTHENTICATION + THE DAY'S BUDGET (2026-09-01, audit finding 1) ────────────────────────
+# The SAME namespace hush-identity writes its sessions into — the coach READS `session:<token>`
+# to tell an athlete from a script, and keeps its own `quota:*` counters beside them. One extra
+# binding, zero new infrastructure; see the Env comment in worker.ts for the whole design.
+[[kv_namespaces]]
+binding = "HUSH_KV"
+id = "14a55c2d60944fdfb81d9895cf6b7a66"
+
+[vars]
+# ⛔ FLIPPED TO '1' ON 2026-09-09 (the formula report, red finding 3): with '0' anyone holding the
+# token from the IPA could spend the whole global budget. A session is now the price of every
+# call EXCEPT an intake — a stranger's `build`/`import` still passes, on the install's own small
+# budget below, because her week is built before she has an account. Builds older than the first
+# bearer-sending one (build 65) lose the coach; none are in anyone's hands but the founder's.
+REQUIRE_AUTH = "1"
+# What one anonymous install may spend in a day on intake calls. A real intake is one build, a
+# retry, an import at most.
+DAILY_ANON_CALLS = "6"
+# ⛔ 40 → 200 on 2026-09-09. The founder walked the intake repeatedly on a testing day, crossed 40,
+# and every build after it fell through to the local assembler — a week his own sentence never
+# touched, reported as "the AI ignores my prompt". A real athlete's heaviest honest day is still
+# under ten; 200 keeps the wall against a script (the 30/60 s limiter above is the real one) and
+# stops the wall from landing on the most important call in the product.
+DAILY_ACCOUNT_CALLS = "200"
+DAILY_GLOBAL_CALLS = "2000"
+
+# ⚠️ `GEMINI_API_KEY` AND `HUSH_TOKEN` ARE NOT HERE, AND MUST NEVER BE. They live in the Worker's
+# secret store (`npx wrangler secret put …`), already set, and a deploy leaves them untouched.

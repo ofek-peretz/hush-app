@@ -1,0 +1,16 @@
+# ════ ADD THIS TO `wrangler.toml` IN THE WORKER PROJECT ════
+#
+# Cloudflare's own rate limiter. No KV namespace, no dashboard, no extra command — it is declared
+# here and it exists on the next deploy.
+#
+# 30 requests per 60 seconds, per install. A real athlete sends one message and waits for an answer
+# that takes fifteen seconds; she cannot reach thirty in a minute by hand. A loop reaches it
+# immediately. That is the whole design: invisible to her, a wall to a script.
+#
+# `namespace_id` is any integer unique within this Worker — it is not a secret and not an account id.
+
+[[unsafe.bindings]]
+name = "COACH_LIMIT"
+type = "ratelimit"
+namespace_id = "1"
+simple = { limit = 30, period = 60 }

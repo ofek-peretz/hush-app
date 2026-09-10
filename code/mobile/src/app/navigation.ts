@@ -2,69 +2,397 @@
  * Navigation param lists. Two groups gated by onboarding completion (Root.tsx):
  * onboarding (forward-only) and the main app.
  *
- * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18):
- *   Authentication → Consent → Connect Health → [Manual Info, if Health skipped]
- *   → Goal → Days per week → Program Created → Home.
+ * Entry flow (HUSH_BUILD_SPEC §3, founder directive 2026-06-18; Goal step removed
+ * 2026-06-30 — Hush is hypertrophy-first for everyone, so goal is no longer asked;
+ * Body data + Training merged into one "About you + Your week" step, v7 2026-07-24):
+ *   Authentication (sign-in + consent, merged 2026-07-12) → Name → Connect Health
+ *   → the conversation → Program Created → Home. Four screens, and one of them is a coach.
  * Invite-token enrollment is removed.
+ *
+ * ⛔ AND THE THIRD ANSWERING STEP IS THE BUILDER NOW (founder 2026-08-29):
+ *
+ *     Authentication → Start → AboutYou (1/3) → ConnectHealth (2/3) → PlanBuilder (3/3)
+ *       → BuildingProgramme → ProgramCreated → Home
+ *
+ * The body map held that seat because it was the only step that shaped the week. The builder is
+ * that step now, and it does not merely shape the week — it IS the week, written by her: build one
+ * for me, start from a blank sheet, or take a proven shelf and change it. `BodyMap` is deleted from
+ * the intake (the map itself lives on at `BodyMapEdit` and in the pain flow).
  */
-import type { CardioActivity, Experience, Goal, OnboardingInputs, SessionSummary } from '@/data/local/models';
 
-/** Profile fields gathered before Goal — from HealthKit (granted) or Manual Info. */
-export interface OnboardingProfileDraft {
-  healthConnected: boolean;
-  age?: number;
-  sex?: 'male' | 'female';
-  heightCm?: number;
-  weightKg?: number;
+// 
+
+import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSummary } from '@/data/local/models';
+import type { ShareCard } from '@/domain/shareCard';
+import type { WeeklyPlanView } from '@/engine/weeklyView';
+import type { WristOffer } from '@/platform/watch/watchPresence';
+
+/** The Saturday letter's fact band — workouts done of planned, tonnes moved, calories. */
+export interface WeeklyBand {
+  done: number;
+  planned: number;
+  tonnes: number;
+  kcal: number | null;
 }
 
 export type OnboardingParamList = {
+  /*
+   * ⛔ THE IMPORT IS AN ONBOARDING STEP TOO (2026-08-11). It carries the relay so that keeping the
+   * week she brought still FINISHES the intake — see `BodyMap.bringYourOwn`. Absent params mean it
+   * was opened from the profile instead, where there is no intake to finish.
+   */
+  /* ⚠️ `coachAsk` RIDES THROUGH THE REVIEW ROUND-TRIP (2026-08-30). When the build step hands this
+     screen a landed import, it carries the sentence she typed on the ask step — because declining
+     the photograph has to return her to the build she was watching, and a decline that quietly
+     dropped her words would build a different week under the same words. */
+  ImportPlan: { fromOnboarding?: true; review?: true; inputs?: OnboardingInputs; coachAsk?: string } | undefined;
+  // Sign-in AND consent (merged 2026-07-12): continuing with a provider records the
+  // versioned agreement — the line under the buttons says so before it is pressed.
   Authentication: undefined;
-  Consent: undefined;
-  // "What should we call you?" — captures the name (fallback to the Apple-provided name).
-  NameEntry: undefined;
-  ConnectHealth: undefined;
-  // Single screen, four fields (§4.3) — now shown to EVERYONE (sex/age/height/weight
-  // are needed for the program; HealthKit only reliably gives steps/weight). The flag
-  // records whether Health was connected (for weight prefill + the profile).
-  ManualInfo: { healthConnected: boolean } | undefined;
-  Goal: { profile: OnboardingProfileDraft };
-  // Experience drives the starting weights; sits between Goal and Days per week.
-  Experience: { profile: OnboardingProfileDraft; goal: Goal };
-  DaysPerWeek: { profile: OnboardingProfileDraft; goal: Goal; experience: Experience };
+  /**
+   * ⛔ THE FORK, AND THE FIRST REAL DECISION IN THE PRODUCT (founder 2026-08-12).
+   *
+   * Bringing a programme was one grey underlined line under a Continue button — the largest system
+   * in the intake drawn as its smallest control. It is one of the two ways this app begins, so it
+   * is a screen, and it is first: what she answers here changes what every step after it is FOR,
+   * and the model's read of a photograph runs underneath the rest of the intake rather than in
+   * front of her (`domain/pendingImport`).
+   */
+  Start: undefined;
+  /*
+   * ⛔ WHAT SHE WEIGHS (founder 2026-08-03) — *"the coach didn't ask for my weight, and it's
+   * critical for it."* It was never asked by anyone: `coachFacts` spreads it conditionally, so an
+   * absent bodyweight is simply an absent line on the sheet and nothing is surprised by it.
+   *
+   * ⚠️ AND IT IS ALSO WHERE `sex` AND HER NAME ARE ANSWERED (2026-08-04) — the screen that asked for
+   * those is merged in here. The relay to the profile therefore STARTS on this step rather than
+   * passing through it.
+   */
+
+  /*
+   * ⛔ THE REST OF WHAT THE COACH MUST BE GIVEN (founder 2026-08-03) — age, experience, how many
+   * days, how long a session. `domain/coachRequirements` is the list and the argument.
+   *
+   * Each step carries everything gathered so far and adds its own, so `ConnectHealth` still
+   * assembles the whole `OnboardingInputs` in ONE place — the relay `sex` has always ridden.
+   */
+  /*
+   * ⛔ NO PARAMS (2026-08-04). `sex` used to ride in from `NameEntry`; that screen is merged into
+   * this one, so the answer is made here and leaves here. The relay starts one step later.
+   */
+  AboutYou: undefined;
+  /*
+   * ⛔ RESHUFFLED 2026-08-05 (founder): *"make one screen of 3 rulers — DAYS A WEEK together with
+   * BODYWEIGHT and AGE — and then move the years of experience to the screen with the name and the
+   * sex."*
+   *
+   * So `AboutYou` now carries the three things she IS (name, sex, experience) and `YourTraining`
+   * carries the three she SETS, on one instrument each. Bodyweight and age travel one step later
+   * than they used to; nothing else about the relay changes.
+   */
+  /*
+   * ⛔ `experience` AND `age` LEFT THE INTAKE (founder 2026-08-08, on a measurement he forced).
+   *
+   * Neither is read anywhere in `src/engine`. Their only consumers were `coachFacts` and the server
+   * payload, and the engine learns her true load from `actualWeight` the moment she edits a set —
+   * see the note on `AboutYou`'s state for the numbers. Both remain OPTIONAL on `ConnectHealth` so
+   * a persisted profile that has them still parses; no screen produces them any more.
+   *
+   * ⛔ AND `YourTraining` IS MERGED INTO `AboutYou` AND DELETED (founder 2026-08-10). Once age and
+   * experience went, the intake was four answers across two screens, each half empty — the same
+   * form with an extra tap in the middle of it. Three answering steps now: who she is and what she
+   * has, then her body, then health.
+   */
+  /*
+   * ⛔ THE TWO THINGS A FORM CANNOT HOLD (founder 2026-08-04, taking the chat out of the front
+   * door). What she is training FOR, and what hurts or is refused. Everything else onboarding needs
+   * is a wheel or a choice; these two are prose, and they are the whole of what the intake
+   * conversation was still doing.
+   */
+  /*
+   * ⛔ `workoutMinutes` IS GONE (founder 2026-08-05). He proposed defaulting it to an hour; I
+   * argued it should leave the form entirely — *"the athlete cannot answer how long she wants to be
+   * in a gym before her first session"* — and he agreed: *"fine, take it out. Just make it at least
+   * 45 minutes, because less than that is too light."* The floor lives on the coach now.
+   */
+  /*
+   * ⛔ AND THEN THE PROSE WENT TOO (founder 2026-08-08): *"פציעות כאבים ומה אסור יהיה בBODYMAP לכן
+   * לא צריך טקסט חופשי. כולל אילו שרירים הוא הכי רוצה לפתח."*
+   *
+   * `YourGoal` asked two paragraphs and one chip row. Measuring who READ them found a single
+   * consumer — `coachFacts`, the AI's fact pack — and the AI is out of the front door. Nothing in
+   * the engine has ever seen `goalText` or `limitsText`, so the screen was asking her to type an
+   * answer that changed no decision.
+   *
+   * The body map asks the same two things in the form the assembler actually reads: a stance per
+   * muscle. OFF is "don't train this" (a bad shoulder, a forbidden movement); EMPHASIS is "lead
+   * with this". `assembleV5DayLists` takes this map and nothing else about her intent.
+   */
+  /*
+   * ⛔ AND IT IS THE LAST ANSWERING STEP NOW (founder 2026-08-10). It therefore carries what the two
+   * steps before it collected AND what only `ConnectHealth` can know — her units and whether health
+   * was granted — because it is where `OnboardingInputs` is assembled. One place builds that object;
+   * which place is the last one is what changed.
+   */
+  /*
+   * ⛔ THE THIRD ANSWERING STEP — HER WEEK, AND WHO WRITES IT (founder 2026-08-29):
+   *   *"אני לא יכול לבנות את התוכנית בעצמי מההתחלה … אפשר להוריד את מפת הגוף מהאונבורדינג."*
+   *
+   * The builder was reachable from the Program tab and nowhere else, so the one thing an athlete
+   * coming from Hevy asks for first — *I'll write my own week* — was behind an account she did not
+   * have yet. It is a step of the intake now, and it carries the whole relay because it is the last
+   * answering step: whichever door she takes, `OnboardingInputs` leaves from here.
+   *
+   * ⚠️ REGISTERED IN BOTH STACKS, exactly as `ImportPlan` is, and for the same reason: an intake
+   * step and a main-app screen are the same screen wearing different chrome. Absent params mean it
+   * was opened from the Program tab, where there is no intake to finish.
+   */
+  PlanBuilder: { inputs: OnboardingInputs };
+  // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
+  // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
+  // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired
+  // watch decides, as it always has.
+  ConnectHealth: {
+    sex?: 'male' | 'female';
+    weightKg?: number;
+    age?: number;
+    experience?: Experience;
+    daysPerWeek?: number;
+    workoutMinutes?: number;
+    /** Her own words: what the programme is FOR, and what it has to plan around.
+     *  @deprecated Nothing produces these any more — `BodyMap` replaced the prose screen that did.
+     *  Kept only because `ConnectHealth` still spreads them into the profile conditionally. */
+    goal?: string;
+    limits?: string;
+    previewWrist?: WristOffer;
+  } | undefined;
+  /*
+   * ════ THE BODY MAP LEFT ONBOARDING — THE SECOND TIME, AND FOR GOOD (founder 2026-08-29) ════
+   *
+   * It left once already (2026-08-01: *"I really did ask you to get rid of the body map in
+   * onboarding"*), came back on 2026-08-08 as the replacement for the prose goal screen, and is
+   * gone again now that the step in its seat is the builder. The reason is the same one that put it
+   * there: it was the only step that shaped the week. It is not any more, and asking a stranger to
+   * mark ten muscles off / normal / emphasis BEFORE she has ever trained — one screen away from a
+   * sheet where she can write the week itself — is the same question asked twice, worse.
+   *
+   * ⚠️ THE MAP ITSELF IS NOT GONE, and it is the only thing that keeps this honest: `BodyMapEdit`
+   * (4.1) is hers from her first minute in the app, and the pain flow (13.2) reaches it. What is
+   * gone is asking her to fill one in before she has a programme. The engine door therefore builds
+   * her first week from an ABSENT map — a full-body week with nothing switched off — which is the
+   * one thing this ruling costs and the founder was told so before he made it.
+   */
+  // THE INTAKE — the first conversation, and the step that produces the programme. Everything
+  // before it collects what a coach cannot ask for twice (name, gender, bodyweight, days); this is
+  // where she is asked the things only she knows, by the thing that will act on them.
+  // The profile is NOT written here: `Root` swaps navigators the instant it exists, which would
+  // take this screen out from under her mid-conversation. See `CoachIntake`.
+  /*
+   * ⛔ `CoachIntake` IS DELETED (founder 2026-08-04): *"take the chat out of the front door."*
+   *
+   * The intake was a conversation because the coach had to gather everything itself. It does not any
+   * more — six facts come off a form and two come from her own words — so what replaced it makes ONE
+   * call and hands her a programme.
+   */
+  /**
+   * ⛔ `authored` — THE WEEK IS ALREADY WRITTEN, AND IT IS HERS (founder 2026-08-29): *"אני חושב
+   * שאנו לא צריכים לוותר על החלק של האנימציה בסוף … התרגילים שנבנו נכנסים לאנימציה."*
+   *
+   * The reveal — the dark body, the muscles arriving one at a time, the programme named over a lit
+   * figure — is the payoff of the intake, and it belongs to a week she wrote every bit as much as to
+   * one the engine assembled. With this flag the screen READS the sealed week off disk instead of
+   * generating one; nothing else about the theatre changes.
+   */
+  /*
+   * ⛔ `coachAsk` — HER OWN WORDS, AND THE FLAG THAT SAYS WHO WRITES THE WEEK (2026-08-29).
+   *
+   * Present ⇒ the model was asked, and this screen's simulation finally has something to wait for
+   * (see `BuildingProgramme.askTheModel`). Absent ⇒ the local assembler, exactly as before. An
+   * EMPTY STRING is a real value: she pressed straight through the ask step without writing a line,
+   * which is still the coach path — so the flag is `!= null`, never truthiness.
+   */
+  BuildingProgramme: { inputs: OnboardingInputs; authored?: true; coachAsk?: string };
   // 2-second confirmation that builds the program, then auto-advances to Home (§4.6).
-  ProgramCreated: { inputs: OnboardingInputs };
+  /*
+   * ⛔ `coachMissed` — SHE TYPED A SENTENCE AND IT REACHED NOBODY (2026-08-30).
+   *
+   * Measured on the production Worker, 16 consecutive builds: 13 answered, 3 came back truncated,
+   * and four of the 13 arrived after the intake's budget. **Nine of sixteen** landed a usable week
+   * in time. The rest fall through to the local assembler, which is the right week to hand her —
+   * but until now the screen said nothing, by design: *"she never learns there was a call."*
+   *
+   * That was a fair ruling when the fallback was rare. At better than one in three it is the app
+   * quietly dropping the one thing she wrote in her own words, on the screen that exists to show
+   * her it listened. She is told, and she is offered the ask again.
+   */
+  ProgramCreated: { inputs: OnboardingInputs; coachMissed?: boolean; coachAsk?: string };
+};
+
+/**
+ * FOUNDER RULING 2026-07-12 — CLOSED: navigation stays TAP-BASED and hub-and-spoke. A
+ * swipe-carousel across Home / This week / History / Progress was proposed and rejected:
+ * re-architecting routing purely to enable a swipe invites gesture conflicts with the controls
+ * already living on those screens (the sheets, the horizontal wheels, the full-width back
+ * swipe), and the current hierarchy is predictable and does not break. Simple, clear, tapped.
+ */
+/**
+ * The four peer surfaces under the bottom tab bar (founder 2026-07-17). One tap from each other;
+ * everything deeper is pushed ABOVE them on `MainParamList`, where the bar is absent.
+ */
+export type HomeTabsParamList = {
+  // TODAY — the daily loop (the Home component). Renamed from "Home" in v7: the tab bar carries a
+  // measured-range mark under it and the design calls the destination "Today".
+  Today: undefined;
+  // PROGRAM — the whole week, managed (founder 2026-08-23): every day opens the pre-workout card,
+  // the library one row away. The map of the week; every edit verb routes to the surface owning it.
+  Program: undefined;
+  // CARDIO — a launcher tab. Open training is a full-screen STAGE (no tab bar during a live run),
+  // so this tab intercepts its own press and pushes the Main-stack Cardio screen instead of
+  // rendering anything itself (Root.tsx). The working run/walk flow is untouched.
+  Cardio: undefined;
+  // Progression report (founder, 2026-06-21). Default = all-time + the milestones gallery;
+  // `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens (the former
+  // QuarterlyReport screen, merged in here 2026-07-15). History folds into this surface in v7.
+  Progress: { window?: 'all' | 'quarter' } | undefined;
+  // YOU (ProfileSheet) — a peer surface you return to, not a one-off sheet. It exits by tapping
+  // another tab. Renamed from "Settings" in v7.
+  You: undefined;
 };
 
 export type MainParamList = {
-  // Home is the single root. Program · History · Portrait · Settings (ProfileSheet)
-  // are reached from the Home hamburger Menu (the Tab Bar was removed) and pushed
-  // onto this stack with a back affordance.
-  // `focusDayId` = the workout chosen via "Set as next"; Home offers it (if still
-  // unfinished) instead of the default next workout (§4.19 / §5.8).
-  Home: { focusDayId?: string } | undefined;
-  Program: undefined;
-  History: undefined;
+  /**
+   * THE COACH — the conversation, reached from the corner of Today rather than the tab bar.
+   *
+   * The founder's reason is the product's positioning: *"I don't want to put the AI in the tab bar,
+   * because that would signal hardest of all that we're just another AI app — when we really,
+   * really aren't."* A tab is a section; this is who decides what the other sections show.
+   */
+  /*
+   * ⛔ `Coach` WAS A ROUTE AND IS NOT ONE (founder 2026-08-11). The conversation had two doors; the
+   * onboarding one went on 2026-08-04 and the corner of Today kept the other. Both are closed, and
+   * `CoachScreen` — the 228-line wrapper that was the chat — is deleted.
+   *
+   * ⛔ AND ON 2026-08-12 SO ARE `CoachChat` AND `useCoach`. This note used to end "…remain in use by
+   * the pain screen and the live session", which was true and was the whole problem: two screens
+   * were still conversations. The pain report is the body map again and the in-workout window is an
+   * action sheet, so the components had no consumer left but the dev gallery — which is exactly how
+   * a deleted feature keeps voting. `theAiHasOneJob` is the law that keeps them gone.
+   *
+   * Removing the button alone was not enough and the laws said so: `everyScreenIsReachable` flagged a
+   * registered route with no door, and `everythingBuiltCanBeReached` then flagged a screen that only
+   * the dev gallery rendered. A feature is out when nothing reaches it, not when its button is hidden.
+   */
+  // The tab host is the stack's root. Everything below is pushed on top of the tabs.
+  HomeTabs: NavigatorScreenParams<HomeTabsParamList> | undefined;
   // Open training (run / walk) — recorded, never coached, sealed off from the v4
   // strength engine. The recorded activity lands in the unified History timeline.
-  Cardio: undefined;
+  // NAME IS UNIQUE ON PURPOSE (not "Cardio"): the HomeTabs child also has a "Cardio"
+  // route (the READY tab). A shared name made `navigate('Cardio')` from the focused
+  // Cardio tab resolve back to that tab — so "Start cardio" no-op'd. The live stage
+  // owns its own name so the launch always pushes it.
+  /**
+   * The live GPS stage. `target` is present only when the run is a STEP OF A WORKOUT the coach
+   * wrote — "5 km" inside a session — and it is what lets the phone end the run itself instead of
+   * asking her to confirm a distance it is already measuring.
+   */
+  /**
+   * ⛔ `indoor` — a treadmill (founder, 2026-08-12). It selects the DISTANCE SOURCE and nothing
+   * else: the stage, the maths and the calorie model are one, and `kcalPerKgKm` already prices a
+   * walking segment differently from a running one without being asked which this is.
+   */
+  CardioLive: { target?: { metres: number; say?: string; ex?: string }; indoor?: boolean } | undefined;
   // Read-only details for one recorded cardio activity (opened from History).
   CardioDetail: { activity: CardioActivity };
-  // Pushed / modal surfaces.
-  ProfileSheet: undefined;
-  SessionFlow: undefined;
-  WellDone: { unlockedPortrait: boolean; summary?: SessionSummary };
-  ProgramDetail: { dayId: string };
+  // History — every completed session + recorded run. A peer TAB in v6; in v7 it folds under the
+  // Progress surface and is pushed here on the Main stack (opened from Progress).
+  History: undefined;
+  // FREE-FORM LOG (2026-08-24) — "I trained without Hush; keep it." Opened from the Log's ledger;
+  // saves a `freeform` session the record keeps whole and the engine folds none of (models.ts).
+  FreeLog: undefined;
+  // Edit body data after onboarding (opened from Settings).
+  /** The body map, editable forever (brief, Family 4) — stance + the per-muscle rep band. */
+  // The live workout. `previewFirstGym` is the v7 GALLERY's seam and nothing else: 2.0 is an
+  // overlay over this screen that rises ONCE PER INSTALL, so the first look at it in the harness
+  // was also the last (it wrote the device's "seen" flag and never came back). The harness passes
+  // the learning length it wants drawn; it holds the card open and never writes. Never passed by
+  // the app — on a device the flag decides, as it always has.
+  SessionFlow: { previewFirstGym?: number } | undefined;
+  // `notStarted` = the workout was exited with zero sets logged (not saved, not counted) — Well
+  // Done renders the calm "Workout not started" state instead of a completion.
+  WellDone: { unlockedPortrait: boolean; summary?: SessionSummary; notStarted?: boolean };
   WorkoutDetail: { sessionId: string };
-  // Quarterly peak-weight progress report — surfaced by the every-12-weeks notification.
-  QuarterlyReport: undefined;
-  // All-time progression (founder, 2026-06-21) — reached from Home / Recovery hub.
-  Progress: undefined;
+  /**
+   * THE CLOSER, OVER THE TABS (2026-09-09): the sign-in screen registered on the main stack too,
+   * for the athlete whose enrolment finished without an account (the `signInAfterFirstWorkout`
+   * arm). `after: 'workout'` is the one way in from `WellDone`; from the You tab it opens bare.
+   * Both are dismissible — an account is offered here, never demanded.
+   */
+  Authentication: { after?: 'workout' } | undefined;
+  // WHEN SOMETHING HURTS (v7 §13). `exerciseId` = the lift the session was on, so the response can
+  // offer the ordinary swap for it; absent when the report is made outside a session.
+  /*
+   * `previewDone` is the GALLERY's seam and nothing else — the same shape as `previewFirstGym` and
+   * `previewWeekOpen`. The RECEIPT (the state after she has told us) is reachable only by filing a
+   * real report against a real profile, so in the harness this screen could only ever be looked at
+   * as the PICKER — and the receipt is the half that was 55% empty black. Never passed by the app.
+   */
+  PainWhere: { exerciseId?: string; previewDone?: { muscle: string; severity: 'twinge' | 'pain' | 'sharp' } } | undefined;
+  // ONE LIFT'S CARD (v7 3.2b) — its climb, the marks it crossed, and the engine's stamped log for
+  // it. Pushed from a chip on Progress · Lifts, so it opens above the tabs, not inside them.
+  LiftDetail: { exerciseId: string };
   // Weekly Update (v4) — week-rollover summary of what changed + Why (obs/concl/action).
-  WeeklyUpdate: undefined;
+  // `previewAskBack` is the v7 GALLERY's seam and nothing else: the one question (3.1b) is derived
+  // from the map + a real history, which a harness cannot produce. Never passed by the app.
+  // `previewPlan` is the second half of the same seam: the letter's rows come from a week of engine
+  // decisions, which a harness has no way to produce, so 3.1 could only ever be looked at EMPTY —
+  // the one state it is least interesting in. The harness hands the engine's answer and the week's
+  // band; the screen still does all the reading, ordering and drawing itself.
+  WeeklyUpdate: { previewAskBack?: string; previewPlan?: { plan: WeeklyPlanView; band: WeeklyBand; history?: Session[] } } | undefined;
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
   // also opened from Profile → Membership. `source` records what surfaced it.
   Paywall: { source: 'gate' | 'profile' } | undefined;
-  // Internal debug/QA (DEV only) — per-slot v4 engine state dump.
-  V4Debug: undefined;
+  // §11.4 / 11.5 — a plan travels as an opaque link and nothing else leaves the phone
+  // (domain/planShare is an allow-list). `SharePlan` is opened from You; `PlanReceived` is opened
+  // by the link itself, and carries the encoded token rather than a decoded plan so the screen
+  // does the reading — an unreadable token must never have produced a route in the first place.
+  /**
+   * ⛔ THE PRE-WORKOUT CARD (founder 2026-08-05) — what a day on the week board opens.
+   *
+   * It carries only an ID. The workout, its lifts, its changes and its loads are all read live from
+   * the same places Today reads them, because a card that carried a SNAPSHOT would go stale the
+   * moment the coach answered a session finished on another device — and this is the screen she
+   * stands in front of deciding whether the numbers are right.
+   */
+  PreWorkout: { workoutId: string };
+  /** The plan builder (founder 2026-08-25) — full authorship of the week, with the steward layer.
+   *  Door: the Program tab. Saving seals `authored: 'athlete_or_coach'` (the imported week's own
+   *  passport), so every engine rebuild gate refuses the week from then on.
+   *
+   *  ⚠️ AND IT IS ALSO AN ONBOARDING STEP (2026-08-29) — see `OnboardingParamList.PlanBuilder`. NO
+   *  PARAMS HERE, deliberately: the relay is what tells the screen which of the two it is, so the
+   *  main-stack door cannot accidentally put it in intake chrome. */
+  PlanBuilder: undefined;
+  /*
+   * ⛔ HER BODY, EDITABLE (founder 2026-08-11). The map used to exist on ONE screen, in onboarding —
+   * drawn once and never reachable again — while the pain copy already told her *"adjust it any time
+   * in You → Body map."* The app was promising a screen that did not exist.
+   */
+  BodyMapEdit: undefined;
+  /*
+   * ⛔ THE LIFTS SHE WANTS, AND THE ONES SHE NEVER WANTS (founder 2026-08-16). `programAssembly` has
+   * read her picks and her refusals since the same day; until this route there was no way for her to
+   * make either, which is a feature finished everywhere except where she could reach it.
+   */
+  ExerciseLibrary: undefined;
+  /** The programme she already has — photographed or typed. See `screens/import`. */
+  ImportPlan: undefined;
+  SharePlan: undefined;
+  /** The social home (2026-08-23) — the cards on demand, the plan in/out, the future circle. */
+  Together: undefined;
+  PlanReceived: { token: string };
+  // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent
+  // modal over whatever surfaced it (a completed workout, the week's close). `card` carries the
+  // already-derived facts (domain/shareCard); the screen renders and captures, deriving nothing.
+  ShareCardModal: { card: ShareCard };
 };

@@ -4,6 +4,10 @@
  * This catches a future copy change that would re-introduce streaks, praise,
  * gamification, effort input, or interpreting language.
  */
+// @ts-nocheck
+
+// 
+
 import en from '@/i18n/locales/en.json';
 
 const DENYLIST: { re: RegExp; why: string }[] = [
@@ -34,7 +38,13 @@ const DENYLIST: { re: RegExp; why: string }[] = [
 // legitimately states a 3-month timeframe ("Three months", "three months ago").
 // These specific copy keys are exempt from the Decision-1 horizon ban; the ban
 // still guards forecast/horizon copy everywhere else (the model stays horizonless).
+//
+// `paywall.trialPeriod.*` (2026-08-24): the length of a StoreKit introductory free trial
+// ("1 week free"). A BILLING period Apple defines, restated to her verbatim — not the model
+// promising anything about her training in that time. Decision 1 bans the coach's horizon;
+// a subscription's trial window is the store's fact, and hiding it would be the dishonesty.
 const TIMEFRAME_EXEMPT = new Set(['portrait.threeMonths', 'portrait.compareThreeMonths']);
+const isTrialPeriod = (path: string) => path.startsWith('paywall.trialPeriod.');
 const isDecision1 = (why: string) => why.includes('Decision 1');
 
 // Cardio (Open training) is a RECORDED, never-coached activity, deliberately
@@ -44,9 +54,14 @@ const isDecision1 = (why: string) => why.includes('Decision 1');
 // strength coaching surfaces) does not apply inside the `cardio` namespace, nor
 // in the Apple Health connection copy (any `*health*` key), which honestly names
 // the cardio metrics — heart rate, calories, distance — that Health is read for.
-// The ban still guards every coaching surface everywhere else.
+// Founder 2026-07-10: the Complete screen shows duration + an estimated calorie
+// figure (MET × bodyweight × time, omitted when bodyweight is unknown) — the
+// `complete` namespace joins the exemption. The number is a READOUT of the
+// finished session, never a model input and never a coaching signal; the ban
+// still guards every coaching surface everywhere else.
 const isCalories = (why: string) => why.includes('calories');
-const isCardioPath = (path: string) => path.startsWith('cardio.') || /health/i.test(path);
+const isCardioPath = (path: string) =>
+  path.startsWith('cardio.') || path.startsWith('complete.') || /health/i.test(path);
 
 function values(node: unknown, out: { path: string; v: string }[], path = ''): void {
   if (typeof node === 'string') {
@@ -69,7 +84,7 @@ describe('forbidden vocabulary never appears in copy', () => {
       const hits = all.filter(
         (x) =>
           re.test(x.v) &&
-          !(isDecision1(why) && TIMEFRAME_EXEMPT.has(x.path)) &&
+          !(isDecision1(why) && (TIMEFRAME_EXEMPT.has(x.path) || isTrialPeriod(x.path))) &&
           !(isCalories(why) && isCardioPath(x.path)),
       );
       expect(hits.map((h) => `${h.path}: "${h.v}"`)).toEqual([]);

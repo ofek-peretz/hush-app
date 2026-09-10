@@ -5,8 +5,25 @@
  * restEndsAtMs is carried (drift-proof countdown); during an active set there is
  * no countdown. The widget is a read-only SUBSET of the canonical SessionMirror.
  */
+// @ts-nocheck
+
+// 
+
+import i18next from 'i18next';
 import { liveActivityStateFromMirror } from '@/platform/liveActivity';
+import { resources } from '@/i18n';
 import { MIRROR_SCHEMA_VERSION, type SessionMirror } from '@/platform/sessionMirror';
+
+// The Live Activity projection localizes its set label (phone surface), so the
+// global i18next must be initialized for these assertions.
+beforeAll(async () => {
+  if (!i18next.isInitialized) {
+    await i18next.init({ resources, lng: 'en', fallbackLng: 'en', interpolation: { escapeValue: false } });
+  }
+});
+afterEach(async () => {
+  await i18next.changeLanguage('en');
+});
 
 function mirror(over: Partial<SessionMirror>): SessionMirror {
   return {
@@ -15,6 +32,8 @@ function mirror(over: Partial<SessionMirror>): SessionMirror {
     workoutName: 'Upper B',
     exerciseName: 'Back Squat',
     setLabel: 'Set 2 of 4',
+    setNumber: 2,
+    setsInExercise: 4,
     liftIndex: 1,
     liftCount: 6,
     globalIndex: 1,
@@ -60,6 +79,14 @@ describe('liveActivityStateFromMirror', () => {
     expect(s.phase).toBe('transition');
     expect(s.nextExerciseName).toBe('Lat Pulldown');
     expect(s.nextTargetWeight).toBe(59);
+  });
+
+  it('localizes the set label to the app language (Hebrew), names stay English', async () => {
+    await i18next.changeLanguage('he');
+    const s = liveActivityStateFromMirror(mirror({ phase: 'active_set' }));
+    expect(s.setLabel).toBe('סט 2 מתוך 4');
+    expect(s.exerciseName).toBe('Back Squat'); // canonical English name unchanged
+    expect(s.workoutName).toBe('Upper B');
   });
 
   it('paused phase maps through', () => {

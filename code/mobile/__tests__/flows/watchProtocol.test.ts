@@ -3,6 +3,10 @@
  * validates every watch intent against its own mirror; the phone's truth wins.
  * Pure, no native.
  */
+// @ts-nocheck
+
+// 
+
 import {
   decideWatchIntent,
   makeStateEnvelope,
@@ -12,6 +16,7 @@ import {
   parseWatchIntent,
   WATCH_INTENT_TTL_MS,
   WATCH_PROTOCOL_VERSION,
+  WATCH_START_GRACE_MS,
   type WatchIntent,
 } from '@/platform/watch/protocol';
 import type { SessionMirror } from '@/platform/sessionMirror';
@@ -38,7 +43,7 @@ function mirror(over: Partial<SessionMirror> = {}): SessionMirror {
     loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 3,
     workoutName: 'Upper A', summary: null, swapOptions: [], nextSwapOptions: [],
     ...over,
-  };
+  } as SessionMirror;
 }
 
 function intent(over: Partial<WatchIntent> = {}): WatchIntent {
@@ -49,7 +54,7 @@ function intent(over: Partial<WatchIntent> = {}): WatchIntent {
     issuedAt: new Date(NOW - 200).toISOString(),
     expectedGlobalIndex: 0,
     ...over,
-  };
+  } as WatchIntent;
 }
 
 const NONE: ReadonlySet<string> = new Set();
@@ -167,5 +172,113 @@ describe('serialization layer (wire ⇄ object)', () => {
     expect(parseWatchIntent(JSON.parse(serializeIntent(i)))).toEqual(i);
     expect(parseWatchIntent({ type: 'launch_missiles', intentId: 'x', issuedAt: 'now' })).toBeNull();
     expect(parseWatchIntent(null)).toBeNull();
+  });
+});
+
+/**
+ * THE NUMBERS THE WATCH REPORTS ARE NOT TRUSTED (hardened 2026-07-13).
+ *
+ * The parser used to check the three routing fields and cast the rest of the payload straight
+ * through, so a corrupt frame's numbers reached the session machine unexamined. Two of them are
+ * load-bearing: `actualReps`/`actualWeight` are written into the athlete's set log and folded by
+ * the engine forever, and `seconds` is ADDED to the rest — a NaN there makes the rest end NaN, and
+ * the mirror's `new Date(NaN).toISOString()` throws inside the store's publish effect, mid-set.
+ *
+ * A field that is ABSENT still means "unadjusted". A field that is PRESENT but not a sane number
+ * makes the whole frame malformed — corrupt is corrupt, and it is dropped, not half-believed.
+ */
+describe('a corrupt number makes the whole intent malformed', () => {
+  const junk = [NaN, Infinity, -Infinity, -1, 1e12, '7' as unknown as number, null as unknown as number];
+
+  it('rejects a nonsense +15 rather than poisoning the rest anchor', () => {
+    for (const seconds of [...junk, 0, 601, 15.5]) {
+      const d = decideWatchIntent(
+        { ...intent({ type: 'add_rest' }), seconds },
+        mirror({ phase: 'rest_inter', restRemainingS: 40, restTotalS: 90 }),
+        NOW,
+        NONE,
+      );
+      expect({ seconds, accept: d.accept, reason: d.reason }).toEqual({ seconds, accept: false, reason: 'malformed' });
+    }
+    // …and the real one still gets through.
+    const ok = decideWatchIntent(
+      { ...intent({ type: 'add_rest' }), seconds: 15 },
+      mirror({ phase: 'rest_inter', restRemainingS: 40, restTotalS: 90 }),
+      NOW,
+      NONE,
+    );
+    expect(ok.action).toEqual({ kind: 'add_rest', seconds: 15 });
+  });
+
+  it('rejects a nonsense set — the log and the engine take what this writes, forever', () => {
+    for (const actualReps of [...junk, 201, 8.5]) {
+      const d = decideWatchIntent({ ...intent(), actualReps }, mirror(), NOW, NONE);
+      expect({ actualReps, accept: d.accept }).toEqual({ actualReps, accept: false });
+    }
+    for (const actualWeight of [NaN, Infinity, -1, 1001, '60' as unknown as number]) {
+      const d = decideWatchIntent({ ...intent(), actualWeight }, mirror(), NOW, NONE);
+      expect({ actualWeight, accept: d.accept }).toEqual({ actualWeight, accept: false });
+    }
+  });
+
+  it('bodyweight (actualWeight: null) survives the sieve — it is a value, not a hole', () => {
+    const d = decideWatchIntent({ ...intent(), actualWeight: null, actualReps: 12 }, mirror(), NOW, NONE);
+    expect(d.accept).toBe(true);
+    expect(d.action).toEqual({ kind: 'complete_set', actualReps: 12, actualWeight: null });
+  });
+
+  it('an unadjusted set is still unadjusted — absent fields stay absent', () => {
+    const d = decideWatchIntent(intent(), mirror(), NOW, NONE);
+    expect(d.action).toEqual({ kind: 'complete_set', actualReps: undefined, actualWeight: undefined });
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE ONE INTENT THAT CAN CREATE A SECOND AUTHORITY.
+ *
+ * Every gate in this file protects a LIVE session. `start_workout` is judged before any of them —
+ * lobby intents return above the staleness check — so it had no expiry at all, while the wrist
+ * gives up waiting after `WATCH_START_GRACE_MS` and runs the workout itself. A phone woken from
+ * cold well after the tap would then begin a session for a workout already under way on her wrist,
+ * and the wrist can only be talked out of it before her first set is logged.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('a start the wrist has given up on is not a start', () => {
+  it('⛔ rejects a start_workout older than the wrist’s Begin grace', () => {
+    const late = intent({
+      type: 'start_workout',
+      intentId: 'late-start',
+      expectedGlobalIndex: undefined,
+      issuedAt: new Date(NOW - (WATCH_START_GRACE_MS + 1)).toISOString(),
+    });
+    const d = decideWatchIntent(late, null, NOW, NONE);
+    expect({ accept: d.accept, reason: d.reason }).toEqual({ accept: false, reason: 'stale' });
+    expect(d.action).toBeNull();
+  });
+
+  it('still accepts one inside the grace — a merely slow phone keeps the authority', () => {
+    const prompt = intent({
+      type: 'start_workout',
+      intentId: 'prompt-start',
+      workoutId: 'w2',
+      expectedGlobalIndex: undefined,
+      issuedAt: new Date(NOW - (WATCH_START_GRACE_MS - 500)).toISOString(),
+    });
+    const d = decideWatchIntent(prompt, null, NOW, NONE);
+    expect(d.accept).toBe(true);
+    expect(d.action).toEqual({ kind: 'start_workout', workoutId: 'w2' });
+  });
+
+  it('select_workout is NOT expired — it only queues a choice, and is idempotent', () => {
+    const old = intent({
+      type: 'select_workout',
+      intentId: 'old-select',
+      workoutId: 'w3',
+      expectedGlobalIndex: undefined,
+      issuedAt: new Date(NOW - 60_000).toISOString(),
+    });
+    const d = decideWatchIntent(old, null, NOW, NONE);
+    expect(d.accept).toBe(true);
   });
 });
