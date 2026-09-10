@@ -27,6 +27,7 @@
 
 // 
 
+import { noLoadIsBand } from '@/domain/loadPresentation';
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -95,7 +96,7 @@ export function WelcomeBackView({ daysAway, lifts, unit, onStart }: WelcomeBackV
                     <Text style={[styles.unit, !monoCanDraw(unit) && styles.unitWord]}>{unit}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.bodyweight}>{t('comeback.bodyweight')}</Text>
+                  <Text style={styles.bodyweight}>{noLoadIsBand(l.exerciseId) ? t('workout.bandWord') : t('comeback.bodyweight')}</Text>
                 )}
               </View>
             ))}

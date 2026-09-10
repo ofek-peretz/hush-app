@@ -35,12 +35,12 @@
 
 //
 
-import type { Decor, FormSpec, Pose, Rig, Vec2, Vec3 } from '../types';
+import type { Decor, FormSpec, Pose, Primitive, Rig, Vec2, Vec3 } from '../types';
 import { angleAt, dist, lerp, twoBoneIK, twoBoneIK3, withinReach } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE, PLATE_R } from '../anthro';
 import { type Curve, easesOut, leads } from '../curves';
-import { barbellFront, barPathTicks, cable, dumbbellEnd, floorScene, kettlebellHang, plateGhost, pulley, sampledPathTicks } from '../kit';
+import { bandAnchor, bandStrip, barbellFront, barPathTicks, cable, dumbbellEnd, floorScene, kettlebellHang, plateGhost, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { far, FLOOR_Y } from '../bodies';
 
@@ -660,7 +660,7 @@ export const trapBarDeadlift: Rig = (() => {
  * The working endpoint is the STAND-TALL (the squeeze), so the rep runs hinge→stand: rom 0 opens
  * in the deep hinge where the machine honestly holds her, and the pull is the concentric.
  */
-export const cablePullThrough: Rig = (() => {
+function pullThrough(implement: 'cable' | 'band'): Rig {
   /*
    * The stack stands BEHIND the athlete (audit, 2026-09-03). It stood at x 258 — in front of her
    * face — so the rope ran from the front down through the thighs, the hands gripped 6u ahead of
@@ -699,6 +699,12 @@ export const cablePullThrough: Rig = (() => {
        hand, not assumed from rom: 83u of rope at the hinge, 119u at the stand, so the plate climbs
        36u (audit, 2026-09-03). */
     const risen = dist(PT_PULLEY, pose.j.hand) - dist(PT_PULLEY, handPath[0]);
+    if (implement === 'band') {
+      /* The band member (2026-09-10): the same line of pull, tied off low on a post behind her — no
+         tower and no plate; the strip thins as she stands, which is what the stack's rise said. */
+      const post: Primitive = { kind: 'line', a: { x: PT_PULLEY.x - 6, y: FLOOR_Y - 46 }, b: { x: PT_PULLEY.x - 6, y: FLOOR_Y - 1 }, w: 3, color: 'ink3' };
+      return { back: [...sampledPathTicks(handPath), post, ...bandAnchor(PT_PULLEY), bandStrip(PT_PULLEY, pose.j.hand, dist(PT_PULLEY, handPath[0]))], front: [] };
+    }
     const tower = stackTower({ x0: PT_PULLEY.x - 34, x1: PT_PULLEY.x - 8, capY: 64, stackTopY: FLOOR_Y - 34 }, risen);
     return {
       /* The cable draws BEHIND the figure. It runs back and down BETWEEN the legs — that is the
@@ -718,13 +724,16 @@ export const cablePullThrough: Rig = (() => {
     ],
     path: { track: 'hand', kind: 'arc', tol: 2 },
     invariants: [
-      ...plantedFeet('planted, facing away from the stack'),
+      ...plantedFeet(implement === 'band' ? 'planted, facing away from the anchor' : 'planted, facing away from the stack'),
       { kind: 'pointFixed', point: 'knee', tol: 0.5, label: 'knees soft and FROZEN — the hips do the work' },
       { kind: 'angleNever', joint: 'knee', neighbors: ['ankle', 'hip'], aboveDeg: 179, label: 'no knee hyperextension' },
     ],
   };
-  return { id: 'cable_pull_through', chains: hingeChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 184, 30) };
-})();
+  return { id: implement === 'band' ? 'band_pull_through' : 'cable_pull_through', chains: hingeChains, formspec, poseAt, decorAt, scene: floorScene(FLOOR_Y, 184, 30) };
+}
+export const cablePullThrough = pullThrough('cable');
+/** The band family (2026-09-10) — tied off low behind her; see the decor. */
+export const bandPullThrough = pullThrough('band');
 
 /*
  * kb_rdl (2026-09-10, the home-gym family) — the RDL's own skeleton, with a bell in each hand.

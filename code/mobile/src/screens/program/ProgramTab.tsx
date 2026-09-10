@@ -327,6 +327,7 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
                   lift={{ load: r.load, sets: r.sets, band: r.band, ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift}
                   units={units}
                   bodyweightWord={t('workout.bodyweightShort')}
+                  bandWord={t('workout.bandWord')}
                 />
               </View>
             ))}

@@ -330,6 +330,7 @@ export const STARTING_INCREMENT: Record<Equipment, number> = {
   kettlebell: 4.0,
   machine: 2.5,
   cable: 2.5,
+  band: 0, // no kilograms on a band — reps carry it, exactly as for the body (S-51)
   bodyweight: 0,
 };
 

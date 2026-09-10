@@ -25,7 +25,7 @@ import { exerciseById, exercisesForMuscle, engineMayAssign, muscleOf, ROOM_ONLY_
 // S-55b — the one physical question ("can this equipment hold her load?"), asked by BOTH selectors:
 // this assembler and Loop 2's rotation resolver (domain/engineChanges). One home, no second copy.
 import { canLoad, type LoadProfile } from '@/domain/startingLoad';
-import { inRoom } from '@/domain/room';
+import { inRoom, isHomeRoom } from '@/domain/room';
 import { forbiddenFor } from '@/domain/painReport';
 
 /**
@@ -298,8 +298,9 @@ export function pickExercises(
    * Handing it back would be the app overruling her report to keep the shape tidy.
    */
   const banned = forbiddenFor(muscle, profile?.painEases, nowMs);
-  /* A room with NOTHING in it (2026-09-10) — `equipment: []`, distinct from absent (full gym). */
-  const bodyweightOnly = profile?.equipment != null && profile.equipment.length === 0;
+  /* A HOME (2026-09-10) — a declared room of body, bells and bands only; `equipment: []` is the
+     emptiest one. Distinct from absent (a full gym). See `domain/room.isHomeRoom`. */
+  const homeOnly = isHomeRoom(profile?.equipment);
   /*
    * ⛔ THE HOME-ROOM SHELF IS PROGRAMMED ONLY IN A ROOM THAT NEEDS IT (2026-09-10).
    *
@@ -331,13 +332,15 @@ export function pickExercises(
    */
   const roomed = universe.filter((e) => inRoom(e, profile?.equipment));
   /*
-   * ⛔ EXCEPT IN A ROOM WITH NOTHING IN IT (2026-09-10). The fallback above hands a home lifter the
+   * ⛔ EXCEPT IN A HOME (2026-09-10) — the room with nothing in it, and every room of bells and
+   * bands (a band-room week was handed a lying leg curl for the hamstrings the day bands arrived).
+   * The fallback above hands a home lifter the
    * catalogue lead when her furniture cannot serve a muscle, because the swap menu is one tap
    * away. In a bodyweight-only room the swap menu is empty too — every substitute needs iron she
    * does not own — so the fallback would write a barbell curl into a living room. The muscle rests
    * instead, and the week is built from the shelf she actually has (a chin-up trains the biceps).
    */
-  const all = roomed.length > 0 ? roomed : bodyweightOnly ? [] : universe;
+  const all = roomed.length > 0 ? roomed : homeOnly ? [] : universe;
   if (all.length === 0) return [];
   // Lifts whose floor she can actually load lead; the rest stay available behind them, so a muscle
   // is never emptied by the check — a pool of only-too-heavy lifts still yields its catalogue lead.

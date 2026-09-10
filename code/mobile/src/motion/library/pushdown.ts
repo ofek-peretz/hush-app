@@ -36,7 +36,7 @@ import { sticksAt } from '../curves';
 const STICK = sticksAt(0.6, 0.08);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { cable, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
+import { bandAnchor, bandStrip, cable, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, seatedCore, standingCore } from '../bodies';
 
@@ -95,7 +95,7 @@ interface PushdownParams {
    * hang past the fists and swing apart at the lockout, and that silhouette is visible from any
    * camera. §3.5 Amendment 5 already settles this class — the attachment is a word, so it is drawn.
    */
-  implement: 'cable' | 'rope' | 'machine';
+  implement: 'cable' | 'rope' | 'machine' | 'band';
   /** One arm works and the other rests at the side. */
   singleArm?: boolean;
   /** How far past the bar's stop the sweep runs — a rope lets the hands drive further apart and down. */
@@ -169,7 +169,7 @@ function pushdown(p: PushdownParams): Rig {
         : { x0: PULLEY.x + 8, x1: PULLEY.x + 34, capY: 34, stackTopY: FLOOR_Y - 34 },
       risen,
     );
-    back.push(...tower.prims);
+    if (p.implement !== 'band') back.push(...tower.prims); // a band has no stack to rise
 
     let front: Primitive[];
     if (p.implement === 'rope') {
@@ -194,6 +194,15 @@ function pushdown(p: PushdownParams): Rig {
         { kind: 'circle', c: hand, r: 2.6, fill: 'ink0' }, // the swivel the tails hang from
       ];
       /* One attachment, one cable: the far hand's second strand read as a doubled cable (2026-09-07). */
+    } else if (p.implement === 'band') {
+      /* Tied over the top of a door (2026-09-10): the door's edge stands behind the anchor and the
+         strip runs down to a short handle across the fists, thinning as they lock out. */
+      const top = hand0(PHI_TOP);
+      back.push({ kind: 'line', a: { x: PULLEY.x + 8, y: 30 }, b: { x: PULLEY.x + 8, y: FLOOR_Y - 1 }, w: 2.5, color: 'ink3' }, ...bandAnchor(PULLEY));
+      front = [
+        bandStrip(PULLEY, hand, Math.hypot(top.x - PULLEY.x, top.y - PULLEY.y)),
+        { kind: 'line', a: { x: hand.x - dir.x * 5, y: hand.y - dir.y * 5 }, b: { x: hand.x + dir.x * 5, y: hand.y + dir.y * 5 }, w: 3.5, color: 'ink0', cap: 'round' },
+      ];
     } else if (p.implement === 'cable') {
       back.push(...pulley(PULLEY));
       front = [cable(PULLEY, hand), ...dumbbellSide(hand, dir, p.singleArm ? 3 : 9, 2.5)];
@@ -281,6 +290,8 @@ function pushdown(p: PushdownParams): Rig {
 }
 
 export const tricepsPushdown = pushdown({ id: 'triceps_pushdown', implement: 'cable' });
+/** The band family (2026-09-10): the high pulley's line of pull, from a door anchor. */
+export const bandPushdown = pushdown({ id: 'band_pushdown', implement: 'band' });
 /** The rope member: two tails past the fists, opening through the rep, and a couple of degrees more
  *  range than the bar's stop allows — see `implement` for why a comment was not enough. */
 export const ropePushdown = pushdown({ id: 'rope_pushdown', implement: 'rope', phiBottom: 7 });

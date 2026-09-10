@@ -44,7 +44,7 @@ const STICK = sticksAt(0.85, 0.06); // the squeeze — met for the chest, opened
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { project, type Camera } from '../camera';
-import { benchEndOn, cable, dumbbellFront, floorScene, inclineBackPadFront, pulley, sampledPathTicks } from '../kit';
+import { bandStrip, benchEndOn, cable, dumbbellFront, floorScene, inclineBackPadFront, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, hingedSeatedCore, seatedFrontCore, standingFrontCore, supineFrontCore } from '../bodies';
 
@@ -129,7 +129,7 @@ interface FlyParams {
   /** Sweep at rom 0 and rom 1, degrees from straight-out-wide toward the centreline. */
   thetaFrom: number;
   thetaTo: number;
-  implement: 'machine' | 'cable' | 'db';
+  implement: 'machine' | 'cable' | 'db' | 'band';
   /** Rear members open outward; their range statement and stack run the other way. */
   reversed?: boolean;
   /** Extra scene furniture keyed by member. */
@@ -422,6 +422,12 @@ function fly(p: FlyParams): Rig {
       const towerL = stackTower({ x0: PL.x - 26, x1: PL.x - 4, capY: 60, stackTopY: FLOOR_Y - 34 }, travelled * 22);
       back.push(...towerR.prims, ...towerL.prims, ...pulley(PR), ...pulley(PL));
       front = [cable(PR, handR), cable(PL, handL)];
+    } else if (p.implement === 'band') {
+      /* ONE strip held between the fists (2026-09-10) — no anchor and no station. Slack with the
+         hands together in front, thinning as they open: the band is the only resistance there is,
+         so it is the only thing drawn. The fists close over its two ends. */
+      const slack = Math.max(40, Math.abs(metX(1) - metX(-1)));
+      front = [bandStrip(handL, handR, slack), { kind: 'circle', c: handL, r: 2.6, fill: 'ink0' }, { kind: 'circle', c: handR, r: 2.6, fill: 'ink0' }];
     } else {
       /* The deck's two pads, riding the forearms, with their arms up to the overhead pivot. */
       const PIVOT: Vec2 = P3(CX, 52, 0);
@@ -531,3 +537,10 @@ const rearDeltCore = hingedSeatedCore(CX, 50);
 /* metDrop 32: the met hands hang at the knee line, so the sweep RISES 30u as it opens — the hinge reads and the arc is 45u, not 9 (2026-09-07). */
 export const rearDeltFlyRig = fly({ id: 'rear_delt_fly', core: rearDeltCore.j, coreZ: rearDeltCore.z, thetaFrom: MET_PHI, thetaTo: 0, implement: 'db', reversed: true, bench: true, metDrop: 24 });
 export const reversePecDeckRig = fly({ id: 'reverse_pec_deck', core: seated, thetaFrom: MET_PHI, thetaTo: 0, implement: 'machine', reversed: true, seatBack: true, metDrop: 20, elevation: 20 });
+/*
+ * band_pull_apart (2026-09-10, the band family) — the reverse pec deck's opening with nothing to sit
+ * in: STANDING, arms long at shoulder height, one band between the fists. metDrop 3 keeps the hands
+ * on the shoulder line the whole way (the cue says "at shoulder height"), and the raised camera the
+ * standing members use gives the arm its length where it points at the lens.
+ */
+export const bandPullApartRig = fly({ id: 'band_pull_apart', core: standing, thetaFrom: MET_PHI, thetaTo: 0, implement: 'band', reversed: true, metDrop: 3, elevation: 20 });

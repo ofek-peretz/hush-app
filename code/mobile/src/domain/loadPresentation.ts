@@ -84,6 +84,7 @@ export function loadSetup(exerciseId: string | null | undefined, displayValue: n
   const style = loadStyleOf(exerciseId);
   switch (style) {
     case 'bodyweight':
+    case 'band': // no kilograms — nothing to set up but the band itself
       return null;
     case 'barbell': {
       const perSide = Math.max(0, round2((displayValue - GEAR[units].bar) / 2));
@@ -371,6 +372,7 @@ export function totalFromEquipment(exerciseId: string | null | undefined, value:
   if (!Number.isFinite(value) || value < 0) return null;
   switch (loadStyleOf(exerciseId)) {
     case 'bodyweight':
+    case 'band':
       return null;
     case 'barbell':
       return round2(value * 2 + GEAR[units].bar);
@@ -393,4 +395,15 @@ export function equipmentValue(exerciseId: string | null | undefined, total: num
   if (total == null) return null;
   const eq = equipmentLoad(loadSetup(exerciseId, total, units));
   return eq ? eq.value : total;
+}
+
+/**
+ * Is the word a load-less row prints "band" rather than "bodyweight"? (2026-09-10)
+ *
+ * A null load always printed "Bodyweight", which stopped being true the day the band family
+ * arrived: a band lift has no kilograms either, and telling her the resistance is her body while
+ * she holds a band is a wrong word in the one place she looks to see what to pick up.
+ */
+export function noLoadIsBand(exerciseId: string | null | undefined): boolean {
+  return loadStyleOf(exerciseId) === 'band';
 }

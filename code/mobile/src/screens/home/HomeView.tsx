@@ -941,6 +941,7 @@ export function HomeView(props: HomeViewProps) {
                                 metaSize={17}
                                 changedColor={lift.changed ? directionTone(lift.changed) : null}
                                 bodyweightWord={t('workout.bodyweightShort')}
+                                bandWord={t('workout.bandWord')}
                               />
                             )}
                           </Pressable>

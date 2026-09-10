@@ -9,10 +9,11 @@
 
 //
 
-import { inRoom, roomForStorage, ROOM_FAMILIES } from '@/domain/room';
+import { inRoom, isHomeRoom, roomForStorage, ROOM_FAMILIES } from '@/domain/room';
 import { pickExercises } from '@/engine/v5/programAssembly';
 import { swapCandidates } from '@/domain/swapPool';
-import { exerciseById } from '@/data/exercises';
+import { exerciseById, loadStyleOf, progressionRule } from '@/data/exercises';
+import { loadSetup, noLoadIsBand } from '@/domain/loadPresentation';
 import { fixtureModel } from '@/data/api/fixtureModel';
 import { emptyBarKg } from '@/engine/loadMath';
 import { snapDown } from '@/engine/v5/grid';
@@ -35,6 +36,15 @@ describe('inRoom', () => {
     expect(inRoom(exerciseById('push_up'), [])).toBe(true);
     expect(inRoom(exerciseById('push_up'), ['machine'])).toBe(true);
   });
+
+  it('⛔ "no load" is not "needs nothing" — an assist machine is a machine and a band is a band (2026-09-10)', () => {
+    // `bodyweight: true` means the reps carry the lift; it used to let these into every room.
+    expect(inRoom(exerciseById('assisted_pull_up'), [])).toBe(false);
+    expect(inRoom(exerciseById('back_extension'), ['dumbbell'])).toBe(false);
+    expect(inRoom(exerciseById('band_curl'), ['dumbbell'])).toBe(false);
+    expect(inRoom(exerciseById('assisted_pull_up'), ['machine'])).toBe(true);
+    expect(inRoom(exerciseById('band_curl'), ['band'])).toBe(true);
+  });
 });
 
 describe('roomForStorage', () => {
@@ -50,7 +60,7 @@ describe('roomForStorage', () => {
       expect(picked.length).toBeGreaterThan(0);
       for (const id of picked) {
         const ex = exerciseById(id);
-        expect(ex.bodyweight || ex.equipment === 'bodyweight').toBe(true);
+        expect({ id, equipment: ex.equipment }).toEqual({ id, equipment: 'bodyweight' });
       }
     }
     expect(pickExercises('Quads', 2, undefined, {}, { equipment: [] })).toContain('bw_squat');
@@ -71,7 +81,7 @@ describe('roomForStorage', () => {
     expect(lifts.length).toBeGreaterThan(6);
     for (const id of lifts) {
       const ex = exerciseById(id)!;
-      expect({ id, bodyweight: ex.bodyweight || ex.equipment === 'bodyweight' }).toEqual({ id, bodyweight: true });
+      expect({ id, equipment: ex.equipment }).toEqual({ id, equipment: 'bodyweight' });
     }
     expect(lifts).toContain('bw_squat');
   });
@@ -133,9 +143,9 @@ describe('the home-room shelf is programmed only where it is needed (2026-09-10)
   it('⛔ a FULL GYM never sees them — the audited rotation is untouched', () => {
     // The whole reason they are choice-only: admitting them everywhere moved two measured boards
     // (share inversions 149 → 178, unavoidable under-dose 111 → 114).
-    for (const muscle of ['Quads', 'Hamstrings', 'Glutes'] as const) {
+    for (const muscle of ['Quads', 'Hamstrings', 'Glutes', 'Biceps', 'Triceps', 'Back'] as const) {
       const picked = pickExercises(muscle, 4, undefined, {}, undefined);
-      for (const id of ['kb_goblet_squat', 'kb_rdl', 'kb_swing', 'bw_squat', 'split_squat']) {
+      for (const id of ['kb_goblet_squat', 'kb_rdl', 'kb_swing', 'bw_squat', 'split_squat', 'band_curl', 'band_pushdown', 'band_row', 'band_pull_apart', 'band_pull_through']) {
         expect({ muscle, id, picked: picked.includes(id) }).toEqual({ muscle, id, picked: false });
       }
     }
@@ -148,9 +158,62 @@ describe('the home-room shelf is programmed only where it is needed (2026-09-10)
     expect(pickExercises('Quads', 3, undefined, {}, cableRoom)).toContain('bw_squat');
   });
 
+  it('⛔ a HOME never falls back to iron — a muscle her bells cannot serve rests (2026-09-10)', () => {
+    expect(isHomeRoom([])).toBe(true);
+    expect(isHomeRoom(['kettlebell', 'band'])).toBe(true);
+    expect(isHomeRoom(['dumbbell'])).toBe(false);
+    expect(isHomeRoom(undefined)).toBe(false);
+    // No kettlebell curl exists; the old fallback wrote a barbell curl into the living room.
+    for (const id of pickExercises('Biceps', 2, undefined, {}, kbRoom)) {
+      const eq = exerciseById(id).equipment;
+      expect({ id, ok: eq === 'kettlebell' || eq === 'bodyweight' }).toEqual({ id, ok: true });
+    }
+  });
+
   it('a bell has a floor and a coarse ladder — no 2 kg kettlebell exists', () => {
     expect(emptyBarKg('kettlebell')).toBe(KETTLEBELL_KG);
     expect(snapDown(10, 'kettlebell')).toBe(8);
     expect(snapDown(2, 'kettlebell')).toBe(KETTLEBELL_KG);
+  });
+});
+
+describe('the band family (2026-09-10) — a room with bands in it, and no kilograms anywhere', () => {
+  const bandRoom = { equipment: ['band'] } as never;
+  const BANDS = ['band_curl', 'band_pushdown', 'band_row', 'band_pull_apart', 'band_pull_through'];
+
+  it('a band room gets band lifts where the body alone had nothing — the biceps train', () => {
+    expect(pickExercises('Biceps', 2, undefined, {}, bandRoom)).toContain('band_curl');
+    expect(pickExercises('Triceps', 3, undefined, {}, bandRoom)).toContain('band_pushdown');
+    expect(pickExercises('Glutes', 3, undefined, {}, bandRoom)).toContain('band_pull_through');
+    for (const muscle of ['Biceps', 'Triceps', 'Back', 'Glutes'] as const) {
+      for (const id of pickExercises(muscle, 3, undefined, {}, bandRoom)) {
+        const eq = exerciseById(id).equipment;
+        expect({ muscle, id, ok: eq === 'band' || eq === 'bodyweight' }).toEqual({ muscle, id, ok: true });
+      }
+    }
+  });
+
+  it('a band has no load axis — the reps carry it, nothing is set up, and its word is not "bodyweight"', () => {
+    for (const id of BANDS) {
+      expect(loadStyleOf(id)).toBe('band');
+      expect(progressionRule(id).mode).toBe('reps');
+      expect(noLoadIsBand(id)).toBe(true);
+    }
+    expect(noLoadIsBand('push_up')).toBe(false);
+    expect(noLoadIsBand('assisted_pull_up')).toBe(false);
+    expect(loadSetup('band_curl', 10, 'kg')).toBeNull();
+  });
+
+  it('a whole band-room week holds nothing she does not own', async () => {
+    const program = await fixtureModel.generateProgram({
+      sex: 'female', weightKg: 62, units: 'kg', daysPerWeek: 3, repBand: '8-12', healthConnected: false, equipment: ['band'],
+    } as never);
+    const lifts = program.days.flatMap((d) => d.slots.map((s) => s.exerciseId));
+    for (const id of lifts) {
+      const eq = exerciseById(id)!.equipment;
+      expect({ id, eq, ok: eq === 'band' || eq === 'bodyweight' }).toEqual({ id, eq, ok: true });
+    }
+    expect(lifts.some((id) => BANDS.includes(id))).toBe(true);
+    for (const d of program.days) for (const s of d.slots) if (BANDS.includes(s.exerciseId)) expect(s.weightKg ?? null).toBeNull();
   });
 });

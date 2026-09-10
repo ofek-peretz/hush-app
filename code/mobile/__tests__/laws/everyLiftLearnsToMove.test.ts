@@ -180,7 +180,7 @@ import { exerciseById } from '@/data/exercises';
    solve, empty hands forward) and split_squat (the lunge family, both feet planted, no implement) —
    then the KETTLEBELL family: kb_goblet_squat and kb_rdl ride their families' own skeletons with the
    mass hung below the grip, and kb_swing re-authors only the ARM on the audited hinge body. */
-const RIGGED_FLOOR = 141;
+const RIGGED_FLOOR = 146;
 
 const rigs = Object.entries(EXERCISE_MOTION);
 

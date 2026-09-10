@@ -654,7 +654,7 @@ export function ProfileSheet({ navigation }: Props) {
         />
         {/*
           ════ THE ROOM (2026-09-01, audit 06) — which equipment exists where she trains. ════
-          A row that opens a sheet of five switches (`domain/room.ROOM_FAMILIES`); bodyweight is
+          A row that opens a sheet of switches, one per family (`domain/room.ROOM_FAMILIES`); bodyweight is
           never asked because it is never absent. The sub states the room in one word — full, or
           how many families — so the fact is legible without opening anything. Saving routes
           through `updateProfileInfo`, which rebuilds the week exactly like a body-map change:
@@ -851,6 +851,7 @@ const ROOM_LABEL: Record<EquipmentFamily, string> = {
   machine: 'profile.room_machine',
   cable: 'profile.room_cable',
   kettlebell: 'profile.room_kettlebell',
+  band: 'profile.room_band',
   bodyweight: 'profile.room_barbell', // never rendered — bodyweight is not an option (see ROOM_FAMILIES)
 };
 

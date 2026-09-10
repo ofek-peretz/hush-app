@@ -30,13 +30,36 @@ export const ROOM_FAMILIES: Exclude<EquipmentFamily, 'bodyweight'>[] = [
   'kettlebell',
   'machine',
   'cable',
+  'band',
 ];
 
 /** Is `ex` performable in a room offering `equipment`? Absent list = full gym = always yes. */
 export function inRoom(ex: Pick<Exercise, 'equipment' | 'bodyweight'>, equipment?: readonly EquipmentFamily[]): boolean {
   if (!equipment) return true;
-  if (ex.bodyweight || ex.equipment === 'bodyweight') return true;
+  /*
+   * ⛔ THE FAMILY DECIDES, NOT THE LOAD AXIS (2026-09-10). This read `ex.bodyweight || …`, and
+   * `bodyweight` means "no load is prescribed", not "needs nothing": the assisted pull-up and dip
+   * are MACHINES carrying that flag, the back extension is a bench, and every band lift carries it.
+   * So a living room was handed an assist machine and a dumbbell room a hyperextension bench. What
+   * she needs is the equipment family, and only the bodyweight FAMILY is in every room.
+   */
+  if (ex.equipment === 'bodyweight') return true;
   return equipment.includes(ex.equipment);
+}
+
+/**
+ * The families a HOME is made of (2026-09-10): her body, a set of bells, a bag of bands. None of
+ * them is ever a gym's furniture, and a room built only from them is a living room.
+ */
+export const HOME_FAMILIES: ReadonlySet<EquipmentFamily> = new Set<EquipmentFamily>(['bodyweight', 'kettlebell', 'band']);
+
+/**
+ * Is this a declared room with nothing a gym has in it? Absent (a full gym) is not; the empty room
+ * (bodyweight only) is; a kettlebell room, a band room, and the two together are. A dumbbell room is
+ * NOT — a rack of dumbbells is the one family a home and a gym share, and its fallback is unchanged.
+ */
+export function isHomeRoom(equipment?: readonly EquipmentFamily[]): boolean {
+  return equipment != null && equipment.every((f) => HOME_FAMILIES.has(f));
 }
 
 /**

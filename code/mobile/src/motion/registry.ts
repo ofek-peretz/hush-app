@@ -14,11 +14,11 @@ import { closeGripPulldown, latPulldown } from './library/latPulldown';
 import { closeGripBench, dbBenchPress, declineBbPress, inclineBbPress, inclineDbPress, inclineMachinePress, machineChestPress, smithBenchPress, smithInclinePress } from './library/pressHorizontal';
 import { arnoldPress, dbShoulderPress, machineShoulderPress, smithOverheadPress } from './library/pressVertical';
 import { bbOverheadPress } from './library/overheadPressStanding';
-import { cableRow, dbRow, facePull, inclineDbRow, machineRow, meadowsRow, singleArmCableRow, smithRow, tBarRow } from './library/pullRow';
-import { bbDeadlift, bbRdl, cablePullThrough, dbRdl, goodMorning, kbRdl, kbSwing, sumoDeadlift, trapBarDeadlift } from './library/hinge';
-import { bbCurl, bbCurl21, cableCurl, cableRopeHammerCurl, concentrationCurl, dbCurl, ezBarCurl, hammerCurl, inclineDbCurl, preacherCurl, reverseCurl, singleArmCableCurl, spiderCurl } from './library/curl';
+import { bandRow, cableRow, dbRow, facePull, inclineDbRow, machineRow, meadowsRow, singleArmCableRow, smithRow, tBarRow } from './library/pullRow';
+import { bandPullThrough, bbDeadlift, bbRdl, cablePullThrough, dbRdl, goodMorning, kbRdl, kbSwing, sumoDeadlift, trapBarDeadlift } from './library/hinge';
+import { bandCurl, bbCurl, bbCurl21, cableCurl, cableRopeHammerCurl, concentrationCurl, dbCurl, ezBarCurl, hammerCurl, inclineDbCurl, preacherCurl, reverseCurl, singleArmCableCurl, spiderCurl } from './library/curl';
 import { cableLateralRaise, cableUprightRow, dbLateralRaise, machineLateralRaise } from './library/lateralRaise';
-import { machineTricepsExt, ropePushdown, singleArmPushdown, tricepsKickback, tricepsPushdown } from './library/pushdown';
+import { bandPushdown, machineTricepsExt, ropePushdown, singleArmPushdown, tricepsKickback, tricepsPushdown } from './library/pushdown';
 import { cableKickback, donkeyKick, machineKickback } from './library/gluteKickback';
 import { dbCalfRaise, singleLegCalfRaise, smithCalfRaise, standingCalfRaise } from './library/calfStraight';
 import { legExtension, seatedLegCurl } from './library/kneeMachine';
@@ -26,7 +26,7 @@ import { hackSquatRig, legPressCalfRaiseRig, legPressRig, singleLegPressRig } fr
 import { assistedPullUpRig, chinUpRig, pullUpRig } from './library/pullUp';
 import { frogPumpRig, gluteBridgeRig, hipThrustRig, machineHipThrustRig, singleLegHipThrustRig, smithHipThrustRig } from './library/thrust';
 import { bulgarianSplitSquatRig, curtsyLungeRig, reverseLungeRig, splitSquatRig, walkingLungeRig } from './library/lunge';
-import { cableFlyRig, dbFlyRig, inclineDbFlyRig, lowCableFlyRig, pecDeckRig, rearDeltFlyRig, reversePecDeckRig } from './library/fly';
+import { bandPullApartRig, cableFlyRig, dbFlyRig, inclineDbFlyRig, lowCableFlyRig, pecDeckRig, rearDeltFlyRig, reversePecDeckRig } from './library/fly';
 import { bbShrugRig, dbShrugRig } from './library/shrug';
 import { cableCrunchRig, machineCrunchRig, sitUpRig } from './library/crunch';
 import { bwSquatRig, dbSumoSquatRig, frontSquatRig, gobletSquatRig, kbGobletSquatRig, smithSquatRig } from './library/squatVariants';
@@ -115,6 +115,8 @@ const RIGS: Rig[] = [
   declineBbPress, dbFlyRig, smithInclinePress, lowCableFlyRig,
   dbPullover, closeGripPulldown, meadowsRow, cableUprightRow,
   curtsyLungeRig, dbSumoSquatRig, smithHipThrustRig, frogPumpRig, donkeyKick,
+  // the band family (choice-only, the home room, 2026-09-10)
+  bandCurl, bandPushdown, bandRow, bandPullApartRig, bandPullThrough,
 ];
 
 export const EXERCISE_MOTION: Record<string, Rig> = Object.fromEntries(RIGS.map((r) => [r.id, r]));

@@ -71,7 +71,7 @@ function countFNoun(n: number, l: VoiceLocale): string {
  * Total, then how to build it. `loadSetup` does the plate maths in display units; this only says it.
  */
 export function loadLine(exerciseId: string | null, kg: number | null, l: VoiceLocale): string {
-  if (kg == null) return tg('voice.loadBodyweight');
+  if (kg == null) return tg(loadStyleOf(exerciseId) === 'band' ? 'voice.loadBand' : 'voice.loadBodyweight');
   const total = spokenLoad(kg, l);
   const setup = loadSetup(exerciseId, displayWeight(kg, l.units), l.units);
   const style = loadStyleOf(exerciseId);
@@ -96,6 +96,8 @@ export function loadLine(exerciseId: string | null, kg: number | null, l: VoiceL
       return tg('voice.loadPin', { total, pin: spokenNumber(displayWeight(kg, l.units) ?? kg, 'f', l.locale) /* a bare number — abstract counting, feminine */ });
     case 'fixed_barbell':
       return tg('voice.loadFixedBar', { total });
+    case 'band':
+      return tg('voice.loadBand');
     case 'bodyweight':
       // Added load on a bodyweight lift (a belt, a vest): the figure, said as what it is.
       return kg > 0 ? tg('voice.loadBodyweightPlus', { total }) : tg('voice.loadBodyweight');
@@ -104,7 +106,7 @@ export function loadLine(exerciseId: string | null, kg: number | null, l: VoiceL
 
 /** "כשהמוט טעון" / "When the bar is loaded" — the ready condition, per equipment. */
 export function readyWhen(exerciseId: string | null, kg: number | null): string {
-  if (kg == null) return tg('voice.readyBodyweight');
+  if (kg == null) return tg(loadStyleOf(exerciseId) === 'band' ? 'voice.readyBand' : 'voice.readyBodyweight');
   switch (loadStyleOf(exerciseId)) {
     case 'barbell': return tg('voice.readyBarbell');
     case 'fixed_barbell': return tg('voice.readyFixed');
@@ -113,6 +115,7 @@ export function readyWhen(exerciseId: string | null, kg: number | null): string 
     case 'selectorized':
     case 'cable': return tg('voice.readyPin');
     case 'plate_loaded': return tg('voice.readyPlate');
+    case 'band': return tg('voice.readyBand');
     case 'bodyweight': return tg('voice.readyBodyweight');
   }
 }
@@ -141,6 +144,7 @@ export function deltaLine(exerciseId: string | null, fromKg: number, toKg: numbe
       return tg('voice.deltaPin', { pin: spokenNumber(dispTo, 'f', l.locale) });
     case 'fixed_barbell':
       return tg('voice.deltaFixed', { total });
+    case 'band':
     case 'bodyweight':
       return '';
   }
@@ -166,6 +170,22 @@ export function figuresLine(kg: number | null, reps: number, l: VoiceLocale): st
 
 export const name = (exerciseId: string) => exerciseDisplayName(exerciseId);
 
+/**
+ * The loading dialogue's opening for a lift with NO load (2026-09-10, found wiring the band family).
+ *
+ * Both weighted openings offer her a different weight — "the weight is a suggestion: no weight. If it
+ * looks too light or too heavy, say a different weight" — and a push-up or a band curl has no weight
+ * to change. Every load-less lift was opened with an instruction she could not follow. A band names
+ * itself ("with the band"); a bodyweight lift lets its range say "no weight" once, not twice.
+ */
+function noLoadOpening(exerciseId: string, lo: number, hi: number, l: VoiceLocale): string {
+  const range = rangeLine(lo, hi, null, l);
+  const ready = readyWhen(exerciseId, null);
+  return loadStyleOf(exerciseId) === 'band'
+    ? tg('voice.loadBandLift', { exercise: name(exerciseId), load: loadLine(exerciseId, null, l), range, readyWhen: ready })
+    : tg('voice.loadBodyweightLift', { exercise: name(exerciseId), range, readyWhen: ready });
+}
+
 // ── The lines, one function per spoken moment ───────────────────────────────────────────────────
 
 export const voiceScript = {
@@ -175,9 +195,9 @@ export const voiceScript = {
 
   /** Spec §3.2 — the loading dialogue's opening line, in its three forms. */
   loadCalibrated: (exerciseId: string, kg: number | null, lo: number, hi: number, l: VoiceLocale) =>
-    tg('voice.loadCalibrated', { exercise: name(exerciseId), load: loadLine(exerciseId, kg, l), range: rangeLine(lo, hi, kg, l), readyWhen: readyWhen(exerciseId, kg) }),
+    kg == null ? noLoadOpening(exerciseId, lo, hi, l) : tg('voice.loadCalibrated', { exercise: name(exerciseId), load: loadLine(exerciseId, kg, l), range: rangeLine(lo, hi, kg, l), readyWhen: readyWhen(exerciseId, kg) }),
   loadFirstTime: (exerciseId: string, kg: number | null, lo: number, hi: number, l: VoiceLocale) =>
-    tg('voice.loadFirstTime', { exercise: name(exerciseId), load: loadLine(exerciseId, kg, l), range: rangeLine(lo, hi, kg, l), readyWhen: readyWhen(exerciseId, kg) }),
+    kg == null ? noLoadOpening(exerciseId, lo, hi, l) : tg('voice.loadFirstTime', { exercise: name(exerciseId), load: loadLine(exerciseId, kg, l), range: rangeLine(lo, hi, kg, l), readyWhen: readyWhen(exerciseId, kg) }),
   loadChanged: (exerciseId: string, fromKg: number, toKg: number, setN: number, setM: number, warmup: boolean, l: VoiceLocale) =>
     tg('voice.loadChanged', {
       setLabel: setLabelLine(setN, setM, warmup, l),

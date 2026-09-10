@@ -40,7 +40,7 @@ import { MOVEMENTS } from './movements';
  * one family floored every "barbell" isolation lift at 20 kg and the editor refused to go lower.
  * A fixed bar is different iron with a different floor and different steps; the family carries that.
  */
-export type EquipmentFamily = 'barbell' | 'fixed_barbell' | 'dumbbell' | 'kettlebell' | 'machine' | 'cable' | 'bodyweight';
+export type EquipmentFamily = 'barbell' | 'fixed_barbell' | 'dumbbell' | 'kettlebell' | 'machine' | 'cable' | 'band' | 'bodyweight';
 
 /**
  * How a load is physically SET UP — finer than `equipment`, so the live workout can tell the
@@ -57,6 +57,7 @@ export type LoadStyle =
   | 'selectorized' // a pin-selected weight stack → "Set the pin to 24"
   | 'cable' // a pin-selected cable stack → "Set the pin to 28"
   | 'plate_loaded' // a lever machine loaded with plates → "30 + 30 / side"
+  | 'band' // an elastic band → no kilograms at all; the reps carry it (2026-09-10)
   | 'bodyweight'; // no external load
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• THE SWAP TAXONOMY (founder 2026-07-12) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -259,7 +260,13 @@ export interface Exercise {
   baseKg?: number;
   /** Scale the seed with the athlete's bodyweight (true for the big barbell lifts). */
   bwScaled?: boolean;
-  /** Loaded by bodyweight — no external weight prescribed. */
+  /**
+   * No load axis — no external weight is prescribed and REPS carry the progression (S-51/S-52).
+   * True of the bodyweight lifts, of the assist machines, and of the band family (2026-09-10): a
+   * band's tension is not a kilogram, it changes with where she stands, and no two sets of bands
+   * agree on a colour code, so a number written on one would be a load the app made up. It says
+   * nothing about what she NEEDS — that is `equipment` (see `domain/room.inRoom`).
+   */
   bodyweight?: boolean;
   /**
    * A FIXED rep scheme the movement IS (founder, 2026-08-26 — "21 עבור היד הקדמית"): bicep 21s
@@ -336,6 +343,9 @@ export const EXERCISES: Exercise[] = [
   { id: 'bench_dip', name: 'Bench Dip', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hands on the bench edge.', 'Lower until the elbows bend 90°.', 'Press back to lockout.'] },
   { id: 'diamond_push_up', name: 'Diamond Push-Up', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'press', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Hands together under the chest.', 'Elbows brush the ribs.', 'Press the floor away.'] },
   { id: 'machine_triceps_ext', name: 'Triceps Extension Machine', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Set the seat height.', 'Extend fully.', 'Resist on the way back.'] },
+  // The band family (2026-09-10, the home room's third family): an elastic strip with no kilograms on
+  // it, so every member is `bodyweight: true` (the reps axis) and `band` is what the room must hold.
+  { id: 'band_pushdown', name: 'Band Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'free', equipment: 'band', tier: 'isolation', bodyweight: true, cues: ['Anchor the band above the door.', 'Pin the elbows to your sides.', 'Press down to straight arms.'], synonyms: ['resistance band pushdown', 'band triceps pushdown'] },
   { id: 'single_arm_pushdown', name: 'Single-Arm Pushdown', capability: 'horizontal_push', muscle: 'Triceps', pattern: 'elbow_extension_pushdown', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 10, cues: ['Elbow pinned to your side.', 'Extend fully.', 'Resist on the way up.'] },
 
   // ───────────────────────── horizontal_pull · Back ─────────────────────────
@@ -353,6 +363,8 @@ export const EXERCISES: Exercise[] = [
   { id: 'single_arm_cable_row', name: 'Single-Arm Cable Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row_supported', support: 'supported', equipment: 'cable', tier: 'compound', unilateral: true, baseKg: 20, cues: ['Tall chest.', 'Pull to your waist.', 'Let the shoulder travel forward.'] },
   { id: 'inverted_row', name: 'Inverted Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row_supported', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Bar at hip height.', 'Body in a straight line.', 'Pull the chest to the bar.'] },
   { id: 'straight_arm_pulldown', name: 'Straight-Arm Pulldown', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 20, cues: ['Soft elbows, arms long.', 'Sweep the bar to your thighs.', 'Return slowly.'] },
+  { id: 'band_row', name: 'Band Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row_supported', support: 'free', equipment: 'band', tier: 'compound', bodyweight: true, cues: ['Anchor the band at chest height.', 'Pull the hands to your waist.', 'Release slowly against the band.'], synonyms: ['resistance band row', 'seated band row'] },
+  { id: 'band_pull_apart', name: 'Band Pull-Apart', capability: 'horizontal_pull', muscle: 'Back', pattern: 'rear_delt', support: 'free', equipment: 'band', tier: 'isolation', bodyweight: true, cues: ['Arms long at shoulder height.', 'Pull the band apart to your chest.', 'Squeeze the shoulder blades.'], synonyms: ['band pull apart', 'resistance band pull apart'] },
   { id: 'reverse_pec_deck', name: 'Reverse Pec Deck', capability: 'horizontal_pull', muscle: 'Back', pattern: 'rear_delt', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 20, cues: ['Chest on the pad.', 'Open to the sides.', 'Squeeze the rear delts.'] },
   { id: 'bb_shrug', name: 'Barbell Shrug', capability: 'horizontal_pull', muscle: 'Back', pattern: 'shrug', support: 'free', equipment: 'barbell', tier: 'isolation', baseKg: 50, cues: ['Arms long, no curling.', 'Lift the shoulders straight up.', 'Lower for a full stretch.'] },
   { id: 'db_shrug', name: 'Dumbbell Shrug', capability: 'horizontal_pull', muscle: 'Back', pattern: 'shrug', support: 'free', equipment: 'dumbbell', tier: 'isolation', baseKg: 24, cues: ['Weights at your sides.', 'Lift the shoulders straight up.', 'Lower for a full stretch.'] },
@@ -377,6 +389,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'cable_rope_hammer_curl', name: 'Cable Rope Hammer Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'brachialis', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 15, cues: ['Neutral grip on the rope.', 'Elbows pinned to your sides.', 'Squeeze at the top.'], synonyms: ['rope curl', 'rope hammer curl'] },
   { id: 'spider_curl', name: 'Spider Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl_shortened', support: 'supported', equipment: 'dumbbell', tier: 'isolation', baseKg: 8, cues: ['Chest on the incline pad.', 'Arms hang straight down.', 'Curl and squeeze — no swing.'], synonyms: ['spider'] },
   { id: 'reverse_curl', name: 'Reverse Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'brachialis', support: 'free', equipment: 'fixed_barbell', tier: 'isolation', baseKg: 15, cues: ['Overhand grip.', 'Elbows still.', 'Lower under control.'] },
+  { id: 'band_curl', name: 'Band Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'free', equipment: 'band', tier: 'isolation', bodyweight: true, cues: ['Stand on the band, feet apart.', 'Elbows pinned to your sides.', 'Lower slowly against the band.'], synonyms: ['resistance band curl'] },
   { id: 'single_arm_cable_curl', name: 'Single-Arm Cable Curl', capability: 'horizontal_pull', muscle: 'Biceps', pattern: 'curl', support: 'guided', equipment: 'cable', tier: 'isolation', unilateral: true, baseKg: 8, cues: ['Elbow pinned to your side.', 'Curl and squeeze.', 'Resist on the way down.'] },
 
   // ───────────────────────── vertical_push · Shoulders ─────────────────────────
@@ -460,6 +473,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'hip_thrust', name: 'Barbell Hip Thrust', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'thrust', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Upper back on the bench.', 'Drive through the heels.', 'Squeeze the glutes at the top.'], synonyms: ['thrust'] },
   { id: 'glute_bridge', name: 'Glute Bridge', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'bridge', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 30, cues: ['Heels close.', 'Drive the hips up.', 'Squeeze at the top.'] },
   { id: 'cable_pull_through', name: 'Cable Pull-Through', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'hinge', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 25, cues: ['Hinge at the hips.', 'Push the hips back.', 'Snap the hips forward.'] },
+  { id: 'band_pull_through', name: 'Band Pull-Through', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'hinge', support: 'free', equipment: 'band', tier: 'isolation', bodyweight: true, cues: ['Band anchored low behind you.', 'Push the hips back.', 'Snap the hips through.'], synonyms: ['resistance band pull through'] },
   { id: 'hip_abduction', name: 'Hip Abduction', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'abduction', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 30, cues: ['Sit tall.', 'Press the knees out.', 'Control the return.'], synonyms: ['abductor machine'] },
   { id: 'cable_hip_abduction', name: 'Cable Hip Abduction', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'abduction', support: 'guided', unilateral: true, equipment: 'cable', tier: 'isolation', baseKg: 8, cues: ['Cuff on the outside ankle.', 'Sweep the leg out and slightly back.', 'Return under control.'], synonyms: ['standing cable abduction'] },
   { id: 'cable_kickback', name: 'Cable Glute Kickback', capability: 'hip_dominant', muscle: 'Glutes', pattern: 'kickback', support: 'guided', unilateral: true, equipment: 'cable', tier: 'isolation', baseKg: 10, cues: ['Hinge slightly forward.', 'Drive the heel back.', 'Squeeze the glute.'], synonyms: ['glute kickback'] },
@@ -600,6 +614,7 @@ export const CHOICE_ONLY_IDS: ReadonlySet<string> = new Set([
    */
   'bw_squat', 'split_squat',
   'kb_goblet_squat', 'kb_rdl', 'kb_swing',
+  'band_curl', 'band_pushdown', 'band_row', 'band_pull_apart', 'band_pull_through',
 ]);
 
 /**
@@ -613,6 +628,11 @@ export const ROOM_ONLY_IDS: ReadonlyMap<string, EquipmentFamily> = new Map([
   ['kb_goblet_squat', 'kettlebell'],
   ['kb_rdl', 'kettlebell'],
   ['kb_swing', 'kettlebell'],
+  ['band_curl', 'band'],
+  ['band_pushdown', 'band'],
+  ['band_row', 'band'],
+  ['band_pull_apart', 'band'],
+  ['band_pull_through', 'band'],
 ]);
 
 export function isChoiceOnly(id: string): boolean {
@@ -683,6 +703,7 @@ export const LOAD_STEP_KG: Record<EquipmentFamily, number> = {
   kettlebell: 4, // the next bell on the ladder (8 · 12 · 16 · 20 · 24) — a bell is cast, not added to
   machine: 5, // pin / plate-stack increment
   cable: 5, // pin-stack increment
+  band: 0, // no kilograms on a band — it progresses by reps, like the body (see `Exercise.bodyweight`)
   bodyweight: 0, // no external load — progress by reps, then a harder variation
 };
 
@@ -735,6 +756,7 @@ const DEFAULT_LOAD_STYLE: Record<EquipmentFamily, LoadStyle> = {
   kettlebell: 'kettlebell',
   cable: 'cable',
   machine: 'selectorized',
+  band: 'band',
   bodyweight: 'bodyweight',
 };
 
@@ -743,6 +765,8 @@ const DEFAULT_LOAD_STYLE: Record<EquipmentFamily, LoadStyle> = {
 export function loadStyleOf(id: string | null | undefined): LoadStyle {
   const ex = id ? BY_ID.get(id) ?? BY_ID.get(catalogIdFromEngine(id)) : undefined;
   if (!ex) return 'barbell';
+  // A band has no load axis either, but it is not her body: the word on the row differs (2026-09-10).
+  if (ex.equipment === 'band') return 'band';
   if (ex.bodyweight || ex.equipment === 'bodyweight') return 'bodyweight';
   return ex.loadStyle ?? DEFAULT_LOAD_STYLE[ex.equipment];
 }

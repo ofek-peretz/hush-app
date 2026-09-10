@@ -241,6 +241,25 @@ export function pulley(c: Vec2): Primitive[] {
   return [{ kind: 'circle', c, r: 4, stroke: 'ink3', w: 2, fill: 'paper1' }];
 }
 
+/**
+ * An elastic BAND from where it is tied off to the hand (2026-09-10) — drawn so it cannot be read
+ * as a cable. A cable is a constant 1.5u wire over a pulley with a stack that rises; a band has no
+ * stack, and its one honest signal is that it THINS as it stretches. So the stroke's width IS the
+ * stretch: 3.6u at `rest` (its length at the slack end of the rep), narrowing to 1.8u by the time
+ * it has doubled — never thinner, so it never disappears on a phone.
+ */
+export function bandStrip(from: Vec2, to: Vec2, rest: number): Primitive {
+  const len = Math.hypot(to.x - from.x, to.y - from.y);
+  const r = Math.max(1, rest);
+  const w = Math.max(1.8, 3.6 - 1.8 * Math.min(1, Math.max(0, len - r) / r));
+  return { kind: 'line', a: from, b: to, w, color: 'ink2', cap: 'round' };
+}
+
+/** Where a band is tied off — a door anchor's strap block, a loop under a foot, a knot on a post. */
+export function bandAnchor(c: Vec2): Primitive[] {
+  return [{ kind: 'rect', x: c.x - 3.5, y: c.y - 4.5, width: 7, height: 9, rx: 2, fill: 'paper1', stroke: 'ink3', w: 2 }];
+}
+
 // ── the Recognition Layer (§3.5 Amendment 4): the force chain, stated ────────────
 // The full station assemblies (stack towers, pulldown/row/press machines) live in machines.ts;
 // this kit keeps the shared vocabulary they compose.

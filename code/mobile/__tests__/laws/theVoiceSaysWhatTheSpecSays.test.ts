@@ -16,7 +16,7 @@ import { initI18n, setLocale } from '@/i18n';
 import { setGender, resetGender } from '@/i18n/gender';
 import { hebrewDuration, hebrewKilos, hebrewNumber, hebrewReps, hebrewWhole } from '@/domain/hebrewNumbers';
 import { numbersIn, parseVoiceAnswer } from '@/domain/voiceGrammar';
-import { deltaLine, figuresLine, loadLine, rangeLine, voiceScript } from '@/domain/voiceScript';
+import { deltaLine, figuresLine, loadLine, rangeLine, readyWhen, voiceScript } from '@/domain/voiceScript';
 import { voiceAskAfterS, nudgeAfterS } from '@/domain/setDwell';
 
 const HE = { locale: 'he', units: 'kg' as const };
@@ -76,6 +76,25 @@ describe('⛔ the load line — the total, then how to build it (spec §2)', () 
     expect(loadLine(CABLE, 40, HE)).toBe('ארבעים קילו: תשים את הפין על ארבעים');
     expect(loadLine(BENCH, null, HE)).toBe('בלי משקל');
   });
+  it('⛔ a band is said as a band — no kilograms, and not "no weight" either (2026-09-10)', () => {
+    expect(loadLine('band_curl', null, HE)).toBe('עם הגומייה');
+    expect(readyWhen('band_curl', null)).toBe('כשהגומייה במקום');
+    expect(deltaLine('band_curl', 0, 0, HE)).toBe('');
+    // …while a bodyweight lift keeps its own line.
+    expect(readyWhen('push_up', null)).not.toBe('כשהגומייה במקום');
+  });
+  it('⛔ a lift with NO load is never offered "a different weight" — there is none to change (2026-09-10)', () => {
+    for (const id of ['push_up', 'band_curl']) {
+      for (const line of [voiceScript.loadFirstTime(id, null, 8, 12, HE), voiceScript.loadCalibrated(id, null, 8, 12, HE)]) {
+        expect({ id, line, offersWeight: line.includes('משקל אחר') || line.includes('הצעה') }).toEqual({ id, line, offersWeight: false });
+      }
+    }
+    expect(voiceScript.loadCalibrated('band_curl', null, 8, 12, HE)).toContain('עם הגומייה');
+    // the body's range already says "no weight" — once, not twice
+    expect(voiceScript.loadCalibrated('push_up', null, 8, 12, HE).split('בלי משקל').length - 1).toBe(1);
+    // …and a loaded lift keeps its offer
+    expect(voiceScript.loadCalibrated(BENCH, 40, 8, 12, HE)).toContain('משקל אחר');
+  });
   it('the range is always a range, and never a lone number', () => {
     expect(rangeLine(8, 10, 40, HE)).toBe('שמונה עד עשר חזרות');
     expect(rangeLine(8, 10, null, HE)).toBe('שמונה עד עשר חזרות, בלי משקל');
@@ -92,6 +111,8 @@ describe('⛔ the load line — the total, then how to build it (spec §2)', () 
     try {
       expect(loadLine(BENCH, 40, EN)).toBe('40 kilos: the bar is 20, plus 10 on each side');
       expect(loadLine(DB, 12.5, EN)).toBe('12.5 kilos in each hand');
+      expect(loadLine('band_row', null, EN)).toBe('with the band');
+      expect(readyWhen('band_row', null)).toBe('When the band is set');
       expect(rangeLine(8, 10, 40, EN)).toBe('8 to 10 reps');
       expect(voiceScript.askDone()).toBe('Finished the set? How many reps did you do?');
     } finally {

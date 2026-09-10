@@ -536,6 +536,7 @@
     "loadUpBy": "עלייה של {{delta}}{{unit}}",
     "loadDownBy": "ירידה של {{delta}}{{unit}}",
     "bodyweightShort": "גוף",
+    "bandWord": "גומייה",
     "setsDone_one": "סט אחד",
     "setsDone_other": "{{count}} סטים",
     "setsDone_two": "שני סטים",
@@ -1114,6 +1115,7 @@
     "fixed_barbell": "מוט קבוע",
     "dumbbell": "משקולות יד",
     "kettlebell": "קטלבל",
+    "band": "גומייה",
     "machine": "מכונה",
     "cable": "כבל",
     "bodyweight": "משקל גוף"
@@ -1389,6 +1391,7 @@
     "room_fixed_barbell": "מוטות קבועים",
     "room_dumbbell": "משקולות יד",
     "room_kettlebell": "קטלבלס",
+    "room_band": "גומיות התנגדות",
     "room_machine": "מכונות",
     "room_cable": "עמדת כבלים",
     "weekTurns": "השבוע מתחלף ביום",
@@ -1460,6 +1463,10 @@
     "openSession": "{{workout}}. {{lifts}} תרגילים, בערך {{minutes}} דקות. מתחילים ב{{first}}.",
     "loadCalibrated": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגיד: מוכן. אם אתה רוצה משקל אחר, תגיד אותו.",
     "loadCalibrated_female": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגידי: מוכן. אם את רוצה משקל אחר, תגידי אותו.",
+    "loadBandLift": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadBandLift_female": "{{exercise}}. {{load}}. {{range}}. {{readyWhen}}, תגידי: מוכן.",
+    "loadBodyweightLift": "{{exercise}}. {{range}}. {{readyWhen}}, תגיד: מוכן.",
+    "loadBodyweightLift_female": "{{exercise}}. {{range}}. {{readyWhen}}, תגידי: מוכן.",
     "loadFirstTime": "{{exercise}}. זו הפעם הראשונה שלך בתרגיל הזה, אז המשקל הוא הצעה: {{load}}. אם זה נראה לך קל מדי או כבד מדי, תגיד משקל אחר. {{range}}. {{readyWhen}}, תגיד: מוכן.",
     "loadFirstTime_female": "{{exercise}}. זו הפעם הראשונה שלך בתרגיל הזה, אז המשקל הוא הצעה: {{load}}. אם זה נראה לך קל מדי או כבד מדי, תגידי משקל אחר. {{range}}. {{readyWhen}}, תגידי: מוכן.",
     "loadChanged": "{{setLabel}}. {{direction}} ל{{load}}: {{delta}}. {{readyWhen}}, תגיד: מוכן.",
@@ -1521,6 +1528,7 @@
     "loadPlateLoaded": "{{total}}: {{side}} בכל צד",
     "loadDumbbell": "{{perHand}} בכל יד",
     "loadKettlebell": "הקטלבל של {{bell}}",
+    "loadBand": "עם הגומייה",
     "loadPin": "{{total}}: תשים את הפין על {{pin}}",
     "loadPin_female": "{{total}}: תשימי את הפין על {{pin}}",
     "loadBodyweight": "בלי משקל",
@@ -1542,6 +1550,7 @@
     "readyFixed": "כשהמוט ביד",
     "readyDumbbell": "כשהמשקולות ביד",
     "readyKettlebell": "כשהקטלבל ביד",
+    "readyBand": "כשהגומייה במקום",
     "readyPin": "כשהפין במקום",
     "readyPlate": "כשהמכונה טעונה",
     "readyBodyweight": "כשאתה במקום",
@@ -2194,6 +2203,31 @@
       "דחוף את האגן אחורה, גב ישר.",
       "עמוד זקוף וסחט."
     ],
+    "band_curl": [
+      "עמוד על הגומייה, רגליים מפוסקות.",
+      "מרפקים צמודים לגוף.",
+      "הורד לאט נגד הגומייה."
+    ],
+    "band_pushdown": [
+      "עגן את הגומייה מעל הדלת.",
+      "מרפקים נעולים לצדי הגוף.",
+      "יישר עד ידיים ישרות."
+    ],
+    "band_row": [
+      "עגן את הגומייה בגובה החזה.",
+      "משוך את הידיים אל המותניים.",
+      "שחרר לאט נגד הגומייה."
+    ],
+    "band_pull_apart": [
+      "ידיים ישרות בגובה הכתפיים.",
+      "מתח את הגומייה אל החזה.",
+      "כווץ את השכמות."
+    ],
+    "band_pull_through": [
+      "גומייה מעוגנת נמוך מאחוריך.",
+      "דחוף את הישבן אחורה.",
+      "סגור את האגן קדימה."
+    ],
     "kb_swing": [
       "היכנס לציר ירכיים, ידיים ישרות.",
       "שחרר את האגן קדימה — הקטלבל עף.",
@@ -2643,6 +2677,31 @@
       "קטלבל בכל יד, ידיים תלויות.",
       "דחפי את האגן אחורה, גב ישר.",
       "עמדי זקופה וסחטי."
+    ],
+    "band_curl_female": [
+      "עמדי על הגומייה, רגליים מפוסקות.",
+      "מרפקים צמודים לגוף.",
+      "הורידי לאט נגד הגומייה."
+    ],
+    "band_pushdown_female": [
+      "עגני את הגומייה מעל הדלת.",
+      "מרפקים נעולים לצדי הגוף.",
+      "יישרי עד ידיים ישרות."
+    ],
+    "band_row_female": [
+      "עגני את הגומייה בגובה החזה.",
+      "משכי את הידיים אל המותניים.",
+      "שחררי לאט נגד הגומייה."
+    ],
+    "band_pull_apart_female": [
+      "ידיים ישרות בגובה הכתפיים.",
+      "מתחי את הגומייה אל החזה.",
+      "כווצי את השכמות."
+    ],
+    "band_pull_through_female": [
+      "גומייה מעוגנת נמוך מאחורייך.",
+      "דחפי את הישבן אחורה.",
+      "סגרי את האגן קדימה."
     ],
     "kb_swing_female": [
       "היכנסי לציר ירכיים, ידיים ישרות.",
@@ -3671,6 +3730,11 @@
     "kb_goblet_squat": "סקוואט גובלט בקטלבל",
     "kb_rdl": "דדליפט רומני בקטלבל",
     "kb_swing": "נדנוד קטלבל",
+    "band_curl": "כפיפת מרפקים בגומייה",
+    "band_pushdown": "פשיטת מרפקים בגומייה",
+    "band_row": "חתירה בגומייה בישיבה",
+    "band_pull_apart": "פתיחת גומייה לצדדים",
+    "band_pull_through": "משיכה בין הרגליים בגומייה",
     "bw_squat": "סקוואט משקל גוף",
     "split_squat": "ספליט סקוואט",
     "good_morning": "גוד מורנינג",

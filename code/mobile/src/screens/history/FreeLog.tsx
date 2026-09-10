@@ -127,7 +127,8 @@ export function FreeLogView({
     );
   }, [query]);
 
-  const bodyweight = exercise?.equipment === 'bodyweight';
+  // No load axis → no weight wheel: the bodyweight family, the assist machines and the bands (2026-09-10).
+  const bodyweight = !!exercise && (exercise.bodyweight === true || exercise.equipment === 'bodyweight');
   const wStep = exercise ? STARTING_INCREMENT[exercise.equipment] || 0.5 : 2.5;
   const wMin = exercise ? emptyBarKg(exercise.equipment) : 0; // per-family floor (F-19)
 

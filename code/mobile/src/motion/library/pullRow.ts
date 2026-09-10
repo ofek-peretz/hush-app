@@ -16,7 +16,7 @@ import { lerp, lerpV, twoBoneIK, twoBoneIK3, twoBoneIKToward, withinReach } from
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
 import { lags } from '../curves';
-import { barPathTicks, dumbbellEnd, flatBench, floorScene, leverBar, linePathTicks, plateGhost, padStroke, sampledPathTicks } from '../kit';
+import { bandAnchor, bandStrip, barPathTicks, dumbbellEnd, flatBench, floorScene, leverBar, linePathTicks, padStroke, plateGhost, sampledPathTicks } from '../kit';
 import { facePullStation, machineRowStation, seatedRowStation } from '../machines';
 import { far, FLOOR_Y, standingFrontCore } from '../bodies';
 import { project, type Camera } from '../camera';
@@ -286,7 +286,7 @@ interface SeatedRowParams {
   /** The attachment in the fist (§3.5 Amendment 5 — the attachment is a word): the cable row's
    *  V-grip (yoke apex toward the cable, where the cable honestly attaches) vs the machine
    *  row's fixed handle. */
-  grip: 'v' | 'machine';
+  grip: 'v' | 'machine' | 'band';
   /** Torso lean from vertical (deg, + = toward the machine): at the stretch → at the finish.
    *  Equal values = braced/frozen torso (chest pad). */
   lean: { start: number; end: number };
@@ -377,7 +377,9 @@ function seatedRow(p: SeatedRowParams): Rig {
             { kind: 'polyline', pts: [{ x: hand.x, y: hand.y - 7 }, attach, { x: hand.x, y: hand.y + 7 }], w: 2.2, color: 'ink0' },
             { kind: 'circle', c: attach, r: 2, fill: 'ink0' },
           ]
-        : [
+        : p.grip === 'band'
+          ? [{ kind: 'line', a: { x: hand.x, y: hand.y - 5 }, b: { x: hand.x, y: hand.y + 5 }, w: 3.5, color: 'ink0', cap: 'round' }]
+          : [
             { kind: 'line', a: { x: hand.x, y: hand.y - 8 }, b: { x: hand.x, y: hand.y + 8 }, w: 3.5, color: 'ink0', cap: 'round' },
             { kind: 'circle', c: hand, r: 2.5, fill: 'ink0' },
           ];
@@ -441,6 +443,38 @@ export const machineRow = seatedRow({
   grip: 'machine',
   legs: { knee: { x: 186, y: 150 }, ankle: { x: 193, y: 186 }, heel: { x: 187, y: FLOOR_Y }, toe: { x: 212, y: FLOOR_Y } },
   shadow: { cx: 172, rx: 50 },
+});
+
+/*
+ * band_row (2026-09-10, the band family) — the seated cable row's body on a stool, the band tied off
+ * in a door at handle height. The same small hinge (no pad), the same finish at the waist; the strip
+ * thinning as the hands come in is the only resistance drawn, because it is the only one there is.
+ * The station's `lift` is exactly how far the handle has travelled, so the band's slack length is
+ * the anchor-to-hand distance minus it — its length at the stretch end of the rep.
+ */
+const BAND_ROW_ANCHOR: Vec2 = { x: 292, y: 134 };
+function bandRowStation(hand: Vec2, lift: number): Primitive[] {
+  const rest = Math.hypot(BAND_ROW_ANCHOR.x - hand.x, BAND_ROW_ANCHOR.y - hand.y) - lift;
+  return [
+    { kind: 'line', a: { x: BAND_ROW_ANCHOR.x + 8, y: 30 }, b: { x: BAND_ROW_ANCHOR.x + 8, y: FLOOR_Y - 1 }, w: 2.5, color: 'ink3' }, // the door's edge
+    ...bandAnchor(BAND_ROW_ANCHOR),
+    // the stool she sits on
+    { kind: 'rect', x: 116, y: 163, width: 50, height: 7, rx: 2, fill: 'paper3', stroke: 'ink3', w: 2 },
+    { kind: 'line', a: { x: 124, y: 170 }, b: { x: 124, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
+    { kind: 'line', a: { x: 158, y: 170 }, b: { x: 158, y: FLOOR_Y - 2 }, w: 3, color: 'ink3' },
+    bandStrip(BAND_ROW_ANCHOR, hand, rest),
+  ];
+}
+export const bandRow = seatedRow({
+  id: 'band_row',
+  handleY: 134,
+  endX: 150,
+  endLabel: 'hands to the waist',
+  lean: { start: 9, end: -6 },
+  station: bandRowStation,
+  grip: 'band',
+  legs: { knee: { x: 186, y: 152 }, ankle: { x: 196, y: 188 }, heel: { x: 190, y: FLOOR_Y }, toe: { x: 214, y: FLOOR_Y } },
+  shadow: { cx: 176, rx: 50 },
 });
 
 // ── face_pull — FRONT-VIEW: the goalpost IS the exercise ─────────────────────────

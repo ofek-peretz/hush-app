@@ -58,7 +58,7 @@ import { SHARED_SWAP_WAIT_MS, sharedRestEndsAt } from '@/domain/sharedSession';
 import { PairSwapSheet } from '@/components/PairSwapSheet';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, kgFromDisplay, unitLabel, learnPhaseLength } from '@/domain/schedule';
-import { equipmentLoad, equipmentValue, loadSetup, rxType, totalFromEquipment, type LoadSetup } from '@/domain/loadPresentation';
+import { equipmentLoad, equipmentValue, loadSetup, rxType, totalFromEquipment, type LoadSetup, noLoadIsBand } from '@/domain/loadPresentation';
 import { StageBreath } from '@/components/StageBreath';
 import { db } from '@/data/local/db';
 // ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
@@ -2727,7 +2727,7 @@ function ActiveSet({
    * followed by an abbreviation it will spell out.
    */
   const loadSpoken = isBodyweight
-    ? t('workout.bodyweight')
+    ? t(noLoadIsBand(session.currentExerciseId) ? 'workout.bandWord' : 'workout.bodyweight')
     : `${displayWeight(target.recommendedWeight, units)} ${unitLabel(units)}${annex ? ` · ${annex.value} ${annex.suffix}` : ''}`;
 
   /*
@@ -3003,7 +3003,7 @@ function ActiveSet({
             </View>
             <View style={styles.rxFigureRow}>
               {isBodyweight ? (
-                <Text style={styles.rxWordSm} numberOfLines={1}>{t('workout.bodyweight')}</Text>
+                <Text style={styles.rxWordSm} numberOfLines={1}>{t(noLoadIsBand(session.currentExerciseId) ? 'workout.bandWord' : 'workout.bodyweight')}</Text>
               ) : (
                 <Text
                   style={[styles.rxFigure, rxType(String(slot === 'weight' ? draft || '0' : eq?.value ?? ''))]}
@@ -4212,7 +4212,7 @@ function Rest({
                       CREAM, not moss: on a new lift the number is an instruction to go and set up,
                       not a decision the engine just made. Moss on this card means "I changed this". */}
                   <Text style={[styles.upWeight, nextWeight == null && styles.upWeightWord]}>
-                    {nextWeight != null ? nextWeight : t('workout.bodyweight')}
+                    {nextWeight != null ? nextWeight : t(noLoadIsBand(session.nextExercise?.id) ? 'workout.bandWord' : 'workout.bodyweight')}
                     {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
                   </Text>
                 </View>

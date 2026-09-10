@@ -34,7 +34,7 @@ import { lerp } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE, BAR_R } from '../anthro';
 import { easesOut, grindsIn, type Curve } from '../curves';
-import { cable, dumbbellEnd, dumbbellSide, floorScene, padStroke, plateGhost, pulley, sampledPathTicks } from '../kit';
+import { bandAnchor, bandStrip, cable, dumbbellEnd, dumbbellSide, floorScene, padStroke, plateGhost, pulley, sampledPathTicks } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, standingCore } from '../bodies';
 
@@ -121,7 +121,7 @@ interface CurlParams {
    *   `cable`         a straight bar on the low pulley, end-on, drawn as its word.
    *   `cable_neutral` the ROPE: two tails past the swivel, opening through the rep.
    */
-  implement: 'bar' | 'db' | 'db_neutral' | 'cable' | 'cable_neutral';
+  implement: 'bar' | 'db' | 'db_neutral' | 'cable' | 'cable_neutral' | 'band';
   /** One arm works and the other rests on the hip — the single-arm cable curl. */
   singleArm?: boolean;
   /** An overhand grip: the bar hangs under the knuckles — see `barInFist`. */
@@ -279,6 +279,18 @@ function curl(p: CurlParams): Rig {
          side sees the whole profile — handle and both plates, riding perpendicular to the forearm.
          `kit.ts` names this drawing "hammer grips"; for two years the members had them swapped. */
       front = dumbbellSide(hand, dir);
+    } else if (p.implement === 'band') {
+      /*
+       * STOOD ON (2026-09-10): the band's loop sits under the mid-foot and runs straight up to a
+       * handle across the fist, seen end-on like the cable bar. No pulley and no stack — the strip
+       * thinning as the hand rises is the resistance, drawn (`kit.bandStrip`).
+       */
+      const foot: Vec2 = { x: (core.heel.x + core.toe.x) / 2, y: FLOOR_Y - 2 };
+      back.push(...bandAnchor(foot));
+      front = [
+        bandStrip(foot, hand, Math.hypot(bottomHand.x - foot.x, bottomHand.y - foot.y)),
+        { kind: 'circle', c: hand, r: BAR_R, fill: 'ink0' },
+      ];
     } else {
       /*
        * The resistance MOVES (§3.5): the selected plate rides up as the hand does. A low pulley
@@ -376,6 +388,8 @@ export const bbCurl = curl({ id: 'bb_curl', implement: 'bar', phiBottom: 8 });
 export const dbCurl = curl({ id: 'db_curl', implement: 'db' });
 export const cableCurl = curl({ id: 'cable_curl', implement: 'cable' });
 export const singleArmCableCurl = curl({ id: 'single_arm_cable_curl', implement: 'cable', singleArm: true });
+/** The band family (2026-09-10): the same pinned elbow, the band stood on. */
+export const bandCurl = curl({ id: 'band_curl', implement: 'band' });
 
 /*
  * The brachialis pair (2026-08-25) — the SAME arc under a rotated grip, which is the honest

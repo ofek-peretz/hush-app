@@ -18,6 +18,7 @@
 
 // 
 
+import { noLoadIsBand } from '@/domain/loadPresentation';
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 
@@ -246,6 +247,7 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
                 metaSize={17}
                 changedColor={lift.changed ? directionTone(lift.changed) : null}
                 bodyweightWord={t('workout.bodyweightShort')}
+                bandWord={t('workout.bandWord')}
               />
             </View>
           )}
@@ -292,6 +294,7 @@ export function FigureCells({
   metaSize = textScale.base,
   changedColor,
   bodyweightWord,
+  bandWord,
 }: {
   lift: PlanLift;
   units: 'kg' | 'lb';
@@ -303,6 +306,8 @@ export function FigureCells({
   changedColor?: string | null;
   /** Localized word for a bodyweight lift's load cell ("גוף" / "body"). Empty → cell stays blank. */
   bodyweightWord?: string;
+  /** The word for a load-less BAND lift — a band is not her body (2026-09-10). */
+  bandWord?: string;
 }) {
   // A pre-written figure (a coach item's own string) spans the table — it is not a prescription.
   if (lift.detail != null) {
@@ -339,7 +344,7 @@ export function FigureCells({
           </Text>
         ) : (
           <Text style={[cellStyles.loadWord, { fontSize: metaSize }]} numberOfLines={1}>
-            {bodyweightWord ?? ''}
+            {(bandWord != null && noLoadIsBand(lift.exerciseId) ? bandWord : bodyweightWord) ?? ''}
           </Text>
         )}
       </View>
