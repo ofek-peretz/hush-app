@@ -50,6 +50,34 @@ describe('#6 · one tap is one tap', () => {
     expect(taps.filter((t) => !t.includes('TapGate'))).toEqual([]);
   });
 
+  it('⛔ EXEMPTS the one control that MEANS to be pressed again (watch audit, 2026-09-14)', () => {
+    /*
+     * ⛔ THE GATE WAS EATING A DELIBERATE SECOND PRESS, AND SAYING NOTHING.
+     *
+     * The window above is global because *"the second tap lands somewhere else"* — a beat is
+     * replaced under the finger and the tap meant for the old button hits whatever took its place.
+     * That reason does not reach "+15s": it replaces nothing. Same screen, same button, same thumb.
+     * An athlete who wants half a minute presses it twice, and at 350 ms the second press was
+     * refused in silence — a control that did nothing and did not say so, which is the one failure
+     * a gate must never produce.
+     *
+     * The exemption is narrow ON PURPOSE: it still catches a contact bounce, it still ARMS the
+     * global window for whatever she touches next, and only the two "+15s" controls use it.
+     */
+    const src = read('WatchScreens.swift');
+    expect(src).toContain('static func repeatable(_ action: () -> Void)');
+    const m = src.match(/bounceS: TimeInterval = ([\d.]+)/);
+    expect(m).not.toBeNull();
+    const bounceS = Number(m![1]);
+    // A bounce, never a decision: well under the ~250 ms a deliberate second press takes.
+    expect({ bounceS, sane: bounceS > 0 && bounceS < 0.25 }).toMatchObject({ sane: true });
+    // Both "+15s" controls: the inter-rest's own button, and the transition rest's outline one.
+    expect(src).toContain('TapGate.repeatable(onAdd)');
+    expect(src).toContain('repeatable: true, action: onAdd');
+    // …and nothing else has been quietly let through the same door.
+    expect([...src.matchAll(/TapGate\.repeatable\(/g)]).toHaveLength(2);
+  });
+
   it('holds the window between a stray double-tap and a considered second tap', () => {
     /*
      * ~250 ms is the fastest accidental double-tap; ~500 ms is about what it takes to see a new

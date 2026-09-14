@@ -402,10 +402,32 @@ private struct ClockLane<Content: View>: View {
 enum TapGate {
   private static var lastAt: TimeInterval = 0
   private static let windowS: TimeInterval = 0.35
+  /// Contact bounce alone — one finger landing once and registering twice. Short enough that a
+  /// second press a person MEANT always gets through.
+  private static let bounceS: TimeInterval = 0.12
 
   static func pass(_ action: () -> Void) {
     let now = ProcessInfo.processInfo.systemUptime
     guard now - lastAt >= windowS else { return }
+    lastAt = now
+    action()
+  }
+
+  /// A control that MEANS to be pressed again. "+15s", and at present only "+15s".
+  ///
+  /// ⛔ THE GATE'S OWN REASON DOES NOT REACH THIS ONE (watch audit, 2026-09-14). Read the note
+  /// above: the window is global because *"the second tap lands somewhere else"* — a beat is
+  /// replaced under the finger, and the tap meant for the old button hits whatever took its place.
+  /// "+15s" replaces nothing. The rest screen is unchanged, the button is still under the thumb,
+  /// and the athlete who wants half a minute presses it twice — which at 350 ms was swallowed in
+  /// silence. That is the one failure a gate must never produce: a control that did nothing and
+  /// said nothing about it.
+  ///
+  /// It still catches a bounce (120 ms), and it still ARMS the global window, so a considered tap
+  /// on a DIFFERENT control straight afterwards is gated exactly as it was before.
+  static func repeatable(_ action: () -> Void) {
+    let now = ProcessInfo.processInfo.systemUptime
+    guard now - lastAt >= bounceS else { return }
     lastAt = now
     action()
   }
@@ -815,7 +837,7 @@ private struct RestActions: View {
     HStack(spacing: 6) {
       StageButton(title: primaryTitle, kind: ready ? .primary : .onstage, height: 42, fontSize: 15, action: onReady)
       if !ready {
-        Button(action: { TapGate.pass(onAdd) }) {
+        Button(action: { TapGate.repeatable(onAdd) }) {
           Text(WatchCopy.addShort)
             .font(.system(size: 14, weight: .semibold))
             .frame(width: Fit.s(54), height: Fit.s(42))
@@ -1511,9 +1533,14 @@ private struct OutlineButton: View {
    * exact thing the founder photographed and asked about four times.
    */
   var seated: Bool = false
+  /**
+   * ⚠️ A CONTROL THAT MEANS TO BE PRESSED AGAIN — see `TapGate.repeatable`. Declared before
+   * `action` for the same positional reason `seated` is.
+   */
+  var repeatable: Bool = false
   let action: () -> Void
   var body: some View {
-    Button(action: { TapGate.pass(action) }) {
+    Button(action: { if repeatable { TapGate.repeatable(action) } else { TapGate.pass(action) } }) {
       HStack(spacing: 5) {
         if let systemImage { Image(systemName: systemImage).font(.system(size: 12)) }
         Text(title).font(.system(size: fontSize, weight: .semibold))
@@ -2575,7 +2602,8 @@ struct TransitionRestScreen: View {
                     kind: ready ? .primary : .onstage, height: Wrist.action, fontSize: 15, action: onReady)
         HStack(spacing: 5) {
           OutlineButton(title: WatchCopy.addShort, tint: Palette.ink0,
-                        border: Palette.ink0.opacity(0.22), height: 34, fontSize: 12, action: onAdd)
+                        border: Palette.ink0.opacity(0.22), height: 34, fontSize: 12,
+                        repeatable: true, action: onAdd)
           if let best = swaps.first {
             OutlineButton(title: WatchCopy.swapTitle, systemImage: "arrow.left.arrow.right",
                           tint: Palette.ink1, border: Palette.ink0.opacity(0.22), height: 34, fontSize: 12,
