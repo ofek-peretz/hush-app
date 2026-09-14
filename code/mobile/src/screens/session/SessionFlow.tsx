@@ -29,6 +29,8 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { ReorderRows } from '@/components/ReorderRows';
 
 import { ExerciseDemo } from '@/components/ExerciseDemo';
+import { NotificationAsk } from '@/screens/onboarding/NotificationAsk';
+import { ensureNotificationPermission, markNotificationsAsked, shouldAskForNotifications } from '@/platform/notifications';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import { track } from '@/platform/telemetry';
@@ -88,7 +90,7 @@ type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
  * SWAP."* He is right on both counts and the second is the sharper one: a lift she wants gone is a
  * lift she wants REPLACED, and swapping keeps the volume the week was balanced around.
  */
-type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points' | 'swap' | 'map' | 'pairSwap';
+type Overlay = 'none' | 'pause' | 'endConfirm' | 'reasoning' | 'demo' | 'firstGym' | 'points' | 'swap' | 'map' | 'pairSwap' | 'notifyAsk';
 export type Confirm = {
   weight: number | null;
   reps: number;
@@ -968,6 +970,42 @@ export function SessionFlow({ navigation, route }: Props) {
    * And its end-edge doors: Swap + Form on a live set, Form alone on a rest, neither during the
    * one-second logged beat, when there is nothing to reach for.
    */
+  /*
+   * ════ ⛔ THE ASK MOVES TO THE FIRST REST (founder, gym 2026-09-14) ════
+   *
+   * *"ההתראות לא עובדות באימון… מה צריך לשאול הרשאה להתראות האלה. תקפיץ את זה בפעם הראשונה
+   * באימון הראשון וזהו."*
+   *
+   * The rest backstop (`platform/restHaptics`) schedules nothing without permission, and permission
+   * was asked exactly once — on Well Done, AFTER the first workout was over. So the workout that
+   * needs the alerts most, the first one, never had them: a pocketed phone missed every rest it
+   * ran. The pre-ask itself stays what it was (§8.2 — our own words first, iOS's one prompt after),
+   * only its moment moves.
+   *
+   * ⚠️ AND IT IS A REST, WHICH IS THE ONE SAFE MOMENT. `setNudge` and `kilometre` both refuse to
+   * raise a system dialog while she is under a loaded bar; a rest is exactly the gap this product
+   * already treats as hers to read on. It shows once ever (`markNotificationsAsked`), only on a
+   * FIRST workout, and only when iOS has not already decided.
+   *
+   * ⚠️ THE REST THAT IS RUNNING KEEPS ITS SILENCE. Alerts are armed as a rest STARTS, so a
+   * permission granted mid-rest lands from the next rest on. Re-arming this one behind her would
+   * mean a "7 seconds left" for a rest she has been watching the whole time.
+   */
+  const firstWorkout = (app.modeState?.completedSessions ?? 0) === 0;
+  const askedThisSessionRef = useRef(false);
+  useEffect(() => {
+    if (!firstWorkout || askedThisSessionRef.current) return;
+    if (session.displayPhase !== 'REST_INTER' && session.displayPhase !== 'REST_TRANSITION') return;
+    askedThisSessionRef.current = true;
+    let alive = true;
+    void shouldAskForNotifications().then((yes) => {
+      if (alive && yes) setOverlay((cur) => (cur === 'none' ? 'notifyAsk' : cur));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [firstWorkout, session.displayPhase]);
+
   const isTransition = session.displayPhase === 'REST_TRANSITION';
   /** A crossing into a RUN has no form clip and nothing to swap for — see `swapPool`. */
   const nextIsALift = !!exerciseById(session.nextExerciseId ?? '');
@@ -1360,6 +1398,24 @@ export function SessionFlow({ navigation, route }: Props) {
             <Text style={styles.calFootnote}>{t('firstGym.footnote')}</Text>
             <Button variant="primary" block size="card" label={t('firstGym.got')} onPress={dismissFirstGym} />
           </View>
+        </View>
+      ) : null}
+
+      {overlay === 'notifyAsk' ? (
+        <View style={StyleSheet.absoluteFill}>
+          <NotificationAsk
+            onAllow={async () => {
+              await markNotificationsAsked();
+              await ensureNotificationPermission();
+              setOverlay('none');
+            }}
+            onDecline={() => {
+              /* "Not now" spends nothing — iOS's single prompt is untouched, and we never ask from
+                 here again. Same contract as Well Done's, which is where this ask used to live. */
+              void markNotificationsAsked();
+              setOverlay('none');
+            }}
+          />
         </View>
       ) : null}
 

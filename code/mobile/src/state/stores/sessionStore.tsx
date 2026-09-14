@@ -1927,7 +1927,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             // as a typed set on the stage is. During a rest → nothing: the set is written and the
             // tap was a second one.
             const hers = i.reps != null && i.weight !== undefined ? { weight: i.weight, reps: i.reps } : undefined;
+            /*
+             * ⛔ AND A TAP THAT CANNOT LAND IS COUNTED (founder, gym 2026-09-14: *"כשאני מזין
+             * מהלייב אקטיביטי את הסטים והחזרות זה לא מעדכן באפליקציה"*).
+             *
+             * The drop itself is right — during a rest the set is already written and the tap was a
+             * second one — but it happened in SILENCE, so a report of "it did not update" had
+             * nothing behind it: no way to tell a tap that never reached the queue from one the
+             * phase refused. One event, with the phase that refused it, is the whole diagnosis.
+             */
             if (v.displayPhase === 'SET_PRESENTED') await v.completeSet(hers);
+            else void track('lock_intent_dropped', { sessionId: session.id, type: i.type, phase: v.displayPhase });
           } else if (i.type === 'add_rest') {
             v.extendRest(15);
           } else if (i.type === 'end_rest') {
@@ -1938,10 +1948,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               const next = planRef.current[machineRef.current.setIndex + 1];
               if (next) setPresentedAtRef.current = { key: stepKey(next), atMs: i.atMs };
               v.endRest();
-            }
+            } else void track('lock_intent_dropped', { sessionId: session.id, type: i.type, phase: v.displayPhase });
           } else if (i.type === 'set_ready') {
             // "מוכן" from the lock screen: the set on stage started at the tap (spec §3.2).
             if (v.displayPhase === 'SET_PRESENTED') v.markSetStarted();
+            else void track('lock_intent_dropped', { sessionId: session.id, type: i.type, phase: v.displayPhase });
           }
         } finally {
           nowOverrideMs = null;
@@ -3506,7 +3517,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (v) act(v);
   };
   watchActionsRef.current = {
-    REST_ELAPSED: afterClock((v) => v.endRest()),
+    /*
+     * ⛔ WHAT THE WRIST'S "START SET" ACTUALLY MOVED (founder, gym 2026-09-14: *"בשעון כשמדלגים על
+     * מנוחה הוא זורק לאימון אחר במקום להתחיל סט"*).
+     *
+     * Read end to end, this path cannot do that: the intent is judged against the last published
+     * mirror, the clock is caught up first, and the machine advances ONLY from a rest phase
+     * (`sessionState` guards `REST_ELAPSED`), so a second event is a no-op rather than a second
+     * step. Which means the cause is in what the two surfaces BELIEVED, not in the arithmetic —
+     * and that is exactly what is not written down anywhere. So it is now: the phase the phone was
+     * in when the wrist's tap arrived, the phase it left in, and the step it landed on.
+     */
+    REST_ELAPSED: afterClock((v) => {
+      const before = machineRef.current.phase;
+      const fromIndex = machineRef.current.setIndex;
+      v.endRest();
+      void track('watch_rest_end', {
+        sessionId: sessionRef.current?.id,
+        before,
+        after: machineRef.current.phase,
+        fromIndex,
+        toIndex: machineRef.current.setIndex,
+        fromExercise: planRef.current[fromIndex]?.exerciseId ?? null,
+        toExercise: planRef.current[machineRef.current.setIndex]?.exerciseId ?? null,
+      });
+    }),
     PAUSE: afterClock((v) => v.pause()),
     RESUME: afterClock((v) => v.resume()),
     FINISH_EARLY: afterClock((v) => void v.finishEarly()),
