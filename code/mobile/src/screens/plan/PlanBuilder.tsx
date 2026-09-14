@@ -55,7 +55,7 @@ import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
 import { clearImport } from '@/domain/pendingImport';
 import type { OnboardingInputs, Program, ProgramDay } from '@/data/local/models';
-import { EXERCISES, exerciseById, exerciseCues, exerciseDisplayName, isSwapOnly, type Exercise } from '@/data/exercises';
+import { EXERCISES, exerciseById, exerciseCues, exerciseDisplayName, isSwapOnly, type Exercise, type EquipmentFamily } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { swapChoices } from '@/domain/swapPool';
 import { useApp } from '@/state/stores/appStore';
@@ -517,6 +517,13 @@ export interface PlanBuilderViewProps {
   ownedIds: ReadonlySet<string>;
   /** Which of the two athletes demonstrates — hers (the FormMedia rule, from the profile). */
   figure: FigureSex;
+  /**
+   * THE ROOM (2026-09-14) — `Profile.equipment`, for the swap menu below. Every other swap door in
+   * the app passes it (the stage, the pre-workout card, the wrist's own pool); the builder's did
+   * not, so the one screen where she deliberately edits her week was also the one offering her a
+   * cable fly for a garage with no cable stack. Absent = full gym, as everywhere.
+   */
+  equipment?: readonly EquipmentFamily[];
   advice: WeekFinding[];
   /** Leave the builder without saving — the visible door the screen never had (2026-08-26: the
    *  only exits were "שמור כתוכנית שלי" and the native swipe gesture, so a browse-only visit
@@ -1041,6 +1048,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
           currentName={exerciseDisplayName(d.days[swapFor.day].slots[swapFor.slot].exerciseId)}
           choices={swapChoices(d.days[swapFor.day].slots[swapFor.slot].exerciseId, {
             sessionExerciseIds: d.days[swapFor.day].slots.map((s) => s.exerciseId),
+            equipment: props.equipment,
           })}
           onPick={(toId) => { props.onDraft(replaceLift(d, swapFor.day, swapFor.slot, toId)); setSwapFor(null); }}
           onClose={() => setSwapFor(null)}
@@ -1328,6 +1336,7 @@ export function PlanBuilder({ navigation, route }: Props) {
     <PlanBuilderView
       draft={draft}
       intake={intake}
+      equipment={app.profile?.equipment}
       /*
        * ⛔ THE WAY BACK IS ONE STEP IN THE INTAKE, AND THE WHOLE SCREEN OUTSIDE IT.
        *

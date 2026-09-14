@@ -802,7 +802,24 @@ export function ProfileSheet({ navigation }: Props) {
           onSave={(picked) => {
             setOverlay('none');
             const stored = roomForStorage(picked);
-            void app.updateProfileInfo({ equipment: stored ?? null });
+            /*
+             * ⛔ AND IT SAYS WHAT ACTUALLY HAPPENED (2026-09-14, found walking this on real glass).
+             *
+             * This was `void updateProfileInfo(...)`: the answer — did the week rebuild? — was
+             * thrown away, and the sheet just closed. On an ENGINE week that silence was harmless.
+             * On a week the MODEL wrote (every athlete who came through "build me a programme", so
+             * nearly everyone) `engineMayRebuild` refuses, so she turned her gym down to a bag of
+             * bands, was told nothing at all, and opened Today to the same barbell week.
+             *
+             * The week is still not ours to rewrite (`aWeekSheBroughtIsNotOursToRewrite`) — what
+             * was missing is the sentence. `BodyMapEdit` and `ExerciseLibrary` already draw this
+             * exact distinction; one fact keeps one sentence, so the room borrows their shape.
+             */
+            const changed = JSON.stringify(stored ?? null) !== JSON.stringify(p?.equipment ?? null);
+            void app.updateProfileInfo({ equipment: stored ?? null }).then((rebuilt) => {
+              if (!changed) return; // she opened the sheet and changed nothing — nothing to report
+              toast.show(rebuilt ? t('profile.roomSaved') : t('profile.roomKept'));
+            });
           }}
         />
       ) : null}
