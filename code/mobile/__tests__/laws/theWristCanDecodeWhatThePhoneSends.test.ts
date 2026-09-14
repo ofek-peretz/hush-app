@@ -137,6 +137,22 @@ describe('⛔ every envelope the phone builds survives Swift’s decoder', () =>
     expect(faults).toEqual([]);
   });
 
+  it('⛔ the PHONE’S RUN — live, and frozen with every optional null', () => {
+    // Live: an epoch anchor (thirteen digits — `Int64`, or the whole frame is refused on arm64_32).
+    const live = {
+      runId: '2026-09-15T07:00:00.000Z', gait: 'run', paused: false, clockAnchorMs: Date.now() - 600_000,
+      elapsedS: 600.4, distanceKm: 1.84, hr: 148, kcal: 142, lastSplitKm: 1, lastSplitPaceS: 322,
+      lastSplitFastest: true, complete: false,
+    };
+    // Paused before the first kilometre, no heart source: the nulls a real run sends first.
+    const frozen = { ...live, paused: true, clockAnchorMs: null, hr: 0, lastSplitKm: null, lastSplitPaceS: null, lastSplitFastest: false };
+    for (const run of [live, frozen, { ...frozen, complete: true }]) {
+      const faults: string[] = [];
+      check('WireEnvelope', onTheWire(makeStateEnvelope(null, 2, Date.now(), lobby, null, null, Date.now(), null, run)), 'envelope', faults);
+      expect(faults).toEqual([]);
+    }
+  });
+
   it('⛔ an EMPTY envelope — no mirror, no lobby, no plan', () => {
     // What the phone sends between screens. `v`, `type`, `authoritySeq` and `sentAt` are the four
     // Swift will not do without.

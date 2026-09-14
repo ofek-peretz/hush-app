@@ -3932,13 +3932,20 @@ function Rest({
   // decrementing counter would freeze and resume mid-count — here we recompute
   // `remaining` from `endAt - now` each tick AND on every return to foreground, so
   // the real elapsed rest is always reflected (the timer keeps running while away).
+  // What remains AT MOUNT, read from the instant every other surface counts to — a screen mounted
+  // mid-rest (a resume, a wrist handover, a pause) must not paint a full rest for one frame first.
+  const mountRemainingS =
+    session.restFrozenRemainingS ??
+    (session.restEndsAtMs != null
+      ? Math.max(0, Math.round((session.restEndsAtMs - Date.now()) / 1000))
+      : session.restSeconds);
   const [total, setTotal] = useState(session.restSeconds);
-  const [remaining, setRemaining] = useState(session.restSeconds);
+  const [remaining, setRemaining] = useState(mountRemainingS);
   const endAtRef = useRef<number | null>(null);
-  const remainingRef = useRef(session.restSeconds);
+  const remainingRef = useRef(mountRemainingS);
   // Rest "Approach" haptic countdown — each beat (7/3/2/1) fires once as `remaining` lands on it.
   const beatsFiredRef = useRef<Set<number>>(new Set());
-  const prevRemForBeatsRef = useRef(session.restSeconds);
+  const prevRemForBeatsRef = useRef(mountRemainingS);
 
   const sync = useCallback(() => {
     if (endAtRef.current == null) return;
@@ -3961,8 +3968,17 @@ function Rest({
      * end instant — `restEndsAtMs` — is the one every surface counts to; a rest with no anchor
      * yet (the first frame of a resume) keeps the old arithmetic.
      */
+    /*
+     * ⛔ PAUSED, THE REST IS FROZEN — NOT RESTARTED (sync audit, 2026-09-15). Pausing clears the
+     * store's anchor, and that change re-runs THIS effect, which read the missing end as "a rest
+     * with no anchor yet" and painted `now + restSeconds`: the phone showed a FULL rest for the whole
+     * pause, while the store knew exactly what remained. The store's frozen figure is the one every
+     * surface resumes from.
+     */
     const endAt = session.restEndsAtMs ?? Date.now() + session.restSeconds * 1000;
-    const rem = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+    const rem = paused
+      ? session.restFrozenRemainingS ?? remainingRef.current
+      : Math.max(0, Math.round((endAt - Date.now()) / 1000));
     setTotal(session.restSeconds);
     setRemaining(rem);
     remainingRef.current = rem;
@@ -3973,7 +3989,7 @@ function Rest({
      * On a fresh rest this is zero: the store resets the "+15" total with every new rest, and
      * `restSeconds` is the prescribed length. But on a rest RESUMED after an app kill it is not.
      * `sessionRecovery` rebuilds the remaining time as `base + restExtraS − elapsed`, so the
-     * seconds the athlete added before the crash are ALREADY inside `restSeconds` — while the
+     * seconds the athlete added before the crash are ALREADY inside `restEndsAtMs` — while the
      * store, correctly, still reports them as the current rest's extension. Anchoring this ref at
      * 0 would make the effect below read a 15-second "delta" that had already been counted and
      * hand the athlete a rest fifteen seconds longer than the one they walked away from — on the
@@ -3981,7 +3997,7 @@ function Rest({
      */
     appliedExtraRef.current = session.restExtraSeconds;
     beatsFiredRef.current.clear(); // fresh rest → re-arm the Approach countdown
-    prevRemForBeatsRef.current = session.restSeconds;
+    prevRemForBeatsRef.current = rem;
     // Locked/background backstop: schedule the OS-level 7s warning + rest-over alert
     // against the same absolute end (or clear it while paused). ALWAYS with the next set's words
     // (`restAlert`) — this used to re-arm bare and overwrite the store's payload with "Go." (2026-09-09).
@@ -3996,7 +4012,9 @@ function Rest({
       endAtRef.current = null;
       void restHaptics.disarm(); // held — no alert should fire
     } else {
-      endAtRef.current = Date.now() + remainingRef.current * 1000;
+      // The store's re-anchored end when it has one — the instant the wrist and the lock screen
+      // resume to. `now + remaining` rounds to the second, and drifted from them by up to half of one.
+      endAtRef.current = session.restEndsAtMs ?? Date.now() + remainingRef.current * 1000;
       sync();
       void restHaptics.arm(endAtRef.current, session.restAlert ?? undefined); // resume — reschedule from the new end
     }

@@ -69,6 +69,9 @@ enum WatchScreen: Equatable {
   /// workout runtime (HR/kcal/distance), persisted to Health — never engine state.
   case cardio(gait: String, paused: Bool)
   case cardioComplete(CardioSummary)
+  /// The PHONE'S run, mirrored (2026-09-15) — the same stage as a wrist run, drawn from the phone's
+  /// figures, with pause / resume / finish proposed back to the phone.
+  case phoneCardio(paused: Bool)
 }
 
 final class WatchModel: ObservableObject {
@@ -139,6 +142,24 @@ final class WatchModel: ObservableObject {
   /// cleared. Published so the cardio stage can hand it straight to the view; the km itself and
   /// its seconds are FACTS off the runtime clock, never an estimate.
   @Published private(set) var kmSplit: KmSplit?
+  // ---- The phone's live run (2026-09-15) ----
+  /// The run the phone is recording, as last published. Nil when there is none.
+  private var phoneCardio: WireCardioLive?
+  /// The phone's figures in the shape the cardio stage already reads — so a phone run and a wrist run
+  /// are ONE stage, not two that drift apart.
+  let phoneCardioMetrics = LiveMetrics()
+  private var phoneCardioRunId: String?
+  private var phoneCardioLastKm = 0
+  private var phoneCardioClosedRunId: String?
+  /**
+   * ⛔ A RUN THE PHONE HAS STOPPED TALKING ABOUT (2026-09-15). The phone restates a live run at least
+   * every thirty seconds, paused or not. If it goes silent — the app killed with the phone still in
+   * range, so reachability never drops — the wrist would tick a run nobody is recording, forever. Two
+   * minutes of silence: say "reconnecting", honestly. Twenty (the phone's own resume window): the run
+   * is gone. Any frame heals both.
+   */
+  private var phoneCardioSilence: [DispatchWorkItem] = []
+  private var phoneCardioStale = false
   /// The elapsed second each whole kilometre closed at — the split is the gap between two of them.
   private var kmMarks: [TimeInterval] = []
   /// The quickest split of THIS recording, so the screen can say when one is her best.
@@ -438,6 +459,9 @@ final class WatchModel: ObservableObject {
       cancelRestHaptics() // beats scheduled against the discarded local rest
     }
 
+    // The phone's run is ingested on every frame; it only drives the wrist when the wrist owns nothing.
+    applyPhoneCardio(envelope.cardio, effects: localEngine == nil && cardioGait == nil)
+
     // A live LOCAL session (strength engine or a wrist run/walk) owns the display,
     // the haptics, and the OS runtime — phone state is recorded above (it takes over
     // after dismissal) but must not drive side effects mid-local-activity (a phone
@@ -501,6 +525,19 @@ final class WatchModel: ObservableObject {
   /// the lobby / idle) is discarded. Every call is idempotent. Authority-agnostic — the
   /// phone's mirror and the local engine drive it through the same mapping.
   private func syncWorkoutRuntime(phase: String?) {
+    /*
+     * ⛔ THE PHONE'S RUN KEEPS THE WRIST AWAKE — AND RECORDS NOTHING HERE (2026-09-15).
+     *
+     * A live OS workout is what keeps this app running wrist-down, so the run is on the glass the moment
+     * she raises her arm. But the PHONE records the run (and writes it to Health), so the wrist must
+     * never save a second one: the session is `.other`, and it is ABANDONED — never finished — when the
+     * run ends. `.other` matters beyond Health: after a relaunch `onAdoptedActivity` turns a recovered
+     * `.running`/`.walking` session into a WRIST recording, which would then save and send a duplicate.
+     */
+    if let c = phoneCardio {
+      workoutRuntime.trackLive(paused: c.paused, activity: .other, indoor: true)
+      return
+    }
     switch phase {
     case "active_set", "rest_inter", "rest_transition":
       workoutRuntime.trackLive(paused: false)
@@ -633,6 +670,7 @@ final class WatchModel: ObservableObject {
       currentIndex: s.currentIndex,
       restEndsAt: s.restEndsAt,
       restTotalS: s.restTotalS,
+      pausedRestRemainingS: s.pausedRestRemainingS,
       steps: s.steps,
       sets: s.sets,
       sentAt: WatchWire.iso(Date())
@@ -1207,6 +1245,104 @@ final class WatchModel: ObservableObject {
     recompute() // → the completion screen, held until Done
   }
 
+  // MARK: The phone's live run (2026-09-15)
+
+  /// Take a phone run frame. `effects` is false while the wrist is recording something of its own —
+  /// the frame is still kept, and takes over when the wrist's own work is done.
+  private func applyPhoneCardio(_ next: WireCardioLive?, effects: Bool) {
+    let prev = phoneCardio
+    if let c = next, !c.complete { listenForPhoneCardioSilence(runId: c.runId) } else { stopListeningForPhoneCardioSilence() }
+    if let c = next, c.complete {
+      phoneCardio = nil
+      guard effects, phoneCardioClosedRunId != c.runId else { return }
+      phoneCardioClosedRunId = c.runId
+      kmSplit = nil
+      // The same closing a wrist run gets — from the PHONE'S recorded figures, which are the ones saved.
+      cardioSummary = CardioSummary(
+        gait: c.gait,
+        elapsedS: c.elapsedS,
+        distanceKm: c.distanceKm > 0 ? c.distanceKm : nil,
+        kcal: c.kcal > 0 ? c.kcal : nil
+      )
+      onEntryHaptic.send(.workoutSaved)
+      return
+    }
+    phoneCardio = next
+    guard effects, let c = next else { return }
+    if c.runId != phoneCardioRunId {
+      // A NEW run. Kilometres already on it (a resumed run, a wrist that woke late) are stamped, not
+      // celebrated; and a closing screen left from an earlier activity gives way to it.
+      phoneCardioRunId = c.runId
+      phoneCardioLastKm = c.lastSplitKm ?? 0
+      kmSplit = nil
+      cardioSummary = nil
+      completeHold = nil
+    }
+    phoneCardioMetrics.distanceKm = c.distanceKm
+    phoneCardioMetrics.heartRateBpm = c.hr > 0 ? c.hr : nil
+    phoneCardioMetrics.activeKcal = c.kcal > 0 ? c.kcal : nil
+    if let km = c.lastSplitKm, km > phoneCardioLastKm {
+      // The kilometre the phone just closed — its beat and its screen, here, in the same second.
+      phoneCardioLastKm = km
+      onEntryHaptic.send(.kmSplit)
+      let shown = KmSplit(km: km, splitS: c.lastSplitPaceS ?? 0, quickest: c.lastSplitFastest)
+      kmSplit = shown
+      DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) { [weak self] in
+        guard let self, self.kmSplit == shown else { return }
+        self.kmSplit = nil
+        self.recompute()
+      }
+    }
+    if let p = prev, p.runId == c.runId, p.paused != c.paused {
+      // Felt on the wrist whoever pressed it — the phone's button or this one.
+      onEntryHaptic.send(c.paused ? .paused : .resumed)
+    }
+  }
+
+  private func listenForPhoneCardioSilence(runId: String) {
+    stopListeningForPhoneCardioSilence()
+    let stale = DispatchWorkItem { [weak self] in
+      guard let self, self.phoneCardio?.runId == runId else { return }
+      self.phoneCardioStale = true
+      self.recompute()
+    }
+    let gone = DispatchWorkItem { [weak self] in
+      guard let self, self.phoneCardio?.runId == runId else { return }
+      self.phoneCardio = nil
+      self.phoneCardioStale = false
+      // Only when nothing of the wrist's own is running — never abandon a recording from under her.
+      if self.localEngine == nil, self.cardioGait == nil { self.syncWorkoutRuntime(phase: self.mirror?.phase) }
+      self.recompute()
+    }
+    phoneCardioSilence = [stale, gone]
+    DispatchQueue.main.asyncAfter(deadline: .now() + 120, execute: stale)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 20 * 60, execute: gone)
+  }
+
+  private func stopListeningForPhoneCardioSilence() {
+    for w in phoneCardioSilence { w.cancel() }
+    phoneCardioSilence = []
+    phoneCardioStale = false
+  }
+
+  /// The phone run's clock, ticked HERE from the absolute anchor it was sent — never a count of frames.
+  func phoneCardioElapsed() -> TimeInterval {
+    guard let c = phoneCardio else { return 0 }
+    guard !c.paused, let anchor = c.clockAnchorMs else { return c.elapsedS }
+    return max(0, Date().timeIntervalSince1970 - Double(anchor) / 1000)
+  }
+
+  /// A proposal. The screen changes when the PHONE says the run changed — never on the tap alone.
+  func togglePhoneCardioPause() {
+    guard let c = phoneCardio else { return }
+    if !sendIntent(type: c.paused ? "cardio_resume" : "cardio_pause") { intentDidNotLeave() }
+  }
+
+  func endPhoneCardio() {
+    guard phoneCardio != nil else { return }
+    if !sendIntent(type: "cardio_finish") { intentDidNotLeave() }
+  }
+
   /// Done on the run/walk completion — the wrist hands the stage back to the phone's state.
   func dismissCardioComplete() {
     guard cardioSummary != nil else { return }
@@ -1283,6 +1419,12 @@ final class WatchModel: ObservableObject {
     if let s = cardioSummary {
       return .cardioComplete(s)
     }
+    // The phone's run. When the phone stops answering, the wrist says so rather than ticking a clock
+    // it can no longer vouch for — the same honesty the strength viewer keeps.
+    if let c = phoneCardio {
+      if connection == .reconnecting || phoneCardioStale { return .connectionLost(mirror: nil) }
+      return .phoneCardio(paused: c.paused)
+    }
     // A finished WORKOUT holds the stage until Done, whatever the phone publishes next
     // (it republishes its lobby the moment the program updates — that used to erase this).
     if let c = completeHold {
@@ -1357,7 +1499,8 @@ final class WatchModel: ObservableObject {
     case (.idle, .idle), (.start, .start), (.connectionLost, .connectionLost),
          (.workoutComplete, .workoutComplete), (.correction, .correction), (.liftDone, .liftDone),
          (.activeSet, .activeSet), (.interRest, .interRest), (.transitionRest, .transitionRest),
-         (.paused, .paused), (.cardio, .cardio), (.cardioComplete, .cardioComplete):
+         (.paused, .paused), (.cardio, .cardio), (.cardioComplete, .cardioComplete),
+         (.phoneCardio, .phoneCardio):
       return true
     default:
       return false

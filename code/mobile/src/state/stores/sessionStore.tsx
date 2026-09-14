@@ -41,7 +41,8 @@ import { WatchSession } from '@/platform/watch/watchBridge';
 import { isCardioRecordPayload, type WatchLobby, type WatchLocalSession, type WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { applyWatchCardioRecord, applyWatchSessionRecord, watchSessionId } from '@/platform/watch/watchReconcile';
 import { armGapCatch } from '@/platform/gapCatch';
-import { adoptWatchSession, decideAdoption } from '@/platform/watch/watchAdopt';
+import { cardioControl, setCardioWatchSink } from '@/platform/cardio/cardioLive';
+import { adoptWatchSession, adoptedRestAnchor, decideAdoption } from '@/platform/watch/watchAdopt';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import {
   initialSessionMachine,
@@ -614,6 +615,16 @@ export interface SessionView {
   nextTarget: SetTarget | null;
   /** Upcoming set's "n of m" label (the set the rest leads into) — §4.11/§4.12. */
   nextSetLabel: { n: number; m: number; warmup?: boolean } | null;
+  /**
+   * The PRESCRIBED length of the current rest — the ring's denominator, and the very number the
+   * mirror publishes to the wrist and the lock screen as `restTotalS`.
+   *
+   * ⛔ NEVER WHAT REMAINS (sync audit, 2026-09-15). After an app-kill resume or a wrist handover this
+   * used to be the REMAINDER, so the phone's ring started full over forty seconds while the wrist and
+   * the card drew the same forty seconds as a partial ring — and `restedSeconds`, which reads the
+   * same number, wrote her rest into the learned median minus every second she had rested before
+   * the handover. What remains is `restEndsAtMs − now`, on every surface.
+   */
   restSeconds: number;
   /** Seconds added to the CURRENT rest by "+15 sec", from EITHER surface. The phone's Rest
    *  countdown reads this and fills forward by the delta — which is how a watch +15 reaches the
@@ -624,6 +635,11 @@ export interface SessionView {
   /** Epoch ms the running rest ENDS (start + prescribed + extra) — the instant the wrist, the lock
    *  screen and the phone's ring all count to. Null unless resting and not paused. */
   restEndsAtMs: number | null;
+  /**
+   * While PAUSED mid-rest: what remains of it, frozen at the pause instant — the figure the rest
+   * resumes from on every surface. Null when not paused, or not resting.
+   */
+  restFrozenRemainingS: number | null;
   /** The rest-over alert's words for the set the rest leads into; null when nothing follows. */
   restAlert: { title: string; body: string } | null;
   /** The last set the WATCH logged — the phone plays its "Set logged" beat over it. */
@@ -1659,9 +1675,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [endResult, setEndResult] = useState<CompleteResult | null>(null);
   // The signature moment — see `LiveCorrection`. Belongs to one rest, not the session.
   const [correction, setCorrection] = useState<LiveCorrection | null>(null);
-  // One-shot remaining seconds of a rest resumed after an app kill (S3): the Rest UI anchors
-  // its countdown on this instead of the full base length. Cleared at the next transition.
-  const [restResumeRemainingS, setRestResumeRemainingS] = useState<number | null>(null);
   // Live Activity start/end is one-shot per session; gates start-vs-update + telemetry.
   const laStartedRef = useRef(false);
   // Watch action handlers, refreshed each render so a (native) watch intent runs the
@@ -1708,6 +1721,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       startWorkout: (workoutId) => watchStartRef.current(workoutId),
       selectWorkout: (workoutId) => watchSelectRef.current(workoutId),
       addRest: (seconds) => watchAddRestRef.current(seconds),
+      // The phone's live run, proposed on the wrist and performed by the run's own screen.
+      cardioControl: (op) => void cardioControl(op),
       // WT14 · What's off. The wrist flags a body area; the phone owns what a pain flag DOES.
       // This key was MISSING — the bridge's `this.d.reportPain?.(area)` evaluated to undefined and
       // the athlete's report died in silence, with every other layer of the chain correct.
@@ -1872,7 +1887,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           // keeps the stamp and the ask is measured from the truth, not from the wake.
           if (st) setPresentedAtRef.current = { key: stepKey(st), atMs: res.presentedAtMs };
         }
-        setRestResumeRemainingS(null);
         setCorrection(null);
         machineRef.current = res.machine;
         dispatch({ type: 'CLOCK', session, machine: res.machine });
@@ -1999,6 +2013,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     },
     [clearNudgeTimer],
   );
+
+  /*
+   * ⛔ THE PHONE'S RUN REACHES THE WRIST (founder, 2026-09-15) — through the same bridge, from the same
+   * state the lock card is drawn from (`platform/cardio/cardioLive`).
+   *
+   * A run PRESCRIBED inside a workout is not mirrored on its own: the strength session is live, its
+   * mirror owns the wrist, and two authorities on one screen is the bug this whole layer exists to
+   * prevent. The sink answers whether a reachable wrist took the frame, which is what decides who
+   * plays the kilometre beat.
+   */
+  const strengthLiveRef = useRef(false);
+  strengthLiveRef.current = state.plan.length > 0;
+  useEffect(() => {
+    setCardioWatchSink((live) => {
+      if (strengthLiveRef.current) return false;
+      watchRef.current?.publishCardio(live);
+      return watchTransport.isReachable();
+    });
+    return () => setCardioWatchSink(null);
+  }, []);
 
   // Mirror session state to BOTH the Live Activity / Dynamic Island / Lock Screen
   // AND the Apple Watch — from ONE canonical projection (§8.5; no duplicate state).
@@ -2196,15 +2230,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         ? 'REST_INTER'
         : 'REST_TRANSITION'
       : 'SET_PRESENTED';
-    // A rest resumed after an app kill anchors on its true remaining time, not the base length.
-    //
     // The rest belongs to the step that just ENDED — which is `current`, since the cursor only moves
     // on REST_ELAPSED — so it is the same question `completeSet` asked when it decided there would
     // be a rest at all (`restAfterStep`). Asking it differently here is how the machine and the
     // countdown come to disagree about a coach's three minutes.
-    const restSeconds =
-      restResumeRemainingS ??
-      (current ? restAfterStep(current) : restTransitionSeconds());
+    //
+    // A RESUMED rest asks it the same way. What remains of it is not a length — see `restSeconds`.
+    const restSeconds = current ? restAfterStep(current) : restTransitionSeconds();
 
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
       const session = sessionRef.current;
@@ -2588,6 +2620,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         resting && !paused && current && restStartedAtRef.current != null
           ? restStartedAtRef.current + (restAfterStep(current) + restExtraSecondsRef.current) * 1000
           : null,
+      // The same end, read at the instant the workout froze: pause → resume moves the anchor forward
+      // by exactly the time stood still (`unfrozenRestAnchor`), so this is what every surface resumes to.
+      restFrozenRemainingS:
+        resting && paused && current && restStartedAtRef.current != null && pauseStartedAtRef.current != null
+          ? Math.max(
+              0,
+              Math.round(
+                (restStartedAtRef.current + (restAfterStep(current) + restExtraSecondsRef.current) * 1000 - pauseStartedAtRef.current) /
+                  1000,
+              ),
+            )
+          : null,
       // What the rest-over alert says — the next set's own figures (`nextSetAlert`). Handed to the
       // rest screen so every re-arm it makes (mount, resume, +15) keeps them; it used to re-arm
       // with no payload and overwrite the store's with "Go." while the app was open (2026-09-09).
@@ -2708,7 +2752,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // The athlete chose a FRESH workout while an interrupted one was still resumable
         // (or a stale orphan lingered): salvage its logged work first, then compose cleanly.
         await creditSalvage(await salvageOrphanSession());
-        setRestResumeRemainingS(null);
         // A rest banked by the PREVIOUS session must never be stamped onto this one's first set —
         // the athlete's "rest" between two workouts is not a rest (L3). The first set of a session
         // has no rest before it, and that is the honest answer.
@@ -2775,7 +2818,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
          * budget, and read her history so the live loop has her learned grid and rest.
          */
         await creditSalvage(await salvageOrphanSession());
-        setRestResumeRemainingS(null);
         restStartedAtRef.current = null;
         pendingRestSRef.current = null;
         historyRef.current = await db.loadHistory().catch(() => []);
@@ -2883,7 +2925,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             setPresentedAtRef.current = { key: stepKey(landed), atMs };
           }
           pauseStartedAtRef.current = null;
-          setRestResumeRemainingS(r.restRemainingS);
           dispatch({ type: 'START', plan: resumePlan, session: active, machine: r.machine });
           // …and a rest that ran out while the app was dead is served out now, at its own instant.
           setTimeout(() => void applyClockRef.current(Date.now()), 0);
@@ -2951,13 +2992,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         sessionRef.current = adopted.session;
         historyRef.current = history; // her learned grid for live Loop 1
         refreshLearnedRests(history); // …and her learned REST timer (S-17)
-        restStartedAtRef.current = adopted.restStartedAtMs;
-        /* The wrist's +15s is already inside the absolute `restEndsAt` it sent, so there is no
-           extra left to carry — counting it twice would hand her a rest she never asked for. */
+        /*
+         * ⛔ THE WRIST'S END IS KEPT TO THE MILLISECOND (sync audit, 2026-09-15).
+         *
+         * The anchor used to be derived from the WRIST'S prescribed length, while the phone then
+         * counted to its OWN — and `refreshLearnedRests` runs one line up, so the two could differ
+         * by her whole learned median. At the instant of the handover the rest she was watching on
+         * her wrist jumped. The anchor is now solved from the phone's own length, so the end is
+         * exactly the one she was counting to; and a rest the wrist handed over PAUSED keeps its
+         * frozen remainder instead of losing its clock altogether (`adoptedRestAnchor`).
+         *
+         * The wrist's +15s is already inside the absolute `restEndsAt` it sent, so there is no
+         * extra left to carry — counting it twice would hand her a rest she never asked for.
+         */
+        const onStep = adopted.plan[adopted.machine.setIndex];
+        const anchor = adoptedRestAnchor(adopted, onStep ? restAfterStep(onStep) : null, Date.now());
+        restStartedAtRef.current = anchor.restStartedAtMs;
         restExtraSecondsRef.current = 0;
         pendingRestSRef.current = null;
-        pauseStartedAtRef.current = null;
-        setRestResumeRemainingS(adopted.restRemainingS);
+        pauseStartedAtRef.current = anchor.pausedAtMs;
         /*
          * ⛔ BEFORE THE DISPATCH, NOT AFTER THE RESOLVE. Going live is what triggers the first
          * mirror frame, and that frame has to carry the ack — otherwise the wrist, which is still
@@ -3092,7 +3145,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
         );
         sessionRef.current = updated;
-        setRestResumeRemainingS(null); // a fresh transition — the resumed-rest anchor is spent
         dispatch({ type: 'LOG', setLog, session: updated, machine: m });
 
         // Engine v5 · the remaining sets follow what she just LIFTED (the fact, not the prescription).
@@ -3205,7 +3257,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
           );
           sessionRef.current = updated;
-          setRestResumeRemainingS(null);
           // Nothing here can correct a load, so nothing here may leave one on screen: a correction
           // belongs to the set that earned it, and the rest after a plank is not that rest.
           setCorrection(null);
@@ -3247,7 +3298,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           restStartedAtRef.current = null;
         }
         restExtraSecondsRef.current = 0;
-        setRestResumeRemainingS(null); // the resumed-rest anchor is spent
         dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'REST_ELAPSED' }) });
       },
       extendRest(seconds: number) {
@@ -3505,7 +3555,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     // restNonce: `restExtraSeconds` is read from a ref, so a "+15 sec" (from either surface)
     // must re-memo the view or the phone's Rest screen would never see the rest grow.
-  }, [state, app, endResult, correction, restResumeRemainingS, restNonce, watchLoggedSet, setRunningLong, applyLockIntents, awaitingReady]);
+  }, [state, app, endResult, correction, restNonce, watchLoggedSet, setRunningLong, applyLockIntents, awaitingReady]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.

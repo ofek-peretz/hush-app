@@ -34,6 +34,13 @@ import {
 
 const SWIFT = readFileSync(join(__dirname, '../../targets/watch/WatchWire.swift'), 'utf8');
 
+/** A phone run mid-kilometre-four — every field the wrist decodes, present. */
+const LIVE_RUN = {
+  runId: '2026-09-15T07:00:00.000Z', gait: 'run' as const, paused: false, clockAnchorMs: 1_788_898_463_000,
+  elapsedS: 1_234.5, distanceKm: 3.42, hr: 151, kcal: 288, lastSplitKm: 3, lastSplitPaceS: 331,
+  lastSplitFastest: true, complete: false,
+};
+
 /** The `var name: Type` fields of a Swift struct, in declaration order. */
 function swiftFields(structName: string): Array<{ name: string; optional: boolean }> {
   // Anchored on a word boundary: `struct WireSummary` must not match `struct WireSummaryLift`,
@@ -416,7 +423,13 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
        phone — precisely the one-directional drift this file exists to fail on. */
     const mirrorFrame = makeStateEnvelope(widestMirror(), 7, NOW, null, null, null, NOW, 'rec-parity');
     const lobbyFrame = makeStateEnvelope(null, 8, NOW, null, null, watchCopyPack(), NOW);
-    joined('WireEnvelope', keysOf(mirrorFrame, lobbyFrame));
+    // The phone's live run rides beside the lobby (2026-09-15).
+    const runFrame = makeStateEnvelope(null, 9, NOW, null, null, null, NOW, null, LIVE_RUN);
+    joined('WireEnvelope', keysOf(mirrorFrame, lobbyFrame, runFrame));
+  });
+
+  it('WireCardioLive — the phone’s run, drawn on the wrist', () => {
+    joined('WireCardioLive', keysOf(LIVE_RUN));
   });
 
   it('WireLocalSession — the workout the wrist hands over mid-flight', () => {
@@ -438,6 +451,8 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       currentIndex: 1,
       restEndsAt: new Date(NOW + 45_000).toISOString(),
       restTotalS: 90,
+      // A pause entered mid-rest clears the end and freezes the remainder (2026-09-15).
+      pausedRestRemainingS: 30,
       steps: [],
       sets: [],
       sentAt: new Date(NOW).toISOString(),

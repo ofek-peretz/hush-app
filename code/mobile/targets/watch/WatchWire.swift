@@ -260,7 +260,29 @@ struct WireEnvelope: Codable {
   /// be a different workout entirely. This names the session, so the wrist's release is an exact id
   /// match instead of an inference. `nil` is "no claim" — never "not yours".
   var adoptedRecordId: String?
+  /// The run the PHONE is recording, live — mirror of protocol.ts `cardio` (2026-09-15). Optional like
+  /// every post-v1 field: a phone one build behind never sends it, and nil is "no phone run".
+  var cardio: WireCardioLive?
   var sentAt: String
+}
+
+/// The phone's live run, as the wrist draws it — mirror of protocol.ts `WatchCardioLive`.
+///
+/// ⛔ `clockAnchorMs` IS `Int64`: a millisecond epoch overflows the watch's 32-bit `Int` (the deaf-wrist
+/// root cause, build 70). The wrist ticks `now − anchor` itself; nil means the clock is frozen.
+struct WireCardioLive: Codable, Equatable {
+  var runId: String
+  var gait: String
+  var paused: Bool
+  var clockAnchorMs: Int64?
+  var elapsedS: Double
+  var distanceKm: Double
+  var hr: Int
+  var kcal: Int
+  var lastSplitKm: Int?
+  var lastSplitPaceS: Double?
+  var lastSplitFastest: Bool
+  var complete: Bool
 }
 
 // ---- Standalone plan snapshot (phone → watch) -------------------------------
@@ -429,6 +451,8 @@ struct WireLocalSession: Codable {
   var currentIndex: Int
   var restEndsAt: String?
   var restTotalS: Int?
+  /// A pause entered mid-rest clears `restEndsAt`; this is the remainder it froze (2026-09-15).
+  var pausedRestRemainingS: Int?
   var steps: [WirePlanStep]
   var sets: [WireRecordSet]
   var sentAt: String

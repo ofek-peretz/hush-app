@@ -46,7 +46,8 @@ import { cardioCardFromActivity, type ShareCardioCard } from '@/domain/shareCard
 import { healthWrite } from '@/platform/health/healthWrite';
 import { cloudAutoBackup } from '@/platform/cloudBackup';
 import { armGapCatch } from '@/platform/gapCatch';
-import { cardioLiveActivity, type CardioLiveActivityState } from '@/platform/liveActivity';
+import { type CardioLiveActivityState } from '@/platform/liveActivity';
+import { cardioSurfaces, setCardioControls, wristOwnsTheBeat } from '@/platform/cardio/cardioLive';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { readWatchPresence } from '@/platform/watch/watchPresence';
 import { legendVoice } from '@/design/monoVoice';
@@ -155,6 +156,8 @@ export function Cardio({ navigation, route: nav }: Props) {
 
   // Live Activity / Dynamic Island — start when live, update each tick, end on unmount.
   const laStarted = useRef(false);
+  /** The last state the surfaces were handed — what the finish frame closes the wrist's run with. */
+  const lastStateRef = useRef<CardioLiveActivityState | null>(null);
   useEffect(() => {
     if (phase !== 'active') return;
     const last = splits[splits.length - 1];
@@ -171,16 +174,18 @@ export function Cardio({ navigation, route: nav }: Props) {
       calories: Math.round(calories),
       lastSplit: last ? { km: last.km, paceSec: Math.round(last.paceSec), fastest: last.paceSec <= fastest } : null,
     };
+    lastStateRef.current = state;
+    // ONE call feeds the lock card AND the wrist, from this same state (`platform/cardio/cardioLive`).
     if (!laStarted.current) {
       laStarted.current = true;
-      void cardioLiveActivity.start(state).catch(() => {});
+      cardioSurfaces.start(state, startedAtRef.current || String(Date.now()));
     } else {
-      void cardioLiveActivity.update(state).catch(() => {});
+      cardioSurfaces.update(state);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, elapsedSec, paused]);
   useEffect(() => () => {
-    if (laStarted.current) void cardioLiveActivity.end().catch(() => {});
+    if (laStarted.current) cardioSurfaces.end();
   }, []);
 
   // Every cardio phase is a dark stage now — light glyphs throughout, restored on blur.
@@ -216,7 +221,8 @@ export function Cardio({ navigation, route: nav }: Props) {
     }
     if (splits.length <= shownSplitsRef.current) return;
     shownSplitsRef.current = splits.length;
-    haptics.setLogged();
+    // ⛔ ONE BEAT, ONE WRIST: a wrist mirroring this run plays the kilometre itself (2026-09-15).
+    if (!wristOwnsTheBeat()) haptics.setLogged();
     setKmMoment(splits[splits.length - 1]);
   }, [phase, splits]);
 
@@ -240,6 +246,53 @@ export function Cardio({ navigation, route: nav }: Props) {
     setPhase('complete');
   };
 
+  /*
+   * ⛔ THE WRIST'S THREE PROPOSALS, PERFORMED HERE — the screen that owns the run (2026-09-15). The wrist
+   * mirrors this run and offers pause, resume and finish; they arrive through the bridge and do exactly
+   * what the stage's own buttons do. `finish` is read through a ref: it closes over this render's
+   * distance, and a proposal arriving a minute later must judge the run as it is then.
+   */
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  useEffect(() => {
+    if (phase !== 'active') return;
+    setCardioControls({
+      pause: () => setPaused(true),
+      resume: () => {
+        setConfirmEnd(false);
+        setPaused(false);
+      },
+      finish: () => finishRef.current(),
+    });
+    return () => setCardioControls(null);
+  }, [phase]);
+
+  /*
+   * THE HEARTBEAT. A paused run changes nothing, so nothing re-renders and nothing is published — and a
+   * wrist that hears nothing cannot tell "paused" from "the phone app died". Every thirty seconds the
+   * run is restated, which is what lets the wrist keep its honest silence rule (see `WatchModel`).
+   */
+  useEffect(() => {
+    if (phase !== 'active') return;
+    const id = setInterval(() => {
+      if (lastStateRef.current) cardioSurfaces.update(lastStateRef.current);
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  // A run worth recording closes on the wrist too — the same summary, the same moment.
+  useEffect(() => {
+    if (phase !== 'complete' || !lastStateRef.current) return;
+    cardioSurfaces.complete({
+      ...lastStateRef.current,
+      paused: true,
+      elapsedSec,
+      distanceKm: Math.round(distanceKm * 100) / 100,
+      calories: Math.round(calories),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
   /**
    * The prescribed distance is covered — end it, without being asked.
    *
@@ -252,7 +305,8 @@ export function Cardio({ navigation, route: nav }: Props) {
     if (!target || phase !== 'active' || reachedRef.current) return;
     if (distanceKm * 1000 < target.metres) return;
     reachedRef.current = true;
-    haptics.exerciseAdvance();
+    // …and the finish: the wrist closes the run with its own beat when it is mirroring it.
+    if (!wristOwnsTheBeat()) haptics.exerciseAdvance();
     finish();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target, phase, distanceKm]);

@@ -46,6 +46,39 @@ export interface AdoptedSession {
   restStartedAtMs: number | null;
   /** Seconds still to run on that rest, floored at 0. Null when she is not resting. */
   restRemainingS: number | null;
+  /** The absolute instant the wrist's running rest ends — the one fact the handover must keep. */
+  restEndsAtMs: number | null;
+  /** A rest the wrist handed over PAUSED: what remained of it at the pause. Null otherwise. */
+  pausedRestRemainingS: number | null;
+}
+
+const isRestPhase = (p: SessionPhase | null | undefined) => p === 'REST_INTER' || !!p?.startsWith('REST_TRANSITION');
+
+/**
+ * Where the phone's rest anchor goes when it takes over from the wrist — solved from the PHONE'S
+ * own prescribed length, so that the end the wrist was counting to is the end the phone counts to.
+ *
+ *   · a running rest: `start = end − base`, exactly — the countdown does not move by a millisecond;
+ *   · a paused rest: frozen at `now`, with the remainder it had — resume carries on from it;
+ *   · a paused rest from a wrist too old to say its remainder: the prescribed length, never "no
+ *     clock" — a rest with no anchor has no countdown on the wrist or the lock screen at all.
+ */
+export function adoptedRestAnchor(
+  a: Pick<AdoptedSession, 'machine' | 'restEndsAtMs' | 'pausedRestRemainingS'>,
+  baseS: number | null,
+  nowMs: number,
+): { restStartedAtMs: number | null; pausedAtMs: number | null } {
+  if (baseS == null || !Number.isFinite(baseS)) return { restStartedAtMs: null, pausedAtMs: null };
+  const { machine } = a;
+  if (isRestPhase(machine.phase)) {
+    const end = a.restEndsAtMs ?? nowMs + baseS * 1000;
+    return { restStartedAtMs: end - baseS * 1000, pausedAtMs: null };
+  }
+  if (machine.phase === 'PAUSED' && isRestPhase(machine.resumePhase)) {
+    const remaining = a.pausedRestRemainingS ?? baseS;
+    return { restStartedAtMs: nowMs - (baseS - remaining) * 1000, pausedAtMs: nowMs };
+  }
+  return { restStartedAtMs: null, pausedAtMs: null };
 }
 
 /** The wrist's phase vocabulary → the phone machine's. */
@@ -137,10 +170,12 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
    */
   let restStartedAtMs: number | null = null;
   let restRemainingS: number | null = null;
+  let restEndsAtMs: number | null = null;
   const resting = phase === 'REST_INTER' || phase === 'REST_TRANSITION';
   if (resting && local.restEndsAt) {
     const endsAt = Date.parse(local.restEndsAt);
     if (!Number.isFinite(endsAt)) return null;
+    restEndsAtMs = endsAt;
     restRemainingS = Math.max(0, Math.round((endsAt - nowMs) / 1000));
     /* Derived BACKWARDS from the end and the prescription, so the phone's ring gets the same
        denominator the wrist was drawing. A frame with no stated length gives no ring to size, and
@@ -167,7 +202,13 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
     earlyFinish: false,
   };
 
-  return { session, plan, machine, restStartedAtMs, restRemainingS };
+  /* A pause the wrist entered mid-rest clears its end instant and freezes what remained instead. */
+  const pausedRestRemainingS =
+    phase === 'PAUSED' && isRestPhase(resumePhase) && local.pausedRestRemainingS != null
+      ? Math.max(0, Math.round(local.pausedRestRemainingS))
+      : null;
+
+  return { session, plan, machine, restStartedAtMs, restRemainingS, restEndsAtMs, pausedRestRemainingS };
 }
 
 /**

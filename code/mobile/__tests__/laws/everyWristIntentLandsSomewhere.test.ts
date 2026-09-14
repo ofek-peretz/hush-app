@@ -84,6 +84,17 @@ const PHASE_FOR: Record<WatchIntentType, SessionMirror['phase'] | null> = {
   report_pain: 'paused',
   select_workout: null,
   start_workout: null,
+  // The phone's live run has no strength mirror — it is judged against the RUN (see CARDIO_FOR).
+  cardio_pause: null,
+  cardio_resume: null,
+  cardio_finish: null,
+};
+
+/** The run each cardio intent belongs to: a pause needs a running run, a resume a paused one. */
+const CARDIO_FOR: Partial<Record<WatchIntentType, { paused: boolean; complete: boolean }>> = {
+  cardio_pause: { paused: false, complete: false },
+  cardio_resume: { paused: true, complete: false },
+  cardio_finish: { paused: false, complete: false },
 };
 
 function mirrorIn(phase: SessionMirror['phase']): SessionMirror {
@@ -131,6 +142,7 @@ describe('the wrist → phone chain is joined at every link', () => {
         inPhase === null ? null : mirrorIn(inPhase),
         NOW,
         new Set<string>(),
+        CARDIO_FOR[type] ?? null,
       );
       if (!d.accept || d.action == null) undecided.push(`${type} → ${d.reason ?? 'no action'}`);
     }

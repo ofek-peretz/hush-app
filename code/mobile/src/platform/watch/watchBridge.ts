@@ -27,6 +27,7 @@ import {
   makeStateEnvelope,
   parseWatchLocalSession,
   repairWireStrings,
+  type WatchCardioLive,
   type WatchLocalSession,
   type WatchLobby,
   type WatchPlanSnapshot,
@@ -134,6 +135,9 @@ export interface WatchSessionDeps {
    * Optional in the type only so a harness may omit it; the app always supplies it.
    */
   adoptLocalSession?: (local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused'>;
+  /** Pause, resume or finish the run the phone is recording — proposed on the wrist, performed by
+   *  the screen that owns the run (`platform/cardio/cardioLive`). */
+  cardioControl?: (op: 'pause' | 'resume' | 'finish') => void;
   /** Telemetry sink (track) — every lifecycle/intent event lands in the dataset. */
   track: (type: string, data?: Record<string, unknown>) => void;
   now: () => number;
@@ -155,6 +159,12 @@ export class WatchSession {
   /** The last lobby + plan published, so a reconnect can restate them — see `resync()`. */
   private lastLobby: WatchLobby | null = null;
   private lastPlan: WatchPlanSnapshot | null = null;
+  /**
+   * The phone's live run, while one is on the wrist. Kept so a lobby published mid-run (Home sits
+   * under the run in the stack and republishes on its own schedule) and a reconnect both RESTATE the
+   * run instead of silently retracting it. Never holds a completed run.
+   */
+  private lastCardio: WatchCardioLive | null = null;
   private hasPublished = false;
   /**
    * The wrist handover this phone is currently running, if any — stamped on every envelope so the
@@ -255,6 +265,8 @@ export class WatchSession {
       plan,
       watchCopyPack(),
       this.authorityEpoch,
+      null,
+      this.lastCardio,
     );
     const okLobby = this.send(env);
     this.d.track(okLobby ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
@@ -275,6 +287,33 @@ export class WatchSession {
    * session. The same mirror object that feeds the Live Activity is passed here —
    * one projection, two surfaces.
    */
+  /**
+   * Publish the run the phone is recording — or, with `null`, take it off the wrist. A `complete`
+   * frame is sent once and not remembered, so no reconnect can bring a finished run back.
+   */
+  publishCardio(live: WatchCardioLive | null): void {
+    this.subscribe();
+    if (!live && !this.lastCardio) return; // nothing on the wrist to take away
+    this.lastCardio = live && !live.complete ? live : null;
+    this.hasPublished = true;
+    const env = makeStateEnvelope(
+      null,
+      ++this.authoritySeq,
+      this.d.now(),
+      this.lastLobby,
+      null,
+      null,
+      this.authorityEpoch,
+      null,
+      live,
+    );
+    const ok = this.send(env);
+    this.d.track(ok ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
+      phase: live ? (live.complete ? 'cardio_complete' : 'cardio') : 'cardio_end',
+      seq: this.authoritySeq,
+    });
+  }
+
   publish(mirror: SessionMirror | null): void {
     if (mirror && !this.started) this.begin();
     if (!this.started) return;
@@ -394,6 +433,8 @@ export class WatchSession {
           this.lastPlan,
           watchCopyPack(),
           this.authorityEpoch,
+          null,
+          this.lastCardio,
         );
     const okResync = this.send(env);
     this.d.track(okResync ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
@@ -465,7 +506,7 @@ export class WatchSession {
         .catch(() => this.d.track(WATCH_EVENTS.localSessionOffered, { outcome: 'rejected', reason: 'threw', ...facts }));
       return;
     }
-    const decision = decideWatchIntent(raw, this.lastMirror, this.d.now(), this.seen);
+    const decision = decideWatchIntent(raw, this.lastMirror, this.d.now(), this.seen, this.lastCardio);
     if (!decision.accept || !decision.action) {
       this.d.track(WATCH_EVENTS.actionIgnored, {
         reason: decision.reason ?? 'unknown',
@@ -526,6 +567,9 @@ export class WatchSession {
         break;
       case 'report_pain':
         this.d.reportPain?.(action.area, action.severity);
+        break;
+      case 'cardio':
+        this.d.cardioControl?.(action.op);
         break;
     }
   }

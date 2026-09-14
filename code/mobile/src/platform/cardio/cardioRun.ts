@@ -34,7 +34,7 @@ import {
   segmentCounts,
 } from './cardioMath';
 import { notifier } from '@/platform/notifications';
-import { cardioLiveActivity } from '@/platform/liveActivity';
+import { cardioSurfaces } from './cardioLive';
 import { averageHeartRate } from '@/domain/heartRate';
 import { db } from '@/data/local/db';
 
@@ -86,8 +86,8 @@ function publishLiveActivity(force: boolean): void {
   const elapsed = elapsedSec();
   const last = s.splits[s.splits.length - 1];
   const fastest = s.splits.length ? Math.min(...s.splits.map((x) => x.paceSec)) : Infinity;
-  void cardioLiveActivity
-    .update({
+  // Through the fan-out, so a pocketed run reaches the wrist on the same wake as the lock card.
+  cardioSurfaces.update({
       kind: 'cardio',
       // The lobby has no gait picker (v7): the screen publishes the same constant. Cosmetic only —
       // the widget spends it on a legend word.
@@ -102,8 +102,7 @@ function publishLiveActivity(force: boolean): void {
       hr: s.hr != null ? Math.round(s.hr) : 0,
       calories: Math.round(s.cal),
       lastSplit: last ? { km: last.km, paceSec: Math.round(last.paceSec), fastest: last.paceSec <= fastest } : null,
-    })
-    .catch(() => {});
+    });
 }
 
 export type GpsState = 'idle' | 'acquiring' | 'ready' | 'denied' | 'unavailable';

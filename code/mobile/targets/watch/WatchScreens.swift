@@ -1285,6 +1285,13 @@ struct WatchRootView: View {
                   onReportPain: model.reportPain)
     case let .cardioComplete(summary):
       CardioCompleteScreen(summary: summary, onDone: model.dismissCardioComplete)
+    // The PHONE'S run — the very stage a wrist run uses, fed the phone's figures, its three controls
+    // proposed back to the phone (2026-09-15).
+    case let .phoneCardio(paused):
+      CardioPager(paused: paused, metrics: model.phoneCardioMetrics, split: model.kmSplit,
+                  elapsed: model.phoneCardioElapsed,
+                  onPauseToggle: model.togglePhoneCardioPause, onEnd: model.endPhoneCardio,
+                  onReportPain: model.reportPain)
     }
   }
 }

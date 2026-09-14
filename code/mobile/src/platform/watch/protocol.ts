@@ -146,6 +146,41 @@ export interface WatchStateEnvelope {
    * English you shipped with", never a blank screen.
    */
   copy?: WatchCopyPack | null;
+  /**
+   * ⛔ A RUN THE PHONE IS RECORDING, LIVE (founder, 2026-09-15).
+   *
+   * Until this existed a run started on the phone never reached the wrist: the wire carried a
+   * finished run HOME from the watch and nothing live the other way. Present while the phone owns a
+   * free run; `complete: true` once it has ended worth recording (the wrist closes it the way it
+   * closes its own); absent otherwise. Rides beside the lobby — the phone has no strength session
+   * while it is set — and is omitted, not null, when there is none.
+   */
+  cardio?: WatchCardioLive | null;
+}
+
+/** The phone's live run, as the wrist draws it — see `WatchStateEnvelope.cardio`. */
+export interface WatchCardioLive {
+  /** The run's identity (its start instant) — a new id is a new run, so its kilometres count afresh. */
+  runId: string;
+  gait: 'run' | 'walk';
+  paused: boolean;
+  /**
+   * Epoch ms at which a running clock read zero, pause-aware — the wrist ticks `now − anchor` itself,
+   * the same absolute-instant rule the rest follows. Null while paused or complete: the clock is
+   * frozen at `elapsedS`.
+   */
+  clockAnchorMs: number | null;
+  elapsedS: number;
+  /** The phone's recorded distance — the number on the phone, the card and the saved run. */
+  distanceKm: number;
+  /** 0 = no heart-rate source; the wrist draws a dash, never "0". */
+  hr: number;
+  kcal: number;
+  lastSplitKm: number | null;
+  /** The closed kilometre's time, in seconds. */
+  lastSplitPaceS: number | null;
+  lastSplitFastest: boolean;
+  complete: boolean;
 }
 
 export function makeStateEnvelope(
@@ -157,6 +192,7 @@ export function makeStateEnvelope(
   copy: WatchCopyPack | null = null,
   authorityEpoch = 0,
   adoptedRecordId: string | null = null,
+  cardio: WatchCardioLive | null = null,
 ): WatchStateEnvelope {
   return {
     v: WATCH_PROTOCOL_VERSION,
@@ -174,6 +210,7 @@ export function makeStateEnvelope(
     /* Omitted rather than sent as null, like every other optional here — a wrist that decodes an
        absent key gets `nil`, which is "no claim", never "not yours". */
     ...(adoptedRecordId ? { adoptedRecordId } : {}),
+    ...(cardio ? { cardio } : {}),
     sentAt: new Date(sentAtMs).toISOString(),
   };
 }
@@ -463,7 +500,12 @@ export type WatchIntentType =
   | 'add_rest'
   // The wrist flagged a body area that hurts (WT14 · What's off). A REPORT the phone acts on —
   // never an authoritative session action. Carries `area`.
-  | 'report_pain';
+  | 'report_pain'
+  // The phone's live RUN, from its wrist mirror (2026-09-15): proposals the screen that owns the run
+  // performs. Valid only while a run is published — see `decideWatchIntent`.
+  | 'cardio_pause'
+  | 'cardio_resume'
+  | 'cardio_finish';
 
 // ---- Pre-session lobby (the Start screen) ----------------------------------
 
@@ -563,7 +605,9 @@ export type WatchPhoneAction =
   | { kind: 'swap_exercise'; exerciseId?: string }
   | { kind: 'add_rest'; seconds: number }
   // The wrist flagged a hurting area; the phone records it against the body map / model.
-  | { kind: 'report_pain'; area: string; severity: string };
+  | { kind: 'report_pain'; area: string; severity: string }
+  // The phone's live run — pause, resume or finish it (the run's screen performs it).
+  | { kind: 'cardio'; op: 'pause' | 'resume' | 'finish' };
 
 export interface WatchIntentDecision {
   accept: boolean;
@@ -579,6 +623,7 @@ export interface WatchIntentDecision {
 export const WATCH_INTENT_TYPES: readonly WatchIntentType[] = [
   'complete_set', 'end_rest', 'pause', 'resume', 'finish_early', 'exercise_busy',
   'select_workout', 'start_workout', 'swap_exercise', 'add_rest', 'report_pain',
+  'cardio_pause', 'cardio_resume', 'cardio_finish',
 ];
 const INTENT_TYPES = WATCH_INTENT_TYPES;
 
@@ -610,6 +655,10 @@ function isStandingFact(t: WatchIntentType): boolean {
  *  screen). They are handled before the active-session gates below. */
 function isLobbyIntent(t: WatchIntentType): boolean {
   return t === 'select_workout' || t === 'start_workout';
+}
+
+function isCardioIntent(t: WatchIntentType): boolean {
+  return t === 'cardio_pause' || t === 'cardio_resume' || t === 'cardio_finish';
 }
 
 /* --- The numbers the watch reports are NOT trusted (hardened 2026-07-13) --------------------
@@ -737,6 +786,12 @@ function intentToAction(intent: WatchIntent): WatchPhoneAction | null {
       return intent.area && intent.severity
         ? { kind: 'report_pain', area: intent.area, severity: intent.severity }
         : null;
+    case 'cardio_pause':
+      return { kind: 'cardio', op: 'pause' };
+    case 'cardio_resume':
+      return { kind: 'cardio', op: 'resume' };
+    case 'cardio_finish':
+      return { kind: 'cardio', op: 'finish' };
     default:
       return null;
   }
@@ -756,6 +811,8 @@ export function decideWatchIntent(
   mirror: SessionMirror | null,
   nowMs: number,
   seenIntentIds: ReadonlySet<string>,
+  /** The run the phone last published to the wrist, if any — the ONLY state a cardio intent is judged against. */
+  cardio: Pick<WatchCardioLive, 'paused' | 'complete'> | null = null,
 ): WatchIntentDecision {
   const intent = parseWatchIntent(raw);
   if (!intent) return { accept: false, reason: 'malformed', action: null };
@@ -800,6 +857,23 @@ export function decideWatchIntent(
     ) {
       return { accept: false, reason: 'stale', action: null, latencyMs };
     }
+    const action = intentToAction(intent);
+    if (!action) return { accept: false, reason: 'malformed', action: null, latencyMs };
+    return { accept: true, action, latencyMs };
+  }
+
+  /*
+   * ⛔ A RUN IS JUDGED AGAINST THE RUN, not against a strength mirror that does not exist while it is
+   * live — `noActiveSession` below would throw every one of these away. Same discipline as the rest:
+   * no run published → nothing to act on; a late tap → stale; a pause of a paused run → mismatch.
+   */
+  if (isCardioIntent(intent.type)) {
+    if (!cardio || cardio.complete) return { accept: false, reason: 'no_session', action: null, latencyMs };
+    if (!Number.isNaN(issuedMs) && nowMs - issuedMs > WATCH_INTENT_TTL_MS) {
+      return { accept: false, reason: 'stale', action: null, latencyMs };
+    }
+    if (intent.type === 'cardio_pause' && cardio.paused) return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+    if (intent.type === 'cardio_resume' && !cardio.paused) return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
     const action = intentToAction(intent);
     if (!action) return { accept: false, reason: 'malformed', action: null, latencyMs };
     return { accept: true, action, latencyMs };
@@ -1012,6 +1086,11 @@ export interface WatchLocalSession {
   restEndsAt?: string | null;
   /** What that rest was prescribed as, so the phone can draw a ring with the right denominator. */
   restTotalS?: number | null;
+  /**
+   * A pause entered mid-rest clears `restEndsAt` and freezes the remainder here instead. Without
+   * it a paused rest reached the phone with no clock at all (sync audit, 2026-09-15).
+   */
+  pausedRestRemainingS?: number | null;
   /** The prescriptions the wrist is executing — a full copy, so adoption never depends on the
    *  phone's plan file agreeing with the one the wrist was handed days ago. */
   steps: WatchPlanStep[];
@@ -1049,6 +1128,12 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
     return null;
   }
   if (r.restTotalS != null && (typeof r.restTotalS !== 'number' || !Number.isFinite(r.restTotalS) || r.restTotalS < 0)) {
+    return null;
+  }
+  if (
+    r.pausedRestRemainingS != null &&
+    (typeof r.pausedRestRemainingS !== 'number' || !Number.isFinite(r.pausedRestRemainingS) || r.pausedRestRemainingS < 0)
+  ) {
     return null;
   }
   if (!Array.isArray(r.steps) || r.steps.length === 0) return null;

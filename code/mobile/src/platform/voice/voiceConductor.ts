@@ -754,10 +754,13 @@ export class VoiceConductor {
     const lines: string[] = [];
     // Re-entering a rest already under way (earbuds back, resume): what was said is not said
     // again, and a "ten seconds" from a rest whose remainder is unknown is not guessed (§3.9).
+    // ⛔ But the remainder is NOT unknown when the rest has an end instant — the same one the ring,
+    // the wrist and the lock screen count to — so the line is kept, counted to that end (2026-09-15).
     if (this.reentry) {
       this.reentry = false;
       this.narrated = null;
       this.pendingMove = null;
+      if (v.restEndsAtMs != null) this.scheduleTenSeconds(v);
       return;
     }
     // Reached without the voice having said the set (a tap on the stage, the lock screen or the
@@ -783,8 +786,20 @@ export class VoiceConductor {
   private scheduleTenSeconds(v: SessionView): void {
     const total = v.restSeconds + (v.restExtraSeconds ?? 0);
     if (total < 20) return; // a short rest has no "ten seconds" (spec §3.6)
-    this.restEndsAtMs = this.d.now() + total * 1000;
-    this.after(Math.max(0, total * 1000 - 10_000), () => {
+    /*
+     * ⛔ COUNTED TO THE REST'S OWN END, NOT TO THE MOMENT THE VOICE LOOKED (sync audit, 2026-09-15).
+     *
+     * This was `now + prescribed + extra` — right on the first frame of a rest and wrong on every
+     * later one. A "+15" pressed sixty seconds into a ninety-second rest re-scheduled the line to
+     * ninety-five seconds from THEN: the rest ended forty-five seconds later, and "עשר שניות" never
+     * came, or came into the next set. The end instant is the store's, and it is the same one the
+     * ring, the wrist's GO and the lock card count to.
+     */
+    const endMs = v.restEndsAtMs ?? this.d.now() + total * 1000;
+    this.restEndsAtMs = endMs;
+    const inMs = endMs - 10_000 - this.d.now();
+    if (inMs < 0) return; // already inside the last ten seconds — a late "ten seconds" is a wrong one
+    this.after(inMs, () => {
       const now = this.d.getView();
       if (now && (now.displayPhase === 'REST_INTER' || now.displayPhase === 'REST_TRANSITION')) void this.speak([voiceScript.tenSeconds()]);
     });
