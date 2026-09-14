@@ -15,6 +15,7 @@
 // be referenced inside a factory.
 const mockScheduled: Array<{ identifier: string; content: { data?: { kind?: string }; sound?: boolean; interruptionLevel?: string }; trigger: { seconds?: number } }> = [];
 const mockCanceled: string[] = [];
+const mockDismissed: string[] = [];
 const mockState = { reachable: false, granted: true, liveActivity: false };
 
 jest.mock('expo-notifications', () => ({
@@ -28,6 +29,9 @@ jest.mock('expo-notifications', () => ({
   },
   cancelScheduledNotificationAsync: async (id: string) => {
     mockCanceled.push(id);
+  },
+  dismissNotificationAsync: async (id: string) => {
+    mockDismissed.push(id);
   },
   cancelAllScheduledNotificationsAsync: async () => {},
   addNotificationResponseReceivedListener: () => ({ remove: () => {} }),
@@ -50,6 +54,7 @@ const NOW = 1_700_000_000_000;
 beforeEach(() => {
   mockScheduled.length = 0;
   mockCanceled.length = 0;
+  mockDismissed.length = 0;
   mockState.reachable = false;
   mockState.granted = true;
   mockState.liveActivity = false;
@@ -193,5 +198,25 @@ describe('a Live Activity takes over the 7-second warning', () => {
     await restHaptics.arm(NOW + 60_000);
     expect(mockCanceled).toEqual(expect.arrayContaining(['hush.rest_warn', 'hush.rest_done']));
     expect(kinds().filter((k) => k === 'rest_warn')).toEqual([]);
+  });
+});
+
+describe('⛔ a delivered alert is litter the moment the rest moves on (founder, gym 2026-09-14)', () => {
+  /*
+   * *"כשיש התראות זה מצטבר למלא התראות וקשה לבחור את ההתראה העדכנית."* The identifiers were already
+   * stable, which de-duplicates the SCHEDULE and does nothing to what iOS has already SHOWN: every
+   * rest left its card in the tray, and a twelve-set workout ended with twelve of them stacked over
+   * the live one. Arming the next rest — and ending one — now clears the pair from the tray too.
+   */
+  it('arming clears the previous pair from the tray, not only from the schedule', async () => {
+    await restHaptics.arm(at(90));
+    expect(mockDismissed).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+
+  it('disarming clears it too — a workout that ends leaves no card behind', async () => {
+    await restHaptics.arm(at(90));
+    mockDismissed.length = 0;
+    await restHaptics.disarm();
+    expect(mockDismissed).toEqual(['hush.rest_warn', 'hush.rest_done']);
   });
 });

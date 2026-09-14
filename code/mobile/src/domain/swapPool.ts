@@ -428,6 +428,32 @@ export function bestSwap(currentId: string, ctx: SwapContext): Exercise | undefi
 }
 
 /**
+ * ════ EVERYTHING ELSE THE POOL HOLDS (founder, gym 2026-09-14) ════
+ *
+ * *"יש לי תרגיל שאני לא אוהב והוא באימון וגם את החלופות שלו אני לא אוהב ואין לי אופציה אחרת."*
+ *
+ * `swapChoices` is deliberately short: three rows, ranked by fidelity, and a different MOVEMENT
+ * only when her own pattern cannot fill the menu at all. That rule is right for the question it
+ * was written for — *"this station is taken, what else trains this exactly?"* — and it is the
+ * wrong answer to a second question the athlete also asks, standing in front of a lift she simply
+ * does not like: *"show me anything else."*
+ *
+ * So the short menu stands, and this is the door under it. Same pool, same admissibility gates,
+ * same room filter — nothing here is looser about what may be offered, it is only LONGER: the
+ * synonyms she has not been shown, then the other ways to train the same muscle, each labelled for
+ * what it is. A lift with no peer at all still answers with nothing, and the sheet says so.
+ */
+export function swapMore(currentId: string, ctx: SwapContext, alreadyOffered: readonly string[] = []): SwapChoice[] {
+  const current = exerciseById(catalogIdFromEngine(currentId));
+  if (!current) return [];
+  const shown = new Set(alreadyOffered.map((id) => catalogIdFromEngine(id)));
+  const rest = swapCandidates(currentId, ctx).filter((e) => !shown.has(e.id));
+  const synonyms = rest.filter((e) => e.pattern === current.pattern);
+  const others = rest.filter((e) => e.pattern !== current.pattern);
+  return [...synonyms, ...others].map((e) => ({ exercise: e, sameMovement: e.pattern === current.pattern }));
+}
+
+/**
  * The catalog's standing answer to "what stands in for this lift" — no session, no preferences.
  *
  * Used for reachability (every exercise must have a real alternative — the catalogSync test) and

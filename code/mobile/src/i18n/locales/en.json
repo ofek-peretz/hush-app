@@ -822,6 +822,8 @@
     "restored": "Back to {{name}}",
     "sameMovement": "{{equipment}} · the same movement",
     "differentWay": "Trains it a different way",
+    "more_one": "Show 1 more option",
+    "more_other": "Show {{count}} more options",
     "none": "No other lift trains this the same way. This one stays.",
     "moved": "You moved on — that lift is behind you now."
   },

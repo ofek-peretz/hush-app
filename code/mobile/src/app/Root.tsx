@@ -22,6 +22,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { HushTabBar } from './HushTabBar';
 import { useApp } from '@/state/stores/appStore';
+import { useSession } from '@/state/stores/sessionStore';
 import { usePair } from '@/state/stores/pairStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { fullLayerAnimation, sheetAnimation } from './navAnimations';
@@ -313,6 +314,30 @@ export function Root() {
   const enrolledRef = useRef(false);
   enrolledRef.current = !!app.profile;
   const coldStartRouted = useRef(false);
+  /*
+   * ════ ⛔ A LIVE WORKOUT IS WHERE SHE LEFT OFF (founder, gym 2026-09-14) ════
+   *
+   * *"כל פעם שאני נכנס לאפליקציה בזמן האימון זה זורק אותי למסך הHome ולא משאיר אותי במסך הlive."*
+   *
+   * iOS kills a backgrounded app freely, and the app came back to HOME with a "Continue {workout}"
+   * card — correct information, wrong place: she is mid-set, the phone is in her hand, and the
+   * product asks her to find a button. The snapshot that card is drawn from (`hush.session.resume`,
+   * S3) is the same one `resumeSaved` replays, so the app can simply BE where she was.
+   *
+   * ⚠️ IT RUNS ONCE PER LAUNCH, AND NEVER OVER HER OWN TAP. A notification tap is an instruction
+   * about where to go (`routeNotificationIntent`), and a workout waiting in a snapshot is not a
+   * reason to overrule it. The window itself is `loadResumable`'s (RESUME_WINDOW_MS) — an
+   * abandoned session from yesterday is not a session she is standing in.
+   */
+  const session = useSession();
+  const resumeTried = useRef(false);
+  /*
+   * ⚠️ AND IT IS **NOT** `coldStartRouted` (caught on real glass, 2026-09-14). That ref means "the
+   * cold-start routing pass has run", and it is set on EVERY launch — intent or no intent — so a
+   * resume guarded on it never fired once. What the resume must yield to is an actual instruction
+   * from her: a notification she tapped, which says where she wants to be.
+   */
+  const launchIntentRouted = useRef(false);
   /* The pair, behind a ref: the link listener is subscribed ONCE for the app's lifetime, and a
      handler that closed over the first render's `pair` would join into a stale room for ever. */
   const pair = usePair();
@@ -327,6 +352,30 @@ export function Root() {
     if (navigationRef.isReady()) routeNotificationIntent(intent, enrolledRef.current);
     else pendingIntentRef.current = intent;
   };
+
+  useEffect(() => {
+    if (resumeTried.current || !app.profile) return;
+    resumeTried.current = true;
+    let alive = true;
+    void (async () => {
+      const r = await session.loadResumable().catch(() => null);
+      if (!alive || !r) return;
+      if (launchIntentRouted.current) return; // her own tap decided where to land
+      const ok = await session.resumeSaved().catch(() => false);
+      if (!alive || !ok) return;
+      /* The container mounts on its own clock, and `navigateMain` is a no-op until it is ready —
+         which is exactly how the first cut of this silently did nothing. Wait for it, briefly. */
+      for (let i = 0; i < 40 && alive && !navigationRef.isReady(); i++) {
+        await new Promise((res) => setTimeout(res, 100));
+      }
+      if (!alive || launchIntentRouted.current) return;
+      navigateMain('SessionFlow');
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.profile]);
 
   // Soft reload: a language change flips I18nManager direction, then asks for a
   // remount so the new direction (RTL ⇄ LTR) applies without a process relaunch.
@@ -423,6 +472,7 @@ export function Root() {
           pendingIntentRef.current = null;
           routeNotificationIntent(intent, enrolledRef.current);
           coldStartRouted.current = true; // the stashed tap IS the launch intent
+          launchIntentRouted.current = true; // …and it outranks a resumable workout
           // …and it must be CONSUMED here too: this path skips
           // getInitialNotificationIntent, and an unconsumed native response would be
           // replayed (and re-routed) by the next manual launch.
@@ -433,9 +483,11 @@ export function Root() {
         // after the container is mounted (so navigateMain can act).
         if (coldStartRouted.current) return;
         coldStartRouted.current = true;
-        void getInitialNotificationIntent().then((intent) =>
-          routeNotificationIntent(intent, enrolledRef.current),
-        );
+        void getInitialNotificationIntent().then((intent) => {
+          // Only a REAL intent outranks the resume — see `launchIntentRouted`.
+          if (intent) launchIntentRouted.current = true;
+          routeNotificationIntent(intent, enrolledRef.current);
+        });
       }}
     >
       {app.profile ? <MainNavigator /> : <OnboardingNavigator />}

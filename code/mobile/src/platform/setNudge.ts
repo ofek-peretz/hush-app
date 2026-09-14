@@ -56,6 +56,11 @@ export interface SetNudge {
 
 async function cancel(): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(NUDGE_ID).catch(() => {});
+  /* ⛔ AND THE DELIVERED ONE (2026-09-14, the same finding as `restHaptics.clearDelivered`): a
+     cancelled SCHEDULE leaves any card iOS already showed sitting in the tray. "Log your set" for
+     a set logged twenty minutes ago is the litter the founder had to scroll through to find the
+     live alert. */
+  await Notifications.dismissNotificationAsync(NUDGE_ID).catch(() => {});
 }
 
 export const setNudge: SetNudge = {

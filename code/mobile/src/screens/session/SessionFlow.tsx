@@ -50,7 +50,7 @@ import { isOutdoorMovement, isTrackedMovement } from '@/data/movements';
 // `OpenStage` was imported here for a week after it was deleted (2026-08-12). `ItemStage` exports
 // no such binding; `@ts-nocheck` is why nothing said so, and nothing rendered it, so nothing broke.
 import { TimeStage, DistanceStage, SayLine, clockOf, distanceOf } from '@/screens/session/ItemStage';
-import { swapChoices, type SwapChoice } from '@/domain/swapPool';
+import { swapChoices, type SwapChoice, swapMore } from '@/domain/swapPool';
 import { SwapSheet } from '@/components/SwapSheet';
 import { PairStrip } from '@/components/PairStrip';
 import { usePair } from '@/state/stores/pairStore';
@@ -794,7 +794,7 @@ export function SessionFlow({ navigation, route }: Props) {
   const [proposal, setProposal] = useState<{ from: string; to: string; target: 'current' | 'next' } | null>(null);
   const swapMenuRef = useRef<{ target: 'current' | 'next'; originalId: string } | null>(null);
   const undoRef = useRef<{ target: 'current' | 'next'; originalId: string } | null>(null);
-  const [swapMenu, setSwapMenu] = useState<{ name: string; choices: SwapChoice[]; fallbackWeight?: number | null } | null>(null);
+  const [swapMenu, setSwapMenu] = useState<{ name: string; choices: SwapChoice[]; more: SwapChoice[]; fallbackWeight?: number | null } | null>(null);
   const swapActionsRef = useRef({ undo: () => {} });
   /** Read by the answer effect, which is bound to `pair.swapAnswer` alone (one answer, one run). */
   const proposalRef = useRef(proposal);
@@ -946,7 +946,10 @@ export function SessionFlow({ navigation, route }: Props) {
        carries across (exactly `retargetPlanForSwap`'s fallback). The sheet may never show a
        number the pick would not produce. */
     const fallbackW = (target === 'next' ? session.nextTarget : session.currentTarget)?.recommendedWeight ?? null;
-    setSwapMenu({ name: exerciseDisplayName(exId), choices, fallbackWeight: fallbackW });
+    /* …and everything else the pool holds, folded away under the three (`swapMore`): the menu that
+       answers "the station is taken" is not the menu that answers "I do not like this lift". */
+    const more = swapMore(exId, { sessionExerciseIds: session.sessionExerciseIds, prefs, equipment: app.profile?.equipment }, choices.map((c) => c.exercise.id));
+    setSwapMenu({ name: exerciseDisplayName(exId), choices, more, fallbackWeight: fallbackW });
     setOverlay('swap');
   }
 
@@ -1303,6 +1306,7 @@ export function SessionFlow({ navigation, route }: Props) {
         <SwapSheet
           currentName={swapMenu.name}
           choices={swapMenu.choices}
+          more={swapMenu.more}
           /* The two facts a swap is decided on — see `SwapSheetProps.weightFor`. */
           weightFor={(id) => session.previewTargetFor?.(id)?.recommendedWeight ?? swapMenu.fallbackWeight ?? null}
           units={units}

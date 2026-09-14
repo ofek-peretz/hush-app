@@ -75,11 +75,31 @@ async function cancelBoth(): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(DONE_ID).catch(() => {});
 }
 
+/**
+ * ⛔ AND THE ONES ALREADY DELIVERED ARE TAKEN DOWN (founder, gym 2026-09-14: *"כשיש התראות זה
+ * מצטבר למלא התראות וקשה לבחור את ההתראה העדכנית"*).
+ *
+ * A stable identifier de-duplicates the SCHEDULE; it does nothing to a notification iOS has
+ * already shown. So every rest left its "rest over" card in Notification Centre, and a twelve-set
+ * workout ended with twelve identical cards stacked over the one that was current — the athlete
+ * scrolling a pile to find the live one. Nothing in the app had ever dismissed a delivered alert.
+ *
+ * A rest alert's entire life is the ten seconds around the instant it names: once the next rest is
+ * armed, or the rest is over, or the workout has moved on, the card is not history — it is litter.
+ * It is dropped from the tray with the same two ids that schedule it.
+ */
+async function clearDelivered(): Promise<void> {
+  await Notifications.dismissNotificationAsync(WARN_ID).catch(() => {});
+  await Notifications.dismissNotificationAsync(DONE_ID).catch(() => {});
+}
+
 export const restHaptics: RestHaptics = {
   async arm(endAtMs, done) {
     try {
-      // Re-arm is idempotent: always clear the prior pair first (+15s / resume reschedule).
+      // Re-arm is idempotent: always clear the prior pair first (+15s / resume reschedule) —
+      // scheduled AND delivered, so the tray never carries the last rest's card into this one.
       await cancelBoth();
+      await clearDelivered();
       const { warnInS, doneInS } = restAlertDelays(endAtMs, Date.now());
       if (warnInS == null && doneInS == null) return; // rest already over / sub-second
       /*
@@ -150,6 +170,7 @@ export const restHaptics: RestHaptics = {
   async disarm() {
     try {
       await cancelBoth();
+      await clearDelivered();
     } catch {
       /* nothing scheduled / no native module */
     }

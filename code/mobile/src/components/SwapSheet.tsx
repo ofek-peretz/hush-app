@@ -60,6 +60,16 @@ export interface SwapSheetProps {
   /** What `swapChoices` returned: one to three, already ordered, never padded. */
   choices: readonly SwapChoice[];
   /**
+   * ⛔ EVERYTHING ELSE THE POOL HOLDS, BEHIND ONE PRESS (founder, gym 2026-09-14: *"יש לי תרגיל
+   * שאני לא אוהב… וגם את החלופות שלו אני לא אוהב ואין לי אופציה אחרת"*).
+   *
+   * The three rows above answer "this station is taken". They do not answer "I do not like this
+   * lift", and until today that athlete's only options were the three she had already refused.
+   * These are the rest of the SAME pool (`swapMore`) — same gates, same room — folded away so the
+   * short menu stays short for everyone who is only looking for a free station.
+   */
+  more?: readonly SwapChoice[];
+  /**
    * ⛔ THE TWO FACTS A SWAP IS DECIDED ON (design review 2026-09-01): what it LOOKS like, and what
    * it would WEIGH. Three names with "אותה תנועה" under each were three rows the athlete could not
    * tell apart. `weightFor` reads the session's own target table (the exact load a pick would
@@ -75,6 +85,9 @@ export interface SwapSheetProps {
 
 export function SwapSheet(props: SwapSheetProps) {
   const { t } = useCopy();
+  const [expanded, setExpanded] = React.useState(false);
+  const more = props.more ?? [];
+  const shown = expanded ? [...props.choices, ...more] : props.choices;
   return (
     <BottomSheet onClose={props.onClose}>
       {/* ✦ IT ARRIVES, after the sheet does (2026-08-27). Two beats: what she is replacing, then
@@ -87,7 +100,7 @@ export function SwapSheet(props: SwapSheetProps) {
       </Arrive>
 
       <View style={styles.rows}>
-        {props.choices.map((c) => (
+        {shown.map((c) => (
           <Pressable
             key={c.exercise.id}
             accessibilityRole="button"
@@ -130,6 +143,16 @@ export function SwapSheet(props: SwapSheetProps) {
         ))}
       </View>
 
+      {/* The door under the menu — drawn only when there IS something else, and it says how much. */}
+      {more.length > 0 && !expanded ? (
+        <Button
+          variant="ghost"
+          block
+          label={t('swap.more', { count: more.length })}
+          onPress={() => setExpanded(true)}
+          style={styles.close}
+        />
+      ) : null}
       <Button variant="ghost" block label={t('swap.close')} onPress={props.onClose} style={styles.close} />
     </BottomSheet>
   );
