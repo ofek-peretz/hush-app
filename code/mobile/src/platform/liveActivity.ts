@@ -199,7 +199,9 @@ export interface CardioLiveActivityHost {
 interface HushLiveActivityNativeModule {
   startActivity(content: LiveActivityContent): Promise<boolean>;
   updateActivity(content: LiveActivityContent): Promise<void>;
-  endActivity(): Promise<void>;
+  endActivity(kind: 'strength' | 'cardio'): Promise<void>;
+  /** Is a card of this kind on the lock screen right now? The truth, asked of ActivityKit. */
+  hasActivity(kind: 'strength' | 'cardio'): boolean;
   areActivitiesEnabled(): boolean;
   /** Every lock-screen tap since the last drain, oldest first; the native queue is emptied. */
   drainLockIntents(): Promise<unknown>;
@@ -343,6 +345,24 @@ export function liveActivityRunning(): boolean {
   return activityIsLive;
 }
 
+/**
+ * ⛔ AND THE FLAG IS SYNCED FROM ACTIVITYKIT, NOT REMEMBERED (audit, 2026-09-14).
+ *
+ * A Live Activity outlives the process. After a kill the boolean above said "no card" while one was
+ * live on the lock screen — so `restHaptics` scheduled the seven-second warning the card was
+ * already counting down, which is the pile the founder objected to in July. And a cardio run that
+ * ended every card left it saying "card" when there was none, so the warning stopped arriving at
+ * all. Called wherever the session store wakes: mount, foreground, the lock-intent whistle.
+ */
+export async function syncLiveActivity(): Promise<void> {
+  if (!nativeModule?.hasActivity) return;
+  try {
+    activityIsLive = nativeModule.hasActivity('strength');
+  } catch {
+    /* no native module / ActivityKit unavailable — the stub's answer stands */
+  }
+}
+
 export const liveActivityStub: LiveActivityHost = {
   async start() {},
   async update() {},
@@ -362,7 +382,7 @@ export const liveActivityNative: LiveActivityHost = {
   async end() {
     if (!nativeModule) return;
     activityIsLive = false;
-    await nativeModule.endActivity();
+    await nativeModule.endActivity('strength');
   },
 };
 
@@ -378,7 +398,9 @@ const cardioNative: CardioLiveActivityHost = {
   },
   async end() {
     if (!nativeModule) return;
-    await nativeModule.endActivity();
+    /* ⛔ BY KIND. This used to end whatever the module happened to hold — and inside a workout that
+       was HER WORKOUT'S card: a run's finish took the session's Live Activity with it. */
+    await nativeModule.endActivity('cardio');
   },
 };
 

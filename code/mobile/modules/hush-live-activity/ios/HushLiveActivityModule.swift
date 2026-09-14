@@ -169,8 +169,15 @@ public class HushLiveActivityModule: Module {
       HushActivityController.shared.update(state)
     }
 
-    AsyncFunction("endActivity") {
-      HushActivityController.shared.end()
+    /// End every card of ONE kind — a cardio run ending may not take her workout's card with it.
+    AsyncFunction("endActivity") { (kind: String) in
+      HushActivityController.shared.end(kind: kind)
+    }
+
+    /// Is a card of this kind on the lock screen right now? Asked by `liveActivityRunning`, which
+    /// gates the 7-second rest warning and used to be a boolean this process could only guess at.
+    Function("hasActivity") { (kind: String) -> Bool in
+      HushActivityController.shared.has(kind: kind)
     }
 
     /// Every lock-screen tap since the last drain — `{ id, type, atMs }` each — and the queue is
@@ -185,7 +192,10 @@ public class HushLiveActivityModule: Module {
 /// ContentState. All ActivityKit access is guarded by `#available(iOS 16.2, *)`.
 final class HushActivityController {
   static let shared = HushActivityController()
-  private var current: Any?
+  /*
+   * ⛔ THERE IS NO HANDLE HERE ANY MORE (audit, 2026-09-14). See the lifecycle note below: a Live
+   * Activity outlives this process, so the only honest question is what ActivityKit is running.
+   */
 
   // ---- projections ----
   @available(iOS 16.2, *)
@@ -265,26 +275,80 @@ final class HushActivityController {
   }
 
   // ---- lifecycle ----
+  /*
+   * ⛔ ACTIVITYKIT IS THE SOURCE OF TRUTH, NOT A HANDLE IN THIS PROCESS (audit, 2026-09-14).
+   *
+   * This controller kept the running activity in one in-memory handle. A Live Activity
+   * OUTLIVES the process that started it — iOS kills a backgrounded app freely, the same kill that
+   * used to drop her back on Home — so at the next launch the handle was nil while the card was
+   * still on the lock screen: `start` requested a SECOND card, `end` could only end the last one,
+   * and the orphans stayed until ActivityKit's own ceiling. That is the founder's own finding from
+   * the floor ("מצטבר למלא התראות וקשה לבחור את ההתראה העדכנית"), and it has a sharper edge than
+   * clutter: the widget's projection reads `Activity.activities.first`, so a thumb could be
+   * operating a card the phone had long stopped updating.
+   *
+   * Every road below asks ActivityKit what is running, BY KIND:
+   *   · start   — adopt the live card of this kind (ending any orphan behind it) or request one,
+   *               and never leave the other kind on screen beside it;
+   *   · update  — with nothing to update, START one. That is the other half of the same bug: a run
+   *               inside a workout ends the workout's card, and the store only ever `update`s
+   *               afterwards, so the card never came back for the rest of the session;
+   *   · end     — end every card of that kind, orphans included.
+   */
+  @available(iOS 16.2, *)
+  private func strengthActivities() -> [Activity<HushSessionAttributes>] {
+    Array(Activity<HushSessionAttributes>.activities)
+  }
+
+  @available(iOS 16.2, *)
+  private func cardioActivities() -> [Activity<HushCardioAttributes>] {
+    Array(Activity<HushCardioAttributes>.activities)
+  }
+
+  /// End these cards. `keepingFirst` adopts the first and ends the rest — the pile a killed
+  /// process left behind, cleared the moment the app speaks again.
+  @available(iOS 16.2, *)
+  private func endAll<T: ActivityAttributes>(_ list: [Activity<T>], keepingFirst keep: Bool = false) {
+    for (i, a) in list.enumerated() where !(keep && i == 0) {
+      Task { await a.end(nil, dismissalPolicy: .immediate) }
+    }
+  }
+
+  func has(kind: String) -> Bool {
+    guard #available(iOS 16.2, *) else { return false }
+    return kind == "cardio" ? !cardioActivities().isEmpty : !strengthActivities().isEmpty
+  }
+
   func start(_ r: ActivityRecord) -> Bool {
     guard #available(iOS 16.2, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
-    // If an activity of the same kind is already running, just update it.
-    if r.kind == "cardio", current is Activity<HushCardioAttributes> {
-      update(r); return true
-    }
-    if r.kind == "strength", current is Activity<HushSessionAttributes> {
-      update(r); return true
-    }
-    end() // switching kinds (or first start) — clear any prior activity
-    do {
-      if r.kind == "cardio" {
-        current = try Activity.request(
+    if r.kind == "cardio" {
+      endAll(strengthActivities()) // the two kinds never share the screen
+      let live = cardioActivities()
+      if let a = live.first {
+        endAll(live, keepingFirst: true)
+        Task { await a.update(ActivityContent(state: cardioState(r), staleDate: nil)) }
+        return true
+      }
+      do {
+        _ = try Activity.request(
           attributes: HushCardioAttributes(),
           content: ActivityContent(state: cardioState(r), staleDate: nil), pushType: nil)
-      } else {
-        current = try Activity.request(
-          attributes: HushSessionAttributes(),
-          content: ActivityContent(state: strengthState(r), staleDate: nil), pushType: nil)
+        return true
+      } catch {
+        return false
       }
+    }
+    endAll(cardioActivities())
+    let live = strengthActivities()
+    if let a = live.first {
+      endAll(live, keepingFirst: true)
+      Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
+      return true
+    }
+    do {
+      _ = try Activity.request(
+        attributes: HushSessionAttributes(),
+        content: ActivityContent(state: strengthState(r), staleDate: nil), pushType: nil)
       return true
     } catch {
       return false
@@ -293,20 +357,17 @@ final class HushActivityController {
 
   func update(_ r: ActivityRecord) {
     guard #available(iOS 16.2, *) else { return }
-    if let a = current as? Activity<HushCardioAttributes> {
+    if r.kind == "cardio" {
+      guard let a = cardioActivities().first else { _ = start(r); return }
       Task { await a.update(ActivityContent(state: cardioState(r), staleDate: nil)) }
-    } else if let a = current as? Activity<HushSessionAttributes> {
-      Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
+      return
     }
+    guard let a = strengthActivities().first else { _ = start(r); return }
+    Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
   }
 
-  func end() {
+  func end(kind: String) {
     guard #available(iOS 16.2, *) else { return }
-    if let a = current as? Activity<HushCardioAttributes> {
-      Task { await a.end(nil, dismissalPolicy: .immediate) }
-    } else if let a = current as? Activity<HushSessionAttributes> {
-      Task { await a.end(nil, dismissalPolicy: .immediate) }
-    }
-    current = nil
+    if kind == "cardio" { endAll(cardioActivities()) } else { endAll(strengthActivities()) }
   }
 }

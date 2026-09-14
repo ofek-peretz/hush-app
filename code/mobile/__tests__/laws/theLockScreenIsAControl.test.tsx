@@ -113,6 +113,53 @@ describe('⛔ the native half: three intents, one queue, two targets', () => {
     expect((widget.match(/StrengthActions\(state:/g) ?? []).length).toBe(2);
   });
 
+  it('⛔ ACTIVITYKIT IS THE SOURCE OF TRUTH — the module may not hold the only handle (2026-09-14)', () => {
+    /*
+     * ⛔ FOUND AUDITING THE WHOLE LIVE-ACTIVITY SURFACE, and it is the founder's own "מצטבר למלא
+     * התראות" from the native end.
+     *
+     * The controller kept the running activity in ONE in-memory reference. A Live Activity outlives
+     * the process that started it — iOS kills a backgrounded app freely, which is the same kill that
+     * used to drop her back on Home — so on the next launch that reference was nil while the card
+     * was still on the lock screen. `start` then requested a SECOND card, `end` could only ever end
+     * the last one, and the orphans stayed until ActivityKit's own ceiling. The widget's own
+     * projection reads `Activity.activities.first`, so her taps could land on a card the phone had
+     * stopped updating: a stale card that answers.
+     *
+     * The handle is gone. Every road asks ActivityKit what is actually running, by KIND — so a card
+     * is adopted rather than duplicated, an update with nothing to update starts one (a run inside a
+     * workout used to end the workout's card for good), and ending a kind ends every orphan of it.
+     */
+    for (const call of ['Activity<HushSessionAttributes>.activities', 'Activity<HushCardioAttributes>.activities']) {
+      expect(module).toContain(call);
+    }
+    // no private handle anywhere in the controller
+    expect(module).not.toMatch(/private var current/);
+    // the kind travels: ending cardio may not end her workout's card
+    expect(module).toContain('AsyncFunction("endActivity") { (kind: String) in');
+    expect(module).toContain('Function("hasActivity")');
+    // an update with nothing to update starts one
+    expect(module).toContain("guard let a = strengthActivities().first else { _ = start(r); return }");
+    expect(module).toContain("guard let a = cardioActivities().first else { _ = start(r); return }");
+  });
+
+  it('⛔ …and the JS side stops guessing whether a card is live', () => {
+    /*
+     * `liveActivityRunning()` gates the 7-second rest warning (founder, 2026-07-29: a card already
+     * counting down does not need a notification saying so). It was a module-level boolean, so a
+     * relaunch said "no card" while one was live (the warning doubled), and a cardio run that ended
+     * every card left it saying "card" when there was none (no warning at all). It is synced from
+     * ActivityKit now.
+     */
+    const js = read('src/platform/liveActivity.ts');
+    expect(js).toContain('export async function syncLiveActivity()');
+    expect(js).toContain("hasActivity('strength')");
+    expect(js).toContain("endActivity('strength')");
+    expect(js).toContain("endActivity('cardio')");
+    // …and the store keeps it honest on every wake
+    expect(read('src/state/stores/sessionStore.tsx')).toContain('void syncLiveActivity()');
+  });
+
   it('the intents and the module agree on the queue — suite, key, whistle', () => {
     for (const literal of ['"group.com.hushfitness.app"', '"hush.lockIntents"', '"com.hushfitness.app.lockIntent"']) {
       expect(intents).toContain(literal);

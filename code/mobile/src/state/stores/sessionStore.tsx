@@ -28,7 +28,7 @@ import { db } from '@/data/local/db';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
 import { isTrainingGated } from '@/domain/entitlement';
 import { runSteps } from '@/domain/planRun';
-import { liveActivity, drainLockIntents, addLockIntentListener, type LockExtras, type LockIntent } from '@/platform/liveActivity';
+import { liveActivity, drainLockIntents, addLockIntentListener, type LockExtras, type LockIntent, syncLiveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy, type Translate } from '@/domain/milestoneCopy';
@@ -1968,6 +1968,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   applyLockIntentsRef.current = applyLockIntents;
   /** Take the queue and replay it — every road into the replay goes through here. */
   const drainLockQueue = useCallback(async () => {
+    /* Every wake also re-asks ActivityKit whether a card is live — see `syncLiveActivity`: the
+       answer gates the rest warning, and a process that just started cannot remember it. */
+    void syncLiveActivity();
     const list = await drainLockIntents();
     // Always — an empty queue still ends in `applyClock(now)`, so a wake that reaches this listener
     // first runs the clock forward exactly as the clock's own listener would.
