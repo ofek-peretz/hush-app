@@ -58,7 +58,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Arrive, Legend, Stage } from '@/components/ds';
@@ -163,6 +163,8 @@ export const LIFT_HOLD_MS = 460;
 export const LIFT_TRAVEL_MS = 520;
 /** A breath on the lit muscle after the last row has gone in, before the next muscle takes over. */
 export const MUSCLE_BREATH_MS = 300;
+/** Half a breath of the DARK body while the answer is out — see the note where it is used. */
+export const BREATH_MS = 1400;
 
 /**
  * How long one muscle owns the screen: exactly as long as its own lifts need, plus a breath.
@@ -201,6 +203,40 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
   /* The figure turns to whichever face carries the muscle being filled — she never has to guess
      where the light went. It holds the last face once the programme is named. */
   const face = filling ? viewOf(filling) : 'front';
+  /*
+   * ⛔ THE WAIT BREATHES, AND SAYS NOTHING ELSE (2026-09-14, the founder's ruling on the wait).
+   *
+   * No muscles yet means the answer is not in — and until it is, this screen may not name a muscle,
+   * light a region or draw a row, because every one of those is a claim about a week nobody has
+   * written yet. What is honest is that something is happening, so the dark body breathes: one slow
+   * swell, no colour, no names. It is the same figure she will watch fill; it is simply not
+   * pretending to be full.
+   *
+   * ⚠️ REDUCED MOTION GETS A STEADY DIM instead of a pulse — the state still reads as "waiting"
+   * without moving, which is what the setting asks for.
+   */
+  const waiting = !named && props.muscles.length === 0;
+  const reduced = useReducedMotion();
+  const breath = useSharedValue(1);
+  React.useEffect(() => {
+    if (!waiting) {
+      breath.value = 1;
+      return;
+    }
+    if (reduced) {
+      breath.value = 0.78;
+      return;
+    }
+    breath.value = withRepeat(
+      withSequence(
+        withTiming(0.62, { duration: BREATH_MS, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: BREATH_MS, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+  }, [waiting, reduced, breath]);
+  const breathStyle = useAnimatedStyle(() => ({ opacity: breath.value }));
 
   return (
     <View style={styles.root}>
@@ -265,9 +301,9 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
           ════════════════════════════════════════════════════════════════════════════════════════
         */}
         <View style={styles.body}>
-          <View style={styles.figureStage}>
+          <Animated.View style={[styles.figureStage, breathStyle]}>
             <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} sex={props.sex} />
-          </View>
+          </Animated.View>
 
           {/*
             The muscle being filled, and the lifts going into it. Only the CURRENT muscle's lifts

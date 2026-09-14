@@ -445,22 +445,17 @@ describe('the wait is honest', () => {
      * has not returned would be the app performing work it had not done — on the one screen whose
      * entire job is showing her what it did.
      *
-     * The muscles ARE real (the catalogue knows them without asking anyone) and their rows stand as
-     * dashes until the answer lands, which is why the placeholder carries names and nothing else.
+     * ⛔ AND SINCE 2026-09-14 IT DRAWS NO MUSCLE EITHER (founder: *"תחליף את שורות ההמתנה"*). The
+     * old cover walked the canonical ten with dashed rows, defended as "true of any programme" —
+     * and an athlete who wrote "no legs" watched her own quads, hamstrings and glutes light up
+     * while the model was obeying her. A wait may show that something is happening; it may not
+     * describe a week nobody has written yet. So the placeholders are gone and the wait is a dark
+     * body breathing under her own sentence.
      */
     const src = building();
-    /*
-     * ⚠️ TWO SOURCES NOW, NOT THREE. The middle tier was the coach's SKETCH — her real muscles,
-     * arriving seconds before its full answer — and it existed only because the full answer was
-     * slow. The catalogue's muscles carry the opening beat and the assembled week replaces them
-     * whole; both draw DASHED rows until a real lift exists.
-     */
-    expect(src).toContain('PLACEHOLDER_MUSCLES');
-    /* The walk loops since 2026-09-09 (`cycle`), so the placeholders come off a rotation of the same
-       list — still the catalogue's muscles, still dashed rows, nothing invented. */
-    expect(src).toContain('placeholders().map((m) => ({ muscle: m, lifts: waitingRows }))');
-    expect(src).toContain('return PLACEHOLDER_MUSCLES.slice(0, shownMuscles);');
-    expect(src).toContain("const waitingRows = [{ name: '' }, { name: '' }];");
+    expect(src).not.toContain('PLACEHOLDER_MUSCLES');
+    expect(src).not.toContain('waitingRows');
+    expect(src).toContain('const muscles: BuildMuscle[] = built ? built.muscles.slice(0, shownMuscles) : [];');
     // …and the real rows only ever come from the assembled programme.
     expect(src).toContain('buildMusclesFromProgram(program, profile.repBand');
     /*

@@ -601,22 +601,27 @@ describe('4 · it can never strand her — and it can never fail her in silence'
       .toContain("const budget = her.ask?.trim() ? PLAN_BUILD_SAID_MS : PLAN_BUILD_BUDGET_MS;");
   });
 
-  it('⛔ the drawing LOOPS while the call is out — the screen never runs dry under a slow answer', () => {
+  it('⛔ the drawing CLAIMS NOTHING while the call is out — and never runs dry either', () => {
     /*
-     * The old clause here proved `cover >= budget` — the placeholder walk had to outlast the call,
-     * because past its last muscle the screen went static. That coupling is what capped the model
-     * at the animation's length. Now the walk wraps: every muscle lit, and the rows keep moving
-     * through the same ten in order, each for its own beat, until the answer lands.
+     * Two clauses have stood here. The first proved `cover >= budget`: the placeholder walk had to
+     * outlast the call, which is what capped the model at the animation's length. The second proved
+     * the walk LOOPED, so the screen could never run dry.
+     *
+     * ⛔ BOTH ARE GONE WITH THE WALK (founder, 2026-09-14: *"תחליף את שורות ההמתנה"*). A cover that
+     * names muscles is a claim about a week nobody has written: an athlete who asked for no legs
+     * watched quads and glutes light on her own figure while the model obeyed her. The wait is now
+     * a DARK BODY BREATHING under her own sentence — it cannot run dry (the breath repeats for
+     * ever) and it cannot be wrong (it says nothing at all).
      */
     const screen = read('src/screens/onboarding/BuildingProgramme.tsx');
-    expect(screen).toContain('const [cycle, setCycle] = useState(0);');
-    // the ticker only STOPS when there is a week in hand
-    expect(screen).toContain('if (shownMuscles >= total && built) return;');
-    expect(screen).toContain('shownMuscles >= total ? setCycle((c) => c + 1) : setShownMuscles((n) => n + 1)');
-    // the loop draws real muscles with dashed rows — nothing invented
-    expect(screen).toContain('placeholders().map((m) => ({ muscle: m, lifts: waitingRows }))');
-    // …and the background catch-up walks the loop with the same arithmetic
-    expect(screen).toContain('setCycle((cur) => Math.max(cur, beats - PLACEHOLDER_MUSCLES.length));');
+    const view = read('src/screens/onboarding/BuildingProgrammeView.tsx');
+    // nothing is drawn until there is a week in hand
+    expect(screen).toContain('const muscles: BuildMuscle[] = built ? built.muscles.slice(0, shownMuscles) : [];');
+    expect(screen).not.toContain('PLACEHOLDER_MUSCLES');
+    expect(screen).not.toContain('const [cycle, setCycle]');
+    // …and the screen is alive for as long as the answer takes, without saying anything
+    expect(view).toContain('const waiting = !named && props.muscles.length === 0;');
+    expect(view).toContain('withRepeat(');
   });
 
   it('⛔ a sentence she wrote and no answer ⇒ the screen STOPS and says the true reason', () => {

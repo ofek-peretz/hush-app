@@ -121,31 +121,22 @@ const REVEAL_MS = 2600;
 function fillHold(muscles: readonly BuildMuscle[]): number {
   return beatFor(muscles[muscles.length - 1]?.lifts.length ?? 1);
 }
-/**
- * ⚠️ THE MUSCLES A PROGRAMME COVERS, which the app knows without asking anyone — so the screen
- * has something TRUE to draw during the wait rather than a spinner. Their lifts stand as dashes
- * until the coach answers; nothing here is a guess about what it will say.
- */
 /*
- * ⛔ THE CANONICAL TEN, NOT A HAND-PICKED SEVEN (2026-08-30).
+ * ⛔ THE WAIT CLAIMS NOTHING (founder, 2026-09-14: *"תחליף את שורות ההמתנה"*).
  *
- * The seven were `Glutes`, `Calves` and `Core` short — three muscles every assembled week actually
- * covers, left out of a list whose own docblock promises *"the muscles a programme covers, which
- * the app knows without asking anyone."* So the omission was a small lie, and removing it is worth
- * doing on its own.
+ * This file used to fill the wait with the CANONICAL TEN — every muscle a week could cover, lit one
+ * at a time on her own body, each with its name over two blank rows, looping until the answer came.
+ * It was defended as *"true of any programme"*, and it stopped being true the day she could write a
+ * sentence: an athlete asks for a week with NO LEGS and watches quads, hamstrings and glutes light
+ * up on her own figure while the model is busy obeying her. Measured on real builds 2026-09-14 —
+ * the model obeyed every time, and the screen contradicted it for the length of the call.
  *
- * ⚠️ AND IT IS ALSO WHAT PAYS FOR THE LONGER WAIT. The cover has to outlast the call (see
- * `PLAN_BUILD_SAID_MS`), and the only two ways to stretch it are more muscles or a slower beat.
- * The founder rejected a slower beat on 2026-08-13. More muscles costs nothing and is truer:
- * 1500 + 9 × 1920 = **18.8 seconds** of a screen that is still drawing something real.
+ * ⚠️ A WAIT MAY SHOW THAT SOMETHING IS HAPPENING. IT MAY NOT DESCRIBE WHAT HAS NOT ARRIVED. So the
+ * placeholders are gone — no muscle list, no dashed rows, no loop to keep them moving — and what
+ * carries the wait is what this screen already had and never needed to dress up: the DARK BODY,
+ * breathing (`BuildingProgrammeView`), her own sentence quoted above it, and a legend that says
+ * what is actually happening ("reading what you told me"). The first muscle to light is hers.
  */
-export const PLACEHOLDER_MUSCLES: readonly string[] = CANONICAL_MUSCLE_ORDER;
-/**
- * ⚠️ HOW MANY DASHED ROWS A WAITING MUSCLE DRAWS — and therefore how long it holds, since `beatFor`
- * is paced by rows. Named because three separate places need the SAME number: the walk, the
- * background catch-up, and the law that proves the cover outlasts the call it is covering.
- */
-export const PLACEHOLDER_LIFTS = 2;
 
 export function BuildingProgramme({ navigation, route }: Props) {
   const { t } = useCopy();
@@ -277,61 +268,27 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * is showing her what it did.
    */
   const [shownMuscles, setShownMuscles] = useState(0);
-  /**
-   * ⛔ THE WALK LOOPS WHILE THE CALL IS OUT (founder 2026-09-09: *"אסור שיהיה כשלון בכלל"*).
-   *
-   * The placeholder walk used to END — ten muscles, 18.8 seconds, then a fully lit body with dashed
-   * rows and no motion — and that end was the ceiling on the model's time: past it the screen had
-   * nothing left to draw, so the budget cut the call and the local assembler answered instead.
-   * The founder overruled the cut. So once every muscle is lit, the rows keep moving through the
-   * same ten muscles again, in order, each for its own beat: still true (a week covers them), still
-   * dashes (nothing is invented), and the screen is alive for as long as the answer takes.
-   */
-  const [cycle, setCycle] = useState(0);
+
   const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number } | null>(null);
   /** When the show began — wall-clock, so a background gap costs nothing (see the catch-up below). */
   const startedAtMs = useRef(Date.now());
   /** …and when the answer landed, which is what everything after the fill is scheduled from. */
   const builtAtMs = useRef<number | null>(null);
 
+  /*
+   * ⛔ THE BODY FILLS WHEN THE ANSWER IS IN, AND NOT ONE BEAT BEFORE (2026-09-14).
+   *
+   * The walk that used to run during the wait went with the placeholders. What is left is the two
+   * beats that were always real: the DARK BODY owns the opening — held even when the answer is
+   * instant, so the fill is seen BEGINNING rather than arriving already finished — and then the
+   * whole week lands at once, which is exactly what `fillHold` is measured against.
+   */
   useEffect(() => {
-    // The dark body owns the first beat; then the muscles begin arriving whether or not the coach
-    // has answered, because the muscles are ours to know.
-    const id = setTimeout(() => setShownMuscles(1), openingMs);
+    if (!built) return;
+    const left = Math.max(0, openingMs - (Date.now() - startedAtMs.current));
+    const id = setTimeout(() => setShownMuscles(built.muscles.length), left);
     return () => clearTimeout(id);
-  }, []);
-
-  useEffect(() => {
-    if (shownMuscles === 0) return;
-    /*
-     * ⚠️ THE TICKER COUNTS WHAT IS ACTUALLY BEING DRAWN. It counted the catalogue's seven even
-     * after call A had handed the screen HER four — so the reveal would wait for three muscles that
-     * were never going to be drawn, and the fill would appear to stall for three whole seconds
-     * before the name arrived. Same source as the render, or the clock is timing a different screen.
-     */
-
-    const total = built ? built.muscles.length : PLACEHOLDER_MUSCLES.length;
-    if (shownMuscles >= total && built) return;
-    /*
-     * ⛔ THE ANSWER IS IN ⇒ THE BODY FILLS AT ONCE. See `FILL_HOLD_MS`: the walk is a cover for
-     * the wait, so the instant there is nothing left to wait for the cover has no work to do.
-     *
-     * ⚠️ AND THIS IS ALSO WHERE THE OLD BUILD COULD SKIP THE FILL ENTIRELY. The walk used to
-     * carry on through HER muscles, so a week with fewer muscles than the placeholders already
-     * shown satisfied `shownMuscles >= total` on the very render the answer landed — dashes
-     * straight to the name, the fill never drawn once. One branch, and the case cannot arise.
-     */
-    if (built) {
-      setShownMuscles(total);
-      return;
-    }
-    /* Every muscle lit and still no answer ⇒ the loop (see `cycle`). Same beat, next muscle. */
-    const id = setTimeout(
-      () => (shownMuscles >= total ? setCycle((c) => c + 1) : setShownMuscles((n) => n + 1)),
-      beatFor(PLACEHOLDER_LIFTS),
-    );
-    return () => clearTimeout(id);
-  }, [shownMuscles, built, cycle]);
+  }, [built, openingMs]);
 
   /*
    * ⛔ THE NAME WAITS FOR THE FILL (found in the audit, 2026-08-05).
@@ -367,23 +324,18 @@ export function BuildingProgramme({ navigation, route }: Props) {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (st) => {
       if (st !== 'active') return;
-      const elapsed = Date.now() - startedAtMs.current;
       /*
        * ⚠️ THE ANSWER'S OWN ARRIVAL TIME IS THE ANCHOR, not the start of the show. The schedule
-       * past that point is the fill's hold and nothing else, and it cannot be derived from
-       * `elapsed` — the wait it followed was however long the network took.
+       * past that point is the fill's hold and nothing else, and it cannot be derived from the
+       * elapsed time — the wait it followed was however long the network took.
+       *
+       * ⚠️ AND THERE IS NOTHING TO CATCH UP TO BEFORE THAT (2026-09-14): with no placeholder walk,
+       * a backgrounded phone misses a dark body breathing, and a dark body breathing is where it
+       * comes back to.
        */
-      if (built) {
-        setShownMuscles((cur) => Math.max(cur, built.muscles.length));
-        if (builtAtMs.current != null && Date.now() - builtAtMs.current >= fillHold(built.muscles)) setRevealed(true);
-        return;
-      }
-      if (elapsed < openingMs) return;
-      const beats = 1 + Math.floor((elapsed - openingMs) / beatFor(PLACEHOLDER_LIFTS));
-      const n = Math.min(PLACEHOLDER_MUSCLES.length, beats);
-      setShownMuscles((cur) => Math.max(cur, n));
-      /* …and past the last muscle the same arithmetic says how far round the loop the show is. */
-      setCycle((cur) => Math.max(cur, beats - PLACEHOLDER_MUSCLES.length));
+      if (!built) return;
+      setShownMuscles((cur) => Math.max(cur, built.muscles.length));
+      if (builtAtMs.current != null && Date.now() - builtAtMs.current >= fillHold(built.muscles)) setRevealed(true);
     });
     return () => sub.remove();
   }, [built]);
@@ -744,46 +696,10 @@ export function BuildingProgramme({ navigation, route }: Props) {
   }
 
   /*
-   * ⚠️ WHAT IS DRAWN IS ALWAYS WHAT IS KNOWN. Before the answer: her three numbers, then the real
-   * muscles with dashed rows. After it: the real lifts, fast, and the programme's name.
+   * ⚠️ WHAT IS DRAWN IS ALWAYS WHAT IS KNOWN — and before the answer, what is known is nothing.
+   * Her muscles arrive whole, the moment the week does (see "THE WAIT CLAIMS NOTHING" above).
    */
-  /*
-   * ⚠️ THREE SOURCES, IN ORDER OF HOW MUCH IS KNOWN, and never one pretending to be another:
-   *   · the full plan, once call B lands — real lifts, real loads;
-   *   · HER muscles from call A — real muscles, dashed rows;
-   *   · the catalogue's muscles — true of any programme, dashed rows, and all the screen has in
-   *     the first few seconds.
-   */
-  const waitingRows = [{ name: '' }, { name: '' }];
-  /*
-   * ⛔ THE COACH'S MUSCLE NAMES ARE FILTERED AGAINST THE CATALOGUE (audit, 2026-08-05).
-   *
-   * Call A returns muscle names as free text. The view prints them through `t('muscle.<name>')`, and
-   * i18next returns the KEY when it does not know one — so a coach that wrote "Pecs" or "Delts"
-   * would have put **"muscle.Pecs" on the first screen of her programme**, and nothing would have
-   * failed anywhere. Anything the catalogue does not know is dropped rather than drawn; if that
-   * leaves nothing, the catalogue's own list carries the wait exactly as it did before.
-   */
-  /*
-   * ⚠️ TWO TIERS NOW, NOT THREE. The middle one was the coach's SKETCH — her real muscles, arriving
-   * seconds before its full answer — and it existed only because the full answer was slow. There is
-   * no gap to fill any more: the catalogue's muscles carry the opening beat, and the real week
-   * replaces them whole.
-   */
-  /*
-   * ⚠️ ON THE LOOP the whole body stays lit and only the muscle whose rows are being drawn moves:
-   * the view draws the LAST entry's rows, so the list is rotated to end on the muscle whose turn it
-   * is. `lit` is a set, so the order costs nothing there.
-   */
-  const placeholders = (): readonly string[] => {
-    const n = PLACEHOLDER_MUSCLES.length;
-    if (shownMuscles < n || cycle === 0) return PLACEHOLDER_MUSCLES.slice(0, shownMuscles);
-    const k = (n - 1 + cycle) % n;
-    return [...PLACEHOLDER_MUSCLES.slice(k + 1), ...PLACEHOLDER_MUSCLES.slice(0, k + 1)];
-  };
-  const muscles: BuildMuscle[] = built
-    ? built.muscles.slice(0, shownMuscles)
-    : placeholders().map((m) => ({ muscle: m, lifts: waitingRows }));
+  const muscles: BuildMuscle[] = built ? built.muscles.slice(0, shownMuscles) : [];
 
   /*
    * The week's name, said in her language. `programmeName` returns the PARTS — the shape, the

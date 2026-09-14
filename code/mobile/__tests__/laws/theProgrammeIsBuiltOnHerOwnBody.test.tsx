@@ -97,6 +97,24 @@ describe('the body is the instrument', () => {
     expect(Object.values(map).every((v) => v === 'off')).toBe(true);
   });
 
+  it('⛔ while it waits it names NO muscle and lights none — the wait is not a description (2026-09-14)', () => {
+    /*
+     * The founder's ruling on the wait: an athlete who wrote "no legs" watched the canonical ten
+     * arrive on her own body, quads included, while the model was writing her a week without them.
+     * With no muscles in hand the screen may draw the figure and her sentence, and nothing else.
+     */
+    const r = draw({ muscles: [], askedFor: 'בלי אימון רגליים' });
+    const map = figure(r).props.map as Record<string, string>;
+    expect(Object.values(map).every((s) => s === 'off')).toBe(true);
+    expect(figure(r).props.selected).toBeNull();
+    const said = texts(r).join(' | ');
+    for (const muscle of ['Quads', 'Glutes', 'Hamstrings', 'Chest', 'Back']) {
+      expect({ muscle, named: said.includes(tg(`muscle.${muscle}`).toUpperCase()) }).toEqual({ muscle, named: false });
+    }
+    // …and her own words ARE hers to show
+    expect(said).toContain('בלי אימון רגליים');
+  });
+
   it('⚠️ the figure TURNS to the face carrying the muscle being filled', () => {
     /*
      * Half the muscles are on the back. Without this the light lands on a face she is not looking

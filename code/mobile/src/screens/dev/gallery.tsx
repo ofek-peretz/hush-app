@@ -2329,14 +2329,12 @@ export const GALLERY: GalleryEntry[] = [
    * absence). Her words are not a claim. They are evidence — the only thing that could put
    * *"דגש על ישבן, בלי מוט ישר"* over a body filling with glute work is something that read it.
    */
-  { id: '0.0f', label: 'the model is writing it — the wait', of: '0.0e', status: 'live', note: 'rows still dashes, her own sentence above the body: the AI signature is her words, never a badge', render: () => (
+  { id: '0.0f', label: 'the model is writing it — the wait', of: '0.0e', status: 'live', note: '⛔ 2026-09-14 — THE WAIT NAMES NOTHING: a dark body breathing under her own sentence. It used to light the canonical ten, so a week asked with "no legs" lit quads while the model was obeying her.', render: () => (
     <InApp>
       <BuildingProgrammeView
         sex="female"
-        askedFor="דגש על ישבן ורגליים, בלי מוט ישר"
-        muscles={[
-          { muscle: 'Glutes', lifts: [{ name: exerciseDisplayName('hip_thrust') }, { name: exerciseDisplayName('cable_kickback') }] },
-        ]}
+        askedFor="דגש על ישבן, בלי אימון רגליים"
+        muscles={[]}
       />
     </InApp>
   ) },
