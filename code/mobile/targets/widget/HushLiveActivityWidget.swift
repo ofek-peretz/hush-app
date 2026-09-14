@@ -141,7 +141,7 @@ struct HushStrengthLiveActivity: Widget {
               .foregroundColor(HX.ink0)
               .frame(maxWidth: 96)
           } else if s.phase != "paused" {
-            StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17, unit: s.unitLabel)
+            StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17, unit: s.unitLabel, bw: s.wordBodyweight)
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
@@ -282,6 +282,8 @@ private struct StrengthLoadText: View {
   let size: CGFloat
   /// The unit word from the phone ("kg" / "lb") — never assumed (2026-09-08).
   var unit: String = "kg"
+  /// Her word for a lift with no external load — never a hard "BW" (sync audit, 2026-09-14).
+  var bw: String = "BW"
   private var tail: CGFloat { max(11, size * 0.38) }
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 5) {
@@ -293,7 +295,7 @@ private struct StrengthLoadText: View {
           .font(.system(size: tail, design: .monospaced)).monospacedDigit()
           .foregroundColor(HX.ink2)
       } else {
-        Text("BW").font(.system(size: size * 0.9, weight: .medium)).foregroundColor(HX.ink0)
+        Text(bw).font(.system(size: size * 0.9, weight: .medium)).foregroundColor(HX.ink0)
         Text("× \(reps)")
           .font(.system(size: tail, design: .monospaced)).monospacedDigit()
           .foregroundColor(HX.ink2)
@@ -365,7 +367,7 @@ private struct StrengthLockView: View {
           // On a set: HER FIGURES, with the two steppers that let her type them from here.
           StrengthSetEntry(state: state)
         } else {
-          StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 34, unit: state.unitLabel)
+          StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 34, unit: state.unitLabel, bw: state.wordBodyweight)
           Spacer(minLength: 8)
           SetDots(index: state.setIndex, count: state.setCount)
         }
@@ -406,7 +408,7 @@ private struct StrengthSetEntry: View {
     HStack(spacing: 10) {
       FigureStepper(
         field: "weight",
-        figure: state.targetWeight.map(fmtWeight) ?? "BW",
+        figure: state.targetWeight.map(fmtWeight) ?? state.wordBodyweight,
         tail: state.targetWeight == nil ? "" : state.unitLabel,
         enabled: state.targetWeight != nil
       )
@@ -539,9 +541,9 @@ struct HushCardioLiveActivity: Widget {
       return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
           VStack(alignment: .leading, spacing: 2) {
-            legend(s.gait == "run" ? "Run" : "Walk")
+            legend(s.gait == "run" ? s.wordRun : s.wordWalk)
             // Pause is MANUAL (the athlete pressed Pause) — never claim auto-pause.
-            Text(s.paused ? "Paused" : "LIVE")
+            Text((s.paused ? s.wordPaused : s.wordLive).uppercased())
               .font(.system(size: 10, weight: .semibold))
               .tracking(1.2)
               .foregroundColor(s.paused ? HX.ink2 : HX.accent)
@@ -553,16 +555,16 @@ struct HushCardioLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           HStack(spacing: 14) {
-            CardioStat(value: String(format: "%.2f", s.distanceKm), unit: "km")
+            CardioStat(value: String(format: "%.2f", s.distanceKm), unit: s.unitKm)
             // ⛔ NO LIVE PACE (founder 2026-08-23): the per-kilometre figure exists only once the
             // kilometre does — the last closed split, in its own slot, wearing its own kilometre.
             if let km = s.lastSplitKm, let sec = s.lastSplitPaceSec {
-              CardioStat(value: fmtPace(sec), unit: "km \(km)")
+              CardioStat(value: fmtPace(sec), unit: "\(s.unitKm) \(km)")
             }
-            CardioStat(value: "\(s.calories)", unit: "kcal")
+            CardioStat(value: "\(s.calories)", unit: s.unitKcal)
             // hr == 0 means no heart-rate source — hidden, never shown as "0 bpm".
             if s.hr > 0 {
-              CardioStat(value: "\(s.hr)", unit: "bpm")
+              CardioStat(value: "\(s.hr)", unit: s.unitBpm)
             }
           }
         }
@@ -685,14 +687,14 @@ private struct CardioLockView: View {
   /// What this is, and nothing else — the split has its own slot now. Saying "km 4 split" here AND
   /// printing the split on the same row would be the card stuttering (one fact, one element).
   private var legendText: String {
-    let gait = state.gait == "run" ? "Run" : "Walk"
-    return state.paused ? "\(gait) · paused" : "\(gait) · live"
+    let gait = state.gait == "run" ? state.wordRun : state.wordWalk
+    return state.paused ? "\(gait) · \(state.wordPaused)" : "\(gait) · \(state.wordLive)"
   }
 
   /// The last closed kilometre and what it took — moss when it is the quickest of the run.
   private var splitTag: String? {
     guard let km = state.lastSplitKm, let pace = state.lastSplitPaceSec else { return nil }
-    return "km \(km) · \(fmtPace(pace))"
+    return "\(state.unitKm) \(km) · \(fmtPace(pace))"
   }
 
   var body: some View {
@@ -721,7 +723,7 @@ private struct CardioLockView: View {
             .font(.system(size: 24, weight: .semibold, design: .monospaced))
             .monospacedDigit()
             .foregroundColor(HX.ink0)
-          Text("km").font(.system(size: 12)).foregroundColor(HX.ink2)
+          Text(state.unitKm).font(.system(size: 12)).foregroundColor(HX.ink2)
         }
       }
 
@@ -730,11 +732,11 @@ private struct CardioLockView: View {
       HStack(spacing: 0) {
         // ⛔ NO LIVE PACE (founder 2026-08-23) — the split tag in the header row is the card's
         // only per-kilometre figure, and it is the time a FINISHED kilometre took.
-        CardioLockStat(value: "\(state.calories)", label: "kcal")
+        CardioLockStat(value: "\(state.calories)", label: state.unitKcal)
         // hr == 0 means no heart-rate source — the column is dropped, never shown as "0 bpm".
         // Same law as the in-app row (C.19): no instrument, no readout.
         if state.hr > 0 {
-          CardioLockStat(value: "\(state.hr)", label: "bpm")
+          CardioLockStat(value: "\(state.hr)", label: state.unitBpm)
         }
       }
     }

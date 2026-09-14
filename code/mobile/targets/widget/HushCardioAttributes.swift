@@ -25,5 +25,16 @@ struct HushCardioAttributes: ActivityAttributes {
     var lastSplitKm: Int?
     var lastSplitPaceSec: Double?
     var lastSplitFastest: Bool
+    /// ⛔ THE CARD'S OWN WORDS, BAKED ON THE PHONE (sync audit, 2026-09-14). This state carried no
+    /// words at all, so every label the cardio card draws was an English literal inside the widget
+    /// while the strength card beside it spoke her language and her gender. Resolved once per
+    /// publish by `cardioWords()` — see `platform/liveActivity`.
+    var wordRun: String
+    var wordWalk: String
+    var wordLive: String
+    var wordPaused: String
+    var unitKm: String
+    var unitKcal: String
+    var unitBpm: String
   }
 }

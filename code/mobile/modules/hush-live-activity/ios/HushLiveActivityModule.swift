@@ -61,6 +61,8 @@ struct ActivityRecord: Record {
   // The voice's loading dialogue (spec §3.2): Ready beside Done while the set waits for her word.
   @Field var awaitingReady: Bool = false
   @Field var actReady: String = "Ready"
+  /// Her word for a lift with no external load — bodyweight, or the band's own word.
+  @Field var wordBodyweight: String = "BW"
 
   // ---- cardio ----
   @Field var gait: String = "run"
@@ -72,12 +74,27 @@ struct ActivityRecord: Record {
   @Field var hr: Int = 0
   @Field var calories: Int = 0
   @Field var lastSplit: SplitRecord? = nil
+  /// The cardio card's words, resolved on the phone (`cardioWords()`). Optional so a publish from
+  /// a JS build that predates them still decodes — the English defaults below stand in.
+  @Field var words: CardioWordsRecord? = nil
 }
 
 struct SplitRecord: Record {
   @Field var km: Int = 0
   @Field var paceSec: Double = 0
   @Field var fastest: Bool = false
+}
+
+/// The cardio card's vocabulary. Every label that card draws used to be an English literal in the
+/// widget; they cross the bridge now, exactly as the strength card's words have since 2026-09-08.
+struct CardioWordsRecord: Record {
+  @Field var run: String = "Run"
+  @Field var walk: String = "Walk"
+  @Field var live: String = "Live"
+  @Field var paused: String = "Paused"
+  @Field var km: String = "km"
+  @Field var kcal: String = "kcal"
+  @Field var bpm: String = "bpm"
 }
 
 /// The App Group queue the lock-screen intents write (`HushLockIntentBus` in the widget target —
@@ -252,6 +269,7 @@ final class HushActivityController {
       unitLabel: r.unitLabel,
       weightStep: r.weightStep,
       wordReps: r.wordReps,
+      wordBodyweight: r.wordBodyweight,
       awaitingReady: r.awaitingReady,
       actReady: r.actReady
     )
@@ -270,7 +288,14 @@ final class HushActivityController {
       calories: r.calories,
       lastSplitKm: r.lastSplit?.km,
       lastSplitPaceSec: r.lastSplit?.paceSec,
-      lastSplitFastest: r.lastSplit?.fastest ?? false
+      lastSplitFastest: r.lastSplit?.fastest ?? false,
+      wordRun: r.words?.run ?? "Run",
+      wordWalk: r.words?.walk ?? "Walk",
+      wordLive: r.words?.live ?? "Live",
+      wordPaused: r.words?.paused ?? "Paused",
+      unitKm: r.words?.km ?? "km",
+      unitKcal: r.words?.kcal ?? "kcal",
+      unitBpm: r.words?.bpm ?? "bpm"
     )
   }
 

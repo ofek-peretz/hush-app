@@ -222,9 +222,18 @@ const RETIRED_IDS = ['hush.quarterly_report'] as const;
 try {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
-      const data = (notification as { request?: { content?: { data?: { kind?: unknown } } } })
+      const data = (notification as { request?: { content?: { data?: { kind?: unknown; intent?: unknown } } } })
         ?.request?.content?.data;
-      const kind = typeof data?.kind === 'string' ? data.kind : '';
+      /*
+       * ⛔ TWO KEYS, ONE QUESTION (sync audit, 2026-09-14). The rest alerts and the set nudge write a
+       * bare `data.kind`; everything built by `buildPayload` writes `intent` instead. So this read
+       * saw '' for that whole second family and fell through to "show a banner" — and `kilometre`
+       * is documented in this very file as *"Suppressed while the app is in the foreground"*, which
+       * it never was: every closed kilometre banner-ed over the live run screen that had just said
+       * the same thing, which is the exact duplication this handler exists to prevent.
+       */
+      const kind =
+        typeof data?.kind === 'string' ? data.kind : typeof data?.intent === 'string' ? data.intent : '';
       // Rest alerts (rest_warn / rest_done) are the LOCKED/BACKGROUND backstop for the
       // 7 s warning + rest-over cue. In the FOREGROUND the in-app Core Haptics countdown
       // already fires, so present nothing here — no double buzz, no banner over the stage.
@@ -238,6 +247,12 @@ try {
          later, for a set long since logged, is worse than nothing. */
       if (kind === 'set_nudge') {
         return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
+      }
+      /* The kilometre is a RECORD of the run (`kilometre` gives each split its own id for exactly
+         that reason), so it keeps its place in the list. What it loses in the foreground is the
+         BANNER: 3.4b is already on screen saying that kilometre, and its haptic has been felt. */
+      if (kind === 'cardio_km') {
+        return { shouldShowBanner: false, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false };
       }
       return { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false };
     },

@@ -76,6 +76,10 @@ struct HushSessionAttributes: ActivityAttributes {
     var weightStep: Double
     /// The word beside the rep count, in her language.
     var wordReps: String
+    /// Her word for a lift with no external load — "Bodyweight" / "משקל גוף", or the BAND's own
+    /// word when it is a band lift. The card printed a hard "BW" in Swift until 2026-09-14, which
+    /// made it the one surface of the three that could not be read in her language.
+    var wordBodyweight: String
     // ── The voice's loading dialogue (spec §3.2 / §4) ──
     /// The set on stage waits for her "מוכן": the card offers Ready beside Done, and a tap on it
     /// is the set's start (`set_ready` on the wire).

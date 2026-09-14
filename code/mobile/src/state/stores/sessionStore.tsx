@@ -33,7 +33,7 @@ import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/p
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy, type Translate } from '@/domain/milestoneCopy';
 import { i18n, tg } from '@/i18n';
-import { equipmentLoad, loadSetup } from '@/domain/loadPresentation';
+import { equipmentLoad, loadSetup, noLoadIsBand } from '@/domain/loadPresentation';
 import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { AppState } from 'react-native';
 import { notifier } from '@/platform/notifications';
@@ -2148,6 +2148,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         start: tg('notifications.lockActStart'),
         reps: tg('notifications.lockWordReps'),
         ready: tg('notifications.lockActReady'),
+        // The stage's own word for a lift with no external load — and the BAND's word when it is
+        // one, exactly as `SessionFlow` chooses it. The card used to print a hard "BW" in Swift.
+        bodyweight: tg(noLoadIsBand(onStep?.exerciseId) ? 'workout.bandWord' : 'workout.bodyweight'),
       },
       // The voice's loading dialogue is open: the card offers Ready beside Done (spec §4).
       awaitingReady,

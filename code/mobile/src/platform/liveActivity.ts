@@ -74,6 +74,16 @@ export interface LiveActivityState {
   unitLabel: string;
   weightStep: number;
   wordReps: string;
+  /**
+   * ⛔ HER WORD FOR A LIFT WITH NO EXTERNAL LOAD (sync audit, 2026-09-14).
+   *
+   * The card printed a hard "BW" in Swift while the stage said "משקל גוף" and the wrist — which
+   * takes its words from this same phone — said hers too. One athlete, one set, three answers, and
+   * the lock screen was the only surface of the three that could not be read in her language. It
+   * was also the only one that never learned about BANDS: the stage says "גומייה" for a band lift,
+   * and the card said "BW" for that too.
+   */
+  wordBodyweight: string;
   // ── The voice's loading dialogue (spec §3.2 / §4): the card offers Ready beside Done. ──
   awaitingReady: boolean;
   actReady: string;
@@ -101,7 +111,7 @@ export interface LockExtras {
   nextSetCount: number;
   alertTitle: string;
   alertBody: string;
-  words: { rest: string; next: string; paused: string; logged: string; done: string; addRest: string; start: string; reps: string; ready: string };
+  words: { rest: string; next: string; paused: string; logged: string; done: string; addRest: string; start: string; reps: string; ready: string; bodyweight: string };
   /** The voice's loading dialogue is open: the set on stage waits for her "מוכן" (spec §3.2). */
   awaitingReady: boolean;
   /*
@@ -179,6 +189,43 @@ export interface CardioLiveActivityState {
   calories: number; // kcal
   /** The most recent kilometre split (Dynamic Island "split" presentation); else null. */
   lastSplit: { km: number; paceSec: number; fastest: boolean } | null;
+  /**
+   * ⛔ THE CARDIO CARD HAD NO WORDS AT ALL (sync audit, 2026-09-14).
+   *
+   * The strength card has carried every word it draws since 2026-09-08 — rest, next, paused, the
+   * three verbs — baked on the phone in her language and her gender. The cardio card carried NONE,
+   * so "Run", "Walk", "live", "paused", "km", "kcal" and "bpm" were English literals inside the
+   * widget: on a Hebrew phone the two Live Activities of one product spoke two languages.
+   *
+   * Filled by the HOST, not by the callers — a run is published from two places (the screen once a
+   * second, `cardioRun` every fifteen from a background wake), and words baked twice are words
+   * that eventually disagree.
+   */
+  words?: CardioWords;
+}
+
+/** The cardio card's own vocabulary, resolved on the phone. */
+export interface CardioWords {
+  run: string;
+  walk: string;
+  live: string;
+  paused: string;
+  km: string;
+  kcal: string;
+  bpm: string;
+}
+
+/** Her words for the cardio card — read at publish time, so a language change mid-run lands. */
+export function cardioWords(): CardioWords {
+  return {
+    run: tg('cardio.run'),
+    walk: tg('cardio.walk'),
+    live: tg('cardio.liveTag'),
+    paused: tg('cardio.paused'),
+    km: tg('cardio.km'),
+    kcal: tg('cardio.kcal'),
+    bpm: tg('cardio.bpm'),
+  };
 }
 
 export type LiveActivityContent = LiveActivityState | CardioLiveActivityState;
@@ -239,7 +286,7 @@ const NO_LOCK: LockExtras = {
   nextSetCount: 1,
   alertTitle: '',
   alertBody: '',
-  words: { rest: 'Rest', next: 'Next up', paused: 'Paused', logged: 'Logged', done: 'Done', addRest: '+15 s', start: 'Next set', reps: 'reps', ready: 'Ready' },
+  words: { rest: 'Rest', next: 'Next up', paused: 'Paused', logged: 'Logged', done: 'Done', addRest: '+15 s', start: 'Next set', reps: 'reps', ready: 'Ready', bodyweight: 'BW' },
   awaitingReady: false,
   unitLabel: 'kg',
   weightStep: 2.5,
@@ -299,6 +346,7 @@ export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExt
     wordReps: lock.words.reps,
     awaitingReady: lock.awaitingReady && phaseFromMirror(mirror.phase) === 'set',
     actReady: lock.words.ready,
+    wordBodyweight: lock.words.bodyweight,
   };
 }
 
@@ -390,11 +438,11 @@ const cardioStub: CardioLiveActivityHost = { async start() {}, async update() {}
 const cardioNative: CardioLiveActivityHost = {
   async start(state) {
     if (!nativeModule) return;
-    await nativeModule.startActivity(state);
+    await nativeModule.startActivity({ ...state, words: cardioWords() });
   },
   async update(state) {
     if (!nativeModule) return;
-    await nativeModule.updateActivity(state);
+    await nativeModule.updateActivity({ ...state, words: cardioWords() });
   },
   async end() {
     if (!nativeModule) return;

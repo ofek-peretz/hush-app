@@ -166,6 +166,7 @@
     "readyTitle": "Cardio",
     "startCardio": "Start cardio",
     "liveLegend": "Cardio",
+    "liveTag": "Live",
     "metresUnit": "m",
     "kmOrdinal": "km {{n}}",
     "targetEnd": "{{km}} km",

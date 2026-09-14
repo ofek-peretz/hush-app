@@ -73,7 +73,7 @@ import type { Session } from '@/data/local/models';
 import { restWithSample, restedSeconds } from '@/domain/restPrescription';
 import type { LastTime } from '@/domain/lastTimeOn';
 import * as haptics from '@/platform/haptics';
-import { restHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
+import { restHaptics, REST_WARNING_LEAD_S, phoneOwnsRestHaptics } from '@/platform/restHaptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { legendVoice } from '@/design/monoVoice';
 import { color, space, stage, font, ramp, rampLine, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
@@ -4020,9 +4020,22 @@ function Rest({
   useEffect(() => {
     if (paused) return;
     if (remaining <= 0) {
-      // GO — felt without looking. A new exercise gets the distinct triple; the next set, the double.
-      if (isTransition) haptics.exerciseAdvance();
-      else haptics.restFinished();
+      /*
+       * ⛔ ONE BEAT, ONE WRIST (sync audit, 2026-09-14).
+       *
+       * The NOTIFICATION layer has held this doctrine since the wrist shipped — `phoneOwnsRestHaptics`
+       * silences the phone's alert while a watch is there to buzz. The in-app Core Haptics never
+       * asked. So with the app open and a watch on, the same rest ended twice: the phone's triple
+       * and the watch's own beat, scheduled independently against the very same absolute instant.
+       *
+       * Asked HERE rather than when the rest was armed, which makes it the more accurate of the two
+       * gates: a watch that went away mid-rest hands the beat straight back to the phone.
+       */
+      if (phoneOwnsRestHaptics()) {
+        // GO — felt without looking. A new exercise gets the distinct triple; the next set, the double.
+        if (isTransition) haptics.exerciseAdvance();
+        else haptics.restFinished();
+      }
       void restHaptics.disarm(); // rest reached zero in-app → drop the pending OS alerts
       session.endRest();
       return;
@@ -4042,7 +4055,8 @@ function Rest({
     for (const tSec of haptics.REST_APPROACH_BEATS) {
       if (remaining <= tSec && !beatsFiredRef.current.has(tSec)) {
         beatsFiredRef.current.add(tSec); // consume so it never fires late
-        if (!jumped && remaining === tSec) haptics.restApproach(tSec);
+        // …and the Approach beats answer to the same owner — the wrist counts these down too.
+        if (!jumped && remaining === tSec && phoneOwnsRestHaptics()) haptics.restApproach(tSec);
       }
     }
   }, [remaining, paused]);
