@@ -642,8 +642,18 @@ export interface SessionView {
   restFrozenRemainingS: number | null;
   /** The rest-over alert's words for the set the rest leads into; null when nothing follows. */
   restAlert: { title: string; body: string } | null;
-  /** The last set the WATCH logged — the phone plays its "Set logged" beat over it. */
+  /**
+   * The last set logged OFF the stage — on the wrist, by voice, or from the lock screen. The phone
+   * plays its "Set logged" beat over it, so a set looks the same on the phone whichever channel wrote
+   * it. (Named for the first channel that had it.)
+   */
   watchLoggedSet: WatchLoggedSet | null;
+  /**
+   * Raise that beat for a set about to be written from a channel other than the stage — read from the
+   * set on stage NOW, before the write moves the cursor. The voice calls it; the wrist and the lock
+   * screen raise it inside the store.
+   */
+  announceLoggedSet: (weight: number | null, reps: number) => void;
   /** Epoch ms the active session started (drives the session elapsed-time label on the mirror). */
   startedAtMs: number | null;
   /** The day's name ("Upper A") — the voice's opening line says it (spec §3.1). */
@@ -1920,6 +1930,36 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
    */
   const seenLockIdsRef = useRef<Set<string>>(new Set());
   const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+
+  /**
+   * ⛔ ONE SET, ONE BEAT — WHICHEVER CHANNEL WROTE IT (founder, 2026-09-15).
+   *
+   * *"אם אני מדבר בקול בזמן האימון זה מזין באפליקציה וזה שווה ערך ללחיצה גם ברמת המסכים? זה חשוב."*
+   *
+   * It was not. Every channel wrote the SAME set through the same `completeSet`, and the wrist and the
+   * lock card saw it identically — but on the phone's own stage only two channels had a moment: a tap
+   * (the stage's beat) and the wrist (`watchLoggedSet`). A set said aloud, or pressed on the lock
+   * screen, went straight to the rest with no "Set logged", no record said at the bar, no lift closed.
+   *
+   * One function now raises the beat for every channel off the stage, from the set on stage BEFORE the
+   * write moves the cursor, through the same speak-predicate the stage uses (`beatSpeaksFor`).
+   */
+  const raiseLoggedBeat = useCallback((v: SessionView, weight: number | null, reps: number) => {
+    const tgt = v.currentTarget;
+    if (!v.setLabel) return;
+    setWatchLoggedSet({
+      weight,
+      reps,
+      n: v.setLabel.n,
+      m: v.setLabel.m,
+      seq: ++watchLogSeqRef.current,
+      ...(bandOf(tgt) ? { band: bandOf(tgt)! } : {}),
+      ...(tgt?.exerciseId ? { lift: tgt.exerciseId } : {}),
+      // The record answers identically on every channel (never on a warm-up bridge).
+      ...(!v.setLabel.warmup && isRecordSet(weight, reps, v.priorPeakKg) ? { record: true } : {}),
+    });
+  }, []);
+
   const applyLockIntents = useCallback(
     async (intents: LockIntent[]) => {
       const session = sessionRef.current;
@@ -1950,8 +1990,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
              * nothing behind it: no way to tell a tap that never reached the queue from one the
              * phase refused. One event, with the phase that refused it, is the whole diagnosis.
              */
-            if (v.displayPhase === 'SET_PRESENTED') await v.completeSet(hers);
-            else void track('lock_intent_dropped', { sessionId: session.id, type: i.type, phase: v.displayPhase });
+            if (v.displayPhase === 'SET_PRESENTED') {
+              // The phone's beat for a set pressed on the lock screen — the same one a tap plays, and
+              // only once the set is actually written (a refused second press plays nothing).
+              const w = hers ? hers.weight : v.currentTarget?.recommendedWeight ?? null;
+              const r = hers ? hers.reps : v.currentTarget?.recommendedReps ?? 0;
+              const before = sessionRef.current?.sets.length ?? 0;
+              await v.completeSet(hers);
+              if ((sessionRef.current?.sets.length ?? before) > before) raiseLoggedBeat(v, w, r);
+            } else void track('lock_intent_dropped', { sessionId: session.id, type: i.type, phase: v.displayPhase });
           } else if (i.type === 'add_rest') {
             v.extendRest(15);
           } else if (i.type === 'end_rest') {
@@ -3404,6 +3451,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
 
       // ════ The voice coach's verbs (spec §3.2 / §3.4 / §4) ════
+      announceLoggedSet(weight, reps) {
+        const v = viewRef.current;
+        if (v && v.displayPhase === 'SET_PRESENTED') raiseLoggedBeat(v, weight, reps);
+      },
       setLiftLoad(weightKg) {
         const idx = machine.setIndex;
         const cur = plan[idx];
@@ -3612,20 +3663,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // logged" beat, so the wrist and the screen read back the same numbers.
     const weight = actualWeight !== undefined ? actualWeight : tgt?.recommendedWeight ?? null;
     const reps = actualReps ?? tgt?.recommendedReps ?? 0;
-    if (view.setLabel) {
-      setWatchLoggedSet({
-        weight,
-        reps,
-        n: view.setLabel.n,
-        m: view.setLabel.m,
-        seq: ++watchLogSeqRef.current,
-        // Same capture, same instant, same reason as `weight` and `reps` above — see `WatchLoggedSet`.
-        ...(bandOf(tgt) ? { band: bandOf(tgt)! } : {}),
-        ...(tgt?.exerciseId ? { lift: tgt.exerciseId } : {}),
-        // The record answers identically on either device (never on a warm-up bridge).
-        ...(!view.setLabel.warmup && isRecordSet(weight, reps, view.priorPeakKg) ? { record: true } : {}),
-      });
-    }
+    // Same capture, same instant — the one beat every off-stage channel raises (`raiseLoggedBeat`).
+    raiseLoggedBeat(view, weight, reps);
     if (actualReps == null && actualWeight === undefined) {
       void view.completeSet(); // nothing adjusted → log the prescribed target
       return;

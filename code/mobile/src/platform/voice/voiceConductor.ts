@@ -652,6 +652,10 @@ export class VoiceConductor {
     const wasCalibration = this.calibrating === ex;
     const lastOfLift = !!(before as { lastSetOfExercise?: boolean }).lastSetOfExercise;
     const firstTime = v.lastTime == null;
+    // The phone's "Set logged" beat, exactly as a tap on the stage plays it — a set said aloud looks
+    // the same on every screen as a set pressed (founder, 2026-09-15). Raised before the write, from
+    // the set still on stage, as the wrist's own does.
+    v.announceLoggedSet(weight, reps);
     await v.completeSet({ weight, reps });
     this.d.track?.('voice_set_logged', { exerciseId: ex, reps, weight, calibration: wasCalibration });
     const after = this.d.getView() ?? v;

@@ -77,7 +77,10 @@ describe('the record speaks ONCE — on the set that struck it, never on the set
 
   it('a wrist-logged record answers identically — same rule, either device', () => {
     const store = read('src/state/stores/sessionStore.tsx');
-    expect(store).toContain('isRecordSet(weight, reps, view.priorPeakKg)');
+    // One beat for every channel off the stage since 2026-09-15 — the wrist, the voice and the lock
+    // screen all raise it through `raiseLoggedBeat`, which asks the one rule.
+    expect(store).toContain('isRecordSet(weight, reps, v.priorPeakKg)');
+    expect(store).toContain('raiseLoggedBeat(view, weight, reps);');
     const flow = read('src/screens/session/SessionFlow.tsx');
     expect(flow).toContain("...(logged.record ? { record: true } : {})");
   });
