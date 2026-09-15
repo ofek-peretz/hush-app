@@ -479,7 +479,7 @@
     "equipmentOccupied": "הציוד תפוס",
     "reasonIncrease": "עלייה של {{delta}} מהפעם הקודמת. הרווחת את זה.",
     "reasonDecrease": "ירידה של {{delta}} היום. שלושה אימונים קשים ברצף — זו הבחירה החכמה.",
-    "exerciseCount": "תרגיל {{n}} / {{N}}",
+    "exerciseCount": "תרגיל ⁦{{n}} / {{N}}⁩",
     "restLearned": "מנוחה · נלמדה",
     "upNextNewLift": "תרגיל חדש",
     "rest": "מנוחה",

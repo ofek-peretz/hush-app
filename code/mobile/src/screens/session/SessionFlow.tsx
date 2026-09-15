@@ -39,7 +39,7 @@ import { MotionThumb } from '@/motion/render/MotionThumb';
 import { MotionFigure } from '@/motion/render/MotionFigure';
 import { STAGE_FRAME_ASPECT } from '@/motion/frame';
 import { exerciseMotion } from '@/motion/registry';
-import { drinkingRig, loggingRig, restingRig } from '@/motion/library/life';
+import { drinkingRig, restingRig } from '@/motion/library/life';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, filmSubject, type CompleteResult } from '@/state/stores/sessionStore';
@@ -352,11 +352,22 @@ export function SessionFlow({ navigation, route }: Props) {
   const voiceNoticeRef = useRef(false);
   useEffect(() => {
     if (voiceNoticeRef.current) return;
+    /*
+     * ⛔ ONCE PER WORKOUT, AND ONLY BEFORE IT HAS BEGUN (founder, 2026-09-15: "אם אני יוצא לזמן מה
+     * ואז חוזר, זה מראה שהמאמן בקול צריך אוזניות אבל זה קוטע את האימון"). "Once per mount" was once
+     * per return: coming back to the stage mounted it again, and a notice owns the footer while it is
+     * up, so the set's own act stood down under a line she had already read. A workout with a set
+     * already logged is under way — nothing about the voice is news by then.
+     */
+    const workoutKey = session.startedAtMs ?? 0;
+    if (voiceNoticeShownFor.has(workoutKey) || (session.loggedSets?.length ?? 0) > 0) return;
     if (voice.silentBecause === 'permission') {
       voiceNoticeRef.current = true;
+      voiceNoticeShownFor.add(workoutKey);
       notify(t('workout.voiceSilentPermission'), [{ label: t('workout.voiceOpenSettings'), onPress: () => void Linking.openSettings() }]);
     } else if (voice.silentBecause === 'no_engine') {
       voiceNoticeRef.current = true;
+      voiceNoticeShownFor.add(workoutKey);
       notify(t('workout.voiceSilentNoEngine'));
     } else if (voice.silentBecause === 'no_headset') {
       /*
@@ -366,9 +377,10 @@ export function SessionFlow({ navigation, route }: Props) {
        * condition; the moment earbuds connect the conductor starts and the line is history.
        */
       voiceNoticeRef.current = true;
+      voiceNoticeShownFor.add(workoutKey);
       notify(t('workout.voiceSilentNoHeadset'));
     }
-  }, [voice.silentBecause, notify, t]);
+  }, [voice.silentBecause, notify, t, session.startedAtMs, session.loggedSets]);
   const confirmRunning = useRef(false);
   // Equipment-learning toast: the engine's pristine load for the active set (captured before any
   // Edit Result), and whether the athlete corrected the load to a different available weight.
@@ -1843,6 +1855,9 @@ function StageBar({
  */
 const STAGE_FPS = 24;
 
+/** The workouts (by start instant) whose silent-voice notice has been shown — once per workout, not per mount. */
+const voiceNoticeShownFor = new Set<number>();
+
 function StageAthlete({ exerciseId }: { exerciseId: string | null | undefined }) {
   const app = useApp();
   const session = useSession();
@@ -1850,7 +1865,11 @@ function StageAthlete({ exerciseId }: { exerciseId: string | null | undefined })
   /* A lift with no rig yet draws NOTHING rather than a stand-in: a generic body performing a
      movement that is not the one she is doing is worse than an empty slot, and the caller keeps
      its own shape either way. */
-  const rig = session.setRunningLong ? loggingRig : lift;
+  /* ⛔ THE PHONE-IN-HAND POSE IS GONE (founder, 2026-09-15: "האנימציה לא אהבתי בכלל… לא ברור מה זה
+     האיור הזה"). A set running long swapped her lift for a figure holding a phone, and on real glass
+     it read as nothing at all. The stage keeps showing the lift she is doing; the line above the act
+     (`SetRunningLong`) is what asks. */
+  const rig = lift;
   if (!rig) return null;
   return (
     <MotionFigure
@@ -1983,6 +2002,22 @@ function SetRunningLong() {
     haptics.warning(); // the one beat — a tap on the shoulder, not the rest-over GO
   }, [long]);
   if (!long) return null;
+  /*
+   * ⛔ "THAT WAS THE LAST SET" ONLY ON THE LAST SET (founder, 2026-09-15: set 1 of a whole workout
+   * asked "זה היה הסט האחרון. סיימת?"). The line was written when only the last set could still run
+   * long — every other set was presumed by the clock. Presumption was cancelled on 2026-09-09 and
+   * every set can run long again, so the finish ask is kept for the set that IS last and every other
+   * set says what is actually true.
+   */
+  const at = session.globalProgress?.index;
+  const isLast = at != null && !!session.livePlan?.[at]?.lastSetOfSession;
+  if (!isLast) {
+    return (
+      <Text style={styles.runningLong} accessibilityLiveRegion="polite">
+        {t('workout.setRunningLong')}
+      </Text>
+    );
+  }
   /*
    * ⛔ THE ONLY SET THIS LINE STILL SPEAKS FOR IS THE LAST ONE (2026-09-07 — the session runs
    * itself). Every other set is presumed by the clock at exactly this instant (`domain/sessionClock`)

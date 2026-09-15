@@ -143,6 +143,13 @@ function stepKey(step: Step): string {
   return `${step.exerciseId}#${step.exerciseSetIndex}`;
 }
 
+/** Which lift of the session this step is, among its DISTINCT lifts — the session map's own list. A
+    superset alternates two lifts set by set; counting runs counted every alternation ("1 / 9" over five). */
+export function exerciseProgressOf(plan: readonly Step[], current: Step): { index: number; total: number } {
+  const ids = [...new Set(plan.map((st) => st.exerciseId))];
+  return { index: Math.max(0, ids.indexOf(current.exerciseId)), total: ids.length };
+}
+
 /** Contiguous same-exercise runs of a plan (each exercise's consecutive sets). */
 function exerciseRuns(plan: Step[]): Step[][] {
   const runs: Step[][] = [];
@@ -2636,17 +2643,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       livePlan: plan,
       loggedSets: state.session?.sets ?? EMPTY_SETS,
       globalProgress: current ? { index: current.globalIndex, total: plan.length } : null,
-      exerciseProgress: current
-        ? (() => {
-            const runs = exerciseRuns(plan);
-            let acc = 0;
-            for (let r = 0; r < runs.length; r++) {
-              if (current.globalIndex < acc + runs[r].length) return { index: r, total: runs.length };
-              acc += runs[r].length;
-            }
-            return { index: 0, total: runs.length };
-          })()
-        : null,
+      /*
+       * ⛔ DISTINCT LIFTS, NOT CONTIGUOUS RUNS (founder, 2026-09-15 — "תרגיל 1 / 9" over a map of five).
+       * A superset alternates its two lifts set by set, so counting runs of the same id counted every
+       * alternation as a lift: three rounds of curl + pushdown were six "exercises". The count is the
+       * session map's own list — each lift once, in the order it first appears.
+       */
+      exerciseProgress: current ? exerciseProgressOf(plan, current) : null,
       nextExercise: resting && next ? exerciseById(next.exerciseId) ?? null : null,
       nextExerciseId: resting ? next?.exerciseId ?? null : null,
       nextTarget: resting ? next?.target ?? null : null,

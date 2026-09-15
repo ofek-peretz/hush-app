@@ -2072,7 +2072,7 @@ export const GALLERY: GalleryEntry[] = [
      store arms it off `learnedExecS`, twice her measured execution on this lift, so looking at it
      used to mean waiting three minutes inside a live session. Now the figure carries it, and a
      pose nobody can open is a pose nobody reviews. */
-  { id: '2.2u', label: 'the set has run long', of: '2.2', status: 'live', note: 'she is at her phone instead of under the bar — the pose IS the ask (no second line, no banner)', render: () =>
+  { id: '2.2u', label: 'the set has run long', of: '2.2', status: 'live', note: 'set 2 of 4 running long — the lift keeps playing and one line says so ("that was the last set" only on the last set, 2026-09-15)', render: () =>
     mount(SessionFlow, undefined, { ...sessionFixture, setRunningLong: true }) },
   { id: '2.2h', label: 'a lift she has never done', of: '2.2', status: 'live', note: 'set 2 · no history AND no load change, so no delta and no per-side line', render: () =>
     mount(SessionFlow, undefined, { ...sessionFixture, lastTime: null, setsSoFar: [] }) },

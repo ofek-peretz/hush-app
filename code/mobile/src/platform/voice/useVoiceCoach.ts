@@ -30,7 +30,10 @@ export type VoiceSilence = 'off' | 'no_engine' | 'no_headset' | 'permission' | n
 
 export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilence } {
   const app = useApp();
-  const [silentBecause, setSilentBecause] = useState<VoiceSilence>('no_headset');
+  /* ⛔ UNKNOWN UNTIL THE GATE IS READ (2026-09-15). This began as 'no_headset', so with earbuds IN the
+     stage announced "the coach needs earbuds" for the moment the permission check took — on every
+     mount. The gate below says 'no_headset' when it actually reads no headset. */
+  const [silentBecause, setSilentBecause] = useState<VoiceSilence>(null);
   /** Denied once this mount: iOS does not ask twice, and the re-check below must not spam. */
   const deniedRef = useRef(false);
   /** The gate, re-applied from the observe effect when a route change was never delivered. */
@@ -106,8 +109,8 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
             void track('voice_permission_denied');
           }
         });
-      } else if (!connected && c.isOn()) {
-        c.disable();
+      } else if (!connected) {
+        if (c.isOn()) c.disable();
         setSilentBecause('no_headset');
       }
     };
