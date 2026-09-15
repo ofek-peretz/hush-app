@@ -205,6 +205,24 @@ export interface Env {
  * asked for the switch on a cost-and-quality hunch — *"אולי זה יותר זול ועדיף ממה שיש לנו כעת"* —
  * which is a hypothesis, and it was tested rather than argued with. Anyone tempted to try 3.7
  * again: run the sixteen-call probe first, and expect truncation to be the thing that breaks.
+ *
+ * ── ⛔ 3.8 FLASH WAS PROBED TOO, AND STAYED OFF (2026-09-15) ─────────────────────────────────────
+ *
+ * Founder: *"יש כרגע את GEMINI 3.6 אבל בפועל כבר יצא 3.8. תבדוק עלויות ואיכויות."* Same per-token
+ * price as 3.6 (GA since 2026-09-02). Probed WITHOUT touching production: a non-deployed version
+ * (`wrangler versions upload --preview-alias`), sixteen app-built requests (he/en, 2–6 days, eight
+ * with a free-text ask carrying a checkable rule), two rounds per model — 32 builds each:
+ *
+ *              STOP     usable*   median   p90     output/call   $/build (std rate)   rule broken
+ *     3.6      32/32    31/32     5.2s     12.8s   572           $0.0094              1 (a cable lift in "dumbbells only")
+ *     3.8      32/32    30/32     4.3s      6.9s   889           $0.0114              4 (supersets asked, none paired ×2;
+ *                                                                                        "no straight bar, bad shoulder" →
+ *                                                                                        landmine press / trap bar ×2)
+ *     * usable = STOP, the days asked for, no unknown id, ≥3 lifts a day. Thinking at `low` ≈ 0 on both.
+ *
+ * 3.8 is faster in the tail and ~20% dearer per build (it writes longer weeks). It lost on the one
+ * thing this door is judged by — doing what she wrote — and the misses were an injury constraint
+ * and a superset request, both twice out of two. Re-probe after any prompt change that targets them.
  */
 const MODEL = 'gemini-3.6-flash';
 /**
