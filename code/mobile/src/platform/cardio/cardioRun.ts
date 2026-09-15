@@ -31,7 +31,12 @@ import {
   kcalForSegment,
   gaitFromPace,
   movementCredit,
+  noiseFloorM,
   segmentCounts,
+  trackProgresses,
+  MAX_FIX_GAP_S,
+  PROGRESS_SPAN_S,
+  type TrackWindow,
 } from './cardioMath';
 import { notifier } from '@/platform/notifications';
 import { cardioSurfaces } from './cardioLive';
@@ -170,9 +175,16 @@ const EMPTY = () => ({
   splits: [] as CardioSplit[],
   lastKm: 0,
   splitStartSec: 0,
+  /** The anchor the next window is measured from (see `noiseFloorM`). A pause clears it; a loose
+   *  fix no longer does. */
   lastFix: null as Prev | null,
+  /** Doppler summed across the open window, and how many fixes it holds — the window's speed. */
+  windowSpeedSum: 0,
+  windowSpeedN: 0,
+  /** Every window judged in the last PROGRESS_SPAN_S — what `trackProgresses` looks back over. */
+  windows: [] as TrackWindow[],
   // The instant of the newest fix EVER accepted — see the monotonic guard in `ingestFix`. It
-  // deliberately survives a pause and a bad fix, both of which clear `lastFix`.
+  // deliberately survives a pause, which clears `lastFix`.
   lastTsMs: 0,
   gps: 'idle' as GpsState,
   // The last LIVE reading (already through the freshness gate), and every one this activity has
@@ -315,6 +327,9 @@ export function setPaused(paused: boolean): void {
     if (s.resumedAtMs > 0) s.activeMs += Date.now() - s.resumedAtMs;
     s.resumedAtMs = 0;
     s.lastFix = null;
+    s.windowSpeedSum = 0;
+    s.windowSpeedN = 0;
+    s.windows = [];
     s.movingRun = 0;
     s.paceSec = 0;
   } else {
@@ -359,32 +374,49 @@ export function ingestFix(fix: Fix): void {
    * adds it a second time. A 10 km run could report 15.
    *
    * So an older-or-equal fix is not new information and is dropped before it can touch anything.
-   * `lastTsMs` is separate from `lastFix` on purpose: a pause and a poor fix both clear the chain,
-   * and neither of them makes the past interesting again.
+   * `lastTsMs` is separate from `lastFix` on purpose: a pause clears the chain, and it does not
+   * make the past interesting again.
    */
   if (tsMs <= s.lastTsMs) return;
   s.lastTsMs = tsMs;
   const goodFix = accuracy != null && accuracy <= MAX_ACCURACY_M;
   if (goodFix && s.gps !== 'ready') s.gps = 'ready';
-  if (s.paused || !goodFix) {
-    if (!goodFix) {
-      s.lastFix = null; // a poor fix breaks the segment
-      s.movingRun = 0; // …and the movement has to prove itself again
-    }
-    return;
-  }
-  const prev = s.lastFix;
-  s.lastFix = { lat: latitude, lon: longitude, tsMs };
+  /*
+   * ⛔ A LOOSE FIX IS SKIPPED, NOT A BREAK (founder, 2026-09-15 — see `noiseFloorM` in cardioMath).
+   * It cleared the chain and the moving run, so one bad second between tall buildings sent a real
+   * walk back to proving itself from zero. A fix with no Doppler (iOS reports -1) is skipped the
+   * same way: it can say where, not whether the athlete is moving.
+   */
+  if (s.paused || !goodFix || speed == null || speed < 0) return;
   // The origin is the first fix good enough to trust. Everything the athlete has to beat — the
   // departure test — is measured from here.
   if (!s.origin) s.origin = { lat: latitude, lon: longitude, tsMs };
   s.departedM = haversineM(s.origin.lat, s.origin.lon, latitude, longitude);
-  if (!prev) return;
-
+  const prev = s.lastFix;
+  if (!prev) {
+    s.lastFix = { lat: latitude, lon: longitude, tsMs };
+    s.windowSpeedSum = 0;
+    s.windowSpeedN = 0;
+    s.windows = [{ lat: latitude, lon: longitude, tsMs, segM: 0 }];
+    return;
+  }
+  s.windowSpeedSum += speed;
+  s.windowSpeedN += 1;
   const dtS = (tsMs - prev.tsMs) / 1000;
   const segM = haversineM(prev.lat, prev.lon, latitude, longitude);
-  const plausible = segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: speed, segmentM: segM, dtS });
-  // A plausible segment still has to PROVE itself: movement that holds across consecutive fixes,
+  // Still inside the fix's own noise: the window stays open and the anchor holds.
+  if (segM < noiseFloorM(accuracy) && dtS <= MAX_FIX_GAP_S) return;
+  const windowSpeed = s.windowSpeedSum / s.windowSpeedN;
+  s.lastFix = { lat: latitude, lon: longitude, tsMs };
+  s.windowSpeedSum = 0;
+  s.windowSpeedN = 0;
+  if (dtS > MAX_FIX_GAP_S) s.windows = [];
+  while (s.windows.length > 1 && tsMs - s.windows[0].tsMs > PROGRESS_SPAN_S * 1000) s.windows.shift();
+  s.windows.push({ lat: latitude, lon: longitude, tsMs, segM });
+
+  const plausible =
+    segmentCounts({ accuracyM: accuracy, dopplerSpeedMs: windowSpeed, segmentM: segM, dtS }) && trackProgresses(s.windows);
+  // A plausible segment still has to PROVE itself: movement that holds across consecutive windows,
   // from a phone that has gone further than its own error bar. This is what a chair cannot fake
   // (founder 2026-07-12 — see cardioMath). The proof is made once per activity, not once per stride.
   const credit = movementCredit(plausible, {
@@ -400,8 +432,8 @@ export function ingestFix(fix: Fix): void {
   // while moving; blank the moment movement stops. It follows the same proof as the distance — a
   // pace with no credited distance behind it is the exact "5:39 /km on a table" lie this whole
   // module exists to prevent.
-  if (credit.counts && speed != null && speed >= MIN_SPEED_MS) {
-    const inst = 1000 / speed; // sec/km
+  if (credit.counts && windowSpeed >= MIN_SPEED_MS) {
+    const inst = 1000 / windowSpeed; // sec/km
     s.paceSec = s.paceSec > 0 ? Math.round(s.paceSec * 0.7 + inst * 0.3) : Math.round(inst);
   } else if (!plausible) {
     s.paceSec = 0;

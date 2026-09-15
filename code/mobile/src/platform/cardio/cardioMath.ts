@@ -91,6 +91,75 @@ export function requiredDepartureM(accuracyM: number | null): number {
   return Math.max(MIN_DEPARTURE_M, DEPARTURE_ACCURACY_FACTOR * acc);
 }
 
+/**
+ * ════ ⛔ THE STREET WALK THAT READ NOTHING (founder, 2026-09-15) ════
+ *
+ *   *"בפעם האחרונה שעשיתי קרדיו בחוץ זה לא הראה לי את המטרים שאני עושה."*
+ *
+ * The gates above were judged on CONSECUTIVE fixes, one second apart. At a walk that is 1.4 m of
+ * real movement against 3–5 m of position jitter, so the geometry of a one-second segment is mostly
+ * noise: its speed disagreed with the Doppler (COHERENCE), the moving run reset, and the proof had
+ * to start over. Worse, one fix looser than 30 m — a tree, a bus, a building — cleared the chain
+ * outright. Simulated on realistic traces: a street walk credited ~63%, a walk between tall
+ * buildings 0–11%, a city walk with turns ~41%. That is his report.
+ *
+ * Three changes, each measured against the chair (a WiFi-hopping phone that must read 0.00):
+ *
+ *   1. A LOOSE FIX IS SKIPPED, NOT A BREAK. A fix over MAX_ACCURACY_M, or with no Doppler, is
+ *      ignored; the next good fix measures across it. The gap rule (MAX_FIX_GAP_S) still breaks a
+ *      segment that spans a real outage.
+ *   2. THE SEGMENT IS JUDGED FROM AN ANCHOR THAT CLEARS THE NOISE. The anchor holds until the
+ *      track has moved `noiseFloorM(accuracy)` from it (or the gap rule expires), and the Doppler
+ *      is averaged across that window — so the geometry being tested is movement, not jitter.
+ *   3. ⚠️ AND THE TRACK MUST GO SOMEWHERE. The anchor alone made the chair WORSE: joining hops
+ *      into longer windows made them look coherent (≈4 km in 15 minutes). What a hop cannot fake is
+ *      progress — over the last PROGRESS_SPAN_S, the straight-line displacement of a person is a
+ *      large fraction of the path they walked, while hops orbit a room. A window whose recent track
+ *      has walked PROGRESS_MIN_PATH_M and got less than MIN_PROGRESS of it away is not credited.
+ *
+ * The span is SHORT on purpose: at 60–180 s a U-turn, a block corner or a 400 m track reads as an
+ * orbit and a real walk loses most of its distance. At 30 s / 0.4 (25 seeds per trace):
+ * street walk 63→95%, canyon walk 8→78%, canyon run 43→99%, city turns 41→69%, out-and-back
+ * 61→85%, stop-and-go 63→87%; the chair's worst case 393 m→37 m, the wide chair 2.5 km→0.
+ * Pinned by `theStreetWalkIsMeasured`.
+ */
+export const NOISE_FLOOR_MIN_M = 3;
+export const NOISE_FLOOR_ACCURACY_FACTOR = 0.5;
+export const PROGRESS_SPAN_S = 30;
+export const PROGRESS_MIN_PATH_M = 20;
+export const MIN_PROGRESS = 0.4;
+
+export function noiseFloorM(accuracyM: number | null): number {
+  return Math.max(NOISE_FLOOR_MIN_M, NOISE_FLOOR_ACCURACY_FACTOR * (accuracyM ?? MAX_ACCURACY_M));
+}
+
+/** One judged window's end — what the progress test looks back over. */
+export interface TrackWindow {
+  lat: number;
+  lon: number;
+  tsMs: number;
+  /** The window's own length (anchor → this fix), metres. */
+  segM: number;
+}
+
+/**
+ * Does the recent track go somewhere? `windows` is every judged window, oldest first, ending with
+ * the one being judged now. Too little path to tell is a yes — the departure proof covers the start.
+ */
+export function trackProgresses(windows: readonly TrackWindow[]): boolean {
+  const n = windows.length;
+  if (n < 2) return true;
+  const now = windows[n - 1];
+  let i = n - 1;
+  let path = 0;
+  while (i > 0 && now.tsMs - windows[i - 1].tsMs <= PROGRESS_SPAN_S * 1000) {
+    path += windows[i].segM;
+    i--;
+  }
+  if (path < PROGRESS_MIN_PATH_M) return true;
+  return haversineM(windows[i].lat, windows[i].lon, now.lat, now.lon) >= MIN_PROGRESS * path;
+}
+
 /** Net energy cost per km per kg of bodyweight (run ≈ level running, walk ≈ brisk). */
 export const KCAL_PER_KG_KM: Record<CardioGait, number> = { run: 1.03, walk: 0.55 };
 
