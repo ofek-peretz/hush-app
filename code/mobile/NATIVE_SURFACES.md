@@ -5,6 +5,16 @@ These iOS-native surfaces are **wired in JS and configured**, but require a
 or on Windows. Each has a clean swap point in the app; dropping in the native
 module is the only remaining step.
 
+## ✅ SHIPPED AND RUNNING (updated 2026-08-25)
+
+**Nothing here is pending.** All four surfaces compiled and went to TestFlight in builds 58/59 with
+their capabilities provisioned (see `IOS_CAPABILITIES_PENDING.md`, itself now closed). The section
+below is the original hand-off note and is kept for the swap points it documents — read the dates
+in it as history, not as a status. The test count it quotes (218) predates the rebuild; the suite
+is over 3,400 today.
+
+---
+
 ## NATIVE IMPLEMENTATION COMPLETE (2026-06-16) — compile-pending only
 
 All four surfaces now have their native code in the repo behind the existing swap
@@ -192,6 +202,30 @@ invariant (§8.4) and the watch never triggers the save.
 **Offline rule:** the watch is a terminal — completion intents are never queued
 on it (would risk double-logging / broken save-order); a stale intent after a
 reconnect is rejected; the phone completes workouts entirely on its own.
+
+**Is there a watch at all? (`pairingState`, added 2026-07-29.)** The one native
+read that is not about the connection but about the DEVICE. `isReachable` cannot
+answer it — that is false whenever the watch app is not in the foreground, which
+is nearly always — so the module exposes `WCSession.isPaired` /
+`isWatchAppInstalled` alongside an `activated` flag, and JS reads them through
+`src/platform/watch/watchPresence.ts`. Nothing built on it may ever appear for an
+athlete who owns no Apple Watch, so the seam is deliberately three-valued:
+**UNKNOWN** (no native module, or activation has not finished) is never spent as a
+"no". On web / Expo Go / jest it is always UNKNOWN and nothing shows.
+
+Two surfaces read it, and between them every athlete is covered exactly once —
+`hush.watch.offered` ("she has been told") is the single seam:
+
+| when she got the watch | who tells her |
+| --- | --- |
+| before onboarding | **1.3 · Connect health** — a ruled notice row under the Health card, drawn only when paired. Sets the flag on the way out. |
+| after onboarding, or WCSession answered too late for 1.3 | **10.4 · On your wrist** — a state of Today, armed because the flag is unset. |
+| never | neither |
+
+Both surfaces resolve the face through the same pure `wristFace()`, so they cannot
+disagree. Neither is drivable from the browser gallery (no WCSession), so each has
+a documented preview seam: `ConnectHealth`'s `previewWrist` route param, and
+10.4's `offer` prop.
 
 **Native steps (require macOS + a watchOS target — out of this phase):**
 1. Add a watchOS app target (SwiftUI) to the prebuilt iOS project, protected by a

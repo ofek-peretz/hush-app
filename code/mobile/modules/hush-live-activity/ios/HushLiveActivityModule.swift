@@ -5,9 +5,12 @@ import Foundation
 // Expo module that controls the Hush Live Activities from JS.
 //
 // JS swap point: `src/platform/liveActivity.ts` calls these async functions by the
-// native module name "HushLiveActivity". The module is the ONLY writer of the
-// Activities; the phone's session / cardio machines are the source of truth, and the
-// Live Activity is a read-only projection.
+// native module name "HushLiveActivity". The phone's session / cardio machines are the
+// source of truth; the Live Activity is a projection of them — and, since 2026-09-08,
+// a CONTROL as well: three lock-screen taps (`targets/widget/HushLockIntents.swift`)
+// queue themselves in the App Group and whistle over a Darwin notification. This module
+// listens for the whistle and hands the queue to JS (`onLockIntent` → `drainLockIntents`),
+// and JS replays each tap at the instant it happened.
 //
 // Two kinds share one entry point, discriminated by `kind` ("strength" | "cardio").
 // Only one Activity is in flight at a time (you cannot lift and run at once); starting
@@ -33,6 +36,33 @@ struct ActivityRecord: Record {
   @Field var nextExerciseName: String? = nil
   @Field var nextTargetWeight: Double? = nil
   @Field var nextTargetReps: Int? = nil
+  // v7 6.2 — the set count as NUMBERS, for the dot row beside the load.
+  @Field var setIndex: Int = 1
+  @Field var setCount: Int = 1
+  // The lock screen as a control (2026-09-08) — see HushSessionAttributes.
+  @Field var restAfterS: Double = 0
+  @Field var lastSetOfSession: Bool = false
+  @Field var nextSetLabel: String = ""
+  @Field var nextSetIndex: Int = 1
+  @Field var nextSetCount: Int = 1
+  @Field var alertTitle: String = ""
+  @Field var alertBody: String = ""
+  @Field var wordRest: String = "Rest"
+  @Field var wordNext: String = "Next up"
+  @Field var wordPaused: String = "Paused"
+  @Field var wordLogged: String = "Logged"
+  @Field var actDone: String = "Done"
+  @Field var actAddRest: String = "+15 s"
+  @Field var actStart: String = "Next set"
+  // Her figures, typed on the lock screen (2026-09-08) — see HushSessionAttributes.
+  @Field var unitLabel: String = "kg"
+  @Field var weightStep: Double = 2.5
+  @Field var wordReps: String = "reps"
+  // The voice's loading dialogue (spec §3.2): Ready beside Done while the set waits for her word.
+  @Field var awaitingReady: Bool = false
+  @Field var actReady: String = "Ready"
+  /// Her word for a lift with no external load — bodyweight, or the band's own word.
+  @Field var wordBodyweight: String = "BW"
 
   // ---- cardio ----
   @Field var gait: String = "run"
@@ -44,6 +74,9 @@ struct ActivityRecord: Record {
   @Field var hr: Int = 0
   @Field var calories: Int = 0
   @Field var lastSplit: SplitRecord? = nil
+  /// The cardio card's words, resolved on the phone (`cardioWords()`). Optional so a publish from
+  /// a JS build that predates them still decodes — the English defaults below stand in.
+  @Field var words: CardioWordsRecord? = nil
 }
 
 struct SplitRecord: Record {
@@ -52,9 +85,91 @@ struct SplitRecord: Record {
   @Field var fastest: Bool = false
 }
 
+/// The cardio card's vocabulary. Every label that card draws used to be an English literal in the
+/// widget; they cross the bridge now, exactly as the strength card's words have since 2026-09-08.
+struct CardioWordsRecord: Record {
+  @Field var run: String = "Run"
+  @Field var walk: String = "Walk"
+  @Field var live: String = "Live"
+  @Field var paused: String = "Paused"
+  @Field var km: String = "km"
+  @Field var kcal: String = "kcal"
+  @Field var bpm: String = "bpm"
+}
+
+/// The App Group queue the lock-screen intents write (`HushLockIntentBus` in the widget target —
+/// the same suite, the same key, read here because a pod cannot see the app target's Swift).
+private enum LockQueue {
+  static let suite = "group.com.hushfitness.app"
+  static let key = "hush.lockIntents"
+  static let darwinName = "com.hushfitness.app.lockIntent"
+
+  /// Take everything queued. Only the ids handed over are removed, so a tap pushed by the intent
+  /// process between the read and the write is kept for the next drain, never lost.
+  static func drain() -> [[String: Any]] {
+    guard let store = UserDefaults(suiteName: suite) else { return [] }
+    let queue = store.array(forKey: key) as? [[String: Any]] ?? []
+    if queue.isEmpty { return [] }
+    let taken = Set(queue.compactMap { $0["id"] as? String })
+    let now = store.array(forKey: key) as? [[String: Any]] ?? []
+    let left = now.filter { !(($0["id"] as? String).map(taken.contains) ?? false) }
+    if left.isEmpty { store.removeObject(forKey: key) } else { store.set(left, forKey: key) }
+    return queue
+  }
+}
+
+/// Her figures from the lock screen's steppers, parked in the App Group until the set is logged —
+/// the same suite and key `HushLockPending` writes in the widget target (a pod cannot see the app
+/// target's Swift, so the shape is declared twice; `theLockScreenIsAControl` holds the literals).
+private enum LockPending {
+  static let key = "hush.lockPending"
+  struct Figures { let key: String; let weight: Double?; let reps: Int }
+
+  static func key(liftIndex: Int, setIndex: Int) -> String { "\(liftIndex)/\(setIndex)" }
+
+  static func read() -> Figures? {
+    guard let store = UserDefaults(suiteName: LockQueue.suite),
+          let d = store.dictionary(forKey: key),
+          let k = d["key"] as? String,
+          let reps = d["reps"] as? Int else { return nil }
+    return Figures(key: k, weight: d["weight"] as? Double, reps: reps)
+  }
+
+  static func clear() {
+    UserDefaults(suiteName: LockQueue.suite)?.removeObject(forKey: key)
+  }
+}
+
 public class HushLiveActivityModule: Module {
   public func definition() -> ModuleDefinition {
     Name("HushLiveActivity")
+    Events("onLockIntent")
+
+    OnCreate {
+      // The whistle: a lock-screen intent was queued. Emitted without a payload — JS drains the
+      // queue itself, so an event and a foreground drain can never apply the same tap twice.
+      let center = CFNotificationCenterGetDarwinNotifyCenter()
+      let observer = Unmanaged.passUnretained(self).toOpaque()
+      CFNotificationCenterAddObserver(
+        center,
+        observer,
+        { _, observer, _, _, _ in
+          guard let observer = observer else { return }
+          let module = Unmanaged<HushLiveActivityModule>.fromOpaque(observer).takeUnretainedValue()
+          DispatchQueue.main.async { module.sendEvent("onLockIntent", [:]) }
+        },
+        LockQueue.darwinName as CFString,
+        nil,
+        .deliverImmediately
+      )
+    }
+
+    OnDestroy {
+      CFNotificationCenterRemoveEveryObserver(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        Unmanaged.passUnretained(self).toOpaque()
+      )
+    }
 
     Function("areActivitiesEnabled") { () -> Bool in
       if #available(iOS 16.2, *) {
@@ -71,8 +186,21 @@ public class HushLiveActivityModule: Module {
       HushActivityController.shared.update(state)
     }
 
-    AsyncFunction("endActivity") {
-      HushActivityController.shared.end()
+    /// End every card of ONE kind — a cardio run ending may not take her workout's card with it.
+    AsyncFunction("endActivity") { (kind: String) in
+      HushActivityController.shared.end(kind: kind)
+    }
+
+    /// Is a card of this kind on the lock screen right now? Asked by `liveActivityRunning`, which
+    /// gates the 7-second rest warning and used to be a boolean this process could only guess at.
+    Function("hasActivity") { (kind: String) -> Bool in
+      HushActivityController.shared.has(kind: kind)
+    }
+
+    /// Every lock-screen tap since the last drain — `{ id, type, atMs }` each — and the queue is
+    /// emptied. JS replays them in order at their instants (`sessionStore.applyLockIntents`).
+    AsyncFunction("drainLockIntents") { () -> [[String: Any]] in
+      LockQueue.drain()
     }
   }
 }
@@ -81,26 +209,69 @@ public class HushLiveActivityModule: Module {
 /// ContentState. All ActivityKit access is guarded by `#available(iOS 16.2, *)`.
 final class HushActivityController {
   static let shared = HushActivityController()
-  private var current: Any?
+  /*
+   * ⛔ THERE IS NO HANDLE HERE ANY MORE (audit, 2026-09-14). See the lifecycle note below: a Live
+   * Activity outlives this process, so the only honest question is what ActivityKit is running.
+   */
 
   // ---- projections ----
   @available(iOS 16.2, *)
   private func strengthState(_ r: ActivityRecord) -> HushSessionAttributes.ContentState {
-    HushSessionAttributes.ContentState(
+    /*
+     * ════ HER FIGURES SURVIVE A REPUBLISH (2026-09-08) ════
+     * The lock screen's steppers write her load and reps into the App Group (`hush.lockPending`,
+     * keyed by the set they belong to) and project them onto the card locally. The phone republishes
+     * this state on every change of its own — a tick, a mirror — and would put the prescription back
+     * over her numbers. So the pending figures are merged HERE, on the set they were typed for, and
+     * dropped the moment the card shows any other set (or a rest): a stale edit never lands on the
+     * wrong set.
+     */
+    var weight = r.targetWeight
+    var reps = r.targetReps
+    let key = LockPending.key(liftIndex: r.liftIndex, setIndex: r.setIndex)
+    if r.phase == "set", let p = LockPending.read(), p.key == key {
+      weight = p.weight
+      reps = p.reps
+    } else {
+      LockPending.clear()
+    }
+    return HushSessionAttributes.ContentState(
       workoutName: r.workoutName,
       phase: r.phase,
       exerciseName: r.exerciseName,
       setLabel: r.setLabel,
       liftIndex: r.liftIndex,
       liftCount: r.liftCount,
-      targetWeight: r.targetWeight,
-      targetReps: r.targetReps,
+      targetWeight: weight,
+      targetReps: reps,
       restEndDate: r.isResting ? r.restEndsAtMs.map { Date(timeIntervalSince1970: $0 / 1000.0) } ?? nil : nil,
       restTotalS: r.isResting ? r.restTotalS : nil,
       isResting: r.isResting,
       nextExerciseName: r.nextExerciseName,
       nextTargetWeight: r.nextTargetWeight,
-      nextTargetReps: r.nextTargetReps
+      nextTargetReps: r.nextTargetReps,
+      setIndex: r.setIndex,
+      setCount: r.setCount,
+      restAfterS: r.restAfterS,
+      lastSetOfSession: r.lastSetOfSession,
+      nextSetLabel: r.nextSetLabel,
+      nextSetIndex: r.nextSetIndex,
+      nextSetCount: r.nextSetCount,
+      alertTitle: r.alertTitle,
+      alertBody: r.alertBody,
+      wordRest: r.wordRest,
+      wordNext: r.wordNext,
+      wordPaused: r.wordPaused,
+      wordLogged: r.wordLogged,
+      actDone: r.actDone,
+      actAddRest: r.actAddRest,
+      actStart: r.actStart,
+      unitLabel: r.unitLabel,
+      weightStep: r.weightStep,
+      wordReps: r.wordReps,
+      wordBodyweight: r.wordBodyweight,
+      awaitingReady: r.awaitingReady,
+      actReady: r.actReady
     )
   }
 
@@ -117,31 +288,92 @@ final class HushActivityController {
       calories: r.calories,
       lastSplitKm: r.lastSplit?.km,
       lastSplitPaceSec: r.lastSplit?.paceSec,
-      lastSplitFastest: r.lastSplit?.fastest ?? false
+      lastSplitFastest: r.lastSplit?.fastest ?? false,
+      wordRun: r.words?.run ?? "Run",
+      wordWalk: r.words?.walk ?? "Walk",
+      wordLive: r.words?.live ?? "Live",
+      wordPaused: r.words?.paused ?? "Paused",
+      unitKm: r.words?.km ?? "km",
+      unitKcal: r.words?.kcal ?? "kcal",
+      unitBpm: r.words?.bpm ?? "bpm"
     )
   }
 
   // ---- lifecycle ----
+  /*
+   * ⛔ ACTIVITYKIT IS THE SOURCE OF TRUTH, NOT A HANDLE IN THIS PROCESS (audit, 2026-09-14).
+   *
+   * This controller kept the running activity in one in-memory handle. A Live Activity
+   * OUTLIVES the process that started it — iOS kills a backgrounded app freely, the same kill that
+   * used to drop her back on Home — so at the next launch the handle was nil while the card was
+   * still on the lock screen: `start` requested a SECOND card, `end` could only end the last one,
+   * and the orphans stayed until ActivityKit's own ceiling. That is the founder's own finding from
+   * the floor ("מצטבר למלא התראות וקשה לבחור את ההתראה העדכנית"), and it has a sharper edge than
+   * clutter: the widget's projection reads `Activity.activities.first`, so a thumb could be
+   * operating a card the phone had long stopped updating.
+   *
+   * Every road below asks ActivityKit what is running, BY KIND:
+   *   · start   — adopt the live card of this kind (ending any orphan behind it) or request one,
+   *               and never leave the other kind on screen beside it;
+   *   · update  — with nothing to update, START one. That is the other half of the same bug: a run
+   *               inside a workout ends the workout's card, and the store only ever `update`s
+   *               afterwards, so the card never came back for the rest of the session;
+   *   · end     — end every card of that kind, orphans included.
+   */
+  @available(iOS 16.2, *)
+  private func strengthActivities() -> [Activity<HushSessionAttributes>] {
+    Array(Activity<HushSessionAttributes>.activities)
+  }
+
+  @available(iOS 16.2, *)
+  private func cardioActivities() -> [Activity<HushCardioAttributes>] {
+    Array(Activity<HushCardioAttributes>.activities)
+  }
+
+  /// End these cards. `keepingFirst` adopts the first and ends the rest — the pile a killed
+  /// process left behind, cleared the moment the app speaks again.
+  @available(iOS 16.2, *)
+  private func endAll<T: ActivityAttributes>(_ list: [Activity<T>], keepingFirst keep: Bool = false) {
+    for (i, a) in list.enumerated() where !(keep && i == 0) {
+      Task { await a.end(nil, dismissalPolicy: .immediate) }
+    }
+  }
+
+  func has(kind: String) -> Bool {
+    guard #available(iOS 16.2, *) else { return false }
+    return kind == "cardio" ? !cardioActivities().isEmpty : !strengthActivities().isEmpty
+  }
+
   func start(_ r: ActivityRecord) -> Bool {
     guard #available(iOS 16.2, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
-    // If an activity of the same kind is already running, just update it.
-    if r.kind == "cardio", current is Activity<HushCardioAttributes> {
-      update(r); return true
-    }
-    if r.kind == "strength", current is Activity<HushSessionAttributes> {
-      update(r); return true
-    }
-    end() // switching kinds (or first start) — clear any prior activity
-    do {
-      if r.kind == "cardio" {
-        current = try Activity.request(
+    if r.kind == "cardio" {
+      endAll(strengthActivities()) // the two kinds never share the screen
+      let live = cardioActivities()
+      if let a = live.first {
+        endAll(live, keepingFirst: true)
+        Task { await a.update(ActivityContent(state: cardioState(r), staleDate: nil)) }
+        return true
+      }
+      do {
+        _ = try Activity.request(
           attributes: HushCardioAttributes(),
           content: ActivityContent(state: cardioState(r), staleDate: nil), pushType: nil)
-      } else {
-        current = try Activity.request(
-          attributes: HushSessionAttributes(),
-          content: ActivityContent(state: strengthState(r), staleDate: nil), pushType: nil)
+        return true
+      } catch {
+        return false
       }
+    }
+    endAll(cardioActivities())
+    let live = strengthActivities()
+    if let a = live.first {
+      endAll(live, keepingFirst: true)
+      Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
+      return true
+    }
+    do {
+      _ = try Activity.request(
+        attributes: HushSessionAttributes(),
+        content: ActivityContent(state: strengthState(r), staleDate: nil), pushType: nil)
       return true
     } catch {
       return false
@@ -150,20 +382,17 @@ final class HushActivityController {
 
   func update(_ r: ActivityRecord) {
     guard #available(iOS 16.2, *) else { return }
-    if let a = current as? Activity<HushCardioAttributes> {
+    if r.kind == "cardio" {
+      guard let a = cardioActivities().first else { _ = start(r); return }
       Task { await a.update(ActivityContent(state: cardioState(r), staleDate: nil)) }
-    } else if let a = current as? Activity<HushSessionAttributes> {
-      Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
+      return
     }
+    guard let a = strengthActivities().first else { _ = start(r); return }
+    Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
   }
 
-  func end() {
+  func end(kind: String) {
     guard #available(iOS 16.2, *) else { return }
-    if let a = current as? Activity<HushCardioAttributes> {
-      Task { await a.end(nil, dismissalPolicy: .immediate) }
-    } else if let a = current as? Activity<HushSessionAttributes> {
-      Task { await a.end(nil, dismissalPolicy: .immediate) }
-    }
-    current = nil
+    if kind == "cardio" { endAll(cardioActivities()) } else { endAll(strengthActivities()) }
   }
 }

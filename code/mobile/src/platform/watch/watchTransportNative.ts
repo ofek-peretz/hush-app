@@ -15,16 +15,37 @@
  * web / a build without the watch target / jest), so the transport degrades to the
  * stub and the bridge keeps running with a no-op pipe.
  */
+
+// 
+
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule, type EventSubscription } from 'expo-modules-core';
 import { serializeEnvelope, type WatchStateEnvelope } from './protocol';
 import { watchTransportStub, type WatchTransport } from './watchBridge';
 
+/** What WCSession knows about the DEVICE (not about the connection) — see `pairingState` in
+ *  `HushWatchConnectivityModule.swift`. `activated: false` means "not asked yet", never "no". */
+export interface NativeWatchPairing {
+  activated: boolean;
+  paired: boolean;
+  appInstalled: boolean;
+}
+
 interface HushWatchConnectivityNativeModule {
   isReachable(): boolean;
-  sendState(json: string): void;
+  pairingState(): NativeWatchPairing;
+  /** Expo AsyncFunction — resolves when the OS accepted the frame, REJECTS when it refused
+   *  (not-activated / not-paired / payload-too-large). See sendState below. */
+  sendState(json: string): Promise<void>;
+  /** Durably acknowledge a reconciled watch-local session record (transferUserInfo). */
+  ackRecord(recordId: string): void;
+  /** JS is subscribed on both inbound channels — drain everything buffered during boot (W1). */
+  flushPending(): void;
   addListener(event: 'onIntent', cb: (e: { intent: string }) => void): EventSubscription;
   addListener(event: 'onReachabilityChange', cb: (e: { reachable: boolean }) => void): EventSubscription;
+  addListener(event: 'onSessionRecord', cb: (e: { record: string }) => void): EventSubscription;
+  /** Live-channel (sendMessage) refusals — surfaced instead of `errorHandler: nil` (2026-08-26). */
+  addListener(event: 'onSendError', cb: (e: { reason: string }) => void): EventSubscription;
 }
 
 const native =
@@ -42,6 +63,86 @@ function parseIntent(json: string): unknown {
   }
 }
 
+/**
+ * What WCSession knows about the wrist, or null where there is no native module (web / Expo
+ * Go / jest / a build without the watch target). NULL AND `activated: false` MEAN THE SAME
+ * THING to a caller — we do not know — and neither is ever reported as "no watch".
+ *
+ * This is the only native read outside the transport, and it lives here so the module handle
+ * has exactly one home.
+ */
+export function nativeWatchPairing(): NativeWatchPairing | null {
+  if (!native) return null;
+  try {
+    const state = native.pairingState();
+    // A malformed answer is an unknown one, never a negative.
+    if (typeof state?.activated !== 'boolean') return null;
+    return { activated: state.activated, paired: !!state.paired, appInstalled: !!state.appInstalled };
+  } catch {
+    return null;
+  }
+}
+
+/*
+ * ⛔ THE BOOT WINDOW (watch audit 2026-08-23). WCSession activates milliseconds into a cold launch
+ * and delivers queued transfers immediately; React subscribes seconds later; an event emitted into
+ * that gap was dropped — a pain report permanently, a finished wrist workout until the outbox's
+ * next retry. The native module now BUFFERS intents + records until told JS is listening, and this
+ * is where it is told: once BOTH inbound channels have a subscriber, everything buffered drains in
+ * order. Counted per channel, because flushing on the first (intents) while the second (records)
+ * was still unsubscribed would drop the records all over again.
+ */
+let intentSubs = 0;
+let recordSubs = 0;
+/** Listeners for LATE (async) OS refusals of sendState — see the sendState note. */
+const sendFailureCbs = new Set<(reason: string) => void>();
+let sendErrorSubAttached = false;
+
+/**
+ * ⛔ THE PHONE'S OWN ACCOUNT OF THE LAST FRAME (founder 2026-09-08, two photographs of a wrist
+ * saying `badframe` and nothing on the phone to hold against it). Every frame that leaves —
+ * when, how many bytes, which sequence — and the first refusal after it: the OS's
+ * (`updateApplicationContext` threw), or the phone's own parser's (`invalid_json: …`, the module
+ * checks the string before sending). Read by the Profile sheet's watch row, so the phone says
+ * what it sent without Sentry, PostHog or a cable.
+ */
+export interface WatchPublishRecord {
+  atMs: number;
+  bytes: number;
+  seq: number;
+  ok: boolean;
+  reason: string | null;
+}
+let lastPublish: WatchPublishRecord | null = null;
+function noteFailure(reason: string): void {
+  if (lastPublish) lastPublish = { ...lastPublish, ok: false, reason: reason.slice(0, 160) };
+  else lastPublish = { atMs: Date.now(), bytes: 0, seq: -1, ok: false, reason: reason.slice(0, 160) };
+}
+function utf8Bytes(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+/** The last frame the phone tried to send to the wrist, and what became of it. */
+export function lastWatchPublish(): WatchPublishRecord | null {
+  return lastPublish;
+}
+function maybeFlushPending(): void {
+  if (intentSubs > 0 && recordSubs > 0) {
+    try {
+      native?.flushPending();
+    } catch {
+      /* an older native binary has no flushPending — it also has no buffer to drain */
+    }
+  }
+}
+
 export const watchTransportNative: WatchTransport | null = native
   ? {
       isReachable() {
@@ -51,16 +152,58 @@ export const watchTransportNative: WatchTransport | null = native
           return false;
         }
       },
-      sendState(env: WatchStateEnvelope) {
+      sendState(env: WatchStateEnvelope): boolean {
+        /*
+         * ⛔ THE CATCH THAT COULD NEVER CATCH (build-59 wrist silence, 2026-08-26). `sendState` is
+         * an Expo AsyncFunction — it returns a PROMISE, and the old synchronous try/catch here met
+         * only serialization errors. An OS refusal (`updateApplicationContext` throwing on
+         * not-activated / not-paired / payload-too-large) arrived as an unhandled rejection while
+         * this function had already answered `true` — so the bridge telemetered a success for
+         * every frame the OS discarded, which is exactly the blindness that let the wrist starve
+         * unnoticed. Refusals now flow to `onSendFailure`, and the promise is always handled.
+         */
         try {
-          native.sendState(serializeEnvelope(env));
-        } catch {
-          /* transport unavailable — drop; the bridge re-publishes on next change */
+          const json = serializeEnvelope(env);
+          lastPublish = { atMs: Date.now(), bytes: utf8Bytes(json), seq: env.authoritySeq, ok: true, reason: null };
+          const r = native.sendState(json) as unknown;
+          if (r && typeof (r as Promise<void>).catch === 'function') {
+            (r as Promise<void>).catch((err) => {
+              const reason = err instanceof Error ? err.message : String(err);
+              noteFailure(reason);
+              for (const cb of sendFailureCbs) cb(reason);
+            });
+          }
+          return true;
+        } catch (err) {
+          noteFailure(err instanceof Error ? err.message : String(err));
+          return false; // synchronous refusal (serialization) — the bridge counts it inline
         }
+      },
+      onSendFailure(cb: (reason: string) => void) {
+        // One native listener, attached on first subscriber, feeds the same channel — a
+        // sendMessage refusal and a rejected updateApplicationContext are one fact to the bridge.
+        if (!sendErrorSubAttached) {
+          sendErrorSubAttached = true;
+          try {
+            native.addListener('onSendError', (e) => {
+              noteFailure(e.reason);
+              for (const f of sendFailureCbs) f(e.reason);
+            });
+          } catch {
+            /* an older native binary has no such event — the promise path still reports */
+          }
+        }
+        sendFailureCbs.add(cb);
+        return () => {
+          sendFailureCbs.delete(cb);
+        };
       },
       onIntent(cb: (raw: unknown) => void) {
         const sub = native.addListener('onIntent', (e) => cb(parseIntent(e.intent)));
+        intentSubs += 1;
+        maybeFlushPending();
         return () => {
+          intentSubs = Math.max(0, intentSubs - 1);
           try {
             sub.remove();
           } catch {
@@ -77,6 +220,28 @@ export const watchTransportNative: WatchTransport | null = native
             /* already removed */
           }
         };
+      },
+      onSessionRecord(cb: (raw: unknown) => void) {
+        // Same defensive parse as intents: a malformed record becomes a value the
+        // reconciler rejects (never throws here).
+        const sub = native.addListener('onSessionRecord', (e) => cb(parseIntent(e.record)));
+        recordSubs += 1;
+        maybeFlushPending();
+        return () => {
+          recordSubs = Math.max(0, recordSubs - 1);
+          try {
+            sub.remove();
+          } catch {
+            /* already removed */
+          }
+        };
+      },
+      ackRecord(recordId: string) {
+        try {
+          native.ackRecord(recordId);
+        } catch {
+          /* transport unavailable — the watch re-delivers; reconcile is idempotent */
+        }
       },
     }
   : null;

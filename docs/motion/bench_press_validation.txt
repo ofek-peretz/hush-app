@@ -1,0 +1,10 @@
+FormSpec validation — bb_bench_press
+========================================
+RESULT: PASS — every predicate holds across the loop.
+
+
+Checks:
+  start: elbow lockout (full press) — the unrack
+  end: bar touches the chest line
+  path: handR vertical ±1.5
+  invariants: feet planted · toes planted · hips on the bench · shoulders on the bench · head still · no elbow hyperextension

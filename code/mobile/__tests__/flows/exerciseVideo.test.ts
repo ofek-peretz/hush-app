@@ -3,6 +3,10 @@
  * built; files are supplied later), so these pin the resolver contract + a content-integrity guard
  * that holds now (empty) and keeps holding as real videos are added.
  */
+// @ts-nocheck
+
+// 
+
 import { EXERCISE_VIDEO, exerciseVideoSource, hasExerciseVideo, type VideoSource } from '@/platform/media/exerciseVideo';
 import { exerciseById } from '@/data/exercises';
 

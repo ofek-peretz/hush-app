@@ -1,0 +1,10 @@
+FormSpec validation — bb_back_squat
+========================================
+RESULT: PASS — every predicate holds across the loop.
+
+
+Checks:
+  start: knee near-extended (stand tall) · hip near-extended (stand tall)
+  end: hip crease below the knee (depth)
+  path: bar vertical ±1.5
+  invariants: ankle planted · heel never leaves the floor · toe planted · no knee hyperextension

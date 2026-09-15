@@ -9,12 +9,22 @@
  * pattern is the signature: the only one with an internal pause AND a sustained
  * beat — unmistakable as "the session is fully complete".
  *
+ * REST COUNTDOWN ("The Approach"): a non-major, multi-beat pattern the native layer SCHEDULES
+ * against the mirror's rest end (not played as a burst) — one soft whisper at 7s, then a rising
+ * gentle-firm 3-2-1, resolving into `rest_complete` (the GO) at 0. Because the watch fires reliably
+ * wrist-down/screen-off, it is the PRIMARY surface for the countdown and OWNS it whenever a watch
+ * session is active; the phone suppresses its own countdown then, so the athlete never feels both.
+ *
  * See WATCH_EXPERIENCE_SPEC.md §3.
  */
+
+// 
+
 
 export type HapticPatternId =
   | 'set_complete'
   | 'rest_complete'
+  | 'rest_countdown'
   | 'exercise_complete'
   | 'workout_complete'
   | 'connection_lost'
@@ -91,6 +101,20 @@ export const HAPTICS: Record<HapticPatternId, HapticPattern> = {
     major: true,
     firesWristDown: true,
   },
+  // ---- The rest countdown ("The Approach") — scheduled against the rest clock ----
+  rest_countdown: {
+    id: 'rest_countdown',
+    label: 'one soft whisper at 7s, then a rising gentle-firm 3-2-1 (gaps are seconds, not ms)',
+    // gapBeforeMs is the wall-clock gap from the previous beat: 7s→3s→2s→1s before rest end.
+    beats: [
+      { gapBeforeMs: 0, intensity: 'soft' }, // T-7s — awareness
+      { gapBeforeMs: 4000, intensity: 'gentle_firm' }, // T-3s — "three"
+      { gapBeforeMs: 1000, intensity: 'gentle_firm' }, // T-2s — "two"
+      { gapBeforeMs: 1000, intensity: 'warm' }, // T-1s — "one", crisp + imminent
+    ],
+    major: false,
+    firesWristDown: true,
+  },
   // ---- Supporting (lower-frequency, user-initiated contexts) ----
   receipt: {
     id: 'receipt',
@@ -128,6 +152,7 @@ export const HAPTICS: Record<HapticPatternId, HapticPattern> = {
 /** The events that produce a haptic, named at the point they occur. */
 export type WatchHapticEvent =
   | 'set_logged' // the phone confirmed a completed set (incl. adjusted reps)
+  | 'rest_approaching' // the final seconds of rest — schedule the Approach countdown
   | 'rest_elapsed' // the rest timer reached zero
   | 'ready_tapped' // the athlete ended rest early
   | 'exercise_boundary' // entered Exercise Complete
@@ -141,6 +166,7 @@ export type WatchHapticEvent =
 
 const EVENT_TO_PATTERN: Record<WatchHapticEvent, HapticPatternId> = {
   set_logged: 'set_complete',
+  rest_approaching: 'rest_countdown',
   rest_elapsed: 'rest_complete',
   ready_tapped: 'action_ack',
   exercise_boundary: 'exercise_complete',

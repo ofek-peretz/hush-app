@@ -8,8 +8,19 @@
  * all the rest of the app needs to reason about plans.
  */
 
+// 
+
+
 export const PRODUCT_IDS = {
-  monthly: 'hush.pro.monthly',
+  /*
+   * ⚠️ `hush.pro.month`, NOT `.monthly` (2026-08-26). The first monthly product in App Store
+   * Connect was created with a mis-clicked price tier and deleted — and ASC burns a deleted
+   * product id FOREVER, so `.monthly` can never be registered again. The live products:
+   *   hush.pro.month  · Apple ID 6805347288 · $9.99 / 1 month
+   *   hush.pro.annual · Apple ID 6805340117 · $59.99 / 1 year
+   * Both in subscription group "Hush Pro" (22335842), all territories, en + he localizations.
+   */
+  monthly: 'hush.pro.month',
   annual: 'hush.pro.annual',
 } as const;
 

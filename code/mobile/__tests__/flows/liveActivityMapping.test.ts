@@ -5,8 +5,25 @@
  * restEndsAtMs is carried (drift-proof countdown); during an active set there is
  * no countdown. The widget is a read-only SUBSET of the canonical SessionMirror.
  */
+// @ts-nocheck
+
+// 
+
+import i18next from 'i18next';
 import { liveActivityStateFromMirror } from '@/platform/liveActivity';
+import { resources } from '@/i18n';
 import { MIRROR_SCHEMA_VERSION, type SessionMirror } from '@/platform/sessionMirror';
+
+// The Live Activity projection localizes its set label (phone surface), so the
+// global i18next must be initialized for these assertions.
+beforeAll(async () => {
+  if (!i18next.isInitialized) {
+    await i18next.init({ resources, lng: 'en', fallbackLng: 'en', interpolation: { escapeValue: false } });
+  }
+});
+afterEach(async () => {
+  await i18next.changeLanguage('en');
+});
 
 function mirror(over: Partial<SessionMirror>): SessionMirror {
   return {
@@ -15,6 +32,8 @@ function mirror(over: Partial<SessionMirror>): SessionMirror {
     workoutName: 'Upper B',
     exerciseName: 'Back Squat',
     setLabel: 'Set 2 of 4',
+    setNumber: 2,
+    setsInExercise: 4,
     liftIndex: 1,
     liftCount: 6,
     globalIndex: 1,
@@ -62,6 +81,14 @@ describe('liveActivityStateFromMirror', () => {
     expect(s.nextTargetWeight).toBe(59);
   });
 
+  it('localizes the set label to the app language (Hebrew), names stay English', async () => {
+    await i18next.changeLanguage('he');
+    const s = liveActivityStateFromMirror(mirror({ phase: 'active_set' }));
+    expect(s.setLabel).toBe('סט 2 מתוך 4');
+    expect(s.exerciseName).toBe('Back Squat'); // canonical English name unchanged
+    expect(s.workoutName).toBe('Upper B');
+  });
+
   it('paused phase maps through', () => {
     const s = liveActivityStateFromMirror(mirror({ phase: 'paused' }));
     expect(s.phase).toBe('paused');
@@ -79,6 +106,19 @@ describe('liveActivityStateFromMirror', () => {
     const s = liveActivityStateFromMirror(mirror({ phase: 'rest_transition', restEndsAt: iso }));
     expect(s.isResting).toBe(true);
     expect(s.restEndsAtMs).toBe(Date.parse(iso));
+  });
+
+  it('⛔ during a rest the card’s LOAD is the coming set’s, like its label — a moved load reads the same as on the phone', () => {
+    // The voice raised set 3 from 100 to 102.5 while she rests: the label already names set 3, and so
+    // must the figure beside it (it used to print the 100 she had just lifted).
+    const s = liveActivityStateFromMirror(
+      mirror({ phase: 'rest_inter', restEndsAt: '2026-06-16T10:00:00.000Z', nextSetNumber: 3, nextSetsInExercise: 4, nextTargetWeight: 102.5, nextTargetReps: 5 }),
+    );
+    expect(s.setIndex).toBe(3);
+    expect(s.targetWeight).toBe(102.5);
+    expect(s.targetReps).toBe(5);
+    // …and a set on stage still shows its own.
+    expect(liveActivityStateFromMirror(mirror({ phase: 'active_set', nextTargetWeight: 102.5 })).targetWeight).toBe(100);
   });
 
   it('resting with no end instant → null restEndsAtMs (no bogus countdown)', () => {

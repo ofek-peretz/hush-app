@@ -15,6 +15,9 @@
  *    new sample adopts nothing).
  *  - It NEVER throws — observability over failure (telemetry), never a crash.
  */
+
+// 
+
 import type { HealthGate } from '@/platform/health';
 import { HEALTH_EVENTS } from '@/platform/events';
 import type { HealthState } from './healthModel';
