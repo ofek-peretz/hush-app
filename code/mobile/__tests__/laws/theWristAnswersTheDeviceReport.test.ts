@@ -141,14 +141,29 @@ describe('#5 · the correction gets its screen', () => {
 
   it('does not say it twice — but never loses it either', () => {
     /*
-     * The rest screen carries the same news underneath. Saying it twice in four seconds on a 41 mm
-     * case is worse than saying it once — but the correction rides the envelope AFTER the set and
-     * sometimes lands past the confirmation beat, and then the note is the ONLY place it exists.
-     * So the note stands down only for the correction WT3 actually announced.
+     * The correction rides the envelope AFTER the set and sometimes lands past the confirmation beat;
+     * and a set logged on the phone, the lock screen or by voice never opened that beat at all. Until
+     * 2026-09-15 a note under the rest timer carried the news on those paths — and, measured on 40 mm,
+     * pushed the rest body ~40 pt past its slot.
+     *
+     * The contract is now the canon's own ("its own beat, not a note under a timer"): the ARRIVAL of an
+     * unannounced correction on a rest frame opens WT3 itself, once per correction, on every path. So
+     * the news is never lost, and never said twice.
      */
-    const src = read('WatchScreens.swift');
-    expect(src).toMatch(/private var note: WireCorrection \{ 0 \}|announced \? nil : mirror\.correction/);
-    expect(src).toContain('announced: model.announcedCorrectionAt == m.globalIndex');
+    const model = read('WatchModel.swift');
+    const beat = model.slice(model.indexOf('private func openCorrectionBeat'), model.indexOf('private func scheduleSetConfirmClear'));
+    expect(beat).toContain('m.correction != nil, m.phase == "rest_inter" || m.phase == "rest_transition"');
+    // once per correction: not while a tapped beat is already showing it, never for one announced
+    expect(beat).toContain('guard setConfirm == nil, announcedCorrectionAt != m.globalIndex, correctionBeatAt != m.globalIndex');
+    // opened by the news itself, on every envelope
+    expect(model).toContain('openCorrectionBeat(mirror)');
+    // …and projected as WT3, only while the frame is still on the set it was about
+    expect(model).toContain('let beatHere = correctionBeatAt != nil && correctionBeatAt == effectiveMirror?.globalIndex');
+    expect(model).toContain('if setConfirm != nil || beatHere, let c = effectiveMirror?.correction {');
+    // …and the rest itself carries no second telling
+    const rest = read('WatchScreens.swift');
+    const inter = rest.slice(rest.indexOf('struct InterRestScreen'), rest.indexOf('// MARK: 05'));
+    expect(inter).not.toMatch(/CorrectionNote\(|WatchCopy\.corrected\(/);
   });
 });
 

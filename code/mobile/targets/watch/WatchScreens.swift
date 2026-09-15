@@ -196,8 +196,9 @@ private struct NeededHeightKey: PreferenceKey {
  *
  * ⚠️ THE FLOOR IS 0.75 — the same shrink this file already allows a single line of text everywhere
  * (`minimumScaleFactor(0.75)`). A screen that needs more than that needs a DESIGN, not a shrink: it is
- * left to overflow visibly rather than become unreadable. The inter-set rest carrying a correction
- * note, and the end-workout confirm carrying its sets figure, are measured beyond it on 40 mm.
+ * left to overflow visibly rather than become unreadable. The two screens measured beyond it — the
+ * inter-set rest with its correction note, the end confirm with its figure — were redesigned to fit
+ * whole (2026-09-15); this net is for what a measurement from source cannot foresee.
  */
 struct FitToSlot<Content: View>: View {
   @ViewBuilder let content: () -> Content
@@ -654,61 +655,8 @@ struct LoadDelta: View {
   }
 }
 
-/// THE SIGNATURE MOMENT, on the wrist (2026-07-17).
-///
-/// The set she just finished moved the next one. The brief calls this "the single most distinctive
-/// moment in the product" and requires that "the same change appears on the watch" — and the wrist
-/// is where it matters most, because mid-workout it is often the only thing she looks at. Until now
-/// the phone published the correction and the watch silently dropped it: the wrist's next set just
-/// showed a different number, with no account of why. That is the app doing something TO her.
-///
-/// It is the one thing licensed past THE UP-NEXT LAW ("the lift and the set number, NOTHING ELSE").
-/// That law bans a REMINDER — a load she saw thirty seconds ago and will see again in thirty more.
-/// A correction is not a reminder, it is news, and it is rare (S-13 caps it at 2 per exercise).
-///
-/// Form follows the phone's beat exactly (SessionFlow `corr`): the old load struck through and
-/// muted, the arrow, the new load in the brightest value the stage has — never sage/clay. Emphasis
-/// is distance from the ground, not hue (the v5 READOUT law), and the ▲/▼ wash belongs to
-/// `LoadDelta`, which answers a different question ("how does this set compare?").
-private struct CorrectionNote: View {
-  let c: WireCorrection
-  var body: some View {
-    let up = c.direction == "up"
-    VStack(spacing: Fit.s(2)) {
-      // Sized for the 40 mm case and scaled with every other number on the wrist (`Fit`). This said
-      // "FIXED sizes, no Fit.s — more air, not more type" until the founder asked for one design in
-      // the proportion of every case (2026-09-15).
-      HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
-        Text(fmtW(c.from))
-          .font(.system(size: Fit.s(12), design: .monospaced)).monospacedDigit()
-          .strikethrough(true, color: Palette.ink2)
-          .foregroundStyle(Palette.ink2)
-        Text("→").font(.system(size: Fit.s(12), design: .monospaced)).foregroundStyle(Palette.ink2)
-        Text(fmtW(c.to))
-          .font(.system(size: Fit.s(17), weight: .semibold, design: .monospaced)).monospacedDigit()
-          // The engine's new load, IN THE DIRECTION IT MOVED. It was moss either way — so the wrist
-          // announced an ease in the colour of a raise (founder 2026-07-29, phone parity).
-          .foregroundStyle(up ? Palette.up : Palette.down)
-        Text(WatchCopy.kg).font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
-      }
-      // The reason, under the number it earned — never apart from it (phone parity).
-      Text(WatchCopy.corrected(c.reps, up: up))
-        .font(.system(size: Fit.s(12)))
-        .foregroundStyle(Palette.ink1)
-        .multilineTextAlignment(.center)
-    }
-    // A 40 mm case must never clip the news: the block scales down as one before it wraps badly.
-    // (`lineLimit` + `minimumScaleFactor` and nothing else — this file's proven idiom. Adding
-    // `fixedSize(vertical:)` on top fights the scale factor: the text claims its ideal height and
-    // overflows instead of shrinking, which on the 40 mm case is the clip we are avoiding.)
-    .lineLimit(2).minimumScaleFactor(0.7)
-    .padding(.horizontal, Fit.s(8)).padding(.vertical, Fit.s(5))
-    .frame(maxWidth: .infinity)
-    .background(RoundedRectangle(cornerRadius: Fit.s(8)).fill(Palette.stage1))
-  }
-}
-
-/// Set-progress dots: done = sage, current = elongated ochre, upcoming = stage line.
+/* The correction note that stood here under the rest timer is GONE (2026-09-15): the news has its
+   own beat on every path (WT3, `WatchModel.openCorrectionBeat`), and the rest keeps only its trace. */
 
 /// The check as a stroke, so it can be DRAWN — the phone's "green check animation" (founder
 /// 2026-07-13), which the wrist had as a static glyph. Two segments, the short one first.
@@ -782,25 +730,6 @@ private struct TallyMark: View {
   }
 }
 
-/// The way back after a one-tap swap: an ochre "Undo" pill beside the (new) exercise
-/// name, alive for a few seconds. Tapping restores the lift the athlete had.
-private struct SwapUndoChip: View {
-  let action: () -> Void
-  var body: some View {
-    Button(action: { TapGate.pass(action) }) {
-      HStack(spacing: Fit.s(3)) {
-        Image(systemName: "arrow.uturn.backward").font(.system(size: Fit.s(12), weight: .semibold))
-        Text(WatchCopy.undo).font(.system(size: Fit.s(12), weight: .semibold))
-      }
-      .foregroundStyle(Palette.signal)
-      .padding(.horizontal, Fit.s(9)).padding(.vertical, Fit.s(5))
-      .background(Palette.stage1).clipShape(Capsule())
-      .contentShape(Capsule())
-    }
-    .buttonStyle(.plain)
-  }
-}
-
 /// The countdown ring — a CONTINUOUS, fluid linear sweep, mono time at centre. Drift-proof
 /// + Always-On safe: `TimelineView(.animation)` recomputes the arc from the phone-supplied
 /// ABSOLUTE end on every display frame (not in 0.5 s steps), so the sweep is smooth — matching
@@ -853,6 +782,8 @@ private struct RestRing: View {
             // Inside the stroke, always — "10:00" in the 62 pt crossing ring touched it.
             .lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: diameter * 0.72)
           Text(ready ? WatchCopy.ready.uppercased() : restingLabel).font(.system(size: Fit.s(12), weight: .medium)).tracking(Fit.s(0.8)).foregroundStyle(Palette.ink2)
+            // "YOUR PACE" is the label now when the timer is her median — inside the stroke, on one line.
+            .lineLimit(1).minimumScaleFactor(0.7).frame(maxWidth: diameter * 0.72)
         }
       }
     }
@@ -1170,49 +1101,59 @@ private struct EndConfirmScreen: View {
   /// answers a different one. Defaulted, so the two strength call sites are untouched.
   var confirmTitle: String = WatchCopy.endWorkout
   var lift: (i: Int, n: Int)? = nil
-  /*
-   * WHAT "SAVED AS-IS" MEANS, AS A FIGURE (design pass 2026-09-09). The reassurance line said the
-   * workout is kept at this point; this says what "this point" holds — the sets she has logged, or
-   * the minutes a run has run. A decision to end is a decision about that figure, and the screen
-   * that asks for it did not show it. Nil where the screen has no session to read (the standalone
-   * Paused face), and then the line is simply not drawn.
-   */
+  /// What "saved as-is" holds, as a figure — the sets she has logged, or the minutes a run has run.
+  /// Nil where the screen has no session to read (the standalone Paused face).
   var fact: (value: String, label: String)? = nil
   let onConfirm: () -> Void
   let onKeep: () -> Void
   var body: some View {
+    /*
+     * ════ ONE FACT, SAID ONCE (the founder delegated the choice, 2026-09-15) ════
+     *
+     * Measured on the 40 mm case, the confirm carrying its figure asked for ~150 pt of body over a
+     * 108 pt slot: the two-line question, a reassurance that wrapped to two lines, AND the figure — and
+     * every one of them `fixedSize`, so nothing could give. Weighed: shrink the whole (below readable);
+     * put the question on one line (it is two lines by design: a serif question you read in one look);
+     * drop the figure (the 2026-09-09 pass added it so the decision shows what it is about); fold the
+     * figure into the destructive button (never overload the irreversible control); scroll (never).
+     *
+     * Chosen: "Saved as-is at this point" and "12 SETS" were ONE fact said twice. With a figure, it is
+     * said once, concretely — "12 · SETS · SAVED" — and without one the sentence stays. The question
+     * keeps its two serif lines, the two buttons keep their full heights, and it fits every case.
+     */
     WristScreen {
       VStack(spacing: 0) {
         TopStrip(lift: lift)
-        Spacer(minLength: Fit.s(4))
+        Spacer(minLength: Fit.s(2))
         VStack(spacing: Fit.s(6)) {
           Text(title)
             .font(.system(size: Fit.s(21), design: .serif)).foregroundStyle(Palette.ink0)
             .multilineTextAlignment(.center).lineSpacing(Fit.s(1))
-            .fixedSize(horizontal: false, vertical: true)
-          Text(WatchCopy.endConfirmSub)
-            .font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
+            .lineLimit(2).minimumScaleFactor(0.8)
           if let fact {
             HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
               Text(fact.value)
-                .font(.system(size: Fit.s(22), weight: .semibold, design: .monospaced)).monospacedDigit()
+                .font(.system(size: Fit.s(20), weight: .semibold, design: .monospaced)).monospacedDigit()
                 .foregroundStyle(Palette.ink0)
-              Legend(fact.label, size: Wrist.legend)
+              Legend("\(fact.label) · \(WatchCopy.saved)", size: Wrist.legend)
             }
-            .padding(.top, Fit.s(2))
+            .lineLimit(1).minimumScaleFactor(0.75)
+          } else {
+            Text(WatchCopy.endConfirmSub)
+              .font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
+              .multilineTextAlignment(.center)
+              .lineLimit(2).minimumScaleFactor(0.85)
           }
         }
         .frame(maxWidth: .infinity)
-        Spacer(minLength: Fit.s(4))
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       VStack(spacing: Fit.s(5)) {
         // Clay FILL, stage ink — the irreversible act, now the primary (the guard was the earlier tap).
         StageButton(title: confirmTitle, kind: .danger, height: Wrist.action, fontSize: 15, action: onConfirm)
-        // The way back keeps the floor — and it is 40 pt now, not 34: on a screen whose other
-        // button ends the workout, the safe answer must never be the harder one to hit.
+        // The way back keeps the floor — and it is 40 pt, not 34: on a screen whose other button ends
+        // the workout, the safe answer must never be the harder one to hit.
         OutlineButton(title: WatchCopy.keepGoing, tint: Palette.ink1,
                       border: Palette.ink0.opacity(0.22), height: 40, fontSize: 13,
                       seated: true, action: onKeep)
@@ -1374,8 +1315,7 @@ struct WatchRootView: View {
                      lift: (i: m.liftIndex ?? 1, n: m.liftCount ?? 1), sets: m.liveSets,
                      onPause: model.pause, onEnd: model.endWorkout,
                      onReportPain: model.reportPain) {
-        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest,
-                        announced: model.announcedCorrectionAt == m.globalIndex)
+        InterRestScreen(mirror: m, onReady: model.ready, onAdd: model.addRest)
       }
     case let .transitionRest(m):
       ExecutionPager(metrics: model.liveMetrics,
@@ -2053,19 +1993,20 @@ struct ActiveSetScreen: View {
         if showsPerSide { perSideLine }
         if showsEquipment { equipmentLine }
         if setFiguresSpeak { setFigures }
-        if firstSetOfSession { tapToEditPill }
+        if firstSetOfSession && !setFiguresSpeak { tapToEditPill } // the teaching pill yields to her own figures: on 40 mm both did not fit
       } else {
         Button { TapGate.pass { enterEdit(.reps) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
             Text("\(shownReps)").font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
             Text(WatchCopy.reps).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
           }
+          .lineLimit(1).minimumScaleFactor(0.5)
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         Legend(WatchCopy.bodyweightQuiet, size: Wrist.legend)
         if setFiguresSpeak { setFigures }
-        if firstSetOfSession { tapToEditPill }
+        if firstSetOfSession && !setFiguresSpeak { tapToEditPill } // the teaching pill yields to her own figures: on 40 mm both did not fit
       }
     }
     .frame(maxWidth: .infinity)
@@ -2524,21 +2465,7 @@ struct InterRestScreen: View {
   let mirror: WireMirror
   let onReady: () -> Void
   let onAdd: () -> Void
-  /// WT3 already announced this correction, so the note under the ring stands down.
-  ///
-  /// Not an unconditional removal, because the correction rides the envelope AFTER the set and
-  /// sometimes lands past the confirmation beat — WT3 never draws, and the note is then the only
-  /// place the news exists. Each surface speaks exactly when the other did not.
-  var announced: Bool = false
-  private var note: WireCorrection? { announced ? nil : mirror.correction }
 
-  /*
-   * ⛔ READY IS MEASURED OFF THE CLOCK, NOT OFF THE FRAME (code review 2026-09-09). `restRemainingS`
-   * is a snapshot the phone took when it PUBLISHED, and a phone asleep in a pocket publishes
-   * nothing when the rest runs out — so the ring above reached 0:00 and said READY while the row
-   * beneath it still read "Skip rest" and offered +15 s on a rest that was already over. The ring
-   * has always run on the absolute end; the row runs on the same clock now, one tick a second.
-   */
   private func isReady(at now: Date) -> Bool {
     if let end = WatchWire.parseDate(mirror.restEndsAt) { return end.timeIntervalSince(now) <= 0.5 }
     return (mirror.restRemainingS ?? 0) <= 0
@@ -2546,49 +2473,54 @@ struct InterRestScreen: View {
 
   var body: some View {
     /*
-     * ════ THE REST, THINNED OUT ════
+     * ════ ONE REST, ONE INSTRUMENT (the founder delegated the choice, 2026-09-15) ════
      *
-     * Founder, device review 2026-08-01: *"the rest screen is very crowded with words, you can
-     * barely understand what is happening there"* and *"the UP NEXT line is very small — through a
-     * watch, mid-workout, it is impossible to see what it says at all."*
+     * *"תבחן את כל האופציות ותנתח את כולן ותבחר את האופציה שתשדרג את חווית המשתמש."*
      *
-     * The screen was carrying five things: the lift counter, the ring, the up-next card, the
-     * correction note and two buttons. Three of them competed for the same eight points of slack,
-     * so everything shrank together.
+     * Measured on the 40 mm case this screen asked for ~205 pt of body over a 155 pt slot: the ring
+     * (78), a tiled card whose lift name took two lines, and — when WT3 had not drawn — a correction
+     * note under the timer. On 45 mm the same stack was ~275 over 242, before any of this pass. It hung
+     * from the top and ran on under the buttons.
      *
-     * What it carries now, in the order it matters: how long is left (the ring), what is coming and
-     * at what load (one card, at a size that reads at arm's length), and the two ways out. The
-     * correction note only appears when WT3 did not — it is news, and news is told once.
+     * Weighed: shrink it whole (below readable type); shrink the ring to the ~45 pt that would fit
+     * under a card; drop the lift's name; scroll (never, during execution); change the composition.
+     * Chosen — the CROSSING's own composition: the ring BESIDE what comes next, the lift's name on its
+     * own full-width line beneath. Both rests become one instrument, the ring keeps 72 of its 78, the
+     * coming load keeps its size, and the body is ~125 pt: it fits every case with nothing shrunk.
+     *
+     * What left the screen, and where it went:
+     *   · THE CORRECTION NOTE. The news gets its own beat on every path now — WT3 plays for a set
+     *     logged on the phone, the lock screen or by voice as well as on the wrist
+     *     (`WatchModel.openCorrectionBeat`), which is what the canon always said ("its own beat, not a
+     *     note under a timer"). The rest keeps the trace: the coming load in the direction's colour
+     *     with its ▲/▼, and the ring running in that colour.
+     *   · THE "your pace" LINE became the ring's own label while the timer IS her median — the word
+     *     sits on the number it is about, and costs no row. (WT5.)
+     *   · THE CARD'S TILE. Beside a ring, a tile's padding left its figures ~44 pt of width.
      */
     WristScreen {
-      VStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 0) {
         TopStrip(lift: (mirror.liftIndex ?? 1, mirror.liftCount ?? 1), controlsHint: true)
         Spacer(minLength: Fit.s(2))
-        RestRing(
-          endsAt: mirror.restEndsAt,
-          totalS: mirror.restTotalS ?? 90,
-          diameter: Fit.s(note == nil ? 78 : 62),
-          // …and it RUNS in the correction's direction. The note below already names the move; the
-          // ring is what the wrist actually looks at, so the two must not disagree.
-          arc: mirror.correction.map { $0.direction == "down" ? Palette.down : Palette.up } ?? Palette.signal
-        )
-        // WT5 · REST — LEARNED. Her measured rest (S-17) is already what this timer runs; this is
-        // the line that SAYS so, and it appears only once the median is hers rather than the
-        // bootstrap. It went missing in the 2026-08-01 relayout and is restored: without it the
-        // wrist silently uses her pace and never tells her, which is the app doing something FOR
-        // her without her knowing.
-        if mirror.restIsLearned == true {
-          Text(WatchCopy.yourPace)
-            .font(.system(size: Fit.s(12), design: .serif)).italic()
-            .foregroundStyle(Palette.ink2)
-            .padding(.top, Fit.s(3))
+        HStack(alignment: .center, spacing: Fit.s(8)) {
+          RestRing(
+            endsAt: mirror.restEndsAt,
+            totalS: mirror.restTotalS ?? 90,
+            diameter: Fit.s(72),
+            // WT5 · REST — LEARNED: the timer runs her own median, and the ring says so in its label.
+            restingLabel: mirror.restIsLearned == true ? WatchCopy.yourPace.uppercased() : WatchCopy.rest.uppercased(),
+            // …and it RUNS in the correction's direction, so the ring and the load never disagree.
+            arc: mirror.correction.map { $0.direction == "down" ? Palette.down : Palette.up } ?? Palette.signal,
+            timeScale: 0.27
+          )
+          upNextCard
         }
-        Spacer(minLength: Fit.s(4))
-        upNextCard
-        if let c = note {
-          CorrectionNote(c: c).padding(.top, Fit.s(5))
-        }
-        Spacer(minLength: Fit.s(4))
+        Text(mirror.exerciseName)
+          .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
+          .lineLimit(2).minimumScaleFactor(0.8)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, Fit.s(6))
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -2600,56 +2532,47 @@ struct InterRestScreen: View {
 
   /*
    * ════ THE CARD SHOWED THE WRONG WEIGHT, AND IT WAS THE PHONE'S DOCUMENTED TRAP ════
-   *
-   * Founder, device review 2026-08-01: *"it says the next set is 44 kg and one line below it says
-   * 50 kg — there is probably a bug behind the scenes."*
-   *
-   * There was. `sessionMirror.ts` says it in as many words: on a rest frame the phone's machine
-   * HOLDS the finished set's index, so `targetWeight` is the load of the set she has just done,
-   * and `nextTargetWeight` is the one that is coming. This card read `targetWeight`.
-   *
-   * On an ordinary rest the two agree and nothing looked wrong for months. They diverge in exactly
-   * one case — when Loop 1 has just moved the load — and that is the case where the card sits
-   * directly above a correction announcing the new number. So the screen contradicted itself, on
-   * the one beat the product exists to get right.
-   *
-   * The file's own comment warned about this for `setLabel` and the card obeyed it there. The load
-   * was left reading the old field beside it.
+   * On a rest frame the phone's machine HOLDS the finished set's index, so `targetWeight` is the load
+   * she has just done and `nextTargetWeight` is the one coming. They diverge exactly when Loop 1 has
+   * just moved the load — the case this card exists for. (Founder, device review 2026-08-01.)
    */
   private var nextLoad: Double? { mirror.nextTargetWeight ?? mirror.targetWeight }
 
-  /// UP NEXT: the set that is coming, its load, and its lift — at a size that reads at a glance.
-  ///
-  /// THE NAME AND THE LOAD NO LONGER SHARE A LINE (design pass 2026-09-09, from the founder's
-  /// screenshot: "Incline Dumbb…"). Side by side, the load took its 24 pt and the name got what was
-  /// left, which on a 45 mm case was eleven letters. Stacked, each gets the whole width: the load
-  /// first, because it is the figure she acts on; the name under it, two lines if it needs them.
-  /// The legend keeps the one fact the ring cannot say — WHICH set is coming.
+  /// The coming load's tone: the direction's colour when the engine just moved it (founder 2026-07-29 —
+  /// up is moss, down is blue, on every surface), the stage's moss otherwise.
+  private var loadTone: Color {
+    guard let c = mirror.correction else { return Palette.signal }
+    return c.direction == "down" ? Palette.down : Palette.up
+  }
+
+  /// UP NEXT: the load she acts on, the set it is, and — when the engine moved it — the move.
   private var upNextCard: some View {
     VStack(alignment: .leading, spacing: Fit.s(2)) {
-      Text("\(WatchCopy.upNext.uppercased()) · \(mirror.nextIsWarmup == true ? WatchCopy.warmupWord : WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.nextIsWarmup == true ? (mirror.nextSetsInExercise ?? 1) : (mirror.setsInExercise ?? 1))")
+      Text(WatchCopy.upNext.uppercased())
         .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
         .foregroundStyle(Palette.ink1)
-        .lineLimit(1).minimumScaleFactor(0.8)
+        .lineLimit(1).minimumScaleFactor(0.75)
       if let wt = nextLoad {
-        HStack(alignment: .firstTextBaseline, spacing: Fit.s(4)) {
+        HStack(alignment: .firstTextBaseline, spacing: Fit.s(3)) {
           Text(fmtW(wt))
-            .font(.system(size: Fit.s(26), weight: .medium, design: .monospaced)).monospacedDigit()
-            .foregroundStyle(Palette.signal)
-          Text(WatchCopy.kg).font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.signal)
+            .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
+            .foregroundStyle(loadTone)
+          Text(WatchCopy.kg).font(.system(size: Fit.s(12), weight: .medium)).foregroundStyle(loadTone)
         }
-        .lineLimit(1)
+        .lineLimit(1).minimumScaleFactor(0.6)
       } else {
-        Text(WatchCopy.bodyweight).font(.system(size: Fit.s(20), weight: .medium)).foregroundStyle(Palette.signal)
+        Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium)).foregroundStyle(loadTone)
+          .lineLimit(1).minimumScaleFactor(0.7)
       }
-      Text(mirror.exerciseName)
-        .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(2).minimumScaleFactor(0.85)
-        .fixedSize(horizontal: false, vertical: true)
+      Text("\(mirror.nextIsWarmup == true ? WatchCopy.warmupWord : WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.nextIsWarmup == true ? (mirror.nextSetsInExercise ?? 1) : (mirror.setsInExercise ?? 1))")
+        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
+        .foregroundStyle(Palette.ink2)
+        .lineLimit(1).minimumScaleFactor(0.75)
+      if let c = mirror.correction {
+        LoadDelta(deltaKg: c.to - c.from, fontSize: Wrist.legend)
+      }
     }
-    .padding(.vertical, Fit.s(9)).padding(.horizontal, Fit.s(11))
-    .frame(maxWidth: .infinity)
-    .background(RoundedRectangle(cornerRadius: Fit.s(14)).fill(Palette.ink0.opacity(0.07)))
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
@@ -2660,49 +2583,29 @@ struct TransitionRestScreen: View {
   let onReady: () -> Void
   let onAdd: () -> Void
   let onSwap: (String) -> Void
-  /// The way back for the 6 s after a one-tap swap of the NEXT lift (founder 2026-07-12).
   let undo: WireSwapOption?
   let onUndo: () -> Void
   private var swaps: [WireSwapOption] { mirror.nextSwapOptions ?? [] }
-  /// Off the clock, not off the frame — see `InterRestScreen.isReady`.
   private func isReady(at now: Date) -> Bool {
     if let end = WatchWire.parseDate(mirror.restEndsAt) { return end.timeIntervalSince(now) <= 0.5 }
     return (mirror.restRemainingS ?? 0) <= 0
   }
   var body: some View {
     /*
-     * ════ BETWEEN TWO LIFTS, AND ONLY THAT ════
+     * ════ THE CROSSING, MEASURED (2026-09-15) ════
      *
-     * Founder, device review 2026-08-01: *"the TRANSITION REST screen is crowded with words too,
-     * and you can barely tell what is going on."*
+     * The ring and the next lift already shared a row here — the composition the inter-set rest now
+     * takes too, so the two rests are one instrument. What the 40 mm measurement changed:
      *
-     * It was carrying SIX lines: the lift counter, the ring, "Barbell Bench Press, done.", the next
-     * lift's name, its load, its per-side figure — and then two buttons which the screenshot shows
-     * running off the bottom edge. Two of those lines belong to other beats: the "done" sentence is
-     * WT10's whole reason to exist, and it had already played thirty seconds earlier.
-     *
-     * The canonical WT11 carries three things — LIFT 1 → 2, the ring, and one card naming the new
-     * lift with its load — then Start, then +15 sec beside Swap. That is what this is now.
-     */
-    /*
-     * ── DESIGN PASS 2026-09-09 (founder's screenshot: the ring under the CLOCK, the header gone) ──
-     * The screen overflowed its case. An 84 pt ring scales to 103 on a 45 mm case; under it a card
-     * of three lines and beneath that Start plus a row — more than 242 points, and the VStack gave
-     * up the top, so the ring rose into the clock's lane and the strip vanished. On a 41 mm case it
-     * is worse.
-     *
-     * THE RING AND THE CARD SHARE A ROW NOW. A transition rest is the one rest where the clock is
-     * not the whole point — she is walking to the next station — so the ring gives up its solo row
-     * and stands at 62 beside the card, with its time drawn at a larger share of the diameter so
-     * the figure stays readable. The card stacks the way the inter-set card does: legend, load,
-     * name. Height: strip + row + actions ≈ 176 pt; it fits every case.
-     *
-     * (The crossing's "as written?" ask that stood in the strip and above Start for two days went
-     * with the clock's presumption — founder, 2026-09-09: no set is written by time, so there is
-     * never a lift behind her that only the clock stood behind.)
+     *   · THE NAME LEAVES THE CARD for its own full-width line beneath the row. Inside a tiled card
+     *     beside a 62 pt ring it had ~54 pt of width, so "Incline Dumbbell Bench Press" was cut in two
+     *     places and "UP NEXT · LIFT" and a load with its ▲ both truncated.
+     *   · UNDO TAKES THE SWAP BUTTON'S PLACE instead of a chip under the row. The thumb that swapped is
+     *     already there, a second Swap beside an Undo offered to swap the lift just chosen, and the
+     *     chip cost a 29 pt row that pushed the body ~20 pt past its slot.
      */
     WristScreen {
-      VStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 0) {
         TopStrip(text: crossing, controlsHint: true)
         Spacer(minLength: Fit.s(2))
         HStack(alignment: .center, spacing: Fit.s(8)) {
@@ -2715,9 +2618,11 @@ struct TransitionRestScreen: View {
           )
           nextLiftCard
         }
-        if undo != nil {
-          SwapUndoChip(action: onUndo).padding(.top, Fit.s(5))
-        }
+        Text(mirror.nextExerciseName ?? "")
+          .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
+          .lineLimit(2).minimumScaleFactor(0.8)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.top, Fit.s(6))
         Spacer(minLength: Fit.s(2))
       }
     } actions: {
@@ -2730,7 +2635,11 @@ struct TransitionRestScreen: View {
           OutlineButton(title: WatchCopy.addShort, tint: Palette.ink0,
                         border: Palette.ink0.opacity(0.22), height: 34, fontSize: 12,
                         repeatable: true, action: onAdd)
-          if let best = swaps.first {
+          if undo != nil {
+            OutlineButton(title: WatchCopy.undo, systemImage: "arrow.uturn.backward",
+                          tint: Palette.signal, border: Palette.signal.opacity(0.4), height: 34, fontSize: 12,
+                          seated: true, action: onUndo)
+          } else if let best = swaps.first {
             OutlineButton(title: WatchCopy.swapTitle, systemImage: "arrow.left.arrow.right",
                           tint: Palette.ink1, border: Palette.ink0.opacity(0.22), height: 34, fontSize: 12,
                           seated: true) {
@@ -2743,30 +2652,22 @@ struct TransitionRestScreen: View {
     }
   }
 
-  /// "LIFT 1 → 2" — the canonical header, and the only place a transition says what it is.
   private var crossing: String {
     let i = mirror.liftIndex ?? 1
     let n = mirror.liftCount ?? 1
-    // The arrow points the way the line is READ. Under a right-to-left layout "1 → 2" lays out as
-    // 2 → 1 with the arrow against the reading direction; the same string `easedSwapped` already
-    // turns its arrow in he.json, and the header does the same (2026-09-09).
     let arrow = WatchCopyStore.isRTL ? "←" : "→"
     return "\(WatchCopy.liftWord) \(i) \(arrow) \(min(i + 1, n))"
   }
 
-  /// The lift that is coming, named once, with the load the phone decided for it.
-  ///
-  /// ⛔ "Leg Press 100…" AND "Standing Calf… 32…" (founder 2026-08-05, two screenshots): the name
-  /// and the load competed for one row and SwiftUI truncated both. They are stacked now, the load
-  /// first because it is the figure she acts on, the name under it on up to two lines — the same
-  /// shape as the inter-set card, so the two rests read as one instrument.
+  /// What is coming: the load, and its ▲/▼ when the engine moved it. On a NEW lift she has no previous
+  /// number on screen to compare against, so the mark is the only signal there is.
   private var nextLiftCard: some View {
     VStack(alignment: .leading, spacing: Fit.s(2)) {
-      Text("\(WatchCopy.upNext.uppercased()) · \(WatchCopy.liftWord)")
+      Text(WatchCopy.upNext.uppercased())
         .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
         .foregroundStyle(Palette.ink1)
-        .lineLimit(1).minimumScaleFactor(0.8)
-      HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
+        .lineLimit(1).minimumScaleFactor(0.75)
+      HStack(alignment: .firstTextBaseline, spacing: Fit.s(3)) {
         if let wt = mirror.nextTargetWeight {
           Text(fmtW(wt))
             .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
@@ -2775,21 +2676,13 @@ struct TransitionRestScreen: View {
         } else {
           Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium)).foregroundStyle(Palette.signal)
         }
-        // The direction the new lift's opening load moved, if it moved — beside the figure it
-        // describes, at the type floor (founder 2026-08-04).
-        if (mirror.nextLoadDeltaKg ?? 0) != 0 {
-          LoadDelta(deltaKg: mirror.nextLoadDeltaKg ?? 0, fontSize: Wrist.legend)
-        }
       }
-      .lineLimit(1).minimumScaleFactor(0.7)
-      Text(mirror.nextExerciseName ?? "")
-        .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(2).minimumScaleFactor(0.8)
-        .fixedSize(horizontal: false, vertical: true)
+      .lineLimit(1).minimumScaleFactor(0.6)
+      if (mirror.nextLoadDeltaKg ?? 0) != 0 {
+        LoadDelta(deltaKg: mirror.nextLoadDeltaKg ?? 0, fontSize: Wrist.legend)
+      }
     }
-    .padding(.vertical, Fit.s(8)).padding(.horizontal, Fit.s(10))
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(RoundedRectangle(cornerRadius: Fit.s(14)).fill(Palette.ink0.opacity(0.07)))
   }
 }
 

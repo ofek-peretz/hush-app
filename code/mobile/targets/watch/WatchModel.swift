@@ -504,6 +504,8 @@ final class WatchModel: ObservableObject {
       clearUndo()
     }
     resolveUndo(with: mirror)
+    // The news opens its own beat, whichever device logged the set (WT3 on every path).
+    openCorrectionBeat(mirror)
     // The workout is over: the completion experience supersedes any in-flight per-set confirmation,
     // so clear it immediately (otherwise the 1.5s Set Confirmation would mask Workout Complete — the
     // "watch doesn't show the completion experience" defect, item 3). The frame is also HELD (see
@@ -792,14 +794,37 @@ final class WatchModel: ObservableObject {
     return EditDraft(weight: effectiveMirror?.targetWeight, reps: effectiveMirror?.targetReps ?? 0)
   }
 
-  /// The set whose correction WT3 already announced.
-  ///
-  /// The rest screen underneath carries the same news, and saying it twice in four seconds on a
-  /// 41 mm case is worse than saying it once. But the note cannot simply go: the correction rides
-  /// the envelope AFTER the set, so it sometimes lands past the confirmation beat and WT3 never
-  /// draws. Then the note is the only place the news exists. Remembering which one was announced
-  /// is what lets each surface say it exactly when the other did not.
+  /// The set whose correction WT3 already announced — so the beat is played once per correction.
   private(set) var announcedCorrectionAt: Int?
+  /// A correction beat opened by the ARRIVAL of the news rather than by her tap — see `openCorrectionBeat`.
+  private var correctionBeatAt: Int?
+
+  /**
+   * ⛔ WT3 ON EVERY PATH (2026-09-15).
+   *
+   * The beat used to open only inside the confirmation window of a set logged ON THE WRIST — and even
+   * then the correction rides the envelope after the set, so it sometimes landed past the window. Every
+   * other path (a set logged on the phone, on the lock screen, by voice, or a late correction) fell
+   * back to a note squeezed under the rest timer: the product's "single most distinctive moment" told
+   * in 12 pt, on the one screen that, measured on 40 mm, had no room for it.
+   *
+   * So the news opens the beat itself: a rest frame carrying a correction that has not been announced
+   * plays WT3, held a breath longer than a tapped set's (she was not looking — it came to her), and
+   * dismissed by a tap like any beat. It cannot outlive its rest: the projection requires the frame
+   * to still be on the set it was about.
+   */
+  private func openCorrectionBeat(_ m: WireMirror?) {
+    guard let m, m.correction != nil, m.phase == "rest_inter" || m.phase == "rest_transition" else { return }
+    guard setConfirm == nil, announcedCorrectionAt != m.globalIndex, correctionBeatAt != m.globalIndex else { return }
+    correctionBeatAt = m.globalIndex
+    setConfirmToken += 1
+    let token = setConfirmToken
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+      guard let self, self.setConfirmToken == token else { return }
+      self.correctionBeatAt = nil
+      self.recompute()
+    }
+  }
 
   private func scheduleSetConfirmClear() {
     setConfirmToken += 1
@@ -813,9 +838,10 @@ final class WatchModel: ObservableObject {
 
   /// Tap on the Set Confirmation advances immediately.
   func dismissSetConfirm() {
-    guard setConfirm != nil else { return }
+    guard setConfirm != nil || correctionBeatAt != nil else { return }
     setConfirmToken += 1
     setConfirm = nil
+    correctionBeatAt = nil
     recompute()
   }
 
@@ -1449,7 +1475,8 @@ final class WatchModel: ObservableObject {
      * `setConfirm` survives as the TIMER for that window — it is what holds WT3 on screen and what
      * a tap dismisses. With no correction to announce, the window simply passes through to the rest.
      */
-    if setConfirm != nil, let c = effectiveMirror?.correction {
+    let beatHere = correctionBeatAt != nil && correctionBeatAt == effectiveMirror?.globalIndex
+    if setConfirm != nil || beatHere, let c = effectiveMirror?.correction {
       announcedCorrectionAt = effectiveMirror?.globalIndex
       return .correction(c)
     }

@@ -139,6 +139,7 @@ describe('⛔ the wrist reads the fact instead of inferring it', () => {
   });
 
   it('⛔ and the badge itself is still gated on the mirror field, not on a rest existing', () => {
-    expect(swift('WatchScreens.swift')).toMatch(/if mirror\.restIsLearned == true \{/);
+    // The ring's own label since 2026-09-15 — still chosen by the mirror's field and nothing else.
+    expect(swift('WatchScreens.swift')).toMatch(/restingLabel: mirror\.restIsLearned == true \? WatchCopy\.yourPace/);
   });
 });

@@ -202,3 +202,38 @@ describe('4 · what depends on each other scales together', () => {
     expect(CODE).toContain('geo.size.width - Fit.s(9), geo.size.width * intoKm - Fit.s(4.5)');
   });
 });
+
+describe('6 · the two screens that could not fit were redesigned to fit whole (2026-09-15)', () => {
+  /*
+   * Measured from source on the 40 mm case (line height ≈ 1.2 × size), before → after:
+   *   inter-set rest        ~205 pt body over a 155 pt slot → ring BESIDE the next set, name beneath: ~125
+   *   …with a correction    ~255 over 155                  → the news is WT3's own beat; the rest keeps its trace
+   *   crossing + undo chip  ~141 over 114                  → Undo takes the Swap button's place: ~110
+   *   end confirm + figure  ~150 over 108                  → the figure and "saved" are one line: ~108
+   */
+  const screen = (name: string, until: string) => CODE.slice(CODE.indexOf(name), CODE.indexOf(until, CODE.indexOf(name)));
+
+  it('both rests are one instrument: the ring beside what comes next, the name on its own line', () => {
+    // (`CODE` has no comment lines, so the MARK lines are not boundaries here — the next struct is.)
+    const inter = screen('struct InterRestScreen', 'struct TransitionRestScreen');
+    expect(inter).toContain('diameter: Fit.s(72)');
+    expect(inter).toContain('HStack(alignment: .center, spacing: Fit.s(8))');
+    expect(inter).not.toMatch(/CorrectionNote|fixedSize/);
+    const crossing = screen('struct TransitionRestScreen', 'struct CardioPager');
+    expect(crossing).toContain('Text(mirror.nextExerciseName ?? "")');
+    expect(crossing).not.toMatch(/SwapUndoChip|fixedSize/);
+    expect(crossing).toContain('title: WatchCopy.undo');
+  });
+
+  it('the end confirm says its figure once, and nothing on it is rigid', () => {
+    const confirm = screen('private struct EndConfirmScreen', 'private struct ExecutionPager');
+    expect(confirm).toContain('Legend("\\(fact.label) · \\(WatchCopy.saved)", size: Wrist.legend)');
+    expect(confirm).not.toContain('fixedSize');
+    expect(confirm).toContain('height: Wrist.action'); // the irreversible act keeps its full target
+    expect(confirm).toContain('height: 40'); // …and so does the way back
+  });
+
+  it('the teaching pill yields to her own figures on the first set', () => {
+    expect(CODE.split('if firstSetOfSession && !setFiguresSpeak { tapToEditPill }').length - 1).toBe(2);
+  });
+});
