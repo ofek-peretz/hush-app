@@ -294,6 +294,15 @@ const NO_LOCK: LockExtras = {
 
 export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExtras = NO_LOCK): LiveActivityState {
   const isResting = mirror.phase === 'rest_inter' || mirror.phase === 'rest_transition';
+  /*
+   * ⛔ DURING A REST THE CARD NAMES THE COMING SET — AND NOW ITS LOAD TOO (2026-09-15).
+   *
+   * The label below already names the set still to come; the load beside it was the one just LIFTED,
+   * because the machine holds the finished set's index through the rest. On an ordinary rest the two
+   * agree and nothing looked wrong. They diverge exactly when the voice coach moves the next load —
+   * and then the lock card read "SET 2 OF 3 · 60 kg" while the phone and the wrist said 62.5.
+   */
+  const restNamesNext = isResting && mirror.nextSetNumber > 0;
   const endMs = mirror.restEndsAt ? Date.parse(mirror.restEndsAt) : NaN;
   const isTransition = mirror.phase === 'rest_transition';
   return {
@@ -319,8 +328,8 @@ export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExt
     setCount: isResting && mirror.nextSetNumber > 0 ? mirror.nextSetsInExercise : mirror.setsInExercise,
     liftIndex: mirror.liftIndex,
     liftCount: mirror.liftCount,
-    targetWeight: mirror.targetWeight,
-    targetReps: mirror.targetReps,
+    targetWeight: restNamesNext ? mirror.nextTargetWeight : mirror.targetWeight,
+    targetReps: restNamesNext ? mirror.nextTargetReps ?? mirror.targetReps : mirror.targetReps,
     restEndsAtMs: isResting && !Number.isNaN(endMs) ? endMs : null,
     restTotalS: isResting ? mirror.restTotalS ?? null : null,
     isResting,

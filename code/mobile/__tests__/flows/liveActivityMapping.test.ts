@@ -108,6 +108,19 @@ describe('liveActivityStateFromMirror', () => {
     expect(s.restEndsAtMs).toBe(Date.parse(iso));
   });
 
+  it('⛔ during a rest the card’s LOAD is the coming set’s, like its label — a moved load reads the same as on the phone', () => {
+    // The voice raised set 3 from 100 to 102.5 while she rests: the label already names set 3, and so
+    // must the figure beside it (it used to print the 100 she had just lifted).
+    const s = liveActivityStateFromMirror(
+      mirror({ phase: 'rest_inter', restEndsAt: '2026-06-16T10:00:00.000Z', nextSetNumber: 3, nextSetsInExercise: 4, nextTargetWeight: 102.5, nextTargetReps: 5 }),
+    );
+    expect(s.setIndex).toBe(3);
+    expect(s.targetWeight).toBe(102.5);
+    expect(s.targetReps).toBe(5);
+    // …and a set on stage still shows its own.
+    expect(liveActivityStateFromMirror(mirror({ phase: 'active_set', nextTargetWeight: 102.5 })).targetWeight).toBe(100);
+  });
+
   it('resting with no end instant → null restEndsAtMs (no bogus countdown)', () => {
     const s = liveActivityStateFromMirror(mirror({ phase: 'rest_inter', restEndsAt: null }));
     expect(s.isResting).toBe(true);

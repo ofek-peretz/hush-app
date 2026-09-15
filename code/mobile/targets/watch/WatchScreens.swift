@@ -2489,11 +2489,10 @@ struct InterRestScreen: View {
      * coming load keeps its size, and the body is ~125 pt: it fits every case with nothing shrunk.
      *
      * What left the screen, and where it went:
-     *   · THE CORRECTION NOTE. The news gets its own beat on every path now — WT3 plays for a set
-     *     logged on the phone, the lock screen or by voice as well as on the wrist
-     *     (`WatchModel.openCorrectionBeat`), which is what the canon always said ("its own beat, not a
-     *     note under a timer"). The rest keeps the trace: the coming load in the direction's colour
-     *     with its ▲/▼, and the ring running in that colour.
+     *   · THE CORRECTION NOTE. A correction has its own beat (WT3, `WatchModel.openCorrectionBeat`),
+     *     never a note under a timer. A load the VOICE moves carries no beat — it was just said aloud —
+     *     and reads here exactly as it reads on the phone's rest card: the coming figure in the
+     *     direction's colour, with its ▲/▼ (`movedBy`).
      *   · THE "your pace" LINE became the ring's own label while the timer IS her median — the word
      *     sits on the number it is about, and costs no row. (WT5.)
      *   · THE CARD'S TILE. Beside a ring, a tile's padding left its figures ~44 pt of width.
@@ -2509,8 +2508,8 @@ struct InterRestScreen: View {
             diameter: Fit.s(72),
             // WT5 · REST — LEARNED: the timer runs her own median, and the ring says so in its label.
             restingLabel: mirror.restIsLearned == true ? WatchCopy.yourPace.uppercased() : WatchCopy.rest.uppercased(),
-            // …and it RUNS in the correction's direction, so the ring and the load never disagree.
-            arc: mirror.correction.map { $0.direction == "down" ? Palette.down : Palette.up } ?? Palette.signal,
+            // Moss, as the phone's own rest ring is — the direction lives on the figure that moved.
+            arc: Palette.signal,
             timeScale: 0.27
           )
           upNextCard
@@ -2538,11 +2537,29 @@ struct InterRestScreen: View {
    */
   private var nextLoad: Double? { mirror.nextTargetWeight ?? mirror.targetWeight }
 
-  /// The coming load's tone: the direction's colour when the engine just moved it (founder 2026-07-29 —
-  /// up is moss, down is blue, on every surface), the stage's moss otherwise.
+  /**
+   * ⛔ A MOVED LOAD READS THE SAME ON EVERY SURFACE (founder's decision, delegated 2026-09-15).
+   *
+   * The only thing that moves a load mid-lift is the voice coach's verdict, and it moves it as a plain
+   * plan change (`setLiftLoad`) — the signed voice spec keeps the screens as they are: no beat, no new
+   * chrome, the stage a logger. The phone already answered the voice honestly on its rest card
+   * (2026-09-08): it compares the coming load with the load she LAST LIFTED on this lift and, when they
+   * differ, draws the new figure in the direction's colour with its step. This read `correction`
+   * instead, which nothing in a live session sets any more — so a load the voice raised arrived on the
+   * wrist as a bare number, with no sign it had moved. The same measurement as the phone, now.
+   */
+  private var movedBy: Double? {
+    guard mirror.isWarmup != true, mirror.nextIsWarmup != true,
+          let next = nextLoad, let last = mirror.loadsSoFar?.last ?? nil else { return nil }
+    let d = ((next - last) * 100).rounded() / 100
+    return abs(d) >= 0.01 ? d : nil
+  }
+
+  /// The coming load's tone: the direction's colour when it moved (founder 2026-07-29 — up is moss, down
+  /// is blue, on every surface), the stage's moss otherwise.
   private var loadTone: Color {
-    guard let c = mirror.correction else { return Palette.signal }
-    return c.direction == "down" ? Palette.down : Palette.up
+    guard let d = movedBy else { return Palette.signal }
+    return d < 0 ? Palette.down : Palette.up
   }
 
   /// UP NEXT: the load she acts on, the set it is, and — when the engine moved it — the move.
@@ -2568,8 +2585,8 @@ struct InterRestScreen: View {
         .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
         .foregroundStyle(Palette.ink2)
         .lineLimit(1).minimumScaleFactor(0.75)
-      if let c = mirror.correction {
-        LoadDelta(deltaKg: c.to - c.from, fontSize: Wrist.legend)
+      if let d = movedBy {
+        LoadDelta(deltaKg: d, fontSize: Wrist.legend)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)

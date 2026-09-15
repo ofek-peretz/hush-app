@@ -132,3 +132,25 @@ describe('every off-stage channel goes through the one beat', () => {
     expect(store.split('setWatchLoggedSet({').length - 1).toBe(1);
   });
 });
+
+describe('a load the voice moved reads the same on every surface (2026-09-15)', () => {
+  it('the phone compares the coming load with what she last lifted, and draws the move', () => {
+    const flow = read('src/screens/session/SessionFlow.tsx');
+    expect(flow).toContain('nextWeight !== lastWeight');
+    expect(flow).toContain('<LoadDelta value={movedBy} unit={unitLabel(units)} />');
+  });
+
+  it('the wrist asks the SAME question — not a correction nothing in a live session sets', () => {
+    const swift = read('targets/watch/WatchScreens.swift');
+    const inter = swift.slice(swift.indexOf('struct InterRestScreen'), swift.indexOf('struct TransitionRestScreen'));
+    expect(inter).toContain('let next = nextLoad, let last = mirror.loadsSoFar?.last ?? nil');
+    expect(inter).toContain('LoadDelta(deltaKg: d, fontSize: Wrist.legend)');
+    expect(inter).not.toMatch(/mirror.correction/);
+  });
+
+  it('the voice still changes no screen by itself — no beat and no chrome ride its move', () => {
+    const store = read('src/state/stores/sessionStore.tsx');
+    const at = store.indexOf('      setLiftLoad(weightKg) {');
+    expect(store.slice(at, at + 1400)).not.toContain('setCorrection(');
+  });
+});
