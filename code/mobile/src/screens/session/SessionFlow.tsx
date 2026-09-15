@@ -23,7 +23,7 @@ import Svg, { Circle, Defs, G, LinearGradient as SvgGradient, Path, Rect, Stop }
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
-import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, TextField, useToast, type ToastAction } from '@/components/ds';
+import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, useToast, type ToastAction } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ReorderRows } from '@/components/ReorderRows';
@@ -2357,20 +2357,6 @@ function ActiveSet({
    * the prescription row while its wheel is up, so no number is ever stated twice.
    */
   const [slot, setSlot] = useState<'athlete' | 'weight' | 'reps'>('athlete');
-  /* Her note on the lift she is standing on — see the identity block. */
-  const [liftNote, setLiftNote] = useState('');
-  const [noteDraft, setNoteDraft] = useState<string | null>(null);
-  const noteExerciseId = session.currentExerciseId;
-  useEffect(() => {
-    let active = true;
-    if (!noteExerciseId) return;
-    db.loadLiftNotes()
-      .then((all) => active && setLiftNote(all[noteExerciseId] ?? ''))
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [noteExerciseId]);
   /*
    * ════ ⛔ THE REP COUNT STARTS EMPTY, AND IT IS THE BEST ANSWER THIS SCREEN HAS ════
    *
@@ -2866,26 +2852,9 @@ function ActiveSet({
               {session.straightInto}
             </Text>
           ) : null}
-          {/* ════ HER OWN LINE ABOUT THIS LIFT (2026-09-09, the formula report) ════
-              "Seat 4, safety bar." The one thing the record cannot know and every competitor lets
-              her keep. Read from `db.loadLiftNotes` when the lift changes; the pencil opens the
-              same sheet the lift's page has. One line, muted, under the name — never over it. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={liftNote ? t('progress.noteLegend') : t('progress.noteAdd')}
-            onPress={() => setNoteDraft(liftNote)}
-            hitSlop={8}
-            style={styles.noteLine}
-          >
-            {liftNote ? (
-              <Text style={styles.noteLineText} numberOfLines={1}>{liftNote}</Text>
-            ) : (
-              <View style={styles.noteLineAdd}>
-                <Icon name="pencil" size={12} color={stage.ink2} strokeWidth={2} />
-                <Text style={styles.noteLineAddText}>{t('workout.noteOnStage')}</Text>
-              </View>
-            )}
-          </Pressable>
+          {/* ⛔ NO NOTE ON THE STAGE (founder, 2026-09-15): *"ותוריד את האפשרות לכתוב NOTES במסך הזה אין בזה
+              צורך."* The note on a lift still lives on the lift's own page (LiftDetail); mid-set it was a
+              control nobody reaches for, under the one name she reads. */}
           {/*
             ════ ⛔ THE COACH'S LINE ABOUT THIS LIFT, WHICH THIS SCREEN HAS NEVER DRAWN ════
 
@@ -3098,17 +3067,9 @@ function ActiveSet({
                 unitLabel(units)
               )}
             </Text>
-            {/* ════ THE PLATES (2026-09-09, the formula report) ════
-                "7.5 a side" is the figure she racks by (founder 2026-08-26) and it stays the
-                heading. This is the line under it, for the athlete who does not want to do the
-                sum at the rack: the stack for ONE side, largest first, only when standard plates
-                build it exactly (`loadSetup.plates`) — a number no plates can make says nothing. */}
-            {!isBodyweight && slot !== 'weight' && setup?.plates && setup.plates.length > 0 ? (
-              <Text style={styles.rxSub} numberOfLines={1}>
-                <Text style={styles.rxSubFig}>{setup.plates.join(' · ')}</Text>
-                {` ${t('workout.platesASide')}`}
-              </Text>
-            ) : null}
+            {/* ⛔ THE PLATE STACK IS GONE (founder, 2026-09-15): *"כמה לשים בכל צד וכמה סך המשקל הכולל זה
+                מעולה ולא לשנות … איזה פלטות לשים — תוריד את זה."* The per-side figure and the total stay;
+                the list of which plates to use (2026-09-09) was one line more than she reads at the rack. */}
           </Pressable>
 
           <Pressable
@@ -3306,33 +3267,6 @@ function ActiveSet({
           <WarmupOffer />
         </View>
       </View>
-      {noteDraft != null && noteExerciseId ? (
-        /* The same sheet the lift's page opens (`LiftDetail`) — one note, one home, two doors. */
-        <BottomSheet onClose={() => setNoteDraft(null)} heightFraction={0.4}>
-          <TextField
-            label={t('progress.noteLegend')}
-            value={noteDraft}
-            placeholder={t('progress.notePlaceholder')}
-            onChangeText={setNoteDraft}
-            multiline
-            maxLength={280}
-            block
-            autoFocus
-          />
-          <View style={styles.noteSheetActions}>
-            <Button
-              variant="primary"
-              block
-              label={t('progress.noteSave')}
-              onPress={() => {
-                const next = noteDraft.trim();
-                void db.saveLiftNote(noteExerciseId, next).then(() => setLiftNote(next));
-                setNoteDraft(null);
-              }}
-            />
-          </View>
-        </BottomSheet>
-      ) : null}
     </>
   );
 }
@@ -4860,11 +4794,6 @@ const styles = StyleSheet.create({
   // The second half of a superset: the SAME size as the lift she is on, in the quiet tone the unit
   // label wears — present as an equal, subordinate only in colour.
   supersetNext: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
-  noteLine: { marginTop: 4, minHeight: 24, maxWidth: 330, alignItems: 'center', justifyContent: 'center' },
-  noteLineText: { fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: stage.ink1, textAlign: 'center' },
-  noteLineAdd: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  noteLineAddText: { fontFamily: font.sansMedium, fontSize: 17, color: stage.ink2, textAlign: 'center' },
-  noteSheetActions: { marginTop: 18 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
   // The equipment-native figure UNDER the hero: "7 kg a side". The number is a measurement (mono,

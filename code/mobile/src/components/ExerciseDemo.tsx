@@ -87,7 +87,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   // The clip runs to the card's own edges — no inset, no rounding of its own.
-  media: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#26241f' },
+  /* ⛔ NO ASPECT OF ITS OWN (founder, 2026-09-15: "כשלוחצים על הסרטון של התרגיל המילים עולות על הסרטון").
+     This box forced 16:9 (196 pt) while the clip inside draws at its own stage aspect (266 pt), so the
+     clip ran 70 pt down over the title and the first cue. `FormMedia` owns the frame's shape; the box
+     only wraps it, so the words start below the clip on every clip. */
+  media: { width: '100%', backgroundColor: '#26241f' },
   body: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 22, gap: 13 },
   /*
    * ⛔ 18 → 24 (2026-08-27). The lift's NAME was set one point above its own instructions — the cues
