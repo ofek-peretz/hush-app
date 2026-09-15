@@ -187,23 +187,36 @@ export const healthKitGate: HealthGate = {
         ascending: true,
         filter: { date: { startDate: from, endDate: to } },
       });
-      let km = 0;
+      /*
+       * ⛔ ONE BODY, ONE DISTANCE — SUMMED PER SOURCE, NEVER ACROSS THEM (2026-09-15).
+       *
+       * The iPhone AND the Apple Watch each write `DistanceWalkingRunning` for the same strides —
+       * Health's own app de-duplicates them by source priority, a raw sample read does not. Summed
+       * together, a treadmill walk with the watch on read close to DOUBLE. Each device's window is
+       * its own measurement of the same walk, so the answer is the one that measured the most of it
+       * (the watch on the wrist, the phone when there is no watch) — never their total.
+       */
+      const perSource = new Map<string, number>();
       for (const x of samples) {
         const a0 = new Date(x.startDate).getTime();
         const b0 = new Date(x.endDate ?? x.startDate).getTime();
         const q = x.quantity;
         if (!Number.isFinite(q) || q <= 0) continue;
         const span = b0 - a0;
+        let part = 0;
         if (!Number.isFinite(span) || span <= 0) {
           // An instantaneous sample belongs wholly to the window that contains it.
-          if (a0 >= from.getTime() && a0 <= to.getTime()) km += q;
-          continue;
+          if (a0 >= from.getTime() && a0 <= to.getTime()) part = q;
+        } else {
+          const lo = Math.max(a0, from.getTime());
+          const hi = Math.min(b0, to.getTime());
+          if (hi > lo) part = q * ((hi - lo) / span);
         }
-        const lo = Math.max(a0, from.getTime());
-        const hi = Math.min(b0, to.getTime());
-        if (hi <= lo) continue;
-        km += q * ((hi - lo) / span);
+        if (part <= 0) continue;
+        const source = x.sourceRevision?.source?.bundleIdentifier ?? '';
+        perSource.set(source, (perSource.get(source) ?? 0) + part);
       }
+      const km = Math.max(0, ...perSource.values());
       return +km.toFixed(3);
     } catch {
       return null;

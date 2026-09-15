@@ -333,6 +333,56 @@ describe('⛔ the indoor query is shaped the way the library reads it', () => {
   });
 });
 
+/**
+ * ⛔ THE PHONE AND THE WATCH MEASURE THE SAME WALK (2026-09-15, found checking indoor after the
+ * founder's outdoor GPS report). Both write `DistanceWalkingRunning` for the same strides; Health's
+ * own app de-duplicates by source, a raw sample read does not. Summed, a treadmill walk with the
+ * watch on read nearly double.
+ */
+describe('⛔ two devices on one walk are one distance', () => {
+  const src = (bundleIdentifier: string) => ({ source: { bundleIdentifier, name: bundleIdentifier } });
+  let samples: any[] = [];
+  beforeEach(() => {
+    jest.resetModules();
+    jest.doMock('@kingstinct/react-native-healthkit', () => ({
+      isHealthDataAvailableAsync: async () => true,
+      isHealthDataAvailable: () => true,
+      requestAuthorization: async () => true,
+      getRequestStatusForAuthorization: async () => 2,
+      getMostRecentQuantitySample: async () => undefined,
+      AuthorizationRequestStatus: { unknown: 0, shouldRequest: 1, unnecessary: 2 },
+      queryWorkoutSamples: async () => [],
+      queryQuantitySamples: async () => samples,
+    }));
+  });
+  afterEach(() => {
+    jest.dontMock('@kingstinct/react-native-healthkit');
+    jest.resetModules();
+  });
+  const gate = () => require('@/platform/health/healthKitGate').healthKitGate;
+
+  it('the watch and the phone both wrote the same 1 km — it reads 1 km, not 2', async () => {
+    samples = [
+      // The phone flushes in batches…
+      { quantity: 0.6, startDate: new Date(1_000), endDate: new Date(2_000), sourceRevision: src('com.apple.health.phone') },
+      { quantity: 0.4, startDate: new Date(2_000), endDate: new Date(3_000), sourceRevision: src('com.apple.health.phone') },
+      // …the watch in small segments, for the same strides.
+      { quantity: 0.3, startDate: new Date(1_000), endDate: new Date(1_600), sourceRevision: src('com.apple.health.watch') },
+      { quantity: 0.35, startDate: new Date(1_600), endDate: new Date(2_300), sourceRevision: src('com.apple.health.watch') },
+      { quantity: 0.4, startDate: new Date(2_300), endDate: new Date(3_000), sourceRevision: src('com.apple.health.watch') },
+    ];
+    await expect(gate().distanceSince(1_000, 3_000)).resolves.toBeCloseTo(1.05, 3);
+  });
+
+  it('one device alone still sums every one of its segments', async () => {
+    samples = [
+      { quantity: 0.6, startDate: new Date(1_000), endDate: new Date(2_000), sourceRevision: src('com.apple.health.phone') },
+      { quantity: 0.4, startDate: new Date(2_000), endDate: new Date(3_000), sourceRevision: src('com.apple.health.phone') },
+    ];
+    await expect(gate().distanceSince(1_000, 3_000)).resolves.toBeCloseTo(1.0, 3);
+  });
+});
+
 describe('the wire it rides on', () => {
   it('⛔ the read scope already held the distance type — this is a wire, not a model', () => {
     const gate = read('src/platform/health/healthKitGate.ts');
