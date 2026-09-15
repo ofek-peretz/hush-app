@@ -547,10 +547,11 @@ export function CardioLiveView(props: {
      *
      *   · Core Motion counts GAIT, not vibration, and it needs the phone ON HER (see
      *     `platform/health`) — a phone on the treadmill console reads zero forever, correctly;
-     *   · and even walking, iOS flushes distance to HealthKit in BATCHED segments minutes apart,
-     *     against a five-second poll, with `ingestStride` spending the first reading as a cursor.
+     *   · and `ingestStride` spends the first reading as a cursor. (Health's batched flushes used to
+     *     hold the first metre minutes away; since 2026-09-15 the pedometer is read every second
+     *     beside it, so on a working run this line lasts seconds.)
      *
-     * So the first metre is legitimately minutes away, and until it lands the only honest line is
+     * Until the first metre lands, the only honest line is
      * the one that says what the measurement needs. It clears itself the moment distance is
      * credited, so a working run shows it briefly and a broken one shows it until she fixes it.
      *

@@ -173,7 +173,9 @@ describe('⛔ and the wire reaches the screen', () => {
   it('⚠️ a source that drops out mid-run keeps what it already credited', () => {
     // `null` before the first reading stands the mode down; `null` afterwards must not retract the
     // kilometres she actually covered.
-    expect(tracker()).toContain('if (!sawAny) {');
+    // Since 2026-09-15 two sources answer, and the mode stands down only once BOTH have answered with
+    // nothing; the drop-out itself is exercised on the rendered hook in `theTreadmillMovesLive`.
+    expect(tracker()).toContain('if (!sawAny && healthAnswered && (pedometerAnswered || !pedometerLive)) {');
   });
 
   it("⛔ and it never says 'Acquiring GPS signal' over a treadmill", () => {

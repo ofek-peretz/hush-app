@@ -215,3 +215,23 @@ describe('and a phone that does not move still reads nothing', () => {
     }
   });
 });
+
+describe('and the pace blanks at a red light', () => {
+  it('⛔ walking, then standing still inside the noise — the pace is gone within seconds', () => {
+    endRun();
+    beginRun(75);
+    setPaused(false);
+    const r = rng(3);
+    let n = 0;
+    for (let i = 0; i <= 120; i++) {
+      n += 1.4;
+      ingestFix(fix(n + gauss(r), gauss(r), i, 6, 1.4 + gauss(r) * 0.2));
+    }
+    expect(snapshot().paceSec).toBeGreaterThan(0);
+    // Under a building the fix loosens to ±25 m, so the noise floor is 12.5 m and one metre of jitter never
+    // opens a window — the pace has to blank from the Doppler alone.
+    for (let i = 121; i <= 125; i++) ingestFix(fix(n + gauss(r), gauss(r), i, 25, Math.abs(gauss(r)) * 0.1));
+    expect(snapshot().paceSec).toBe(0);
+    endRun();
+  });
+});

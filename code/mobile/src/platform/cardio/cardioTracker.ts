@@ -58,6 +58,8 @@ import {
 } from './cardioRun';
 import { startCardioLocationTask, stopCardioLocationTask } from './cardioTask';
 import { health } from '@/platform/health';
+import { audioSession } from '@/platform/voice/audioSession';
+import { indoorReadingKm, pedometer } from './pedometer';
 import { liveHeartRate } from '@/domain/heartRate';
 
 /**
@@ -82,6 +84,13 @@ const HR_POLL_MS = 5_000;
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 const STRIDE_POLL_MS = 5_000;
+
+/**
+ * ⛔ THE PEDOMETER IS ASKED EVERY SECOND (2026-09-15). Unlike Health it answers live, so a second is
+ * what makes the metres move as she walks. The query reads the coprocessor's own count: it costs a
+ * read, not a sensor.
+ */
+const PEDOMETER_POLL_MS = 1_000;
 
 // The pure math (gates, formatters) lives in cardioMath — native-free, unit-tested.
 // ⚠️ `kcalForKm` is NOT re-exported any more (2026-08-18): it prices a whole distance at a DECLARED
@@ -205,77 +214,148 @@ export function useCardioTracker(
     const startedAt = Date.now();
     let sawAny = false;
     /*
+     * ════ ⛔ TWO MEASUREMENTS OF ONE WALK — THE LIVE ONE AND THE COMPLETE ONE (founder, 2026-09-15) ════
+     *
+     * Health alone was minutes late: the iPhone flushes `DistanceWalkingRunning` in batches, so every
+     * treadmill run sat on its first metre and then jumped. The pedometer (`modules/hush-pedometer`)
+     * answers the same question from the motion coprocessor within a second, and is polled every
+     * second. Health is still read, every five: it is the only source that carries the WATCH's
+     * strides, which is all there is when the phone sits on the console. The run is credited from the
+     * larger of the two (`indoorReadingKm`) — the same strides measured twice are one distance.
+     *
+     * Each source keeps its own last reading, so a source that drops out mid-run cannot pull the
+     * figure down, and `ingestStride` refuses anything that goes backwards anyway.
+     */
+    let pedometerKm: number | null = null;
+    let healthKm: number | null = null;
+    /*
+     * ⚠️ WHEN HEALTH OVERTAKES THE PEDOMETER, ITS BATCH WAS WALKED OVER ITS OWN INTERVAL. The
+     * pedometer credits every second or two, so a watch batch that lands above it (0.50 → 0.62 km)
+     * would be timed over one second: a 2:00 /km pace and running-rate calories. The span that
+     * batch covered is the time since Health last moved, scaled to the part of it that is new.
+     */
+    let healthChangedAtMs = Date.now();
+    let healthCoveredSinceMs: number | undefined;
+    let creditedKm = 0;
+    let lastStrideAtMs = 0;
+    let healthAnswered = false;
+    let pedometerAnswered = false;
+    const pedometerLive = pedometer.usable();
+    /*
+     * ⛔ AND THE PROCESS STAYS AWAKE WITH THE SCREEN LOCKED. Outdoors the location session keeps it
+     * running; indoors nothing did, so iOS suspended it and the lock-screen card, the wrist and the
+     * kilometre notes froze until she looked. The workout's keep-alive, held by this run by name
+     * (`holdKeepAlive`) — a treadmill opened from inside a workout does not stop the workout's loop.
+     *
+     * ⚠️ WHAT STAYS FROZEN, AND WHY IT IS iOS: HealthKit's store is protected while the device is
+     * locked (`errorDatabaseInaccessible` → `distanceSince` null → the last Health figure holds). So
+     * the phone-on-the-console, watch-on-the-wrist run advances on the lock screen only when she
+     * unlocks, and heals in one read then. The pedometer is not protected — a phone on her keeps
+     * moving the card live.
+     */
+    void audioSession.holdKeepAlive('indoorRun');
+    /*
      * ⛔ AND THE MODE HAS TO ASK FOR ITS OWN SOURCE (founder 2026-08-16).
      *
      * `requestPermission` was called in exactly two places, `ConnectHealth` and `ProfileSheet` —
-     * NEITHER on the cardio path. `ConnectHealth` is a skippable onboarding step, so an athlete who
-     * tapped past it arrived here with HealthKit never authorized. A denied READ in HealthKit
-     * returns an EMPTY ARRAY rather than an error, by design, so the poll below reads `0`, latches
-     * `sawAny`, and the stage draws a confident **0 m for the whole run with no message at all** —
-     * the worst of the three outcomes, because it looks like it is working.
+     * NEITHER on the cardio path. A denied READ in HealthKit returns an EMPTY ARRAY rather than an
+     * error, so the poll read `0` and the stage drew a confident **0 m for the whole run with no
+     * message at all**. Indoors asks for its source where she can see what it is for.
      *
-     * The outdoor half of this hook has always asked for location the moment it needs it (below).
-     * Indoors asks for its source the same way, and for the same reason: a permission requested
-     * where the athlete can see what it is for is the one she grants.
-     *
-     * ⚠️ ONLY WHEN UNDETERMINED. Re-prompting on every run is how a grant gets revoked, and iOS
-     * shows the sheet once regardless. `unavailable` is Android, the simulator, or a device with no
-     * HealthKit — there is no source to ask for, and the mode stands down instead of polling
-     * something that will never answer.
+     * ⚠️ ONLY WHEN UNDETERMINED — re-prompting on every run is how a grant gets revoked. And the
+     * pedometer's own Motion & Fitness prompt waits for this one: two system sheets at once is how
+     * one of them gets dismissed unread.
      */
     let ready: Promise<void> | null = null;
     const ensureSource = () => {
       ready ??= (async () => {
         const state = await health.permissionState();
-        if (state === 'unavailable') {
-          if (alive) {
-            setGps('unavailable');
-            setSample(snapshot());
-          }
-          return;
-        }
         if (state === 'unknown') await health.requestPermission();
       })().catch(() => undefined);
       return ready;
     };
-    /*
-     * ⚠️ AND THE RETURN TO FOREGROUND READS IMMEDIATELY (same QA finding, the indoor half).
-     * Indoors there is no location session, so iOS suspends JS while the screen is off and the
-     * poll freezes with it — by design: Core Motion keeps counting in HARDWARE, and the cumulative
-     * read heals the whole gap in one delta. What must not happen is her reopening onto a frozen
-     * figure for up to five more seconds while the interval winds back up. The AppState listener
-     * below reads the instant she is back.
-     */
-    const read = () => {
+    const credit = () => {
+      if (!alive) return;
+      const km = indoorReadingKm(pedometerKm, healthKm);
+      if (km == null) {
+        // Only before the first good reading, and only once every source has answered: nothing to
+        // measure with is `unavailable`. A source that drops out later keeps what it credited.
+        if (!sawAny && healthAnswered && (pedometerAnswered || !pedometerLive)) {
+          setGps('unavailable');
+          setSample(snapshot());
+        }
+        return;
+      }
+      sawAny = true;
+      // A source that answered late lifts the "no source" line it could not have prevented.
+      if (snapshot().gps === 'unavailable') setGps('ready');
+      const ledByHealth = healthKm != null && km === healthKm && km > (pedometerKm ?? 0);
+      // ⚠️ A STRICTLY LATER INSTANT EVERY TIME. Both sources can answer inside the same millisecond, and
+      // `ingestStride` drops a reading that is not newer than the last — which silently lost the one
+      // that carried the watch's batch, with `creditedKm` already claiming it.
+      const at = Math.max(Date.now(), lastStrideAtMs + 1);
+      lastStrideAtMs = at;
+      ingestStride(km, at, ledByHealth && km > creditedKm ? healthCoveredSinceMs : undefined);
+      creditedKm = Math.max(creditedKm, km);
+    };
+    const readHealth = () => {
       void ensureSource()
         .then(() => health.distanceSince(startedAt))
         .then((km) => {
-          if (!alive) return;
-          if (km == null) {
-            // Only before the first good reading. A source that drops out mid-run keeps whatever it
-            // already credited rather than retracting the kilometres she actually covered.
-            if (!sawAny) {
-              setGps('unavailable');
-              setSample(snapshot());
-            }
-            return;
+          healthAnswered = true;
+          if (km != null && km > (healthKm ?? 0)) {
+            const now = Date.now();
+            const batchKm = km - (healthKm ?? 0);
+            const newKm = km - Math.max(creditedKm, pedometerKm ?? 0);
+            healthCoveredSinceMs = newKm > 0 ? now - (now - healthChangedAtMs) * Math.min(1, newKm / batchKm) : undefined;
+            healthChangedAtMs = now;
+            healthKm = km;
+          } else if (km != null && healthKm == null) {
+            healthKm = km;
           }
-          sawAny = true;
-          ingestStride(km);
+          credit();
         })
         .catch(() => {
-          if (alive && !sawAny) setGps('unavailable');
+          healthAnswered = true;
+          credit();
         });
     };
+    const readPedometer = () => {
+      if (!pedometerLive) return;
+      void ensureSource()
+        .then(() => pedometer.kmSince(startedAt))
+        .then((km) => {
+          pedometerAnswered = true;
+          if (km != null) pedometerKm = Math.max(pedometerKm ?? 0, km);
+          credit();
+        })
+        .catch(() => {
+          pedometerAnswered = true;
+          credit();
+        });
+    };
+    /*
+     * ⚠️ AND THE RETURN TO FOREGROUND READS IMMEDIATELY (the build-57 QA finding, the indoor half).
+     * Core Motion keeps counting in HARDWARE while the process sleeps, and both reads are cumulative,
+     * so one read heals the whole gap. What must not happen is her reopening onto a frozen figure
+     * while the intervals wind back up.
+     */
+    const read = () => {
+      readPedometer();
+      readHealth();
+    };
     read();
-    const id = setInterval(read, STRIDE_POLL_MS);
+    const pedometerId = setInterval(readPedometer, PEDOMETER_POLL_MS);
+    const healthId = setInterval(readHealth, STRIDE_POLL_MS);
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') read();
     });
     return () => {
       alive = false;
-      clearInterval(id);
+      clearInterval(pedometerId);
+      clearInterval(healthId);
       sub.remove();
+      void audioSession.releaseKeepAlive('indoorRun');
     };
   }, [active, indoor]);
 

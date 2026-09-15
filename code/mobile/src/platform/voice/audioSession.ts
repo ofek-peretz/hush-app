@@ -22,6 +22,9 @@ interface AudioModule {
 const native: AudioModule | null =
   Platform.OS === 'ios' ? requireOptionalNativeModule<AudioModule>('HushVoiceAudio') : null;
 
+export type KeepAliveOwner = 'workout' | 'indoorRun';
+const keepAliveOwners = new Set<KeepAliveOwner>();
+
 const quiet = async (f: () => Promise<void> | void) => {
   try {
     await f();
@@ -51,8 +54,22 @@ export const audioSession = {
       return () => {};
     }
   },
-  startKeepAlive: () => quiet(() => native?.startKeepAlive()),
-  stopKeepAlive: () => quiet(() => native?.stopKeepAlive()),
+  /*
+   * ⛔ THE KEEP-ALIVE HAS OWNERS (2026-09-15). The workout held it alone until the indoor run needed
+   * it too — a treadmill run has no location session, so with the screen locked iOS suspended the
+   * process and the lock-screen card, the wrist and the kilometre notes froze until she looked. A
+   * cardio item opened from inside a workout would then have STOPPED the workout's loop on its way
+   * out. So each owner holds it by name, and the loop stops only when the last one lets go.
+   */
+  holdKeepAlive(owner: KeepAliveOwner): Promise<void> {
+    const first = keepAliveOwners.size === 0;
+    keepAliveOwners.add(owner);
+    return first ? quiet(() => native?.startKeepAlive()) : Promise.resolve();
+  },
+  releaseKeepAlive(owner: KeepAliveOwner): Promise<void> {
+    if (!keepAliveOwners.delete(owner) || keepAliveOwners.size > 0) return Promise.resolve();
+    return quiet(() => native?.stopKeepAlive());
+  },
   /** Before a line: her music to a quarter. */
   duck: () => quiet(() => native?.duck()),
   /** After a line or a listening window: the music back, the session back to playback-mixed. */

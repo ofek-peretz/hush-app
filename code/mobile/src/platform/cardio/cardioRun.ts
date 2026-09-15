@@ -404,8 +404,12 @@ export function ingestFix(fix: Fix): void {
   s.windowSpeedN += 1;
   const dtS = (tsMs - prev.tsMs) / 1000;
   const segM = haversineM(prev.lat, prev.lon, latitude, longitude);
-  // Still inside the fix's own noise: the window stays open and the anchor holds.
-  if (segM < noiseFloorM(accuracy) && dtS <= MAX_FIX_GAP_S) return;
+  // Still inside the fix's own noise: the window stays open and the anchor holds. The pace still
+  // blanks the moment the Doppler says she has stopped — a red light is not a 9:00 /km.
+  if (segM < noiseFloorM(accuracy) && dtS <= MAX_FIX_GAP_S) {
+    if (speed < MIN_SPEED_MS) s.paceSec = 0;
+    return;
+  }
   const windowSpeed = s.windowSpeedSum / s.windowSpeedN;
   s.lastFix = { lat: latitude, lon: longitude, tsMs };
   s.windowSpeedSum = 0;
@@ -650,7 +654,21 @@ function creditDistance(segM: number, paceSecPerKm: number, segSec: number): voi
  * covered walking to the water fountain would arrive in one lump on resume.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-export function ingestStride(cumulativeKm: number, tsMs: number = Date.now()): void {
+/**
+ * ⛔ HOW LONG A BELT MAY GO WITHOUT NEW DISTANCE BEFORE THE PACE BLANKS (2026-09-15). The pedometer is
+ * read every second and Core Motion updates its distance in small chunks, so most reads repeat the
+ * last figure while she is walking steadily. Blanking on every repeat flickered the pace to "--:--"
+ * and threw away its smoothing. Ten seconds with nothing new is standing still.
+ */
+const STRIDE_STALL_MS = 10_000;
+
+/**
+ * @param coveredSinceMs When the caller knows the delta was covered over a LONGER span than "since the
+ *   last credit" — a Health batch that overtakes the pedometer carries strides from its own interval —
+ *   the start of that span. Without it a batch credited one second after a pedometer read was billed
+ *   at a 2:00 /km sprint.
+ */
+export function ingestStride(cumulativeKm: number, tsMs: number = Date.now(), coveredSinceMs?: number): void {
   if (!s.active || !s.indoor) return;
   if (!Number.isFinite(cumulativeKm) || cumulativeKm < 0) return;
   if (tsMs <= s.strideTsMs) return;
@@ -687,11 +705,15 @@ export function ingestStride(cumulativeKm: number, tsMs: number = Date.now()): v
    * the window: everything since the last reading that carried distance. That is the interval.
    * ════════════════════════════════════════════════════════════════════════════════════════════════
    */
-  const dtS = (tsMs - sinceCreditMs) / 1000;
+  // Never reaching back past the last resume: a pause is not time the strides were walked in.
+  const intervalStartMs =
+    coveredSinceMs != null && coveredSinceMs < sinceCreditMs ? Math.max(coveredSinceMs, s.resumedAtMs) : sinceCreditMs;
+  const dtS = (tsMs - intervalStartMs) / 1000;
   if (segKm <= 0 || dtS <= 0) {
     // Standing still on a moving belt is still standing still. No distance, and the pace blanks
-    // rather than holding the last number it liked.
-    s.paceSec = 0;
+    // rather than holding the last number it liked — once the belt has been still for longer than a
+    // repeated reading can explain (`STRIDE_STALL_MS`).
+    if (tsMs - sinceCreditMs >= STRIDE_STALL_MS) s.paceSec = 0;
     return;
   }
   s.strideCreditTsMs = tsMs;

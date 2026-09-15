@@ -2196,7 +2196,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (laStartedRef.current) {
         laStartedRef.current = false;
         void liveActivity.end();
-        void audioSession.stopKeepAlive();
+        void audioSession.releaseKeepAlive('workout');
         void track(LIVE_ACTIVITY_EVENTS.ended);
       }
       return;
@@ -2253,7 +2253,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        * keeps the process — and the JS clock, and the lock-intent listener — alive from the first
        * set to the receipt. Her music is untouched; the loop is inaudible. Stopped with the activity.
        */
-      void audioSession.startKeepAlive();
+      void audioSession.holdKeepAlive('workout');
       void track(LIVE_ACTIVITY_EVENTS.started);
       void liveActivity.start(mirror, lock).catch(() => void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'start' }));
     } else {

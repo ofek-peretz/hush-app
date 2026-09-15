@@ -27,6 +27,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Hush listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
         "NSSpeechRecognitionUsageDescription": "Hush turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised.",
+        "NSMotionUsageDescription": "Hush counts your steps with the phone's motion sensor to measure distance and pace on the treadmill.",
         "UIBackgroundModes": [
           "location",
           "audio"
