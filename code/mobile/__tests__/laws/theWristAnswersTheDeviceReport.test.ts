@@ -204,7 +204,9 @@ describe('the layout law — nothing gets cut off again', () => {
      * unreadable. The floor is 10, and `Wrist.legend` is where it is written down.
      */
     const src = read(SCREENS);
-    const sizes = [...src.matchAll(/\.system\(size: ([0-9.]+)/g)].map((m) => Number(m[1]));
+    // Every size is written at the 40 mm case and scaled by `Fit.s` (2026-09-15) — the number inside
+    // the call is the one the smallest case renders, so it is the one the floor holds.
+    const sizes = [...src.matchAll(/\.system\(size: (?:Fit\.s\()?([0-9.]+)/g)].map((m) => Number(m[1]));
     expect(sizes.length).toBeGreaterThan(40);
     expect(sizes.filter((n) => n < 8)).toEqual([]);
   });

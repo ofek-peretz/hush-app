@@ -19,16 +19,58 @@ import WatchKit
 
 // MARK: Fit (case-size scale)
 
-/// One scale factor for the hero marks, derived from the case height: 1.0 on the
-/// smallest supported case (40 mm ≈ 197 pt) up to ~1.27 on the 49 mm Ultra. Body
-/// text and legends stay fixed (they are already sized for the smallest case);
-/// only the marks that should GROW with the canvas go through `Fit.s`.
+/**
+ * ════ ONE DESIGN, IN THE PROPORTION OF EVERY CASE (founder, 2026-09-15) ════
+ *
+ * *"אני רוצה שתוודא שהכל תואם בדיוק לפרופורציה של כל שעון ושעון."*
+ *
+ * The wrist is drawn ONCE, at the smallest case watchOS 10 runs on — 40 mm, 162 × 197 pt — and
+ * every case larger than that is the same drawing, uniformly larger. EVERY layout number on this
+ * surface passes through `Fit.s`: type, frames, gutters, gaps, radii, strokes, tracking, the clock's
+ * reserve. `theWristKeepsItsProportion` fails the build on a bare one.
+ *
+ * ⛔ THIS REVERSES A RULE THAT STOOD HERE: "body text and legends stay fixed; only the hero marks
+ * grow". Half the screen scaled and half did not, so no two cases were the same design — on an
+ * Ultra the ring was 27 % larger than on a 40 mm case and the words around it, the gutters and the
+ * header were not larger at all. It also double-scaled: a height handed to `StageButton` already
+ * `Fit.s`-ed was scaled again inside it, and the Done button on three closing screens drew ~68 pt
+ * tall on an Ultra instead of 53.
+ *
+ * WHY BOTH AXES. The cases do not share one aspect ratio: 40/41/44/45 mm and the Ultra run
+ * ~0.82 wide-to-tall, the Series 10/11 42 and 46 mm ~0.84. A height-only factor over-scales width
+ * on the narrower ones. The factor is the SMALLER of the two ratios, so the scaled drawing always
+ * fits the case on both axes — which means a screen that fits at 40 mm fits, in the same proportion,
+ * on every case. That is the whole guarantee, and it is arithmetic, not a hope.
+ *
+ * WHY NOT ROUNDED. Rounding each number to a whole point breaks the proportion (a 1.5 pt stroke
+ * became 2 on the 40 mm case) and lets twenty rounded rows add up to a few points no case has.
+ * SwiftUI snaps to the display's pixels itself.
+ *
+ *   case             points      factor
+ *   40 mm            162 × 197   1.000
+ *   41 mm            176 × 215   1.086
+ *   42 mm (S10/11)   187 × 223   1.132
+ *   44 mm            184 × 224   1.136
+ *   45 mm            198 × 242   1.222
+ *   46 mm (S10/11)   208 × 248   1.259
+ *   49 mm Ultra      205 × 251   1.265
+ *
+ * Read from the device at launch, so a case not in this table scales by the same rule. Never below
+ * 1.0: nothing on the wrist is drawn smaller than the smallest case draws it (the type floor).
+ */
 enum Fit {
+  /// The case the wrist is designed at — 40 mm, the smallest watchOS 10 runs on.
+  static let designWidth: CGFloat = 162
+  static let designHeight: CGFloat = 197
   static let factor: CGFloat = {
-    let h = WKInterfaceDevice.current().screenBounds.height
-    return min(1.3, max(1.0, h / 197))
+    let b = WKInterfaceDevice.current().screenBounds.size
+    return scale(width: b.width, height: b.height)
   }()
-  static func s(_ v: CGFloat) -> CGFloat { (v * factor).rounded() }
+  /// Pure, so the proportion rule can be stated without a device.
+  static func scale(width: CGFloat, height: CGFloat) -> CGFloat {
+    max(1.0, min(width / designWidth, height / designHeight))
+  }
+  static func s(_ v: CGFloat) -> CGFloat { v * factor }
 }
 
 // MARK: The wrist's layout law
@@ -96,9 +138,11 @@ struct WristScreen<Content: View, Actions: View>: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      content
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.horizontal, Wrist.side)
+      // Fitted to the slot the action zone leaves — see `FitToSlot`.
+      FitToSlot {
+        content
+          .padding(.horizontal, Fit.s(Wrist.side))
+      }
       /*
        * ⛔ THE ACTION ZONE OWNS THE FLOOR — founder, asked four times and answered plainly on
        * 2026-08-05: *"you have not answered me for several messages now — did you understand that
@@ -124,6 +168,59 @@ struct WristScreen<Content: View, Actions: View>: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
+}
+
+/// The height a block asked for at the size it was offered — read by `FitToSlot`.
+private struct NeededHeightKey: PreferenceKey {
+  static var defaultValue: CGFloat = 0
+  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+/**
+ * ════ NOTHING OVERFLOWS ITS SLOT, ON ANY CASE (founder, 2026-09-15) ════
+ *
+ * Measured screen by screen against the 40 mm case, several screens asked for more height than the
+ * case has — the inter-set rest the most (its ring, its up-next card and a two-line lift name come to
+ * ~205 pt of content over a 155 pt slot). SwiftUI does not shrink a stack that does not fit: the body
+ * hangs from the top and runs on DOWN, under the buttons, which is the "cut off" the founder has
+ * photographed before.
+ *
+ * So the body is offered its slot, and if it answers with more height than the slot has, the whole
+ * block is drawn UNIFORMLY smaller — laid out wider by the same factor so nothing re-wraps into a
+ * taller shape, then scaled back to the slot's exact width. A block that fits is untouched: the
+ * factor is 1 and every Spacer distributes the slack exactly as before.
+ *
+ * WHY UNIFORM. The founder's rule for this surface is proportion (`Fit`): every case draws the same
+ * picture. A uniform shrink keeps it — and because the content and the slot both scale with the case,
+ * a screen that needs 0.9 on 40 mm needs 0.9 on an Ultra too.
+ *
+ * ⚠️ THE FLOOR IS 0.75 — the same shrink this file already allows a single line of text everywhere
+ * (`minimumScaleFactor(0.75)`). A screen that needs more than that needs a DESIGN, not a shrink: it is
+ * left to overflow visibly rather than become unreadable. The inter-set rest carrying a correction
+ * note, and the end-workout confirm carrying its sets figure, are measured beyond it on 40 mm.
+ */
+struct FitToSlot<Content: View>: View {
+  @ViewBuilder let content: () -> Content
+  @State private var needed: CGFloat = 0
+  var body: some View {
+    GeometryReader { slot in
+      let w = slot.size.width
+      let h = slot.size.height
+      let s: CGFloat = (h > 0 && needed > h + 0.5) ? max(0.75, h / needed) : 1
+      content()
+        .frame(width: w / s, alignment: .top)
+        .background(GeometryReader { g in Color.clear.preference(key: NeededHeightKey.self, value: g.size.height) })
+        .frame(width: w / s, height: h / s, alignment: .top)
+        .scaleEffect(s, anchor: .top)
+        .frame(width: w, height: h, alignment: .top)
+    }
+    .onPreferenceChange(NeededHeightKey.self) { needed = $0 }
+  }
+}
+
+extension View {
+  /// This view, fitted to the space it is given — see `FitToSlot`.
+  func fitToSlot() -> some View { FitToSlot { self } }
 }
 
 /// A screen with nothing to press — the glance, the read-back, WT3. It still hangs from the same
@@ -263,11 +360,12 @@ private func execConfirmation(_ s: WireLoadSetup?) -> String? {
 /// Uppercase instrument legend.
 private struct Legend: View {
   let text: String
+  /// Written at the 40 mm size, like every number here — the legend scales it (`Fit`).
   var size: CGFloat = 10
   init(_ text: String, size: CGFloat = 10) { self.text = text; self.size = size }
   var body: some View {
     Text(text.uppercased())
-      .font(.system(size: size, weight: .medium)).tracking(0.9)
+      .font(.system(size: Fit.s(size), weight: .medium)).tracking(Fit.s(0.9))
       .foregroundStyle(Palette.ink2)
   }
 }
@@ -306,18 +404,21 @@ private struct TopStrip: View {
   @Environment(\.goControls) private var goControls
   var body: some View {
     ClockLane {
-      HStack(spacing: 7) {
+      HStack(spacing: Fit.s(7)) {
         if let text {
           Text(text)
-            .font(.system(size: Wrist.label, weight: .medium, design: .monospaced)).tracking(0.8)
+            .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: .monospaced)).tracking(Fit.s(0.8))
             .foregroundStyle(Palette.ink1)
             .lineLimit(1).minimumScaleFactor(0.75)
         } else if let lift {
           // Her word for it (2026-09-09): this was the literal "LIFT" on a Hebrew wrist, on the one
           // strip every execution screen carries.
           Text("\(WatchCopy.liftWord.uppercased()) \(lift.i)/\(lift.n)")
-            .font(.system(size: Wrist.label, weight: .medium, design: .monospaced)).tracking(0.8)
+            .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: .monospaced)).tracking(Fit.s(0.8))
             .foregroundStyle(Palette.ink1)
+            // One line, always: beside the pause chip this lane is ~46 pt on a 40 mm case, and a
+            // second line inside a 20 pt row spills out of it (2026-09-15).
+            .lineLimit(1).minimumScaleFactor(0.75)
         }
         if controlsHint {
           /*
@@ -327,27 +428,28 @@ private struct TopStrip: View {
            * thing she taps is the capsule.
            */
           Button(action: { TapGate.pass(goControls) }) {
-            HStack(spacing: 3) {
-              Image(systemName: "chevron.backward").font(.system(size: 12, weight: .semibold))
-              Image(systemName: "pause.fill").font(.system(size: 12, weight: .semibold))
+            HStack(spacing: Fit.s(3)) {
+              Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold))
+              Image(systemName: "pause.fill").font(.system(size: Fit.s(12), weight: .semibold))
             }
             .foregroundStyle(Palette.ink2)
-            .padding(.horizontal, 8)
-            .frame(height: Wrist.head)
+            .padding(.horizontal, Fit.s(8))
+            .frame(height: Fit.s(Wrist.head))
             .background(Palette.stage1).clipShape(Capsule())
             .contentShape(Capsule())
           }
           .buttonStyle(.plain)
         }
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
         if let trailing {
           Text(trailing)
-            .font(.system(size: Wrist.label, weight: .medium, design: .monospaced)).monospacedDigit()
+            .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: .monospaced)).monospacedDigit()
             .foregroundStyle(Palette.ink1)
+            .lineLimit(1).minimumScaleFactor(0.75)
         }
       }
     }
-    .frame(height: Wrist.head)
+    .frame(height: Fit.s(Wrist.head))
   }
 }
 
@@ -374,7 +476,7 @@ private struct ClockLane<Content: View>: View {
       // `.leading` / `.trailing` are edges of the LAYOUT, and the layout is what turns around —
       // so the physical right is the trailing edge in English and the leading edge in Hebrew.
       // No second `layoutDirection` is written here: the wrist turns around once, at the root.
-      .padding(direction == .rightToLeft ? .leading : .trailing, 52)
+      .padding(direction == .rightToLeft ? .leading : .trailing, Fit.s(52))
   }
 }
 
@@ -433,8 +535,9 @@ enum TapGate {
   }
 }
 
-/** How far the seated button's rounded bottom is pushed past the display edge. */
-private let SEAT_BLEED: CGFloat = 16
+/** How far the seated button's rounded bottom is pushed past the display edge. Scaled with the
+    corner it hides — a fixed bleed under a scaled radius would let the corner peek back on an Ultra. */
+private var SEAT_BLEED: CGFloat { Fit.s(16) }
 
 struct StageButton: View {
   enum Kind { case primary, moss, onstage, quiet, danger, ghost }
@@ -468,15 +571,20 @@ struct StageButton: View {
   let action: () -> Void
   var body: some View {
     Button(action: { TapGate.pass(action) }) {
-      HStack(spacing: 6) {
-        if let glyph { Image(systemName: glyph).font(.system(size: fontSize * 0.8, weight: .semibold)) }
-        Text(title).font(.system(size: fontSize, weight: .semibold))
+      HStack(spacing: Fit.s(6)) {
+        // `height` AND `fontSize` are written at the 40 mm size and scaled HERE, together — the label
+        // used to stay 40 mm-sized inside a button that grew (`Fit`).
+        if let glyph { Image(systemName: glyph).font(.system(size: Fit.s(fontSize) * 0.8, weight: .semibold)) }
+        Text(title).font(.system(size: Fit.s(fontSize), weight: .semibold))
+          // A label longer than its button ("Start next set" beside +15 on 40 mm) scales on one line
+          // rather than wrapping into a second the button has no height for.
+          .lineLimit(1).minimumScaleFactor(0.75)
       }
-        .frame(maxWidth: .infinity).frame(height: Fit.s(height)) // taller targets on larger cases
+        .frame(maxWidth: .infinity).frame(height: Fit.s(height))
         .padding(.bottom, seated ? SEAT_BLEED : 0)
         .foregroundStyle(fg)
         .background(bg)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Fit.s(14), style: .continuous))
         // The drawn shape overhangs its layout box by the bleed, so the row below it is unmoved.
         .padding(.bottom, seated ? -SEAT_BLEED : 0)
     }
@@ -525,17 +633,17 @@ struct LoadDelta: View {
     let dir = deltaKg > 0 ? 1 : deltaKg < 0 ? -1 : 0
     let color = dir > 0 ? Palette.up : dir < 0 ? Palette.down : Palette.ink2
     let wash = dir > 0 ? Palette.upWash : dir < 0 ? Palette.downWash : Palette.stage1
-    HStack(spacing: 4) {
+    HStack(spacing: Fit.s(4)) {
       if dir > 0 {
-        Triangle().fill(color).frame(width: 8, height: 6)
+        Triangle().fill(color).frame(width: Fit.s(8), height: Fit.s(6))
       } else if dir < 0 {
-        Triangle().fill(color).rotationEffect(.degrees(180)).frame(width: 8, height: 6)
+        Triangle().fill(color).rotationEffect(.degrees(180)).frame(width: Fit.s(8), height: Fit.s(6))
       } else {
-        RoundedRectangle(cornerRadius: 1).fill(color).frame(width: 7, height: 2)
+        RoundedRectangle(cornerRadius: Fit.s(1)).fill(color).frame(width: Fit.s(7), height: Fit.s(2))
       }
-      Text(label(dir)).font(.system(size: fontSize, weight: .medium, design: .monospaced)).foregroundStyle(color)
+      Text(label(dir)).font(.system(size: Fit.s(fontSize), weight: .medium, design: .monospaced)).foregroundStyle(color)
     }
-    .padding(.horizontal, 7).padding(.vertical, 3)
+    .padding(.horizontal, Fit.s(7)).padding(.vertical, Fit.s(3))
     .background(wash).clipShape(Capsule())
   }
   private func label(_ dir: Int) -> String {
@@ -566,26 +674,26 @@ private struct CorrectionNote: View {
   let c: WireCorrection
   var body: some View {
     let up = c.direction == "up"
-    VStack(spacing: 2) {
-      // FIXED sizes, no `Fit.s` — the rest screens size everything for the smallest case and let
-      // only the RING grow with the canvas (see `Fit`: "body text and legends stay fixed"). This
-      // block is a legend, and on a 49 mm Ultra it should buy the athlete more air, not more type.
-      HStack(alignment: .firstTextBaseline, spacing: 5) {
+    VStack(spacing: Fit.s(2)) {
+      // Sized for the 40 mm case and scaled with every other number on the wrist (`Fit`). This said
+      // "FIXED sizes, no Fit.s — more air, not more type" until the founder asked for one design in
+      // the proportion of every case (2026-09-15).
+      HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
         Text(fmtW(c.from))
-          .font(.system(size: 12, design: .monospaced)).monospacedDigit()
+          .font(.system(size: Fit.s(12), design: .monospaced)).monospacedDigit()
           .strikethrough(true, color: Palette.ink2)
           .foregroundStyle(Palette.ink2)
-        Text("→").font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2)
+        Text("→").font(.system(size: Fit.s(12), design: .monospaced)).foregroundStyle(Palette.ink2)
         Text(fmtW(c.to))
-          .font(.system(size: 17, weight: .semibold, design: .monospaced)).monospacedDigit()
+          .font(.system(size: Fit.s(17), weight: .semibold, design: .monospaced)).monospacedDigit()
           // The engine's new load, IN THE DIRECTION IT MOVED. It was moss either way — so the wrist
           // announced an ease in the colour of a raise (founder 2026-07-29, phone parity).
           .foregroundStyle(up ? Palette.up : Palette.down)
-        Text(WatchCopy.kg).font(.system(size: 12)).foregroundStyle(Palette.ink2)
+        Text(WatchCopy.kg).font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
       }
       // The reason, under the number it earned — never apart from it (phone parity).
       Text(WatchCopy.corrected(c.reps, up: up))
-        .font(.system(size: 12))
+        .font(.system(size: Fit.s(12)))
         .foregroundStyle(Palette.ink1)
         .multilineTextAlignment(.center)
     }
@@ -594,9 +702,9 @@ private struct CorrectionNote: View {
     // `fixedSize(vertical:)` on top fights the scale factor: the text claims its ideal height and
     // overflows instead of shrinking, which on the 40 mm case is the clip we are avoiding.)
     .lineLimit(2).minimumScaleFactor(0.7)
-    .padding(.horizontal, 8).padding(.vertical, 5)
+    .padding(.horizontal, Fit.s(8)).padding(.vertical, Fit.s(5))
     .frame(maxWidth: .infinity)
-    .background(RoundedRectangle(cornerRadius: 8).fill(Palette.stage1))
+    .background(RoundedRectangle(cornerRadius: Fit.s(8)).fill(Palette.stage1))
   }
 }
 
@@ -625,8 +733,8 @@ private struct DrawCheck: View {
   var body: some View {
     CheckShape()
       .trim(from: 0, to: drawn ? 1 : 0)
-      .stroke(Palette.up, style: StrokeStyle(lineWidth: max(2.4, size * 0.13), lineCap: .round, lineJoin: .round))
-      .frame(width: size, height: size * 0.82)
+      .stroke(Palette.up, style: StrokeStyle(lineWidth: Fit.s(max(2.4, size * 0.13)), lineCap: .round, lineJoin: .round))
+      .frame(width: Fit.s(size), height: Fit.s(size * 0.82))
       .onAppear {
         if reduceMotion || dimmed { drawn = true } else { withAnimation(.easeOut(duration: 0.35)) { drawn = true } }
       }
@@ -644,15 +752,15 @@ private struct DrawCheck: View {
 private struct RangeGlyph: View {
   var body: some View {
     ZStack {
-      Rectangle().fill(Palette.ink0).frame(width: 20, height: 1.3)
+      Rectangle().fill(Palette.ink0).frame(width: Fit.s(20), height: Fit.s(1.3))
       HStack {
-        Rectangle().fill(Palette.ink0).frame(width: 1.3, height: 9)
+        Rectangle().fill(Palette.ink0).frame(width: Fit.s(1.3), height: Fit.s(9))
         Spacer()
-        Rectangle().fill(Palette.ink0).frame(width: 1.3, height: 9)
+        Rectangle().fill(Palette.ink0).frame(width: Fit.s(1.3), height: Fit.s(9))
       }
-      .frame(width: 20)
+      .frame(width: Fit.s(20))
     }
-    .frame(width: 20, height: 9)
+    .frame(width: Fit.s(20), height: Fit.s(9))
   }
 }
 
@@ -662,15 +770,15 @@ private struct RangeGlyph: View {
 private struct TallyMark: View {
   var body: some View {
     ZStack {
-      Rectangle().fill(Palette.signal).frame(width: 30, height: 1.5) // the rule
+      Rectangle().fill(Palette.signal).frame(width: Fit.s(30), height: Fit.s(1.5)) // the rule
       HStack(spacing: 0) {
-        Rectangle().fill(Palette.signal).frame(width: 1.5, height: 10)
+        Rectangle().fill(Palette.signal).frame(width: Fit.s(1.5), height: Fit.s(10))
         Spacer(minLength: 0)
-        Rectangle().fill(Palette.signal).frame(width: 1.5, height: 10)
+        Rectangle().fill(Palette.signal).frame(width: Fit.s(1.5), height: Fit.s(10))
       }
-      .frame(width: 30, height: 12)
+      .frame(width: Fit.s(30), height: Fit.s(12))
     }
-    .frame(width: 30, height: 12)
+    .frame(width: Fit.s(30), height: Fit.s(12))
   }
 }
 
@@ -680,12 +788,12 @@ private struct SwapUndoChip: View {
   let action: () -> Void
   var body: some View {
     Button(action: { TapGate.pass(action) }) {
-      HStack(spacing: 3) {
-        Image(systemName: "arrow.uturn.backward").font(.system(size: 12, weight: .semibold))
-        Text(WatchCopy.undo).font(.system(size: 12, weight: .semibold))
+      HStack(spacing: Fit.s(3)) {
+        Image(systemName: "arrow.uturn.backward").font(.system(size: Fit.s(12), weight: .semibold))
+        Text(WatchCopy.undo).font(.system(size: Fit.s(12), weight: .semibold))
       }
       .foregroundStyle(Palette.signal)
-      .padding(.horizontal, 9).padding(.vertical, 5)
+      .padding(.horizontal, Fit.s(9)).padding(.vertical, Fit.s(5))
       .background(Palette.stage1).clipShape(Capsule())
       .contentShape(Capsule())
     }
@@ -726,7 +834,8 @@ private struct RestRing: View {
 
   var body: some View {
     let end = WatchWire.parseDate(endsAt)
-    let stroke = max(5, diameter * 0.055)
+    // `diameter` arrives already scaled; the floor under it is a 40 mm number, so it scales too.
+    let stroke = max(Fit.s(5), diameter * 0.055)
     TimelineView(.animation) { ctx in
       let remaining = max(0, end.map { $0.timeIntervalSince(ctx.date) } ?? 0)
       let liveFrac = totalS > 0 ? min(1, max(0, remaining / Double(totalS))) : 0
@@ -737,11 +846,13 @@ private struct RestRing: View {
         Circle().trim(from: 0, to: frac)
           .stroke(arc, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
           .rotationEffect(.degrees(-90))
-        VStack(spacing: 1) {
+        VStack(spacing: Fit.s(1)) {
           Text(fmtTime(remaining))
             .font(.system(size: diameter * timeScale, weight: .semibold, design: .monospaced))
             .monospacedDigit().foregroundStyle(Palette.ink0)
-          Text(ready ? WatchCopy.ready.uppercased() : restingLabel).font(.system(size: 12, weight: .medium)).tracking(0.8).foregroundStyle(Palette.ink2)
+            // Inside the stroke, always — "10:00" in the 62 pt crossing ring touched it.
+            .lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: diameter * 0.72)
+          Text(ready ? WatchCopy.ready.uppercased() : restingLabel).font(.system(size: Fit.s(12), weight: .medium)).tracking(Fit.s(0.8)).foregroundStyle(Palette.ink2)
         }
       }
     }
@@ -804,11 +915,11 @@ private struct PauseActions: View {
   let onEnd: () -> Void
   let onPain: () -> Void
   var body: some View {
-    VStack(spacing: 5) {
+    VStack(spacing: Fit.s(5)) {
       if let primary {
         StageButton(title: primary.title, kind: .moss, height: Wrist.action, fontSize: 15, action: primary.action)
       }
-      HStack(spacing: 5) {
+      HStack(spacing: Fit.s(5)) {
         OutlineButton(title: endTitle, systemImage: "stop", tint: Palette.ink1,
                       border: Palette.ink0.opacity(0.22), height: 38, fontSize: 12,
                       seated: true, action: onEnd)
@@ -834,16 +945,16 @@ private struct RestActions: View {
     row
   }
   private var row: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: Fit.s(6)) {
       StageButton(title: primaryTitle, kind: ready ? .primary : .onstage, height: 42, fontSize: 15, action: onReady)
       if !ready {
         Button(action: { TapGate.repeatable(onAdd) }) {
           Text(WatchCopy.addShort)
-            .font(.system(size: 14, weight: .semibold))
+            .font(.system(size: Fit.s(14), weight: .semibold))
             .frame(width: Fit.s(54), height: Fit.s(42))
             .foregroundStyle(Palette.ink0)
             .background(Palette.stage1)
-            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Fit.s(13), style: .continuous))
         }
         .buttonStyle(.plain)
       }
@@ -860,7 +971,7 @@ private struct Metric: View {
   /// already knows.
   var valueSize: CGFloat = Fit.s(22)
   var body: some View {
-    VStack(spacing: 3) {
+    VStack(spacing: Fit.s(3)) {
       // A wide mark ("12:34") must SCALE into its column, never ellipsize (founder
       // 2026-07-10: elapsed read "12:…" on the 40 mm case — unreadable).
       Text(value).font(.system(size: valueSize, weight: .semibold, design: .monospaced)).monospacedDigit()
@@ -889,12 +1000,12 @@ private struct MetricTile: View {
   var heart: Bool = false
   var bpm: Int? = nil
   var body: some View {
-    VStack(alignment: .leading, spacing: 1) {
-      HStack(spacing: 5) {
+    VStack(alignment: .leading, spacing: Fit.s(1)) {
+      HStack(spacing: Fit.s(5)) {
         if heart {
           PulseHeart(bpm: bpm)
         } else if let glyph {
-          Image(systemName: glyph).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint)
+          Image(systemName: glyph).font(.system(size: Fit.s(12), weight: .semibold)).foregroundStyle(tint)
         }
         Text(value)
           .font(.system(size: valueSize, weight: .medium, design: .monospaced)).monospacedDigit()
@@ -904,8 +1015,8 @@ private struct MetricTile: View {
       Legend(label, size: Wrist.legend)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.vertical, 8).padding(.horizontal, 11)
-    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.ink0.opacity(0.07)))
+    .padding(.vertical, Fit.s(8)).padding(.horizontal, Fit.s(11))
+    .background(RoundedRectangle(cornerRadius: Fit.s(14), style: .continuous).fill(Palette.ink0.opacity(0.07)))
   }
 }
 
@@ -1001,9 +1112,9 @@ private struct GlanceScreen: View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
           TopStrip(lift: lift, trailing: elapsedText)
         }
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
         TimelineView(.periodic(from: .now, by: 1)) { _ in
-          VStack(spacing: 6) {
+          VStack(spacing: Fit.s(6)) {
             // Her word for it — "BPM" was the Latin `bpm` key on a Hebrew wrist — and the glyph
             // beats at her measured rate, the same heart the run's stage carries.
             MetricTile(value: metrics.heartRateBpm.map { "\($0)" } ?? "––",
@@ -1029,12 +1140,12 @@ private struct GlanceScreen: View {
                        valueSize: Fit.s(30))
           }
         }
-        Spacer(minLength: 4)
-        HStack(spacing: 4) {
+        Spacer(minLength: Fit.s(4))
+        HStack(spacing: Fit.s(4)) {
           // `backward`, not `left`: the symbol mirrors with the layout, so a Hebrew wrist points
           // the way its swipe actually goes.
-          Image(systemName: "chevron.backward").font(.system(size: 12, weight: .semibold))
-          Text(WatchCopy.backToYourSet).font(.system(size: 12))
+          Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold))
+          Text(WatchCopy.backToYourSet).font(.system(size: Fit.s(12)))
         }
         .foregroundStyle(Palette.ink2)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -1073,31 +1184,31 @@ private struct EndConfirmScreen: View {
     WristScreen {
       VStack(spacing: 0) {
         TopStrip(lift: lift)
-        Spacer(minLength: 4)
-        VStack(spacing: 6) {
+        Spacer(minLength: Fit.s(4))
+        VStack(spacing: Fit.s(6)) {
           Text(title)
             .font(.system(size: Fit.s(21), design: .serif)).foregroundStyle(Palette.ink0)
-            .multilineTextAlignment(.center).lineSpacing(1)
+            .multilineTextAlignment(.center).lineSpacing(Fit.s(1))
             .fixedSize(horizontal: false, vertical: true)
           Text(WatchCopy.endConfirmSub)
-            .font(.system(size: 12)).foregroundStyle(Palette.ink2)
+            .font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
           if let fact {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
               Text(fact.value)
                 .font(.system(size: Fit.s(22), weight: .semibold, design: .monospaced)).monospacedDigit()
                 .foregroundStyle(Palette.ink0)
               Legend(fact.label, size: Wrist.legend)
             }
-            .padding(.top, 2)
+            .padding(.top, Fit.s(2))
           }
         }
         .frame(maxWidth: .infinity)
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
       }
     } actions: {
-      VStack(spacing: 5) {
+      VStack(spacing: Fit.s(5)) {
         // Clay FILL, stage ink — the irreversible act, now the primary (the guard was the earlier tap).
         StageButton(title: confirmTitle, kind: .danger, height: Wrist.action, fontSize: 15, action: onConfirm)
         // The way back keeps the floor — and it is 40 pt now, not 34: on a screen whose other
@@ -1192,14 +1303,14 @@ struct WatchRootView: View {
   @ViewBuilder private var content: some View {
     switch model.screen {
     case .idle:
-      VStack(spacing: 10) {
+      VStack(spacing: Fit.s(10)) {
         // The wordmark, not a dumbbell — this is the first face the wrist ever shows, and a
         // borrowed SF glyph is nobody's product (design pass 2026-09-09).
-        HStack(spacing: 6) {
+        HStack(spacing: Fit.s(6)) {
           RangeGlyph()
           Text("hush").font(.system(size: Fit.s(17), design: .serif)).foregroundStyle(Palette.ink0)
         }
-        Text(WatchCopy.idleWaiting).font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.ink1)
+        Text(WatchCopy.idleWaiting).font(.system(size: Fit.s(14), weight: .medium)).foregroundStyle(Palette.ink1)
         /*
          * The wire's testimony (build-59 silence), and it names the FAULT now rather than the
          * category (founder 2026-08-30, photographing `wc:badframe · rx:0` — four letters that
@@ -1234,7 +1345,7 @@ struct WatchRootView: View {
          * photograph of it is the only instrument this pair of processes has.
          */
         if (!model.wireDiag.isEmpty && model.wireDiag != "wc:on" && !model.wireDiag.hasPrefix("wc:on ·")) || model.wireDiag.hasPrefix("wc:on · fix:") {
-          Text(model.wireDiag).font(.system(size: 12, design: .monospaced)).foregroundStyle(Palette.ink2.opacity(0.6))
+          Text(model.wireDiag).font(.system(size: Fit.s(12), design: .monospaced)).foregroundStyle(Palette.ink2.opacity(0.6))
         }
       }
     case let .start(lobby):
@@ -1341,17 +1452,17 @@ struct StartScreen: View {
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
         TopStrip(text: WatchCopy.firstWorkout)
-        Spacer(minLength: 2)
-        VStack(alignment: .leading, spacing: 8) {
+        Spacer(minLength: Fit.s(2))
+        VStack(alignment: .leading, spacing: Fit.s(8)) {
           Text(WatchCopy.findYourWeights)
             .font(.system(size: Fit.s(25), design: .serif)).foregroundStyle(Palette.ink0)
-            .lineSpacing(1).lineLimit(4).minimumScaleFactor(0.6)
+            .lineSpacing(Fit.s(1)).lineLimit(4).minimumScaleFactor(0.6)
           Text(WatchCopy.liftTillHonest)
-            .font(.system(size: 12)).foregroundStyle(Palette.ink2)
+            .font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
             .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       // WT7 says "Start" where WT1 says "Begin" — the same act, named for the moment it is in.
@@ -1391,15 +1502,15 @@ struct StartScreen: View {
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
         TopStrip(text: WatchCopy.upNext.uppercased())
-        Spacer(minLength: 2)
-        VStack(alignment: .leading, spacing: 6) {
+        Spacer(minLength: Fit.s(2))
+        VStack(alignment: .leading, spacing: Fit.s(6)) {
           Text(resting ? WatchCopy.recoveryTitle : lobby.workoutName)
             .font(.system(size: Fit.s(30), design: .serif)).foregroundStyle(Palette.ink0)
             .lineLimit(2).minimumScaleFactor(0.6)
           if gated {
-            Text(WatchCopy.membershipNeeded).font(.system(size: 13)).foregroundStyle(Palette.ink2).lineLimit(3)
+            Text(WatchCopy.membershipNeeded).font(.system(size: Fit.s(13))).foregroundStyle(Palette.ink2).lineLimit(3)
           } else if resting {
-            Text(WatchCopy.recovery).font(.system(size: 13)).foregroundStyle(Palette.ink2).lineLimit(3)
+            Text(WatchCopy.recovery).font(.system(size: Fit.s(13))).foregroundStyle(Palette.ink2).lineLimit(3)
           } else {
             metaRow
           }
@@ -1408,12 +1519,12 @@ struct StartScreen: View {
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       if !resting && !gated {
-        VStack(spacing: 6) {
-          HStack(spacing: 6) {
+        VStack(spacing: Fit.s(6)) {
+          HStack(spacing: Fit.s(6)) {
             ChipButton(title: WatchCopy.another, systemImage: "arrow.left.arrow.right", tint: Palette.ink1) { showList = true }
             // Open training is never gated, and it is never asked which way (CR1's own ruling).
             ChipButton(title: WatchCopy.cardio, systemImage: "waveform.path.ecg", tint: Palette.signal) { counting = true }
@@ -1423,7 +1534,7 @@ struct StartScreen: View {
         }
       } else {
         // No Begin to seat, so the pair takes the floor itself — at a height a wet thumb can hit.
-        HStack(spacing: 5) {
+        HStack(spacing: Fit.s(5)) {
           OutlineButton(title: WatchCopy.another, systemImage: "arrow.left.arrow.right", tint: Palette.ink1,
                         border: Palette.ink0.opacity(0.22), height: 40, fontSize: 13,
                         seated: true) { showList = true }
@@ -1454,17 +1565,17 @@ struct StartScreen: View {
    * nothing here guesses.
    */
   private var metaRow: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: Fit.s(6)) {
       if let n = lobby.lifts {
         Text(WatchCopy.lifts(n))
-          .font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink1)
+          .font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.ink1)
       }
       if lobby.lifts != nil, lobby.durationLabel != nil {
-        Circle().fill(Palette.ink2).frame(width: 3, height: 3)
+        Circle().fill(Palette.ink2).frame(width: Fit.s(3), height: Fit.s(3))
       }
       if let d = lobby.durationLabel {
         Text(d)
-          .font(.system(size: 13, weight: .medium)).monospacedDigit().foregroundStyle(Palette.ink1)
+          .font(.system(size: Fit.s(13), weight: .medium)).monospacedDigit().foregroundStyle(Palette.ink1)
       }
     }
     .lineLimit(1).minimumScaleFactor(0.7)
@@ -1481,22 +1592,23 @@ private struct WeekRail: View {
   var body: some View {
     // One workout is not a week — a single mark would be a decoration.
     if workouts.count > 1 {
-      HStack(spacing: 5) {
+      HStack(spacing: Fit.s(5)) {
         ForEach(workouts, id: \.id) { w in
           mark(done: w.done == true, current: w.id == currentId)
         }
       }
-      .frame(height: 7)
-      .padding(.top, 3)
+      .frame(height: Fit.s(7))
+      .padding(.top, Fit.s(3))
     }
   }
   @ViewBuilder private func mark(done: Bool, current: Bool) -> some View {
     if done {
-      Capsule().fill(Palette.signal).frame(width: 16, height: 5)
+      // Flexible to 4 pt: seven workouts already fill 40 mm's width, and an eighth ran off it.
+      Capsule().fill(Palette.signal).frame(minWidth: Fit.s(4), maxWidth: Fit.s(16)).frame(height: Fit.s(5))
     } else if current {
-      Capsule().strokeBorder(Palette.ink0, lineWidth: 1.5).frame(width: 16, height: 5)
+      Capsule().strokeBorder(Palette.ink0, lineWidth: Fit.s(1.5)).frame(minWidth: Fit.s(4), maxWidth: Fit.s(16)).frame(height: Fit.s(5))
     } else {
-      Capsule().fill(Palette.ink3).frame(width: 16, height: 5)
+      Capsule().fill(Palette.ink3).frame(minWidth: Fit.s(4), maxWidth: Fit.s(16)).frame(height: Fit.s(5))
     }
   }
 }
@@ -1510,9 +1622,9 @@ private struct ChipButton: View {
   let action: () -> Void
   var body: some View {
     Button(action: { TapGate.pass(action) }) {
-      HStack(spacing: 4) {
-        Image(systemName: systemImage).font(.system(size: 12, weight: .semibold))
-        Text(title).font(.system(size: 12, weight: .semibold))
+      HStack(spacing: Fit.s(4)) {
+        Image(systemName: systemImage).font(.system(size: Fit.s(12), weight: .semibold))
+        Text(title).font(.system(size: Fit.s(12), weight: .semibold))
           .lineLimit(1).minimumScaleFactor(0.7)
       }
       .frame(maxWidth: .infinity).frame(height: Fit.s(30))
@@ -1548,15 +1660,15 @@ private struct OutlineButton: View {
   let action: () -> Void
   var body: some View {
     Button(action: { if repeatable { TapGate.repeatable(action) } else { TapGate.pass(action) } }) {
-      HStack(spacing: 5) {
-        if let systemImage { Image(systemName: systemImage).font(.system(size: 12)) }
-        Text(title).font(.system(size: fontSize, weight: .semibold))
+      HStack(spacing: Fit.s(5)) {
+        if let systemImage { Image(systemName: systemImage).font(.system(size: Fit.s(12))) }
+        Text(title).font(.system(size: Fit.s(fontSize), weight: .semibold))
           .lineLimit(1).minimumScaleFactor(0.7)
       }
       .frame(maxWidth: .infinity).frame(height: Fit.s(height))
       .padding(.bottom, seated ? SEAT_BLEED : 0)
       .foregroundStyle(tint)
-      .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(border, lineWidth: 1))
+      .overlay(RoundedRectangle(cornerRadius: Fit.s(12), style: .continuous).strokeBorder(border, lineWidth: Fit.s(1)))
       .padding(.bottom, seated ? -SEAT_BLEED : 0)
     }
     .buttonStyle(.plain)
@@ -1600,12 +1712,12 @@ private struct CardioPicker: View {
       WristScreen {
         VStack(spacing: 0) {
           TopStrip(text: WatchCopy.cardio.uppercased())
-          Spacer(minLength: 2)
-          HStack(spacing: 6) {
+          Spacer(minLength: Fit.s(2))
+          HStack(spacing: Fit.s(6)) {
             ChipButton(title: WatchCopy.run, systemImage: "figure.run", tint: Palette.signal) { gait = "run" }
             ChipButton(title: WatchCopy.walk, systemImage: "figure.walk", tint: Palette.signal) { gait = "walk" }
           }
-          Spacer(minLength: 2)
+          Spacer(minLength: Fit.s(2))
         }
       } actions: {
         OutlineButton(title: WatchCopy.cancel, tint: Palette.ink1, border: Palette.ink0.opacity(0.22),
@@ -1630,15 +1742,15 @@ private struct CardioCount: View {
       VStack(spacing: 0) {
         // The strip names what she picked, so the count is already the record's first word.
         TopStrip(text: (gait == "walk" ? WatchCopy.walk : WatchCopy.run).uppercased())
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
         TimelineView(.animation) { ctx in
           let left = max(0, Self.seconds - ctx.date.timeIntervalSince(startedAt))
           // Holds "1" until the stage takes over; a "0" would be a number for nothing.
           let digit = max(1, Int(left.rounded(.up)))
           ZStack {
-            Circle().stroke(Palette.stage2, lineWidth: 5)
+            Circle().stroke(Palette.stage2, lineWidth: Fit.s(5))
             Circle().trim(from: 0, to: left / Self.seconds)
-              .stroke(Palette.signal, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+              .stroke(Palette.signal, style: StrokeStyle(lineWidth: Fit.s(5), lineCap: .round))
               .rotationEffect(.degrees(-90))
             Text("\(digit)")
               .font(.system(size: Fit.s(56), weight: .semibold, design: .monospaced)).monospacedDigit()
@@ -1653,7 +1765,7 @@ private struct CardioCount: View {
           // vocabulary for "nearly".
           .onChange(of: digit) { _, _ in WatchHaptics.play(.restApproach) }
         }
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       OutlineButton(title: WatchCopy.cancel, tint: Palette.ink1, border: Palette.ink0.opacity(0.22),
@@ -1693,33 +1805,33 @@ struct ChooseOverlay: View {
            * edge is the same mark the phone's week uses, and it leaves the crown's own focus
            * ring to mean what the system means by it.
            */
-          HStack(spacing: 9) {
-            RoundedRectangle(cornerRadius: 1.5)
+          HStack(spacing: Fit.s(9)) {
+            RoundedRectangle(cornerRadius: Fit.s(1.5))
               .fill(queued ? Palette.signal : (done ? Palette.ink3 : Palette.stage2))
-              .frame(width: 3, height: 30)
-            VStack(alignment: .leading, spacing: 2) {
-              Text(w.name).font(.system(size: 16, weight: .semibold))
+              .frame(width: Fit.s(3), height: Fit.s(30))
+            VStack(alignment: .leading, spacing: Fit.s(2)) {
+              Text(w.name).font(.system(size: Fit.s(16), weight: .semibold))
                 .foregroundStyle(done ? Palette.ink2 : Palette.ink0)
                 .lineLimit(1).minimumScaleFactor(0.8)
-              HStack(spacing: 4) {
+              HStack(spacing: Fit.s(4)) {
                 if done {
-                  Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.up)
+                  Image(systemName: "checkmark").font(.system(size: Fit.s(12), weight: .bold)).foregroundStyle(Palette.up)
                 }
                 // "6 lifts" in her language — and the muscles only when the phone named any: the
                 // coach sends `muscles: ''`, so this row read "6 lifts · " with a separator to
                 // nothing (2026-09-09). A DONE row says so in her word instead of a count she
                 // already trained ("סיום" was the Done BUTTON's word standing in for it).
                 Text(done ? WatchCopy.doneLegend : chooseMeta(w))
-                  .font(.system(size: 12)).foregroundStyle(Palette.ink2).lineLimit(1)
+                  .font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2).lineLimit(1)
               }
             }
             Spacer(minLength: 0)
           }
-          .padding(.vertical, 2)
+          .padding(.vertical, Fit.s(2))
         }
         .disabled(done)
         .listRowBackground(
-          RoundedRectangle(cornerRadius: 10)
+          RoundedRectangle(cornerRadius: Fit.s(10))
             .fill(Palette.stage1)
             .opacity(done ? 0.5 : 1)
         )
@@ -1804,9 +1916,9 @@ struct ActiveSetScreen: View {
         } else {
           header
         }
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
         if editing { editor } else { readout }
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       footer
@@ -1849,11 +1961,14 @@ struct ActiveSetScreen: View {
   /// by looking up. The name is what tells her she is at the right station, so the name gets the
   /// row and the set position rides with it. The dots stay, folded to the left of the clock lane.
   private var header: some View {
-    VStack(alignment: .leading, spacing: 1) {
-      HStack(spacing: 7) {
+    VStack(alignment: .leading, spacing: Fit.s(1)) {
+      HStack(spacing: Fit.s(7)) {
         Text(setPosition)
-          .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(1.1)
+          .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(1.1))
           .foregroundStyle(Palette.ink2)
+          // "SHOULDERS · 2/4" is wider than the clock leaves it on 40 mm; a second line would push the
+          // lift's name down into the load inside this fixed 38 pt header.
+          .lineLimit(1).minimumScaleFactor(0.75)
         /*
          * ⛔ THE DOTS ARE DELETED (founder 2026-08-05, from his own screenshot). "QUADS · 1/4"
          * and a row of four pips beside it are the same sentence twice — and the SET ROW below
@@ -1862,11 +1977,11 @@ struct ActiveSetScreen: View {
          * Their cost was the header wrapping to two lines on a 41 mm case, which is why "1/4" sat
          * under "QUADS" in his photograph with the pips colliding with the clock's lane.
          */
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
-      .padding(.trailing, 52) // the clock's lane
+      .padding(.trailing, Fit.s(52)) // the clock's lane
       Text(mirror.exerciseName)
-        .font(.system(size: Wrist.body, weight: .semibold)).foregroundStyle(Palette.ink0)
+        .font(.system(size: Fit.s(Wrist.body), weight: .semibold)).foregroundStyle(Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.7)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1913,10 +2028,10 @@ struct ActiveSetScreen: View {
    * pull-up knows what they are lifting, so the rep count takes the mark.
    */
   private var readout: some View {
-    VStack(spacing: 4) {
+    VStack(spacing: Fit.s(4)) {
       if let wt = shownWeight {
         Button { TapGate.pass { enterEdit(.weight) } } label: {
-          HStack(alignment: .firstTextBaseline, spacing: 4) {
+          HStack(alignment: .firstTextBaseline, spacing: Fit.s(4)) {
             Text(fmtW(wt)).font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
             Text(WatchCopy.kg).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
             newsMark
@@ -1941,7 +2056,7 @@ struct ActiveSetScreen: View {
         if firstSetOfSession { tapToEditPill }
       } else {
         Button { TapGate.pass { enterEdit(.reps) } } label: {
-          HStack(alignment: .firstTextBaseline, spacing: 5) {
+          HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
             Text("\(shownReps)").font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
             Text(WatchCopy.reps).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
           }
@@ -1988,7 +2103,7 @@ struct ActiveSetScreen: View {
       Text((d > 0 ? "↑" : "↓") + fmtW(abs(d)))
         .font(.system(size: Fit.s(15), weight: .semibold, design: .monospaced)).monospacedDigit()
         .foregroundStyle(d > 0 ? Palette.up : Palette.down)
-        .padding(.leading, 2)
+        .padding(.leading, Fit.s(2))
     }
   }
 
@@ -2030,24 +2145,27 @@ struct ActiveSetScreen: View {
     let hi = mirror.targetRepsHi ?? lo
     return HStack(spacing: 0) {
       ForEach(0..<m, id: \.self) { i in
-        VStack(spacing: 3) {
+        VStack(spacing: Fit.s(3)) {
           if i < done.count {
             let r = done[i]
             Text("\(r)")
               .font(.system(size: Fit.s(23), weight: .medium, design: .monospaced)).monospacedDigit()
               .foregroundStyle(r > hi ? Palette.up : (r < lo ? Palette.down : Palette.ink0))
+              // Six or more sets make a slot narrower than two digits — scale, never break "12" in two.
+              .lineLimit(1).minimumScaleFactor(0.6)
           } else if i == cur - 1 {
             Text(i < ghosts.count ? "\(ghosts[i])" : "–")
               .font(.system(size: Fit.s(23), design: .monospaced)).monospacedDigit()
+              .lineLimit(1).minimumScaleFactor(0.6)
               .foregroundStyle(Palette.ink1).opacity(0.45)
           } else {
-            Circle().fill(Palette.ink0.opacity(0.28)).frame(width: 5, height: 5)
+            Circle().fill(Palette.ink0.opacity(0.28)).frame(width: Fit.s(5), height: Fit.s(5))
               .frame(height: Fit.s(23))
           }
           // Where she is. A rule, not a colour: the figures already spend colour on the verdict.
           Capsule()
             .fill(i == cur - 1 ? Palette.ink0.opacity(0.55) : Color.clear)
-            .frame(width: 18, height: 2)
+            .frame(width: Fit.s(18), height: Fit.s(2))
         }
         .frame(maxWidth: .infinity)
       }
@@ -2080,7 +2198,7 @@ struct ActiveSetScreen: View {
   }
   @ViewBuilder private var equipmentLine: some View {
     if let line = setupLine(mirror.loadSetup) {
-      Text(line).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink1)
+      Text(line).font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.8)
     }
   }
@@ -2107,8 +2225,8 @@ struct ActiveSetScreen: View {
       // "ק\"ג" in Hebrew, so a monospaced face with no Hebrew swapped mid-word. Same law as the
       // phone's `monoCarriesNoWords`, which had never been pointed at Swift.
       (Text(fmtW(ps)).font(.system(size: Fit.s(15), weight: .semibold, design: .monospaced)).foregroundStyle(Palette.ink0)
-        + Text(" " + WatchCopy.kg).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink0)
-        + Text(" " + WatchCopy.aSide).font(.system(size: 13)).foregroundStyle(Palette.ink1))
+        + Text(" " + WatchCopy.kg).font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
+        + Text(" " + WatchCopy.aSide).font(.system(size: Fit.s(13))).foregroundStyle(Palette.ink1))
         .lineLimit(1).minimumScaleFactor(0.8)
     }
   }
@@ -2119,16 +2237,16 @@ struct ActiveSetScreen: View {
   /// face (which has no Hebrew, so it fell back wider than measured), uppercased for a script with
   /// no case, and cut. Sans, at 12, allowed to shrink — a hint that cannot be read teaches nothing.
   private var tapToEditPill: some View {
-    HStack(spacing: 5) {
-      Image(systemName: "pencil").font(.system(size: 12)).foregroundStyle(Palette.ink2)
+    HStack(spacing: Fit.s(5)) {
+      Image(systemName: "pencil").font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
       Text(WatchCopy.tapWeightToEdit)
-        .font(.system(size: 12, weight: .medium))
+        .font(.system(size: Fit.s(12), weight: .medium))
         .foregroundStyle(Palette.ink2)
         .lineLimit(1).minimumScaleFactor(0.75)
     }
-    .padding(.vertical, 3).padding(.horizontal, 9)
+    .padding(.vertical, Fit.s(3)).padding(.horizontal, Fit.s(9))
     .overlay(
-      Capsule().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3]))
+      Capsule().strokeBorder(style: StrokeStyle(lineWidth: Fit.s(1), dash: [Fit.s(3)]))
         .foregroundStyle(Palette.ink0.opacity(0.22))
     )
   }
@@ -2173,7 +2291,7 @@ struct ActiveSetScreen: View {
      * marked in cream, the crown hint is muted, and the only moss left is on Done, where the app
      * finally does something.
      */
-    VStack(spacing: 7) {
+    VStack(spacing: Fit.s(7)) {
       if !bodyweight {
         editRow(unit: WatchCopy.kg, band: nil, value: fmtW(w), active: field == .weight) { field = .weight }
       }
@@ -2195,9 +2313,9 @@ struct ActiveSetScreen: View {
   /// One half of the editor: a legend, a figure, and a border that says whether the crown is on it.
   private func editRow(unit: String, band: String?, value: String, active: Bool, tap: @escaping () -> Void) -> some View {
     Button(action: { TapGate.pass(tap) }) {
-      HStack(alignment: .firstTextBaseline, spacing: 6) {
+      HStack(alignment: .firstTextBaseline, spacing: Fit.s(6)) {
         Text(unit.uppercased())
-          .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(1.1)
+          .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(1.1))
           .foregroundStyle(active ? Palette.ink0 : Palette.ink2)
         if let band {
           // The ask, inside the row it is about. Moss here is earned: it is the coach's decision.
@@ -2205,18 +2323,18 @@ struct ActiveSetScreen: View {
             .font(.system(size: Fit.s(13), weight: .semibold, design: .monospaced)).monospacedDigit()
             .foregroundStyle(Palette.signal)
         }
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
         Text(value)
           .font(.system(size: Fit.s(30), weight: .medium, design: .monospaced)).monospacedDigit()
           .foregroundStyle(active ? Palette.ink0 : Palette.ink1)
           .lineLimit(1).minimumScaleFactor(0.6)
       }
-      .padding(.horizontal, 12)
+      .padding(.horizontal, Fit.s(12))
       .frame(maxWidth: .infinity).frame(height: Fit.s(44))
-      .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(active ? Palette.ink0.opacity(0.07) : .clear))
+      .background(RoundedRectangle(cornerRadius: Fit.s(13), style: .continuous).fill(active ? Palette.ink0.opacity(0.07) : .clear))
       .overlay(
-        RoundedRectangle(cornerRadius: 13, style: .continuous)
-          .strokeBorder(active ? Palette.ink0.opacity(0.85) : Palette.ink0.opacity(0.16), lineWidth: active ? 1.7 : 1)
+        RoundedRectangle(cornerRadius: Fit.s(13), style: .continuous)
+          .strokeBorder(active ? Palette.ink0.opacity(0.85) : Palette.ink0.opacity(0.16), lineWidth: Fit.s(active ? 1.7 : 1))
       )
       .contentShape(Rectangle())
     }
@@ -2228,9 +2346,9 @@ struct ActiveSetScreen: View {
    * the one non-obvious gesture on this screen, and a hint is never a decision.
    */
   private var crownHint: some View {
-    HStack(spacing: 5) {
-      Image(systemName: "arrow.clockwise").font(.system(size: 12, weight: .semibold))
-      Text(WatchCopy.turnCrownToSet).font(.system(size: Wrist.legend, weight: .medium)).tracking(1.1)
+    HStack(spacing: Fit.s(5)) {
+      Image(systemName: "arrow.clockwise").font(.system(size: Fit.s(12), weight: .semibold))
+      Text(WatchCopy.turnCrownToSet).font(.system(size: Fit.s(Wrist.legend), weight: .medium)).tracking(Fit.s(1.1))
     }
     .foregroundStyle(Palette.ink2)
     .frame(maxWidth: .infinity, alignment: .center)
@@ -2297,10 +2415,10 @@ struct CorrectionScreen: View {
   var body: some View {
     let up = c.direction == "up"
     let tone = up ? Palette.up : Palette.down
-    VStack(spacing: 12) {
+    VStack(spacing: Fit.s(12)) {
       Spacer(minLength: 0)
       Legend(up ? WatchCopy.raisedForYou : WatchCopy.easedForYou, size: 11)
-      HStack(alignment: .firstTextBaseline, spacing: 8) {
+      HStack(alignment: .firstTextBaseline, spacing: Fit.s(8)) {
         // What it WAS — struck, and dropped to the quietest ink the stage has. It is here only so
         // the new number has something to be different from.
         Text(fmtW(c.from))
@@ -2312,7 +2430,7 @@ struct CorrectionScreen: View {
           .foregroundStyle(tone)
           // The glow is the mock's, and it is the reason this reads as news rather than as a
           // number: on the dark stage the new load is the only lit thing on the screen.
-          .shadow(color: tone.opacity(0.22), radius: 15)
+          .shadow(color: tone.opacity(0.22), radius: Fit.s(15))
         Text(WatchCopy.kg).font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink2)
       }
       // ONE line, always: "34 31.5 kg" on a 40 mm case is already tight and a heavy lift
@@ -2334,7 +2452,7 @@ struct CorrectionScreen: View {
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity)
-    .padding(.horizontal, 12)
+    .padding(.horizontal, Fit.s(12))
     .contentShape(Rectangle())
     // The same escape the confirmation has: a tap moves on rather than waiting out the beat.
     .onTapGesture { TapGate.pass(onTap) }
@@ -2362,10 +2480,10 @@ struct LiftDoneScreen: View {
   let onTap: () -> Void
   var body: some View {
     WristScreen {
-      VStack(spacing: 12) {
+      VStack(spacing: Fit.s(12)) {
         Spacer(minLength: 0)
         ZStack {
-          Circle().strokeBorder(Palette.signal, lineWidth: 1.6).frame(width: Fit.s(52), height: Fit.s(52))
+          Circle().strokeBorder(Palette.signal, lineWidth: Fit.s(1.6)).frame(width: Fit.s(52), height: Fit.s(52))
           DrawCheck(size: Fit.s(22))
         }
         Text(WatchCopy.liftDone(name))
@@ -2389,12 +2507,13 @@ private struct LiftRail: View {
   let count: Int
   var body: some View {
     if count > 1 {
-      HStack(spacing: 4) {
+      HStack(spacing: Fit.s(4)) {
         ForEach(0..<count, id: \.self) { i in
-          Capsule().fill(i < done ? Palette.signal : Palette.ink3).frame(width: 14, height: 4)
+          // Flexible to 4 pt: nine lifts overran 40 mm's width at a fixed 14.
+          Capsule().fill(i < done ? Palette.signal : Palette.ink3).frame(minWidth: Fit.s(4), maxWidth: Fit.s(14)).frame(height: Fit.s(4))
         }
       }
-      .frame(height: 6)
+      .frame(height: Fit.s(6))
     }
   }
 }
@@ -2444,7 +2563,7 @@ struct InterRestScreen: View {
     WristScreen {
       VStack(spacing: 0) {
         TopStrip(lift: (mirror.liftIndex ?? 1, mirror.liftCount ?? 1), controlsHint: true)
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
         RestRing(
           endsAt: mirror.restEndsAt,
           totalS: mirror.restTotalS ?? 90,
@@ -2460,16 +2579,16 @@ struct InterRestScreen: View {
         // her without her knowing.
         if mirror.restIsLearned == true {
           Text(WatchCopy.yourPace)
-            .font(.system(size: 12, design: .serif)).italic()
+            .font(.system(size: Fit.s(12), design: .serif)).italic()
             .foregroundStyle(Palette.ink2)
-            .padding(.top, 3)
+            .padding(.top, Fit.s(3))
         }
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
         upNextCard
         if let c = note {
-          CorrectionNote(c: c).padding(.top, 5)
+          CorrectionNote(c: c).padding(.top, Fit.s(5))
         }
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
       }
     } actions: {
       TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -2507,30 +2626,30 @@ struct InterRestScreen: View {
   /// first, because it is the figure she acts on; the name under it, two lines if it needs them.
   /// The legend keeps the one fact the ring cannot say — WHICH set is coming.
   private var upNextCard: some View {
-    VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: Fit.s(2)) {
       Text("\(WatchCopy.upNext.uppercased()) · \(mirror.nextIsWarmup == true ? WatchCopy.warmupWord : WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.nextIsWarmup == true ? (mirror.nextSetsInExercise ?? 1) : (mirror.setsInExercise ?? 1))")
-        .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(0.9)
+        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.8)
       if let wt = nextLoad {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
+        HStack(alignment: .firstTextBaseline, spacing: Fit.s(4)) {
           Text(fmtW(wt))
             .font(.system(size: Fit.s(26), weight: .medium, design: .monospaced)).monospacedDigit()
             .foregroundStyle(Palette.signal)
-          Text(WatchCopy.kg).font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.signal)
+          Text(WatchCopy.kg).font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.signal)
         }
         .lineLimit(1)
       } else {
         Text(WatchCopy.bodyweight).font(.system(size: Fit.s(20), weight: .medium)).foregroundStyle(Palette.signal)
       }
       Text(mirror.exerciseName)
-        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink0)
+        .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
         .lineLimit(2).minimumScaleFactor(0.85)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(.vertical, 9).padding(.horizontal, 11)
+    .padding(.vertical, Fit.s(9)).padding(.horizontal, Fit.s(11))
     .frame(maxWidth: .infinity)
-    .background(RoundedRectangle(cornerRadius: 14).fill(Palette.ink0.opacity(0.07)))
+    .background(RoundedRectangle(cornerRadius: Fit.s(14)).fill(Palette.ink0.opacity(0.07)))
   }
 }
 
@@ -2585,8 +2704,8 @@ struct TransitionRestScreen: View {
     WristScreen {
       VStack(spacing: 0) {
         TopStrip(text: crossing, controlsHint: true)
-        Spacer(minLength: 2)
-        HStack(alignment: .center, spacing: 8) {
+        Spacer(minLength: Fit.s(2))
+        HStack(alignment: .center, spacing: Fit.s(8)) {
           RestRing(
             endsAt: mirror.restEndsAt,
             totalS: mirror.restTotalS ?? 120,
@@ -2597,17 +2716,17 @@ struct TransitionRestScreen: View {
           nextLiftCard
         }
         if undo != nil {
-          SwapUndoChip(action: onUndo).padding(.top, 5)
+          SwapUndoChip(action: onUndo).padding(.top, Fit.s(5))
         }
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       TimelineView(.periodic(from: .now, by: 1)) { ctx in
       let ready = isReady(at: ctx.date)
-      VStack(spacing: 5) {
+      VStack(spacing: Fit.s(5)) {
         StageButton(title: ready ? WatchCopy.startNextLift : WatchCopy.skipRest,
                     kind: ready ? .primary : .onstage, height: Wrist.action, fontSize: 15, action: onReady)
-        HStack(spacing: 5) {
+        HStack(spacing: Fit.s(5)) {
           OutlineButton(title: WatchCopy.addShort, tint: Palette.ink0,
                         border: Palette.ink0.opacity(0.22), height: 34, fontSize: 12,
                         repeatable: true, action: onAdd)
@@ -2642,17 +2761,17 @@ struct TransitionRestScreen: View {
   /// first because it is the figure she acts on, the name under it on up to two lines — the same
   /// shape as the inter-set card, so the two rests read as one instrument.
   private var nextLiftCard: some View {
-    VStack(alignment: .leading, spacing: 2) {
+    VStack(alignment: .leading, spacing: Fit.s(2)) {
       Text("\(WatchCopy.upNext.uppercased()) · \(WatchCopy.liftWord)")
-        .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(0.9)
+        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.8)
-      HStack(alignment: .firstTextBaseline, spacing: 5) {
+      HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
         if let wt = mirror.nextTargetWeight {
           Text(fmtW(wt))
             .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
             .foregroundStyle(Palette.signal)
-          Text(WatchCopy.kg).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.signal)
+          Text(WatchCopy.kg).font(.system(size: Fit.s(12), weight: .medium)).foregroundStyle(Palette.signal)
         } else {
           Text(WatchCopy.bodyweight).font(.system(size: Fit.s(18), weight: .medium)).foregroundStyle(Palette.signal)
         }
@@ -2664,13 +2783,13 @@ struct TransitionRestScreen: View {
       }
       .lineLimit(1).minimumScaleFactor(0.7)
       Text(mirror.nextExerciseName ?? "")
-        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink0)
+        .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
         .lineLimit(2).minimumScaleFactor(0.8)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(.vertical, 8).padding(.horizontal, 10)
+    .padding(.vertical, Fit.s(8)).padding(.horizontal, Fit.s(10))
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(RoundedRectangle(cornerRadius: 14).fill(Palette.ink0.opacity(0.07)))
+    .background(RoundedRectangle(cornerRadius: Fit.s(14)).fill(Palette.ink0.opacity(0.07)))
   }
 }
 
@@ -2746,8 +2865,8 @@ private struct KmLoggedScreen: View {
     WristScreen {
       VStack(spacing: 0) {
         TopStrip()
-        Spacer(minLength: 4)
-        VStack(spacing: 8) {
+        Spacer(minLength: Fit.s(4))
+        VStack(spacing: Fit.s(8)) {
           Legend(WatchCopy.kilometreSplit(split.km), size: Wrist.legend)
           /*
            * Design pass 2026-09-09: the split at 44, with the pace legend under it instead of the
@@ -2756,7 +2875,7 @@ private struct KmLoggedScreen: View {
            * narrated the beat's own dwell, the sentence the founder's build-36 ruling removed
            * from every other screen, minus the number.
            */
-          VStack(spacing: 2) {
+          VStack(spacing: Fit.s(2)) {
             Text(fmtTime(split.splitS))
               .font(.system(size: Fit.s(44), weight: .semibold, design: .monospaced)).monospacedDigit()
               .foregroundStyle(Palette.signal)
@@ -2764,16 +2883,17 @@ private struct KmLoggedScreen: View {
             Legend(WatchCopy.metricPace, size: Wrist.legend)
           }
           if split.quickest {
-            HStack(spacing: 4) {
-              Image(systemName: "checkmark").font(.system(size: 12, weight: .bold))
+            HStack(spacing: Fit.s(4)) {
+              Image(systemName: "checkmark").font(.system(size: Fit.s(12), weight: .bold))
               Text(WatchCopy.quickestThisRun)
-                .font(.system(size: 12, design: .monospaced)).tracking(0.5)
+                .font(.system(size: Fit.s(12), design: .monospaced)).tracking(Fit.s(0.5))
+                .lineLimit(1).minimumScaleFactor(0.75)
             }
             .foregroundStyle(Palette.signal)
           }
         }
         .frame(maxWidth: .infinity)
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
       }
     }
   }
@@ -2827,16 +2947,16 @@ private struct CardioStageScreen: View {
         VStack(alignment: .leading, spacing: 0) {
           TopStrip(text: hasDistance ? fmtTime(elapsed()) : WatchCopy.cardio.uppercased(),
                    controlsHint: !dimmed)
-          Spacer(minLength: 2)
-          VStack(alignment: .leading, spacing: 7) {
+          Spacer(minLength: Fit.s(2))
+          VStack(alignment: .leading, spacing: Fit.s(7)) {
             if hasDistance {
-              HStack(alignment: .firstTextBaseline, spacing: 5) {
+              HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
                 Text(String(format: "%.2f", km ?? 0))
                   .font(.system(size: Fit.s(44), weight: .semibold, design: .monospaced)).monospacedDigit()
                   .foregroundStyle(Palette.ink0)
                   .lineLimit(1).minimumScaleFactor(0.5)
                 Text(WatchCopy.metricKm)
-                  .font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.ink2)
+                  .font(.system(size: Fit.s(14), weight: .medium)).foregroundStyle(Palette.ink2)
               }
             } else {
               Text(fmtTime(elapsed()))
@@ -2845,22 +2965,22 @@ private struct CardioStageScreen: View {
                 .lineLimit(1).minimumScaleFactor(0.5)
             }
             kmMeter(km ?? 0)
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: Fit.s(8)) {
               Figure(value: paceLabel, label: WatchCopy.metricPace)
               Figure(value: metrics.heartRateBpm.map { "\($0)" }, label: WatchCopy.metricHeart) {
                 PulseHeart(bpm: metrics.heartRateBpm)
               }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-              Image(systemName: "flame.fill").font(.system(size: 12, weight: .semibold))
+            HStack(alignment: .firstTextBaseline, spacing: Fit.s(4)) {
+              Image(systemName: "flame.fill").font(.system(size: Fit.s(12), weight: .semibold))
                 .foregroundStyle(metrics.activeKcal == nil ? Palette.ink3 : Palette.ink2)
               Text(metrics.activeKcal.map { "\($0)" } ?? "––")
-                .font(.system(size: 15, weight: .semibold, design: .monospaced)).monospacedDigit()
+                .font(.system(size: Fit.s(15), weight: .semibold, design: .monospaced)).monospacedDigit()
                 .foregroundStyle(metrics.activeKcal == nil ? Palette.ink3 : Palette.ink1)
               Legend(WatchCopy.metricKcalShort, size: Wrist.legend)
             }
           }
-          Spacer(minLength: 2)
+          Spacer(minLength: Fit.s(2))
         }
       }
     }
@@ -2876,15 +2996,16 @@ private struct CardioStageScreen: View {
     let intoKm = km - km.rounded(.down)
     return GeometryReader { geo in
       ZStack(alignment: .leading) {
-        Capsule().fill(Palette.stage2).frame(height: 3)
-        Capsule().fill(Palette.signal).frame(width: max(0, geo.size.width * intoKm), height: 3)
+        Capsule().fill(Palette.stage2).frame(height: Fit.s(3))
+        Capsule().fill(Palette.signal).frame(width: max(0, geo.size.width * intoKm), height: Fit.s(3))
         Circle().fill(Palette.signal)
-          .frame(width: 9, height: 9)
-          .offset(x: max(0, min(geo.size.width - 9, geo.size.width * intoKm - 4.5)))
+          .frame(width: Fit.s(9), height: Fit.s(9))
+          // The knob's own width and half of it — scaled with the knob, or it drifts off the line.
+          .offset(x: max(0, min(geo.size.width - Fit.s(9), geo.size.width * intoKm - Fit.s(4.5))))
       }
-      .frame(height: 9)
+      .frame(height: Fit.s(9))
     }
-    .frame(height: 9)
+    .frame(height: Fit.s(9))
   }
 
   /// Minutes per kilometre — measured, never modelled, and nil until there is a kilometre.
@@ -2903,8 +3024,8 @@ private struct Figure<Glyph: View>: View {
   let label: String
   @ViewBuilder let glyph: () -> Glyph
   var body: some View {
-    VStack(alignment: .leading, spacing: 1) {
-      HStack(alignment: .center, spacing: 4) {
+    VStack(alignment: .leading, spacing: Fit.s(1)) {
+      HStack(alignment: .center, spacing: Fit.s(4)) {
         glyph()
         Text(value ?? "––")
           .font(.system(size: Fit.s(26), weight: .semibold, design: .monospaced)).monospacedDigit()
@@ -2933,7 +3054,7 @@ private struct PulseHeart: View {
   @State private var beat = false
   var body: some View {
     Image(systemName: "heart.fill")
-      .font(.system(size: 13, weight: .semibold))
+      .font(.system(size: Fit.s(13), weight: .semibold))
       .foregroundStyle(bpm == nil ? Palette.ink3 : Palette.clay)
       .scaleEffect(beat || period == nil ? 1.0 : 0.82)
       .animation(period.map { Animation.easeInOut(duration: $0).repeatForever(autoreverses: true) }, value: beat)
@@ -3010,23 +3131,23 @@ private struct CardioPausedScreen: View {
       WristScreen {
         VStack(alignment: .leading, spacing: 0) {
           TopStrip(text: (paused ? WatchCopy.pausedTitle : WatchCopy.cardio).uppercased())
-          Spacer(minLength: 2)
+          Spacer(minLength: Fit.s(2))
           TimelineView(.periodic(from: .now, by: 1)) { _ in
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Fit.s(4)) {
               Text(fmtTime(elapsed()))
                 .font(.system(size: Fit.s(40), weight: .semibold, design: .monospaced)).monospacedDigit()
                 .foregroundStyle(paused ? Palette.ink1 : Palette.ink0)
                 .lineLimit(1).minimumScaleFactor(0.5)
-              HStack(alignment: .firstTextBaseline, spacing: 5) {
+              HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
                 Text(metrics.distanceKm.map { String(format: "%.2f", $0) } ?? "––")
                   .font(.system(size: Fit.s(20), weight: .semibold, design: .monospaced)).monospacedDigit()
                   .foregroundStyle(metrics.distanceKm == nil ? Palette.ink3 : Palette.ink1)
                 Text(WatchCopy.metricKm)
-                  .font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink2)
+                  .font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.ink2)
               }
             }
           }
-          Spacer(minLength: 2)
+          Spacer(minLength: Fit.s(2))
         }
       } actions: {
         // Finish only ARMS the guard (founder 2026-07-12) — the save happens behind it.
@@ -3071,13 +3192,13 @@ struct CardioCompleteScreen: View {
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
         ClockLane {
-          HStack(spacing: 6) {
+          HStack(spacing: Fit.s(6)) {
             RangeGlyph()
-            Text("hush").font(.system(size: 15, design: .serif)).foregroundStyle(Palette.ink0)
+            Text("hush").font(.system(size: Fit.s(15), design: .serif)).foregroundStyle(Palette.ink0)
           }
         }
-        .frame(height: Wrist.head)
-        Spacer(minLength: 2)
+        .frame(height: Fit.s(Wrist.head))
+        Spacer(minLength: Fit.s(2))
         /*
          * ⛔ THE HERO FALLS THROUGH (founder 2026-08-05, from a screenshot reading "hush / –– km /
          * TIME 0:31 / KCAL –– / /KM ––").
@@ -3094,15 +3215,15 @@ struct CardioCompleteScreen: View {
          * The distance does not vanish — it drops to the row below, where a dash is a dash rather
          * than the subject of the screen.
          */
-        VStack(spacing: 8) {
+        VStack(spacing: Fit.s(8)) {
           if let km = summary.distanceKm, km > 0 {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
+            HStack(alignment: .firstTextBaseline, spacing: Fit.s(5)) {
               Text(String(format: "%.2f", km))
                 .font(.system(size: Fit.s(48), weight: .medium, design: .monospaced)).monospacedDigit()
                 .foregroundStyle(Palette.ink0)
                 .lineLimit(1).minimumScaleFactor(0.5)
               Text(WatchCopy.metricKm)
-                .font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.ink2)
+                .font(.system(size: Fit.s(14), weight: .medium)).foregroundStyle(Palette.ink2)
             }
           } else {
             Text(fmtTime(summary.elapsedS))
@@ -3112,7 +3233,7 @@ struct CardioCompleteScreen: View {
           }
           TallyMark()
           // The row carries whichever of the two did NOT take the hero, so nothing is said twice.
-          HStack(spacing: 4) {
+          HStack(spacing: Fit.s(4)) {
             // ⓘ Parenthesised: `??` binds LOOSER than `>`, so `a ?? 0 > 0` is `a ?? (0 > 0)`.
             if (summary.distanceKm ?? 0) > 0 {
               Metric(value: fmtTime(summary.elapsedS), label: WatchCopy.metricTime, valueSize: Fit.s(24))
@@ -3124,10 +3245,10 @@ struct CardioCompleteScreen: View {
           }
         }
         .frame(maxWidth: .infinity)
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
-      StageButton(title: WatchCopy.done, kind: .primary, height: Fit.s(42), fontSize: 15, seated: true, action: onDone)
+      StageButton(title: WatchCopy.done, kind: .primary, height: 42, fontSize: 15, seated: true, action: onDone)
     }
   }
 
@@ -3201,31 +3322,31 @@ struct CompleteScreen: View {
       TopStrip(text: WatchCopy.reading.uppercased())
       ScrollViewReader { proxy in
         ScrollView {
-          VStack(alignment: .leading, spacing: 4) {
+          VStack(alignment: .leading, spacing: Fit.s(4)) {
             ForEach(Array(lifts.enumerated()), id: \.offset) { i, lift in
-              HStack(spacing: 8) {
+              HStack(spacing: Fit.s(8)) {
                 // The phone's mark exactly: a hollow ring that FILLS sage as the read reaches it,
                 // with the check struck through it in the stage's own black.
                 ZStack {
                   Circle()
                     .fill(i < read ? Palette.up : Color.clear)
-                    .overlay(Circle().strokeBorder(i < read ? Palette.up : Palette.stage2, lineWidth: 1.5))
-                    .frame(width: 15, height: 15)
+                    .overlay(Circle().strokeBorder(i < read ? Palette.up : Palette.stage2, lineWidth: Fit.s(1.5)))
+                    .frame(width: Fit.s(15), height: Fit.s(15))
                   if i < read {
                     Image(systemName: "checkmark")
-                      .font(.system(size: 12, weight: .bold))
+                      .font(.system(size: Fit.s(12), weight: .bold))
                       .foregroundStyle(Palette.stage0)
                   }
                 }
-                .frame(width: 15, height: 15)
+                .frame(width: Fit.s(15), height: Fit.s(15))
                 Text(lift.name)
-                  .font(.system(size: 14))
+                  .font(.system(size: Fit.s(14)))
                   .foregroundStyle(Palette.ink0)
                   .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 4)
+                Spacer(minLength: Fit.s(4))
                 if let best = lift.best, !best.isEmpty {
                   Text(best)
-                    .font(.system(size: 13, design: .monospaced)).monospacedDigit()
+                    .font(.system(size: Fit.s(13), design: .monospaced)).monospacedDigit()
                     .foregroundStyle(Palette.ink2)
                     .lineLimit(1).fixedSize()
                 }
@@ -3236,7 +3357,7 @@ struct CompleteScreen: View {
             }
           }
           .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.top, 6)
+          .padding(.top, Fit.s(6))
         }
         .onChange(of: read) { _, r in
           guard r > 0 else { return }
@@ -3244,7 +3365,7 @@ struct CompleteScreen: View {
         }
       }
     }
-    .padding(.horizontal, Wrist.side)
+    .padding(.horizontal, Fit.s(Wrist.side))
     .contentShape(Rectangle())
     .onTapGesture { TapGate.pass(finishReading) }
     .task {
@@ -3294,8 +3415,8 @@ struct CompleteScreen: View {
     WristScreen {
       VStack(spacing: 0) {
         TopStrip()
-        Spacer(minLength: 2)
-        VStack(spacing: 10) {
+        Spacer(minLength: Fit.s(2))
+        VStack(spacing: Fit.s(10)) {
           TallyMark()
           /*
            * ⛔ THE WORKOUT'S NAME, NOT A MOOD (founder 2026-08-04, applying the phone's poster to the
@@ -3316,11 +3437,11 @@ struct CompleteScreen: View {
             .font(.system(size: Fit.s(26), design: .serif))
             .foregroundStyle(Palette.ink0)
             .multilineTextAlignment(.center)
-            .lineSpacing(1)
+            .lineSpacing(Fit.s(1))
             .lineLimit(2).minimumScaleFactor(0.7)
             .fixedSize(horizontal: false, vertical: true)
           if let sm = mirror.summary {
-            HStack(alignment: .top, spacing: 4) {
+            HStack(alignment: .top, spacing: Fit.s(4)) {
               completeMetric(minutesLabel(sm.timeLabel), WatchCopy.metricMinShort)
               // Kcal from the OS runtime; an honest dash when HealthKit gave nothing, never a model.
               completeMetric(shownKcal.map { "\($0)" } ?? "––", WatchCopy.metricKcalShort)
@@ -3329,12 +3450,12 @@ struct CompleteScreen: View {
           }
         }
         .frame(maxWidth: .infinity)
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
       // The way out passes through the mark, exactly as it does on the phone: any exit from the
       // result plays beat 4 once, and only on the session that earned it.
-      StageButton(title: WatchCopy.done, kind: .primary, height: Fit.s(42), fontSize: 15, seated: true) {
+      StageButton(title: WatchCopy.done, kind: .primary, height: 42, fontSize: 15, seated: true) {
         guard milestone != nil else {
           onDone()
           return
@@ -3347,7 +3468,7 @@ struct CompleteScreen: View {
 
   /// One column of the WT6 metric row — mono figure over a muted mono label, a third of the row each.
   private func completeMetric(_ value: String, _ label: String) -> some View {
-    VStack(spacing: 3) {
+    VStack(spacing: Fit.s(3)) {
       Text(value)
         .font(.system(size: Fit.s(26), weight: .medium, design: .monospaced)).monospacedDigit()
         // A figure the session never measured stands in the superseded ink, never in cream.
@@ -3376,17 +3497,17 @@ struct CompleteScreen: View {
     WristScreen {
       VStack(spacing: 0) {
         TopStrip()
-        Spacer(minLength: 2)
-        VStack(spacing: 11) {
+        Spacer(minLength: Fit.s(2))
+        VStack(spacing: Fit.s(11)) {
           // The mock's seal: a dashed CREAM outer ring around a faint solid inner ring, the engraved
           // figure + its unit stacked at the centre (a check when the mark is an event, not a number).
           ZStack {
             Circle().strokeBorder(
               Palette.ink0.opacity(0.4),
-              style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+              style: StrokeStyle(lineWidth: Fit.s(1.5), dash: [Fit.s(4), Fit.s(3)])
             ).frame(width: Fit.s(86), height: Fit.s(86))
-            Circle().strokeBorder(Palette.ink0.opacity(0.18), lineWidth: 1).frame(width: Fit.s(66), height: Fit.s(66))
-            VStack(spacing: 1) {
+            Circle().strokeBorder(Palette.ink0.opacity(0.18), lineWidth: Fit.s(1)).frame(width: Fit.s(66), height: Fit.s(66))
+            VStack(spacing: Fit.s(1)) {
               if let v = m.value, !v.isEmpty {
                 Text(v)
                   .font(.system(size: Fit.s(28), weight: .medium, design: .monospaced)).monospacedDigit()
@@ -3401,7 +3522,7 @@ struct CompleteScreen: View {
                 DrawCheck(size: 26)
               }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, Fit.s(8))
           }
           // The one factual line, in the coach's serif — "Ten workouts.", never "amazing".
           Text(m.title)
@@ -3410,10 +3531,10 @@ struct CompleteScreen: View {
             .lineLimit(2).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
       }
     } actions: {
-      StageButton(title: WatchCopy.done, kind: .primary, height: Fit.s(42), fontSize: 15, seated: true, action: onDone)
+      StageButton(title: WatchCopy.done, kind: .primary, height: 42, fontSize: 15, seated: true, action: onDone)
     }
   }
 }
@@ -3498,8 +3619,8 @@ struct PausedScreen: View {
       WristScreen {
         VStack(spacing: 0) {
           TopStrip(lift: lift)
-          Spacer(minLength: 2)
-          VStack(spacing: 6) {
+          Spacer(minLength: Fit.s(2))
+          VStack(spacing: Fit.s(6)) {
             if let elapsed {
               // The held clock, in the secondary ink — held, not running. A glyph said "paused";
               // the clock says paused AND how long the workout has run (design pass 2026-09-09).
@@ -3511,15 +3632,15 @@ struct PausedScreen: View {
               }
             } else {
               ZStack {
-                Circle().strokeBorder(Palette.ink0.opacity(0.3), lineWidth: 1.5).frame(width: Fit.s(40), height: Fit.s(40))
-                Image(systemName: "pause.fill").font(.system(size: 15)).foregroundStyle(Palette.ink0)
+                Circle().strokeBorder(Palette.ink0.opacity(0.3), lineWidth: Fit.s(1.5)).frame(width: Fit.s(40), height: Fit.s(40))
+                Image(systemName: "pause.fill").font(.system(size: Fit.s(15))).foregroundStyle(Palette.ink0)
               }
             }
             Text(WatchCopy.pausedTitle)
               .font(.system(size: Fit.s(19), design: .serif)).foregroundStyle(Palette.ink0)
           }
           .frame(maxWidth: .infinity)
-          Spacer(minLength: 2)
+          Spacer(minLength: Fit.s(2))
         }
       } actions: {
         PauseActions(
@@ -3540,16 +3661,17 @@ private struct PainAreaScreen: View {
     VStack(alignment: .leading, spacing: 0) {
       // The lane every strip keeps, and a back chevron that mirrors with the layout.
       ClockLane {
-        HStack(spacing: 6) {
+        HStack(spacing: Fit.s(6)) {
           Button(action: { TapGate.pass(onBack) }) {
-            Image(systemName: "chevron.backward").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink2)
-              .frame(width: 24, height: Wrist.head).contentShape(Rectangle())
+            Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold)).foregroundStyle(Palette.ink2)
+              .frame(width: Fit.s(24), height: Fit.s(Wrist.head)).contentShape(Rectangle())
           }
           .buttonStyle(.plain)
-          Legend(WatchCopy.whereIsIt, size: Wrist.legend)
+          // One line inside the 20 pt header — beside the back chevron it is wider than 40 mm allows.
+          Legend(WatchCopy.whereIsIt, size: Wrist.legend).lineLimit(1).minimumScaleFactor(0.75)
         }
       }
-      .frame(height: Wrist.head)
+      .frame(height: Fit.s(Wrist.head))
       ScrollView {
         /*
          * Founder, device review 2026-08-01: *"on the injury screen please make the buttons bigger
@@ -3560,28 +3682,28 @@ private struct PainAreaScreen: View {
          * also the honest scroll affordance. She is reporting pain — this is not the screen to make
          * her aim.
          */
-        VStack(spacing: 6) {
+        VStack(spacing: Fit.s(6)) {
           // She taps the label; the phone receives the VALUE.
           ForEach(WatchCopy.painAreas) { area in
             Button { TapGate.pass { onPick(area.value) } } label: {
               HStack {
-                Text(area.label).font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.ink0)
+                Text(area.label).font(.system(size: Fit.s(15), weight: .medium)).foregroundStyle(Palette.ink0)
                   .lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.forward").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink2)
+                Spacer(minLength: Fit.s(4))
+                Image(systemName: "chevron.forward").font(.system(size: Fit.s(12), weight: .medium)).foregroundStyle(Palette.ink2)
               }
-              .padding(.horizontal, 12)
+              .padding(.horizontal, Fit.s(12))
               .frame(maxWidth: .infinity).frame(height: Fit.s(44))
-              .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(Palette.ink0.opacity(0.16), lineWidth: 1))
+              .overlay(RoundedRectangle(cornerRadius: Fit.s(13)).strokeBorder(Palette.ink0.opacity(0.16), lineWidth: Fit.s(1)))
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
           }
         }
-        .padding(.top, 4)
+        .padding(.top, Fit.s(4))
       }
     }
-    .padding(.horizontal, Wrist.side).padding(.top, 2)
+    .padding(.horizontal, Fit.s(Wrist.side)).padding(.top, Fit.s(2))
     .stageFill()
   }
 }
@@ -3600,51 +3722,52 @@ private struct PainSeverityScreen: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       ClockLane {
-        HStack(spacing: 6) {
+        HStack(spacing: Fit.s(6)) {
           Button(action: { TapGate.pass(onBack) }) {
-            Image(systemName: "chevron.backward").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink2)
-              .frame(width: 24, height: Wrist.head).contentShape(Rectangle())
+            Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold)).foregroundStyle(Palette.ink2)
+              .frame(width: Fit.s(24), height: Fit.s(Wrist.head)).contentShape(Rectangle())
           }
           .buttonStyle(.plain)
-          Legend(WatchCopy.howSharp, size: Wrist.legend)
+          Legend(WatchCopy.howSharp, size: Wrist.legend).lineLimit(1).minimumScaleFactor(0.75)
         }
       }
-      .frame(height: Wrist.head)
+      .frame(height: Fit.s(Wrist.head))
       // `muscle` is the map's own name — what the wire carries. She reads hers.
       Text(WatchCopy.muscle(muscle))
         .font(.system(size: Fit.s(19), design: .serif)).foregroundStyle(Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.8)
-        .padding(.top, 3)
-      Spacer(minLength: 4)
+        .padding(.top, Fit.s(3))
+      Spacer(minLength: Fit.s(4))
       /*
        * SEVERITY IS A WEIGHT, NOT ONLY A WORD (design pass 2026-09-09). The three rows wore one
        * border; the answer they ask for is a degree, and a degree can be drawn — the border
        * thickens with the word, so the row that says "sharp" looks like the sharpest of the three
        * before it is read. Same clay throughout: pain is never a direction.
        */
-      VStack(spacing: 6) {
+      VStack(spacing: Fit.s(6)) {
         ForEach(Array(WatchCopy.severityChoices.enumerated()), id: \.element.id) { i, choice in
           Button { TapGate.pass { onPick(choice.value) } } label: {
             HStack {
-              Text(choice.label).font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.ink0)
+              Text(choice.label).font(.system(size: Fit.s(15), weight: .medium)).foregroundStyle(Palette.ink0)
                 .lineLimit(1).minimumScaleFactor(0.8)
-              Spacer(minLength: 4)
-              Image(systemName: "chevron.forward").font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.ink2)
+              Spacer(minLength: Fit.s(4))
+              Image(systemName: "chevron.forward").font(.system(size: Fit.s(12), weight: .medium)).foregroundStyle(Palette.ink2)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Fit.s(12))
             .frame(maxWidth: .infinity).frame(height: Fit.s(44))
-            .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(
-              Palette.clay.opacity(0.35 + 0.2 * Double(i)), lineWidth: 1 + CGFloat(i) * 0.7
+            .overlay(RoundedRectangle(cornerRadius: Fit.s(13)).strokeBorder(
+              Palette.clay.opacity(0.35 + 0.2 * Double(i)), lineWidth: Fit.s(1 + CGFloat(i) * 0.7)
             ))
             .contentShape(Rectangle())
           }
           .buttonStyle(.plain)
         }
       }
-      Spacer(minLength: 4)
+      Spacer(minLength: Fit.s(4))
     }
-    .padding(.horizontal, Wrist.side).padding(.top, 2)
-    .stageFill()
+    .padding(.horizontal, Fit.s(Wrist.side)).padding(.top, Fit.s(2))
+    // Three 44 pt choices under a header and the muscle's name come to ~201 pt on a 197 pt case.
+    .fitToSlot()
   }
 }
 
@@ -3669,19 +3792,19 @@ private struct PainAcknowledgedScreen: View {
         // "GOT IT" rode its own row under an empty strip; it is the strip's fact (design pass
         // 2026-09-09), and the sentence takes the row it frees.
         TopStrip(text: WatchCopy.gotIt.uppercased())
-        Spacer(minLength: 4)
-        VStack(alignment: .leading, spacing: 8) {
+        Spacer(minLength: Fit.s(4))
+        VStack(alignment: .leading, spacing: Fit.s(8)) {
           Text(WatchCopy.easingToday(muscle))
             .font(.system(size: Fit.s(21), design: .serif)).foregroundStyle(Palette.ink0)
-            .multilineTextAlignment(.leading).lineSpacing(1)
+            .multilineTextAlignment(.leading).lineSpacing(Fit.s(1))
             .fixedSize(horizontal: false, vertical: true)
-          VStack(alignment: .leading, spacing: 3) {
-            Text(WatchCopy.easedSwapped).font(.system(size: 12)).foregroundStyle(Palette.ink2)
-            Text(WatchCopy.easedRests).font(.system(size: 12)).foregroundStyle(Palette.ink2)
+          VStack(alignment: .leading, spacing: Fit.s(3)) {
+            Text(WatchCopy.easedSwapped).font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
+            Text(WatchCopy.easedRests).font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
       }
     } actions: {
       StageButton(title: WatchCopy.resume, kind: .moss, height: 40, fontSize: 14, seated: true, action: onResume)
@@ -3708,17 +3831,17 @@ private struct PainQueuedScreen: View {
   let onResume: () -> Void
   var body: some View {
     WristScreen {
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: Fit.s(8)) {
         TopStrip(text: WatchCopy.gotIt.uppercased())
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
         Text(WatchCopy.painNoted(muscle))
           .font(.system(size: Fit.s(21), design: .serif)).foregroundStyle(Palette.ink0)
-          .multilineTextAlignment(.leading).lineSpacing(1)
+          .multilineTextAlignment(.leading).lineSpacing(Fit.s(1))
           .fixedSize(horizontal: false, vertical: true)
         Text(WatchCopy.painWhenPhoneBack)
-          .font(.system(size: 12)).foregroundStyle(Palette.ink2)
+          .font(.system(size: Fit.s(12))).foregroundStyle(Palette.ink2)
           .fixedSize(horizontal: false, vertical: true)
-        Spacer(minLength: 4)
+        Spacer(minLength: Fit.s(4))
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     } actions: {
@@ -3742,34 +3865,34 @@ struct ConnectionLostScreen: View {
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
         ClockLane {
-          HStack(spacing: 5) {
-            Image(systemName: "wifi.slash").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink2)
+          HStack(spacing: Fit.s(5)) {
+            Image(systemName: "wifi.slash").font(.system(size: Fit.s(12), weight: .semibold)).foregroundStyle(Palette.ink2)
             Text(WatchCopy.reconnecting.uppercased())
-              .font(.system(size: Wrist.label, weight: .medium)).tracking(0.8)
+              .font(.system(size: Fit.s(Wrist.label), weight: .medium)).tracking(Fit.s(0.8))
               .foregroundStyle(Palette.ink1)
               .lineLimit(1).minimumScaleFactor(0.75)
           }
         }
-        .frame(height: Wrist.head)
-        Spacer(minLength: 2)
+        .frame(height: Fit.s(Wrist.head))
+        Spacer(minLength: Fit.s(2))
         if let m = mirror {
-          VStack(alignment: .leading, spacing: 3) {
+          VStack(alignment: .leading, spacing: Fit.s(3)) {
             Text(m.exerciseName)
-              .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink0.opacity(0.4))
+              .font(.system(size: Fit.s(14), weight: .semibold)).foregroundStyle(Palette.ink0.opacity(0.4))
               .lineLimit(2).minimumScaleFactor(0.8)
             if let wt = m.targetWeight {
-              HStack(alignment: .firstTextBaseline, spacing: 4) {
+              HStack(alignment: .firstTextBaseline, spacing: Fit.s(4)) {
                 Text(fmtW(wt))
                   .font(.system(size: Fit.s(40), weight: .medium, design: .monospaced)).monospacedDigit()
                   .foregroundStyle(Palette.ink0.opacity(0.4))
-                Text(WatchCopy.kg).font(.system(size: 14)).foregroundStyle(Palette.ink2.opacity(0.6))
+                Text(WatchCopy.kg).font(.system(size: Fit.s(14))).foregroundStyle(Palette.ink2.opacity(0.6))
               }
               .lineLimit(1).minimumScaleFactor(0.6)
             }
             // Composed here rather than `m.setLabel`, which is the phone's English fallback string
             // ("Set 2 of 4") — the one line on this screen that never turned Hebrew (2026-09-09).
             Text("\(WatchCopy.setWord.uppercased()) \(m.setNumber ?? 1)/\(m.setsInExercise ?? 1)")
-              .font(.system(size: Wrist.legend, weight: .medium, design: .monospaced)).tracking(0.9)
+              .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
               .foregroundStyle(Palette.ink2.opacity(0.6))
           }
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -3777,9 +3900,9 @@ struct ConnectionLostScreen: View {
           Image(systemName: "wifi.slash").font(.system(size: Fit.s(28), weight: .semibold)).foregroundStyle(Palette.ink2)
             .frame(maxWidth: .infinity)
         }
-        Spacer(minLength: 2)
+        Spacer(minLength: Fit.s(2))
         Text(WatchCopy.continueOnPhone)
-          .font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink1)
+          .font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.ink1)
           .frame(maxWidth: .infinity)
           .lineLimit(2).minimumScaleFactor(0.8)
       }

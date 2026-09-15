@@ -53,9 +53,10 @@ describe('⛔ the wrist owns its floor', () => {
     const c = code();
     const container = c.slice(c.indexOf('struct WristScreen'), c.indexOf('extension WristScreen'));
     // The gutter rides the content…
-    expect(container).toMatch(/content[\s\S]{0,220}\.padding\(\.horizontal, Wrist\.side\)/);
+    // (scaled with the case since 2026-09-15 — `Fit.s(Wrist.side)` is the same gutter, in proportion)
+    expect(container).toMatch(/content[\s\S]{0,220}\.padding\(\.horizontal, Fit\.s\(Wrist\.side\)\)/);
     // …and the container itself pads neither side nor foot, or the actions slot inherits it again.
-    expect(container).not.toMatch(/\}\s*\.padding\(\.horizontal, Wrist\.side\)/);
+    expect(container).not.toMatch(/\}\s*\.padding\(\.horizontal, (?:Fit\.s\()?Wrist\.side\)/);
     expect(container).not.toMatch(/\.padding\(\.bottom, Wrist\.foot\)/);
   });
 
