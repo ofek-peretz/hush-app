@@ -126,6 +126,7 @@ const pairFixture = (over = {}) =>
     ready: true,
     signedIn: true,
     canHandOverLead: false,
+    inviteWhatsApp: async () => {},
     joinedByLink: false,
     stage: 'live',
     link: 'open',

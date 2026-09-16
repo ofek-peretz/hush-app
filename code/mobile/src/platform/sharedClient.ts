@@ -131,8 +131,14 @@ export async function pairSignedIn(): Promise<boolean> {
  * The day the capability is enabled on the App ID, the same link starts opening the app directly,
  * with no code change and no new copy. Nothing here has to be revisited; it just gets shorter.
  */
+/*
+ * ⛔ ON THE BRAND'S OWN DOMAIN SINCE 2026-09-16. A WhatsApp message reads its link aloud, and
+ * `hush-identity.hush-app.workers.dev` said the old name to every partner. `getferrox.com/pair` is
+ * served by the site worker (`brand/landing/worker.js`), which answers the same page and the same
+ * `apple-app-site-association`; the identity worker's `/pair` still answers invites already sent.
+ */
 export function pairLink(code: string): string {
-  return `${identityBaseUrl() || 'https://hush-identity.hush-app.workers.dev'}/pair?c=${encodeURIComponent(code)}`;
+  return `https://getferrox.com/pair?c=${encodeURIComponent(code)}`;
 }
 
 // ───────────────────────────── the two HTTP doors ─────────────────────────────

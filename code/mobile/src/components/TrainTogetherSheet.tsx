@@ -22,8 +22,8 @@
  * inside it and cannot be routed around.
  *
  * ── WHAT SHE READS, AT EVERY STAGE ─────────────────────────────────────────────────────────────
- *   idle      → two doors: open a room, or walk into one.
- *   waiting   → the code, large, and the plain fact that nobody else is in the room yet.
+ *   idle      → one button: invite on WhatsApp (it opens the room). A code is the fallback door.
+ *   waiting   → nobody else is in the room yet; send the link again, or read the code out.
  *   ready     → who is here, and what to do next (which is: begin, as usual).
  *   planReady → the guest only: what he is about to adopt, and the button that adopts it.
  *   live      → a workout is running; the sheet holds only the door out.
@@ -109,11 +109,30 @@ export function TrainTogetherSheet({ onClose, onBegin, onStarted, onGated, pair:
         }
         return (
           <>
-            <DoorRow title={t('pair.open')} sub={t('pair.openSub')} onPress={() => {
-              setBusy(true);
-              void pair.open().finally(() => setBusy(false));
-            }} />
-            <DoorRow title={t('pair.join')} sub={t('pair.joinSub')} onPress={() => setEntering((v) => !v)} last={!entering} />
+            {/*
+              ⛔ THE INVITE IS THE FEATURE, NOT THE CODE (founder 2026-09-16).
+
+              *"למה צריך לשלוח קוד בשביל להכנס לחדר... למה אי אפשר פשוט לשלוח בקשה בווטסאפ."* The
+              sheet used to open on "open a room" and "join with a code", so two people who wanted
+              to train together were handed a six-letter protocol. Now one press opens the room and
+              lands in WhatsApp with the link; the partner's tap puts him in the room. The code is
+              still there — below, for somebody standing beside you with no signal for a message.
+            */}
+            <Button
+              variant="primary"
+              size="lg"
+              block
+              disabled={busy}
+              label={t('pair.inviteWhatsApp')}
+              onPress={() => {
+                setBusy(true);
+                void pair.inviteWhatsApp().finally(() => setBusy(false));
+              }}
+            />
+            <Text style={styles.note}>{t('pair.inviteWhatsAppSub')}</Text>
+            <View style={styles.fallback}>
+              <DoorRow title={t('pair.join')} sub={t('pair.joinSub')} onPress={() => setEntering((v) => !v)} last={!entering} />
+            </View>
             {entering ? (
               <View style={styles.codeRow}>
                 <TextInput
@@ -162,23 +181,29 @@ export function TrainTogetherSheet({ onClose, onBegin, onStarted, onGated, pair:
       case 'waiting':
         return (
           <>
-            {/* The code is a FACT she reads out loud — printed plainly, at the size of a thing
-                somebody across a bench has to hear correctly the first time. */}
-            <Legend style={styles.legend}>{t('pair.codeLabel')}</Legend>
-            <Text style={styles.code} accessibilityLabel={(pair.code ?? '').split('').join(' ')}>
-              {pair.code}
-            </Text>
-            <Text style={styles.note}>{t('pair.alone')}</Text>
-            {/* ⛔ THE CODE STILL WORKS WHEN THE LINK DOES NOT, and both are in one message. A
-                custom scheme opens the app for somebody who HAS it and does nothing for anybody
-                else, so the message never relies on the link alone (`pairLink`). */}
+            <Text style={styles.head}>{t('pair.alone')}</Text>
+            {/* The link is the way in; sending it again is the one thing worth doing while alone. */}
             <Button
-              variant="secondary"
+              variant="primary"
+              size="lg"
+              block
+              label={t('pair.inviteWhatsAppAgain')}
+              onPress={() => void pair.inviteWhatsApp()}
+              style={styles.act}
+            />
+            <Button
+              variant="ghost"
               block
               label={t('pair.shareInvite')}
               onPress={() => void pair.invite()}
-              style={styles.act}
             />
+            {/* ⛔ THE CODE STILL WORKS WHEN THE LINK DOES NOT, and both are in one message — but it
+                is the fallback now, so it is printed below the invite, not as the headline. Still
+                mono and still spaced for a voice across a bench. */}
+            <Legend style={styles.codeLegend}>{t('pair.codeLabel')}</Legend>
+            <Text style={styles.code} accessibilityLabel={(pair.code ?? '').split('').join(' ')}>
+              {pair.code}
+            </Text>
             <PrivacyRow />
           </>
         );
@@ -356,7 +381,9 @@ const styles = StyleSheet.create({
 
   /* Read across a bench, so it is the biggest thing on the sheet and it is mono — six glyphs that
      must not be confusable with one another (`SHARED_CODE_ALPHABET` drops 0/O and 1/I/L). */
-  code: { fontFamily: font.mono, fontSize: 40, lineHeight: 46, letterSpacing: 6, color: stage.ink0, marginTop: 6, textAlign: 'left' }, // latin-ok — SHARED_CODE_ALPHABET is A–Z2–9 in every language
+  fallback: { marginTop: 18, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.10)' },
+  codeLegend: { marginTop: 22, marginBottom: 4, textAlign: 'left' },
+  code: { fontFamily: font.mono, fontSize: 30, lineHeight: 36, letterSpacing: 6, color: stage.ink0, marginTop: 6, textAlign: 'left' }, // latin-ok — SHARED_CODE_ALPHABET is A–Z2–9 in every language
 
   row: {
     flexDirection: 'row',

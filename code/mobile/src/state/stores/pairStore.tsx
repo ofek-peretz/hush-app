@@ -34,7 +34,7 @@
 //
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Linking } from 'react-native';
 
 import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
@@ -137,6 +137,16 @@ export interface PairView {
   signIn: () => Promise<boolean>;
   /** Hand the code to somebody — the system share sheet, with a link and the code in one message. */
   invite: () => Promise<void>;
+  /**
+   * ⛔ ONE TAP, AND THE INVITE IS IN WHATSAPP (founder 2026-09-16).
+   *
+   * *"למה אי אפשר פשוט לשלוח בקשה בווטסאפ ואז לחיצה על זה מכניסה אוטומטית לחדר."* Opening a room
+   * and sending it were two separate taps, and the second one was labelled "send the code" — so
+   * the whole feature read as a code to dictate. This opens the room when there is none yet and
+   * goes straight to WhatsApp with the link; the share sheet is the fallback when WhatsApp is not
+   * on the phone. The partner taps the link and is in the room (`Root`, `joinedByLink`).
+   */
+  inviteWhatsApp: () => Promise<void>;
   leave: () => void;
   /** Remembered across workouts — see `OwnedPreferences.pairLoadsPrivate`. */
   setLoadsPrivate: (v: boolean) => void;
@@ -210,6 +220,18 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
   const [joinedByLink, setJoinedByLink] = useState(false);
 
   const room = useRef<SharedRoom | null>(null);
+  /**
+   * ⛔ A LINK THAT ARRIVED BEFORE SHE HAD AN ACCOUNT IS NOT SPENT BY THE SIGN-IN IT NEEDED.
+   *
+   * The partner taps the invite, the room needs an identity, the sheet offers Sign in with Apple —
+   * and the code that brought her here used to be forgotten the moment she signed in, leaving her
+   * to ask for six letters the link was supposed to spare her. It waits here and is walked into
+   * the instant `signIn` answers yes.
+   */
+  const pendingLinkCode = useRef<string | null>(null);
+  /* `signIn` walks into a pending link's room, and `join` is declared after it — read through a ref
+     so neither callback has to be rebuilt around the other. */
+  const joinRef = useRef<(code: string, byLink?: boolean) => Promise<SharedFailure | null>>(async () => null);
   /** Latest of everything the publisher reads, so the 20 s tick never closes over a stale render. */
   const latest = useRef({ plan, role, loadsPrivate });
   latest.current = { plan, role, loadsPrivate };
@@ -500,6 +522,11 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
     const ok = await pairSignedIn();
     setSignedIn(ok);
     if (ok) setFailure(null);
+    const waiting = pendingLinkCode.current;
+    if (ok && waiting) {
+      pendingLinkCode.current = null;
+      await joinRef.current(waiting, true);
+    }
     return ok;
   }, [app]);
 
@@ -509,6 +536,21 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
     void track('pair_invited');
   }, [code]);
 
+  const inviteWhatsApp = useCallback(async (): Promise<void> => {
+    const roomCode = code ?? (await open());
+    if (!roomCode) return; // the sheet already says why (signed out, or no server)
+    const message = tg('pair.inviteMessage', { link: pairLink(roomCode), code: roomCode });
+    try {
+      /* `openURL` needs no LSApplicationQueriesSchemes entry — only `canOpenURL` does — and it
+         rejects when nothing on the phone answers `whatsapp:`, which is exactly the fallback cue. */
+      await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(message)}`);
+      void track('pair_invited', { via: 'whatsapp' });
+    } catch {
+      await shareText(message).catch(() => 'error' as const);
+      void track('pair_invited', { via: 'share' });
+    }
+  }, [code, open]);
+
   const join = useCallback(
     async (raw: string, byLink = false): Promise<SharedFailure | null> => {
       setFailure(null);
@@ -516,7 +558,14 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
       const got = await pairJoin(trimmed);
       if (typeof got === 'string') {
         setFailure(got);
-        if (got === 'signed_out') setSignedIn(false);
+        if (got === 'signed_out') {
+          setSignedIn(false);
+          if (byLink) pendingLinkCode.current = trimmed;
+        }
+        /* ⛔ A LINK THAT FAILED STILL OPENS THE SHEET. It used to open it only on success, so a
+           partner who was signed out — or whose room had expired — tapped the invite and watched
+           nothing happen at all. The sheet is where the reason is said and the door stands. */
+        if (byLink) setJoinedByLink(true);
         return got;
       }
       setCode(trimmed);
@@ -527,6 +576,7 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
     },
     [connect],
   );
+  joinRef.current = join;
 
   /**
    * ════ THE GUEST BEGINS — the host's shape, his own everything else ════
@@ -657,6 +707,7 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
       join,
       signIn,
       invite,
+      inviteWhatsApp,
       joinedByLink,
       clearJoinedByLink: () => setJoinedByLink(false),
       leave,
@@ -676,7 +727,7 @@ export function PairProvider({ children }: { children: React.ReactNode }) {
       stage, link, code, role, peer, partnerHere, plan, standing, signedIn,
       session.currentExerciseId, session.nextExerciseId,
       swapAsk, swapAnswer, failure, loadsPrivate, joinedByLink,
-      open, join, signIn, invite, leave, beginAsGuest, rememberLoadsPrivate,
+      open, join, signIn, invite, inviteWhatsApp, leave, beginAsGuest, rememberLoadsPrivate,
     ],
   );
 
@@ -717,6 +768,7 @@ const SOLO: PairView = {
   join: async () => 'unavailable',
   signIn: async () => false,
   invite: async () => {},
+  inviteWhatsApp: async () => {},
   joinedByLink: false,
   clearJoinedByLink: () => {},
   leave: () => {},

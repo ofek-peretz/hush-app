@@ -363,7 +363,7 @@ describe('7 · whose lifts, how you are invited, and what the room remembers', (
      * the pair invite and the shared plan.
      */
     const app = JSON.parse(read('app.json'));
-    expect(app.expo.ios.associatedDomains).toEqual(['applinks:hush-identity.hush-app.workers.dev']);
+    expect(app.expo.ios.associatedDomains).toEqual(['applinks:getferrox.com', 'applinks:hush-identity.hush-app.workers.dev']);
     // 3 · a page for the browser that opens it anyway, with a way to actually get the app
     expect(worker).toContain("path === '/pair'");
     expect(worker).toContain('APP_STORE_URL');
@@ -383,6 +383,35 @@ describe('7 · whose lifts, how you are invited, and what the room remembers', (
     // Home turns a silent join into something she can see, once.
     expect(read('src/screens/home/Home.tsx')).toContain('if (!pair.joinedByLink) return;');
     expect(read('src/screens/home/Home.tsx')).toContain('pair.clearJoinedByLink();');
+  });
+
+  /*
+   * ⛔ THE WHATSAPP INVITE (founder 2026-09-16): *"למה אי אפשר פשוט לשלוח בקשה בווטסאפ ואז לחיצה על
+   * זה מכניסה אוטומטית לחדר."* Three ways the tap on the invite put nobody in any room, each pinned.
+   */
+  it('⛔ the invite that LAUNCHED the app is held until boot, not dropped by the empty profile', () => {
+    const root = read('src/app/Root.tsx');
+    expect(root).toContain('if (!bootedRef.current) {');
+    expect(root).toContain('pendingLinkRef.current = url;');
+    expect(root).toMatch(/if \(!app\.booted\) return;\s*const waiting = pendingLinkRef\.current;/);
+  });
+
+  it('⛔ a link that failed still opens the sheet, and a sign-in walks into the room it was for', () => {
+    expect(store).toContain('if (byLink) setJoinedByLink(true);');
+    expect(store).toContain('if (byLink) pendingLinkCode.current = trimmed;');
+    expect(store).toContain('await joinRef.current(waiting, true);');
+  });
+
+  it('⛔ one press opens the room and lands in WhatsApp; the share sheet is only the fallback', () => {
+    expect(store).toContain('const roomCode = code ?? (await open());');
+    expect(store).toContain('whatsapp://send?text=');
+    expect(sheet).toContain("label={t('pair.inviteWhatsApp')}");
+    // The link is on the brand's domain, and that domain answers for the app.
+    expect(read('src/platform/sharedClient.ts')).toContain('https://getferrox.com/pair?c=');
+    const site = readRepo('brand/landing/worker.js');
+    expect(site).toContain("'/.well-known/apple-app-site-association'");
+    expect(site).toContain("T6ZRTBRT2U.com.hushfitness.app");
+    expect(site).toContain("{ '/': '/pair*' }");
   });
 
   it('⛔ no account is a front door, never "that code opened no room"', () => {

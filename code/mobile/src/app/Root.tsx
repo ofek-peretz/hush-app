@@ -312,6 +312,8 @@ export function Root() {
   // Latest enrolled flag for the notification listeners (no stale closure).
   const enrolledRef = useRef(false);
   enrolledRef.current = !!app.profile;
+  const bootedRef = useRef(false);
+  bootedRef.current = app.booted;
   const coldStartRouted = useRef(false);
   /*
    * ════ ⛔ A LIVE WORKOUT IS WHERE SHE LEFT OFF (founder, gym 2026-09-14) ════
@@ -392,9 +394,24 @@ export function Root() {
    * that decides whether a payload is trustworthy, and it lives there. A link that is not ours,
    * or carries no token, is ignored in silence: an unknown URL is not an error the athlete caused.
    */
+  /*
+   * ⛔ A LINK THAT OPENED THE APP ARRIVES BEFORE THE APP KNOWS WHO SHE IS (founder 2026-09-16).
+   *
+   * *"זה גם לא עובד"* — and on a cold start it could not have. `getInitialURL` answers within a
+   * frame of mount, while the profile is still being read off the disk, so `enrolledRef` was false
+   * and the invite that launched the app was dropped on the floor: the partner tapped the WhatsApp
+   * link, the app opened on Today, and no room. Only a WARM tap (the app already running) ever
+   * worked. The link now waits here until boot has answered, and is spent exactly once.
+   */
+  const pendingLinkRef = useRef<string | null>(null);
+  const openLinkRef = useRef<(url: string | null) => void>(() => {});
   useEffect(() => {
     const open = (url: string | null) => {
       if (!url) return;
+      if (!bootedRef.current) {
+        pendingLinkRef.current = url;
+        return;
+      }
       /*
        * §11.2 — A PAIR ARRIVES AS A LINK TOO. `hush://pair?c=<code>`.
        *
@@ -422,10 +439,28 @@ export function Root() {
       if (!enrolledRef.current) return; // nothing to adopt a plan INTO yet
       navigateMain('PlanReceived', { token: decodeURIComponent(token) });
     };
+    openLinkRef.current = open;
     void Linking.getInitialURL().then(open).catch(() => {});
     const sub = Linking.addEventListener('url', (e) => open(e.url));
     return () => sub.remove();
   }, []);
+  useEffect(() => {
+    if (!app.booted) return;
+    const waiting = pendingLinkRef.current;
+    pendingLinkRef.current = null;
+    if (!waiting) return;
+    /* Boot answering is not the navigator mounting — the container draws on the next commits, and
+       `navigateMain` is a silent no-op until it has. A shared PLAN needs the navigator; give it a
+       few frames rather than spend the link on nothing. (The pair joins either way.) */
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const drain = () => {
+      if (navigationRef.isReady() || tries++ > 30) openLinkRef.current(waiting);
+      else timer = setTimeout(drain, 100);
+    };
+    drain();
+    return () => clearTimeout(timer);
+  }, [app.booted]);
 
   // Warm taps: app already running. Route every notification response (or stash a
   // boot-time one until the container mounts).

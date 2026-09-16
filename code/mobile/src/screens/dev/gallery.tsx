@@ -182,6 +182,7 @@ const pairFixture = (over: Partial<PairView> = {}): PairView => ({
   ready: true,
   signedIn: true,
   canHandOverLead: false,
+  inviteWhatsApp: async () => {},
   joinedByLink: false,
   stage: 'live',
   link: 'open',
@@ -3245,6 +3246,9 @@ export const GALLERY: GalleryEntry[] = [
   ) },
   { id: '11.2j', label: 'Train together · no account yet', of: '11.2', status: 'live', note: 'a room needs an identity — so the answer is the front door, never an error line', render: () => (
     <InApp><TrainTogetherSheet onClose={noop} pair={pairFixture({ stage: 'idle', signedIn: false, standing: null, partnerName: null, partnerHere: false })} /></InApp>
+  ) },
+  { id: '11.2k', label: 'Train together · the invite', of: '11.2', status: 'live', note: 'one press opens the room and lands in WhatsApp — the code is only the fallback', render: () => (
+    <InApp><TrainTogetherSheet onClose={noop} pair={pairFixture({ stage: 'idle', signedIn: true, standing: null, partnerName: null, partnerHere: false })} /></InApp>
   ) },
   { id: '11.2h', label: 'Train together · the guest adopts', of: '11.2', status: 'live', note: 'same lifts, same order, his own weights', render: () => (
     <InApp><TrainTogetherSheet onClose={noop} pair={pairFixture({ stage: 'planReady', role: 'guest', standing: null })} /></InApp>

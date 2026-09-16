@@ -105,6 +105,7 @@
         ]
       },
       "associatedDomains": [
+        "applinks:getferrox.com",
         "applinks:hush-identity.hush-app.workers.dev"
       ]
     },
