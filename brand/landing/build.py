@@ -31,4 +31,27 @@ for k, v in blocks.items():
     src = src.replace(k, v)
 out = re.sub(r'\{\{img:([a-z]+)\}\}', inline, src)
 (HERE / 'ferrox-landing.html').write_text(out, encoding='utf-8')
+
+# The deployable site: a real document around the same page, with the mark as favicon.
+FAVICON = ("data:image/svg+xml," + "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23131210'/>"
+           "<g transform='translate(50 52) scale(.8) translate(-50 -45)'><path fill='%23F1EEE5' d='" + C.MARK_PATH + "'/><circle cx='50' cy='64' r='10' fill='%23A9C49F'/></g></svg>")
+dist = HERE / 'dist'
+dist.mkdir(exist_ok=True)
+doc = [
+    '<!doctype html>',
+    '<html lang="he" dir="rtl">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
+    '<meta name="theme-color" content="#0b0a08">',
+    '<meta property="og:title" content="FERROX">',
+    '<meta property="og:description" content="אל תחשוב. תתאמן. מאמן כוח שכותב לך את השבוע ועומד לידך בכל סט.">',
+    f'<link rel="icon" href="{FAVICON}">',
+    '</head>',
+    '<body style="margin:0">',
+    out,
+    '</body>',
+    '</html>',
+]
+(dist / 'index.html').write_text('\n'.join(doc), encoding='utf-8')
 print(f'{len(out) // 1024} KB')
