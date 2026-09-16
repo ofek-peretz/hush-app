@@ -72,3 +72,22 @@ jobs:
           node-version: "24"
       - name: Worker tests (node:test, native TS)
         run: node --test server/tests/identity.test.ts server/tests/coach.test.ts
+
+  swift:
+    # ════ THE NATIVE TARGETS, TYPE-CHECKED ON A MAC (2026-09-16, before build 74) ════
+    # The watch app, the Live Activity / Today widget and the watch complication are SwiftUI that
+    # nothing compiled until an EAS build — a Windows tree cannot. Each target is self-contained
+    # (targets/<name>/*.swift), so `swiftc -typecheck` against the real SDKs proves they compile
+    # without building, signing or uploading anything.
+    name: swift typecheck (watch, widget, complication)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: xcodebuild -version && xcrun --sdk watchos --show-sdk-version && xcrun --sdk iphoneos --show-sdk-version
+      - name: Watch app (watchOS 10)
+        run: xcrun --sdk watchos swiftc -typecheck -parse-as-library -target arm64_32-apple-watchos10.0 code/mobile/targets/watch/*.swift
+      - name: Widget + Live Activity (iOS 17)
+        run: xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios17.0 code/mobile/targets/widget/*.swift
+      - name: Watch complication (watchOS 10)
+        run: xcrun --sdk watchos swiftc -typecheck -parse-as-library -target arm64_32-apple-watchos10.0 code/mobile/targets/watch-widget/*.swift
