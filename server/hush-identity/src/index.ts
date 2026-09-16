@@ -44,6 +44,16 @@ export interface Env {
   /** One Durable Object per live pair — see `HushPairRoom`. */
   PAIR_ROOM: DurableObjectNamespace;
   /**
+   * ⛔ THE OAUTH CLIENTS A GOOGLE TOKEN MAY BE MINTED FOR — comma-separated, and NOT a secret: an
+   * OAuth client id ships inside every binary that uses it. It lives in `wrangler.toml` as a plain
+   * var so the deployment states out loud whose tokens it accepts.
+   *
+   * Empty (or absent) means `/auth/google` refuses everything — see `verifyGoogleToken`. That is the
+   * correct behaviour for a deployment that has not been told who its users are, and it is what this
+   * Worker does today, because the clients do not exist yet (founder ops: Google Cloud console).
+   */
+  GOOGLE_CLIENT_IDS?: string;
+  /**
    * THE RESEARCH SINK'S FORWARD ADDRESS (2026-09-01) — where `/events` batches go, e.g. PostHog's
    * `/batch` endpoint. Both optional at DEPLOY time — but an unarmed sink answers 503 and the
    * app keeps its outbox (reversed 2026-09-01: the old 204 made clients DELETE every event while
@@ -75,6 +85,20 @@ const APP_STORE_URL = 'https://apps.apple.com/app/id6780763348';
 
 const APPLE_ISS = 'https://appleid.apple.com';
 const APPLE_JWKS = 'https://appleid.apple.com/auth/keys';
+
+/*
+ * ════ GOOGLE, THE SECOND ISSUER (2026-09-16) — and Android is the reason ════
+ *
+ * There is no Sign in with Apple on Android, so until this existed an Android athlete's "account"
+ * was a local flag: no verified identity, nothing to restore a second phone from, and no circle.
+ *
+ * ⚠️ TWO SPELLINGS OF ONE ISSUER, and both are Google's. Google's ID tokens carry `iss` as either
+ * `accounts.google.com` or `https://accounts.google.com`, and which one you get is not a thing a
+ * client controls — every verification library on earth accepts the pair, and a verifier that
+ * accepted only one would reject perfectly good tokens on somebody's Tuesday.
+ */
+const GOOGLE_ISS = ['accounts.google.com', 'https://accounts.google.com'];
+const GOOGLE_JWKS = 'https://www.googleapis.com/oauth2/v3/certs';
 /** The ONE app this worker answers — the token's `aud` must be this bundle id. */
 const BUNDLE_ID = 'com.hushfitness.app';
 const SESSION_TTL_S = 90 * 24 * 60 * 60; // sessions renew on use; a quiet quarter signs out
@@ -186,6 +210,68 @@ async function verifyAppleToken(idToken: string): Promise<string | null> {
   if (!payload.sub) return null;
 
   const keys = await appleKeys();
+  const jwk = keys.find((k) => (k as { kid?: string }).kid === header.kid);
+  if (!jwk) return null;
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5',
+    key,
+    b64urlToBytes(parts[2]),
+    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+  );
+  return ok ? payload.sub : null;
+}
+
+// ───────────────────────────── Google token verification ─────────────────────────────
+
+/** Google's signing keys, cached per isolate. They rotate every few days; an hour is well inside. */
+let googleJwksCache: { keys: JsonWebKey[]; at: number } | null = null;
+
+async function googleKeys(): Promise<JsonWebKey[]> {
+  if (googleJwksCache && Date.now() - googleJwksCache.at < 60 * 60 * 1000) return googleJwksCache.keys;
+  const res = await fetch(GOOGLE_JWKS);
+  if (!res.ok) throw new Error('jwks_unreachable');
+  const body = (await res.json()) as { keys: (JsonWebKey & { kid?: string })[] };
+  googleJwksCache = { keys: body.keys, at: Date.now() };
+  return body.keys;
+}
+
+/**
+ * Verify a Google ID token: signature against Google's JWKS, issuer, AUDIENCE, expiry.
+ *
+ * ⛔ THE AUDIENCE IS THE WHOLE POINT, AND IT IS WHY THIS TAKES A LIST. A Google ID token is signed
+ * for one OAuth client, and anybody's app can obtain a validly-signed Google token — the signature
+ * alone says only "a Google user", never "a user of OURS". `aud` is the field that says which app
+ * the token was minted for, so a verifier that skips it accepts tokens minted for any app in the
+ * world. The list is this deployment's own clients (`GOOGLE_CLIENT_IDS`): the iOS client, the
+ * Android client and the Web client, because which one signs the token depends on which phone she
+ * is holding.
+ *
+ * ⚠️ AND UNCONFIGURED MEANS REFUSE, never "accept anything". An empty list is a deployment that has
+ * not been given its clients yet, and the only safe reading of "I do not know who my users are" is
+ * no.
+ *
+ * Returns the stable `sub` — or null, never a reason (the caller answers 401 either way).
+ */
+async function verifyGoogleToken(idToken: string, audiences: string[]): Promise<string | null> {
+  if (audiences.length === 0) return null;
+  const parts = idToken.split('.');
+  if (parts.length !== 3) return null;
+  let header: { kid?: string; alg?: string };
+  let payload: { iss?: string; aud?: string; exp?: number; sub?: string };
+  try {
+    header = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[0])));
+    payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1])));
+  } catch {
+    return null;
+  }
+  if (header.alg !== 'RS256') return null;
+  if (!payload.iss || !GOOGLE_ISS.includes(payload.iss)) return null;
+  if (!payload.aud || !audiences.includes(payload.aud)) return null;
+  if (typeof payload.exp !== 'number' || payload.exp * 1000 < Date.now()) return null;
+  if (!payload.sub) return null;
+
+  const keys = await googleKeys();
   const jwk = keys.find((k) => (k as { kid?: string }).kid === header.kid);
   if (!jwk) return null;
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
@@ -597,6 +683,46 @@ ${sections.map(([h, b]) => `<h2>${h}</h2><p>${b}</p>`).join('\n')}
       await env.HUSH_KV.put(`session:${token}`, sub, { expirationTtl: SESSION_TTL_S });
       const user = await userOf(env, sub);
       await env.HUSH_KV.put(`user:${sub}`, JSON.stringify(user));
+      return json(200, { token });
+    }
+
+    /*
+     * ⛔ THE SECOND PROVIDER'S DOOR (2026-09-16) — one route per issuer, not one route that guesses.
+     *
+     * The verification differs in every part that matters: a different JWKS, a different issuer
+     * string (two of them), and an audience that is a LIST of this deployment's OAuth clients rather
+     * than the bundle id. Routing by path keeps each verifier reading one kind of token, which is
+     * the only way a mistake here stays small.
+     *
+     * ⚠️ THE `sub` IS NAMESPACED, and Apple's is not. Two providers mint ids in two different spaces
+     * and nothing says they cannot collide; prefixing Google's keeps them apart for ever. Apple's
+     * stays bare because thousands of sessions and circle memberships are already keyed on it, and
+     * renaming those would log every existing athlete out to fix a collision that has not happened.
+     */
+    if (req.method === 'POST' && path === '/auth/google') {
+      let body: { identityToken?: string };
+      try {
+        body = (await req.json()) as { identityToken?: string };
+      } catch {
+        return json(400, { error: 'bad_request' });
+      }
+      if (!body.identityToken) return json(400, { error: 'bad_request' });
+      const audiences = (env.GOOGLE_CLIENT_IDS ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0);
+      let sub: string | null = null;
+      try {
+        sub = await verifyGoogleToken(body.identityToken, audiences);
+      } catch {
+        return json(503, { error: 'unavailable' });
+      }
+      if (!sub) return json(401, { error: 'unauthorized' });
+      const id = `google:${sub}`;
+      const token = randomToken();
+      await env.HUSH_KV.put(`session:${token}`, id, { expirationTtl: SESSION_TTL_S });
+      const user = await userOf(env, id);
+      await env.HUSH_KV.put(`user:${id}`, JSON.stringify(user));
       return json(200, { token });
     }
 

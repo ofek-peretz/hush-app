@@ -117,6 +117,6 @@ describe('4 · the front door is real where the binary allows', () => {
     expect(app.expo.plugins).toContain('expo-apple-authentication');
   });
   it('sign-in trades the fresh token for the circle session, fire-and-forget', () => {
-    expect(read('src/state/stores/appStore.tsx')).toContain('void circleExchange(result.identityToken)');
+    expect(read('src/state/stores/appStore.tsx')).toContain('void circleExchange(result.identityToken, result.provider)');
   });
 });

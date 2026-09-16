@@ -98,12 +98,19 @@ async function call<T>(path: string, init: { method: 'GET' | 'POST'; body?: unkn
   }
 }
 
-/** Trade a fresh Apple identity token for the worker's session. Fire-and-forget at sign-in —
- *  the front door never waits on a network. */
-export async function circleExchange(identityToken: string | null): Promise<boolean> {
+/**
+ * Trade a fresh identity token for the worker's session. Fire-and-forget at sign-in — the front door
+ * never waits on a network.
+ *
+ * ⛔ THE PROVIDER IS PART OF THE ADDRESS (2026-09-16). This posted to `/auth/apple` unconditionally,
+ * which was honest while Apple was the only wired provider and becomes a silent 401 the moment a
+ * Google token is handed to Apple's verifier. One door per issuer, because each one is verified
+ * against a different JWKS with a different audience — see `server/hush-identity`.
+ */
+export async function circleExchange(identityToken: string | null, provider: 'apple' | 'google' = 'apple'): Promise<boolean> {
   if (!circleAvailable() || !identityToken) return false;
   try {
-    const res = await fetch(`${CIRCLE_URL}/auth/apple`, {
+    const res = await fetch(`${CIRCLE_URL}/auth/${provider === 'google' ? 'google' : 'apple'}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ identityToken }),

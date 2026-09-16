@@ -759,7 +759,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // EXPO_PUBLIC_CIRCLE_URL makes this a no-op by construction (platform/circleClient).
         // (The v4 path ALSO vaulted the Apple token here for a backend that no longer exists —
         // the circle exchange is the only consumer the token ever really had.)
-        void circleExchange(result.identityToken);
+        void circleExchange(result.identityToken, result.provider);
         void track('signed_in', { provider });
         // No profile yet → Root keeps the onboarding stack (Name → … → Program Created).
       },

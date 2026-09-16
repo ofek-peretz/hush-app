@@ -148,6 +148,12 @@
       "expo-video",
       "@sentry/react-native/expo",
       "expo-apple-authentication",
+    [
+      "@react-native-google-signin/google-signin",
+      {
+        "iosUrlScheme": "com.googleusercontent.apps.515963027403-41cctg308okfcd66hao596alfnci630g"
+      }
+    ],
       [
         "expo-speech-recognition",
         {

@@ -5,6 +5,44 @@ These iOS-native surfaces are **wired in JS and configured**, but require a
 or on Windows. Each has a clean swap point in the app; dropping in the native
 module is the only remaining step.
 
+## ⏳ GOOGLE SIGN-IN — code shipped 2026-09-16, waiting on three OAuth clients
+
+**Why it exists:** there is no Sign in with Apple on Android, and until this was wired
+`signInWith('google')` returned a local stub — a session no server could verify. The code is in
+(`src/platform/auth.ts`, `/auth/google` in `server/hush-identity`, laws in
+`__tests__/laws/theSecondProviderIsReal.test.ts` + `server/tests/identityGoogle.test.ts`), and it is
+INERT until the ids below exist: an unconfigured build keeps the stub, and an unconfigured worker
+refuses every Google token. Both are deliberate — see the docblocks.
+
+**Founder steps (Google Cloud console → APIs & Services → Credentials), ~20 minutes:**
+
+1. **Create three OAuth 2.0 client ids** under one project, with the consent screen set to External
+   and the app name/logo/support email filled in:
+   - **Web** — this is the one whose id both the phone and the worker treat as the AUDIENCE.
+   - **iOS** — bundle id `com.hushfitness.app`.
+   - **Android** — package `com.hushfitness.app`, plus the SHA-1 of the signing certificate.
+     Get it from EAS: `npx eas credentials` → Android → production → *Keystore*. A build signed with
+     a key whose SHA-1 is not registered gets `DEVELOPER_ERROR` at the sheet and nothing else.
+2. **Put them in the build's environment** (EAS → project → Environment variables, all three
+   environments; they are PUBLIC by nature — an OAuth client id ships inside every binary):
+   - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+   - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`
+3. **Add the config plugin to `app.json`**, with the iOS client's REVERSED id as the URL scheme
+   (Google prints it on the client's page as *iOS URL scheme*):
+   ```json
+   ["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.XXXX-YYYY" }]
+   ```
+   It cannot be added before the client exists: the scheme is the client's own id, and a placeholder
+   would ship a URL scheme that opens nothing.
+4. **Tell the worker whose tokens to accept** — `GOOGLE_CLIENT_IDS` in
+   `server/hush-identity/wrangler.toml`, comma-separated (iOS + Android + Web), then deploy that
+   worker and smoke-call `/auth/google` with a junk token: it must answer 401, never 200.
+
+**Until then:** iOS is unaffected (Apple is wired), and the Google button behaves exactly as it has
+all along — a local session, no verified identity. Android cannot ship before step 4.
+
+---
+
 ## ✅ SHIPPED AND RUNNING (updated 2026-08-25)
 
 **Nothing here is pending.** All four surfaces compiled and went to TestFlight in builds 58/59 with

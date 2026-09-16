@@ -84,6 +84,16 @@ describe('a build has to be given what the app reads', () => {
       // Remote config (platform/remoteConfig, 2026-09-01, audit 03). Same shape: explicit override,
       // else derived `<circle>/config`, else inert — every compiled default stands.
       'EXPO_PUBLIC_CONFIG_URL',
+      /*
+       * ⛔ THE GOOGLE CLIENTS (platform/auth, 2026-09-16) — and "absent" here is a real state rather
+       * than a gap: with no web client id `googleIsConfigured()` is false, the native sheet is never
+       * probed, and the button keeps the local stub it has had since the door was built. That is the
+       * pre-Google app exactly. They are PUBLIC — an OAuth client id ships inside every binary that
+       * uses it — and they become required the day Android ships, which is the day the worker gets
+       * `GOOGLE_CLIENT_IDS` (`NATIVE_SURFACES.md`). Until then a build without them is honest.
+       */
+      'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID',
+      'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID',
     ];
     const unaccounted = [...used].filter((v) => !REQUIRED_AT_BUILD.includes(v) && !mayBeAbsent.includes(v));
     expect(unaccounted).toEqual([]);
