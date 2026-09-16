@@ -45,7 +45,7 @@ doc = [
     '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
     '<meta name="theme-color" content="#0b0a08">',
     '<meta property="og:title" content="FERROX">',
-    '<meta property="og:description" content="אל תחשוב. תתאמן. מאמן כוח שכותב לך את השבוע ועומד לידך בכל סט.">',
+    '<meta property="og:description" content="אל תחשוב. תתאמן. מאמן אישי לחדר הכושר, שכותב לך את השבוע ועומד לידך בכל סט.">',
     f'<link rel="icon" href="{FAVICON}">',
     '</head>',
     '<body style="margin:0">',
@@ -146,7 +146,7 @@ press_html = '\n'.join([
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600&family=Frank+Ruhl+Libre:wght@400&family=IBM+Plex+Mono:wght@500&display=swap">',
     f'<style>{PRESS_CSS}</style>', '</head>', '<body>', '<div class="page"><div class="wrap">',
     f'<header><a href="/" aria-label="FERROX">{C.mark_svg("30px")}{WORDMARK}</a><nav><a href="/press" aria-current="page">עיתונות</a><a href="/privacy">פרטיות</a><a href="/terms">תנאי שימוש</a></nav></header>',
-    '<section lang="he" dir="rtl"><h1>ערכת עיתונות</h1><p class="stamp">FERROX · מאמן כוח ל-iPhone ול-Apple Watch</p>',
+    '<section lang="he" dir="rtl"><h1>ערכת עיתונות</h1><p class="stamp">FERROX · מאמן אישי לחדר הכושר, ל-iPhone ול-Apple Watch</p>',
     '<p>FERROX כותב לכל מתאמן שבוע אימונים שלם לפי הימים, הציוד והמטרה שלו, מראה כל תרגיל על דמות תלת-ממדית שזזה בקצב ובטווח הנכונים, ומנהל את האימון מהאוזניות, מהשעון וממסך הנעילה, כך שהטלפון נשאר בכיס. עברית ואנגלית. נבנה בישראל על ידי מייסד אחד.</p>',
     '<div class="facts"><div><b>זמינות</b>App Store, iPhone ו-Apple Watch</div><div><b>מחיר</b>14 אימונים ראשונים (בתוך 30 יום) חינם, ואז מנוי FERROX Pro</div>'
     '<div><b>מייסד</b>עופק פרץ</div><div><b>יצירת קשר</b><a href="mailto:ofek34458@gmail.com">ofek34458@gmail.com</a></div></div>',

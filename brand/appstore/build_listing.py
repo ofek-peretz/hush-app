@@ -92,7 +92,7 @@ figcaption{{color:var(--muted);font-size:13px}}
 <header>{MARK}<div><h1>FERROX ב-App Store</h1><p class="sub">מה כבר מוזן ב-App Store Connect, ומה נשאר.</p></div></header>
 
 <section><h2>מצב ב-App Store Connect</h2><div class="status">
-<div class="ok"><b>שם וכותרת משנה</b><span>FERROX: Strength Coach · FERROX: מאמן כוח אישי</span></div>
+<div class="ok"><b>שם וכותרת משנה</b><span>FERROX: Gym Workout Planner · FERROX: מאמן אישי לחדר כושר</span></div>
 <div class="ok"><b>תיאור, קידום, מילות מפתח</b><span>אנגלית ועברית, כולל "14 אימונים בתוך 30 יום"</span></div>
 <div class="ok"><b>צילומי מסך</b><span>7 לאייפון ו-3 לשעון בכל שפה, בסדר הנכון</span></div>
 <div class="ok"><b>קישורים</b><span>getferrox.com, תנאים ופרטיות בדומיין, בשתי השפות</span></div>
