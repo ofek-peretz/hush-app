@@ -8,13 +8,13 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import i18next from 'i18next';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
-import { audioSession } from '@/platform/voice/audioSession';
+import { audioSession, type EarSource } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
-import { voiceCapture } from '@/platform/voice/voiceCapture';
+import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
 import { VoiceConductor } from '@/platform/voice/voiceConductor';
 import { useApp } from '@/state/stores/appStore';
 import type { SessionView } from '@/state/stores/sessionStore';
@@ -27,6 +27,13 @@ import type { SessionView } from '@/state/stores/sessionStore';
  * a closed gate looked exactly like a broken coach).
  */
 export type VoiceSilence = 'off' | 'no_engine' | 'no_headset' | 'permission' | null;
+
+/** How long a "no earbuds" read must stand before the gate believes it. */
+const CONFIRM_MS = 1500;
+/** While the gate is shut, how often the route is asked again. */
+const POLL_MS = 3000;
+/** How long the voice waits for the pocket ear before it speaks without it (a first model download is longer). */
+const EAR_OPEN_WAIT_MS = 3000;
 
 export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilence } {
   const app = useApp();
@@ -47,6 +54,34 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
   // `voiceSpec`, not the dead phase-B `voiceCoach` — see `Profile.voiceSpec` (2026-09-09).
   const switchOn = app.profile?.voiceSpec !== false;
   const units = app.profile?.units ?? 'kg';
+  const mic: EarSource = app.profile?.voiceMic ?? 'headset';
+  const micRef = useRef(mic);
+  micRef.current = mic;
+
+  /*
+   * ════ THE POCKET EAR IS OPENED ON GLASS (2026-09-15) ════
+   *   > founder: *"אם המסך דלוק זה אומר … שהמתאמן יצטרך ללחוץ על המסך … מה שהורס את כל החוויה"*
+   * iOS will not start a microphone from a locked phone, and Apple's old recognizer does not run
+   * there at all. So the microphone is opened here — the gate opens on the stage, which she is
+   * looking at — and kept for the workout; `voiceCapture` hands its windows to it. Without iOS 26,
+   * the Hebrew model, or on refusal, nothing changes: the screen-on ear is what listens.
+   *
+   * ⛔ ONLY ON THE PHONE'S OWN MICROPHONE (founder, 2026-09-15: *"אי אפשר שהשמע של המוזיקה
+   * תיפגע"*). A Bluetooth microphone held open for the workout keeps her earbuds on their call
+   * profile — her music at phone-call quality from the first set to the last. The earbuds'
+   * microphone is therefore only ever opened in the conductor's short windows (the founder's own
+   * design: the app asks, she answers, the microphone closes). The continuous ear is the phone's
+   * microphone, which leaves the earbuds on A2DP and her music untouched.
+   */
+  const openPocketEar = async (): Promise<void> => {
+    if (Platform.OS !== 'ios' || audioSession.earRunning() || micRef.current !== 'phone') return;
+    const lang = recognizerLang(i18next.language ?? 'en');
+    if (!(await audioSession.earAvailable(lang))) return void track('voice_ear', { state: 'unsupported', lang });
+    if (!(await audioSession.earPrepare(lang))) return void track('voice_ear', { state: 'no_model', lang });
+    if (AppState.currentState !== 'active') return void track('voice_ear', { state: 'not_on_glass' });
+    const error = await audioSession.earOpen(micRef.current);
+    void track('voice_ear', { state: error ? 'failed' : 'open', error, source: micRef.current });
+  };
 
   // The conductor, once per stage — built over the real mouth, ear and session.
   if (!conductorRef.current) {
@@ -89,40 +124,111 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
      * when the voice does not speak, this row is the only way to know WHICH gate was shut. The
      * profile's voice row reads the same gates live (`VoiceGateLine`).
      */
-    void track('voice_gate', { switchOn, mouth, ear, audio, headset: audioSession.headsetConnected() });
+    void track('voice_gate', {
+      switchOn,
+      mouth,
+      ear,
+      audio,
+      headset: audioSession.headsetConnected(),
+      outputs: audioSession.routeInfo()?.outputs.map((o) => o.type).join(',') ?? null,
+    });
     if (!switchOn || !capable) {
       c.disable();
       setSilentBecause(!switchOn ? 'off' : 'no_engine');
       applyRef.current = () => {};
       return;
     }
-    const apply = (connected: boolean) => {
-      if (connected && !c.isOn()) {
-        if (deniedRef.current) return;
-        void Promise.all([voiceCapture.ensurePermission(), historyReadRef.current]).then(([ok]) => {
-          if (ok) {
-            c.enable();
-            setSilentBecause(null);
-          } else {
-            deniedRef.current = true;
-            setSilentBecause('permission');
-            void track('voice_permission_denied');
-          }
+    /*
+     * ⛔ "NO EARBUDS" IS BELIEVED ONLY TWICE (founder, 2026-09-15: *"זה כותב לי המאמן בקול מדבר דרך
+     * האוזניות. חבר אותן והוא מתחיל. אבל בפועל אין קול"* — with earbuds in). One read of the route
+     * that said "speaker" was enough to shut the gate, flash the notice, or disable a coach that had
+     * just started, and the app's own audio switches produce exactly such reads. So a "not connected"
+     * is read again after CONFIRM_MS before anything acts on it, a "connected" is re-checked after
+     * the permission wait, and while the gate is shut the route is asked every POLL_MS — a gate that
+     * missed its moment opens within seconds, not at the next logged set.
+     */
+    let disposed = false;
+    let confirm: ReturnType<typeof setTimeout> | null = null;
+    let opening = false;
+    const open = () => {
+      if (c.isOn() || deniedRef.current || opening) return;
+      opening = true;
+      void Promise.all([voiceCapture.ensurePermission(), historyReadRef.current]).then(([ok]) => {
+        opening = false;
+        if (disposed || c.isOn()) return;
+        if (!ok) {
+          deniedRef.current = true;
+          setSilentBecause('permission');
+          void track('voice_permission_denied');
+          return;
+        }
+        if (!audioSession.headsetConnected()) return apply(false);
+        // The pocket ear first (bounded), so the first question can already be answered from a
+        // locked phone and the earbuds' switch to their microphone lands before the first line.
+        void Promise.race([openPocketEar(), new Promise((r) => setTimeout(r, EAR_OPEN_WAIT_MS))]).then(() => {
+          if (disposed || c.isOn() || !audioSession.headsetConnected()) return;
+          c.enable();
+          setSilentBecause(null);
         });
-      } else if (!connected) {
-        if (c.isOn()) c.disable();
-        setSilentBecause('no_headset');
+      });
+    };
+    const close = () => {
+      if (c.isOn()) c.disable();
+      void audioSession.earClose();
+    };
+    const apply = (connected: boolean) => {
+      if (disposed) return;
+      if (connected) {
+        if (confirm) clearTimeout(confirm);
+        confirm = null;
+        open();
+      } else if (!confirm) {
+        confirm = setTimeout(() => {
+          confirm = null;
+          if (disposed) return;
+          if (audioSession.headsetConnected()) return open();
+          close();
+          setSilentBecause('no_headset');
+          void track('voice_gate_closed', { reason: 'no_headset' });
+        }, CONFIRM_MS);
       }
     };
     applyRef.current = apply;
     apply(audioSession.headsetConnected());
-    const off = audioSession.onRouteChange(apply);
+    // The event is a knock, not an answer: the route is read again, on a session that is ours.
+    const off = audioSession.onRouteChange(() => apply(audioSession.headsetConnected()));
+    const poll = setInterval(() => {
+      if (!c.isOn() && !deniedRef.current && audioSession.headsetConnected()) apply(true);
+    }, POLL_MS);
+    // Back on glass with the voice on and no pocket ear (it could not open, or a call stopped it in
+    // the pocket): this is the one moment iOS lets the microphone start again.
+    const appState = AppState.addEventListener('change', (s) => {
+      if (s === 'active' && c.isOn() && !audioSession.earRunning()) void openPocketEar();
+    });
+    const earState = audioSession.onEarState((running, error) => {
+      if (!running) void track('voice_ear', { state: 'stopped', error });
+    });
     return () => {
+      disposed = true;
       off();
+      clearInterval(poll);
+      appState.remove();
+      earState();
+      if (confirm) clearTimeout(confirm);
       applyRef.current = () => {};
-      c.disable();
+      close();
     };
   }, [switchOn]);
+
+  // Her microphone choice changed with the ear open (the profile, on glass): reopen on the new one.
+  const lastMicRef = useRef(mic);
+  useEffect(() => {
+    if (lastMicRef.current === mic) return;
+    lastMicRef.current = mic;
+    // To the earbuds: the continuous ear closes (windows only). To the phone: it opens, if the voice is on.
+    if (mic !== 'phone') void audioSession.earClose();
+    else if (conductorRef.current?.isOn()) void openPocketEar();
+  }, [mic]);
 
   // Every change of the view lands on the conductor; "+15" moves the ten-seconds line.
   const lastExtraRef = useRef(session.restExtraSeconds);

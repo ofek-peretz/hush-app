@@ -18,6 +18,7 @@
 
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import { audioSession } from '@/platform/voice/audioSession';
 
 /** The slice of `ExpoSpeechRecognitionModule` this seam uses — typed here so the package's JS is never imported. */
 interface SpeechModule {
@@ -45,6 +46,7 @@ export function recognizerLang(locale: string): string {
 /**
  * The audio session while a window is open: record AND play, the earbuds' microphone over
  * Bluetooth, her music ducked. Restored to playback-only by the audio module when the window closes.
+ * ⛔ Identical to `prepareListening` in `modules/hush-voice-audio` — a difference is a route change.
  */
 const LISTENING_SESSION = {
   category: 'playAndRecord',
@@ -54,6 +56,8 @@ const LISTENING_SESSION = {
 
 /** Apple's recognizer ends a request itself around the minute; restart under it at 55 s (spec §3.2). */
 const RESTART_AFTER_MS = 55_000;
+/** How long the earbuds take to move to their call profile before the recognizer starts. */
+const ROUTE_SETTLE_MS = 400;
 
 export interface WindowOptions {
   locale: string;
@@ -71,6 +75,41 @@ export interface WindowOptions {
 
 export interface OpenWindow {
   close(): void;
+}
+
+let windowToken = 0;
+
+/**
+ * ⛔ A WINDOW ON THE POCKET EAR (2026-09-15). The microphone already runs (opened on glass, see
+ * `HushEar.swift`); the window only decides when its audio is transcribed. Same contract as the
+ * screen-on window: every final sentence goes to `onSentence`, and exactly one `onEnd`. At the
+ * deadline the recognizer is FLUSHED first — the number she was half-way through saying as the
+ * window ran out is still her answer — and only then does the window end as `timeout`.
+ */
+function openPocketWindow(opts: WindowOptions): OpenWindow {
+  const token = ++windowToken;
+  let ended = false;
+  const off = audioSession.onEarResult((text, from) => {
+    if (ended || from !== token) return; // a late sentence of an earlier window is not this answer
+    const t = text.trim();
+    if (!t) return;
+    if (!opts.onSentence(t, null)) finish('heard');
+  });
+  const finish = (why: WindowEnd) => {
+    if (ended) return;
+    ended = true;
+    clearTimeout(deadline);
+    off();
+    void audioSession.earStopListening();
+    opts.onEnd(why);
+  };
+  const deadline = setTimeout(() => {
+    void audioSession.earStopListening().then(() => finish('timeout'));
+  }, Math.max(500, opts.ms));
+  void audioSession.earListen(recognizerLang(opts.locale), token).then((error) => {
+    if (error) finish('error');
+  });
+  return { close: () => finish('closed') };
 }
 
 export const voiceCapture = {
@@ -97,6 +136,8 @@ export const voiceCapture = {
    * elapsed, or on `close()`. Never throws; every road out ends in exactly one `onEnd`.
    */
   open(opts: WindowOptions): OpenWindow {
+    // The pocket ear, when the workout opened one: it answers from a locked phone.
+    if (audioSession.earRunning()) return openPocketWindow(opts);
     const m = nativeModule;
     let ended = false;
     let subs: { remove(): void }[] = [];
@@ -197,7 +238,19 @@ export const voiceCapture = {
       }, RESTART_AFTER_MS);
     };
     deadline = setTimeout(() => end('timeout'), Math.max(500, opts.ms));
-    startRequest();
+    /*
+     * ⛔ THE ROUTE MOVES FIRST, THEN THE RECOGNIZER STARTS (2026-09-15 audit). Started cold, the
+     * recognizer's own switch to record-and-play moves Bluetooth earbuds to their call profile — a
+     * route change it hears itself, and from a locked phone it ends the recognition on any route
+     * change. So the audio module takes the same listening session first, and the recognizer starts
+     * once the route has settled, onto a session its own `setCategory` no longer changes.
+     */
+    void audioSession.prepareListening().then(() => {
+      if (!ended) restart = setTimeout(() => {
+        restart = null;
+        startRequest();
+      }, ROUTE_SETTLE_MS);
+    });
     return { close: () => end('closed') };
   },
 };

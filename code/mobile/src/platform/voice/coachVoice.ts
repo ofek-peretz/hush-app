@@ -19,6 +19,7 @@ type SpeechApi = {
     voice?: string;
     rate?: number;
     pitch?: number;
+    onStart?: () => void;
     onDone?: () => void;
     onStopped?: () => void;
     onError?: () => void;
@@ -41,6 +42,9 @@ function api(): SpeechApi | null {
 const RATE = 0.92;
 /** The breath between two queued sentences, in milliseconds (spec §4: 300). */
 const BREATH_MS = 300;
+/** A line's longest honest length: a floor, plus far more per character than any voice needs. */
+const WATCHDOG_BASE_MS = 4000;
+const WATCHDOG_PER_CHAR_MS = 150;
 
 interface Item {
   text: string;
@@ -50,6 +54,18 @@ interface Item {
 
 const queue: Item[] = [];
 let speaking = false;
+/** Bumped by `interrupt()`: a line from before it ends without starting the queue again. */
+let generation = 0;
+
+export type LineEnd = 'done' | 'stopped' | 'error' | 'watchdog';
+export interface LastLine {
+  how: LineEnd;
+  /** The synthesizer reported the line began — false means the phone never played a sound. */
+  started: boolean;
+  voice: string | null;
+  atMs: number;
+}
+let last: LastLine | null = null;
 let cachedVoice: { locale: string; id: string | null } | null = null;
 
 /** The best voice the device has for the locale — the enhanced one when it was downloaded. */
@@ -84,28 +100,52 @@ function next(): void {
     return;
   }
   speaking = true;
+  const gen = generation;
   let settled = false;
-  const done = () => {
+  let started = false;
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+  let usedVoice: string | undefined;
+  const done = (how: LineEnd) => {
     if (settled) return;
     settled = true;
+    if (watchdog) clearTimeout(watchdog);
+    last = { how, started, voice: usedVoice ?? null, atMs: Date.now() };
     item.resolve();
     setTimeout(() => {
+      // An `interrupt()` since this line began owns the queue now: this line's end starts nothing.
+      if (gen !== generation) return;
       speaking = false;
       next();
     }, BREATH_MS);
   };
+  /*
+   * ⛔ A LINE THAT NEVER ENDS MUST NOT END THE COACH (2026-09-15). `expo-speech`'s `speak` does not
+   * await its native call: a refused utterance (an unknown voice id throws there) rejects into the
+   * void and no onDone / onError ever arrives — and this queue, and every `await say` in the
+   * conductor behind it, waited for ever in silence. The watchdog ends the line at a generous
+   * length for its text, and a line that timed out on a chosen voice drops that voice for the next.
+   */
+  watchdog = setTimeout(() => {
+    if (settled) return;
+    if (usedVoice && cachedVoice?.id === usedVoice) cachedVoice = { locale: cachedVoice.locale, id: null };
+    done('watchdog');
+  }, WATCHDOG_BASE_MS + item.text.length * WATCHDOG_PER_CHAR_MS);
   void voiceFor(item.locale).then((voice) => {
+    usedVoice = voice;
     try {
       s.speak(item.text, {
         language: item.locale.startsWith('he') ? 'he-IL' : 'en-US',
         ...(voice ? { voice } : {}),
         rate: RATE,
-        onDone: done,
-        onStopped: done,
-        onError: done,
+        onStart: () => {
+          started = true;
+        },
+        onDone: () => done('done'),
+        onStopped: () => done('stopped'),
+        onError: () => done('error'),
       });
     } catch {
-      done();
+      done('error');
     }
   });
 }
@@ -127,11 +167,17 @@ export const coachVoice = {
 
   /** Drop what has not been said and stop what is being said — the moment has passed. */
   interrupt(): void {
+    generation += 1;
     const dropped = queue.splice(0, queue.length);
     for (const d of dropped) d.resolve();
     const s = api();
     if (s) void s.stop().catch(() => {});
     speaking = false;
+  },
+
+  /** How the last line ended — `done` with `started` is a line the phone actually played. */
+  lastLine(): LastLine | null {
+    return last;
   },
 
   /** For tests and the harness: what is waiting to be said. */

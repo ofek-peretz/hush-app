@@ -9,6 +9,13 @@
 import { Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
+/** The route in words: each output's port type and name, and the session's category and mode. */
+export interface RouteInfo {
+  outputs: { type: string; name: string }[];
+  category: string;
+  mode: string;
+}
+
 interface AudioModule {
   headsetConnected(): boolean;
   startKeepAlive(): Promise<void>;
@@ -16,13 +23,27 @@ interface AudioModule {
   duck(): Promise<void>;
   unduck(): Promise<void>;
   playChime(): Promise<void>;
+  prepareListening(): Promise<void>;
+  routeInfo(): RouteInfo;
+  earAvailable?(locale: string): Promise<boolean>;
+  earPrepare?(locale: string): Promise<boolean>;
+  earOpen?(source: EarSource): Promise<string | null>;
+  earClose?(): Promise<void>;
+  earRunning?(): boolean;
+  earListen?(locale: string, token: number): Promise<string | null>;
+  earStopListening?(): Promise<void>;
   addListener(event: 'onRouteChange', cb: (e: { connected: boolean }) => void): { remove(): void };
+  addListener(event: 'onEarResult', cb: (e: { text: string; token: number }) => void): { remove(): void };
+  addListener(event: 'onEarState', cb: (e: { running: boolean; error?: string; restarted?: boolean }) => void): { remove(): void };
 }
 
 const native: AudioModule | null =
   Platform.OS === 'ios' ? requireOptionalNativeModule<AudioModule>('HushVoiceAudio') : null;
 
-export type KeepAliveOwner = 'workout' | 'indoorRun';
+/** Which microphone the pocket ear records from — her choice (see `HushEar.swift`). */
+export type EarSource = 'headset' | 'phone';
+
+export type KeepAliveOwner = 'workout' | 'indoorRun' | 'voiceTest';
 const keepAliveOwners = new Set<KeepAliveOwner>();
 
 const quiet = async (f: () => Promise<void> | void) => {
@@ -75,4 +96,79 @@ export const audioSession = {
   /** After a line or a listening window: the music back, the session back to playback-mixed. */
   unduck: () => quiet(() => native?.unduck()),
   playChime: () => quiet(() => native?.playChime()),
+  /** Before the recognizer starts: the listening session taken ahead of it (see the Swift). */
+  prepareListening: () => quiet(() => native?.prepareListening()),
+  /*
+   * ════ THE POCKET EAR (2026-09-15) ════
+   * A microphone opened on glass and kept for the workout, so a question asked from a locked phone
+   * can be answered (iOS will not START a recording in the background, and SFSpeechRecognizer does
+   * not run there). Every call resolves to "no" without iOS 26 or the module — then the screen-on
+   * ear (`voiceCapture`'s first path) is what listens.
+   */
+  async earAvailable(locale: string): Promise<boolean> {
+    try {
+      return (await native?.earAvailable?.(locale)) ?? false;
+    } catch {
+      return false;
+    }
+  },
+  async earPrepare(locale: string): Promise<boolean> {
+    try {
+      return (await native?.earPrepare?.(locale)) ?? false;
+    } catch {
+      return false;
+    }
+  },
+  /** Null when the microphone runs; otherwise why it does not. Call on glass only. */
+  async earOpen(source: EarSource): Promise<string | null> {
+    if (!native?.earOpen) return 'no ear in this build';
+    try {
+      return (await native.earOpen(source)) ?? null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'earOpen threw';
+    }
+  },
+  earClose: () => quiet(() => native?.earClose?.()),
+  earRunning(): boolean {
+    try {
+      return native?.earRunning?.() ?? false;
+    } catch {
+      return false;
+    }
+  },
+  async earListen(locale: string, token: number): Promise<string | null> {
+    if (!native?.earListen) return 'no ear in this build';
+    try {
+      return (await native.earListen(locale, token)) ?? null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'earListen threw';
+    }
+  },
+  earStopListening: () => quiet(() => native?.earStopListening?.()),
+  onEarResult(cb: (text: string, token: number) => void): () => void {
+    if (!native) return () => {};
+    try {
+      const sub = native.addListener('onEarResult', (e) => cb(String(e.text ?? ''), Number(e.token)));
+      return () => sub.remove();
+    } catch {
+      return () => {};
+    }
+  },
+  onEarState(cb: (running: boolean, error: string | null) => void): () => void {
+    if (!native) return () => {};
+    try {
+      const sub = native.addListener('onEarState', (e) => cb(!!e.running, e.error ?? null));
+      return () => sub.remove();
+    } catch {
+      return () => {};
+    }
+  },
+  /** The route as the phone reports it — null without the module. */
+  routeInfo(): RouteInfo | null {
+    try {
+      return native?.routeInfo() ?? null;
+    } catch {
+      return null;
+    }
+  },
 };

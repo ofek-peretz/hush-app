@@ -197,6 +197,67 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
   it('⛔ the gate starts unknown — earbuds in never flash "needs earbuds" while it is read', () => {
     const hook = read('src/platform/voice/useVoiceCoach.ts');
     expect(hook).toContain('useState<VoiceSilence>(null)');
-    expect(hook).toMatch(/\} else if \(!connected\) \{\s*if \(c\.isOn\(\)\) c\.disable\(\);\s*setSilentBecause\('no_headset'\);/);
+    // A "no earbuds" read is confirmed by a second read before it closes the gate or shows the notice.
+    expect(hook).toMatch(/confirm = setTimeout\(\(\) => \{[\s\S]*?if \(audioSession\.headsetConnected\(\)\) return open\(\);\s*close\(\);\s*setSilentBecause\('no_headset'\);/);
+    // Closing the gate closes the voice AND the pocket microphone.
+    expect(hook).toMatch(/const close = \(\) => \{\s*if \(c\.isOn\(\)\) c\.disable\(\);\s*void audioSession\.earClose\(\);/);
+  });
+  it('⛔ earbuds in open the gate even when no route event ever arrives (2026-09-15)', () => {
+    const hook = read('src/platform/voice/useVoiceCoach.ts');
+    // The route event is a knock: the route is read again, never the payload trusted.
+    expect(hook).toContain("audioSession.onRouteChange(() => apply(audioSession.headsetConnected()))");
+    // While shut, the route is polled.
+    expect(hook).toMatch(/setInterval\(\(\) => \{\s*if \(!c\.isOn\(\) && !deniedRef\.current && audioSession\.headsetConnected\(\)\) apply\(true\);/);
+    // After the permission wait, the earbuds are asked again before the coach speaks.
+    expect(hook).toMatch(/if \(!audioSession\.headsetConnected\(\)\) return apply\(false\);[\s\S]*?if \(disposed \|\| c\.isOn\(\) \|\| !audioSession\.headsetConnected\(\)\) return;\s*c\.enable\(\);/);
+    const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
+    // The app's own category switches post route changes; only a device coming or going is news.
+    expect(swift).toMatch(/if reason == \.newDeviceAvailable \|\| reason == \.oldDeviceUnavailable \{\s*self\.sendEvent\("onRouteChange"/);
+    const mouth = read('src/platform/voice/coachVoice.ts');
+    // A line whose native call never calls back cannot stall the coach.
+    expect(mouth).toMatch(/watchdog = setTimeout\(/);
+  });
+  it('⛔ the whole earbud path, as the 2026-09-15 audit left it', () => {
+    const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
+    // The gate asks "is it the phone's own speaker?" — an unlisted port type never shuts it.
+    expect(swift).toMatch(/o\.portType != \.builtInSpeaker && o\.portType != \.builtInReceiver/);
+    // The listening session is taken before the recognizer starts, identical to the one it sets.
+    const prep = swift.match(/AsyncFunction\("prepareListening"\)[\s\S]*?setCategory\(([^)]*)\)/)?.[1] ?? '';
+    expect(prep).toContain('.playAndRecord, mode: .measurement, options: [.duckOthers, .allowBluetooth, .defaultToSpeaker]');
+    const ear = read('src/platform/voice/voiceCapture.ts');
+    expect(ear).toContain("categoryOptions: ['duckOthers', 'allowBluetooth', 'defaultToSpeaker']");
+    expect(ear).toContain("mode: 'measurement'");
+    expect(ear).toMatch(/audioSession\.prepareListening\(\)\.then\(/);
+    // A failed ear is a silence to the conductor, never a coach that stops talking.
+    const conductor = read('src/platform/voice/voiceConductor.ts');
+    expect(conductor).toContain("if (why === 'timeout' || why === 'error') {");
+    expect(conductor).toContain("if (why !== 'timeout' && why !== 'silence' && why !== 'error') return;");
+    // The profile can play a line through the real path and print what the phone reported.
+    const profile = read('src/screens/profile/ProfileSheet.tsx');
+    expect(profile).toMatch(/await audioSession\.duck\(\);\s*await coachVoice\.say\(/);
+  });
+  it('⛔ the pocket ear: a microphone opened on glass answers from a locked phone (2026-09-15)', () => {
+    const hook = read('src/platform/voice/useVoiceCoach.ts');
+    // ⛔ The founder: the music must not suffer. The workout only ever HOLDS the phone's microphone;
+    // the earbuds' microphone opens only in a question's short window.
+    expect(hook).toMatch(/const openPocketEar = async \(\): Promise<void> => \{\s*if \(Platform\.OS !== 'ios' \|\| audioSession\.earRunning\(\) \|\| micRef\.current !== 'phone'\) return;/);
+    // Opened only on glass — iOS refuses a recording started in the background.
+    expect(hook).toMatch(/if \(AppState\.currentState !== 'active'\) return[\s\S]*?audioSession\.earOpen\(micRef\.current\)/);
+    // Back on glass with the voice on and no ear: the one moment it can start again.
+    expect(hook).toMatch(/s === 'active' && c\.isOn\(\) && !audioSession\.earRunning\(\)\) void openPocketEar\(\)/);
+    const ear = read('src/platform/voice/voiceCapture.ts');
+    // Every window goes to the pocket ear when it runs; a late sentence of an older window is refused.
+    expect(ear).toContain('if (audioSession.earRunning()) return openPocketWindow(opts);');
+    expect(ear).toContain('if (ended || from !== token) return;');
+    // At the deadline the recognizer is flushed before the window ends.
+    expect(ear).toMatch(/void audioSession\.earStopListening\(\)\.then\(\(\) => finish\('timeout'\)\)/);
+    const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
+    // While the ear runs, no session change leaves record-and-play, and unduck never deactivates.
+    expect(swift).toMatch(/private func applySession\(duck: Bool\) throws \{\s*if #available\(iOS 26\.0, \*\), let ear = self\.ear, ear\.running \{\s*let session = AVAudioSession\.sharedInstance\(\)\s*try session\.setCategory\(\.playAndRecord/);
+    expect(swift).toMatch(/AsyncFunction\("unduck"\) \{ \(\) in[\s\S]*?if self\.earRunning \{\s*try self\.applySession\(duck: false\)\s*return\s*\}/);
+    expect(swift).not.toMatch(/try\??\s*Self\.setPlayback\(duck: true\)/);
+    const hushEar = read('modules/hush-voice-audio/ios/HushEar.swift');
+    expect(hushEar).toContain('@available(iOS 26.0, *)');
+    expect(hushEar).toContain('case .phone: options.insert(.allowBluetoothA2DP)');
   });
 });

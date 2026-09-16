@@ -7,8 +7,7 @@ import Foundation
 // Four jobs, and no opinions:
 //
 //   · `headsetConnected` / `onRouteChange` — the voice is on ONLY with earbuds (spec §0.1). The
-//     route's outputs answer it (Bluetooth A2DP/HFP/LE, wired headphones, USB audio); the speaker
-//     is not a headset. ⛔ READ ON A CONFIGURED SESSION (2026-09-09, *"הקול באימון לא עובד"*): before
+//     route's outputs answer it: anything but the phone's own speaker or receiver (see the function). ⛔ READ ON A CONFIGURED SESSION (2026-09-09, *"הקול באימון לא עובד"*): before
 //     this process has ever set a category, `currentRoute` can still describe the default route —
 //     the speaker — with earbuds in, and no route-change notification follows, because nothing
 //     changes. A gate read once at mount from that answer never opened. So the read first makes
@@ -38,17 +37,50 @@ public class HushVoiceAudioModule: Module {
   private var keepAliveWanted = false
   private var routeObserver: NSObjectProtocol?
   private var interruptionObserver: NSObjectProtocol?
+  /// The pocket ear (`HushEar`, iOS 26). Held untyped: a stored property cannot be marked iOS 26.
+  private var earBox: AnyObject?
+
+  @available(iOS 26.0, *)
+  private var ear: HushEar? { earBox as? HushEar }
+
+  private var earRunning: Bool {
+    if #available(iOS 26.0, *) { return ear?.running ?? false }
+    return false
+  }
+
+  @available(iOS 26.0, *)
+  private func makeEar() -> HushEar {
+    let ear = HushEar()
+    ear.onResult = { [weak self] text, token in
+      self?.sendEvent("onEarResult", ["text": text, "token": token])
+    }
+    ear.onState = { [weak self] state in
+      self?.sendEvent("onEarState", state)
+    }
+    earBox = ear
+    return ear
+  }
 
   public func definition() -> ModuleDefinition {
     Name("HushVoiceAudio")
-    Events("onRouteChange")
+    Events("onRouteChange", "onEarResult", "onEarState")
 
     OnCreate {
       self.routeObserver = NotificationCenter.default.addObserver(
         forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
-      ) { [weak self] _ in
+      ) { [weak self] note in
         guard let self else { return }
-        self.sendEvent("onRouteChange", ["connected": Self.headsetConnected()])
+        // ⛔ ONLY A DEVICE COMING OR GOING IS NEWS (2026-09-15, *"חבר אותן והוא מתחיל" — with them in*).
+        // This app changes its own category all workout long — the keep-alive, every duck and
+        // unduck, every listening window — and each change posts a route change too. Read between a
+        // `setCategory` and a `setActive`, the route could answer "speaker" with earbuds in, and that
+        // one answer shut the gate (or silenced a coach mid-line). The JS side re-reads on this event
+        // and confirms a departure before believing it; here, the app's own switches say nothing.
+        let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+        let reason = raw.flatMap(AVAudioSession.RouteChangeReason.init(rawValue:))
+        if reason == .newDeviceAvailable || reason == .oldDeviceUnavailable {
+          self.sendEvent("onRouteChange", ["connected": Self.headsetConnected()])
+        }
         // A route change (earbuds out, then in) can stop the keep-alive player; put it back.
         if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
       }
@@ -60,9 +92,69 @@ public class HushVoiceAudioModule: Module {
         guard let self, self.keepAliveWanted,
               let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
-        try? Self.setPlayback(duck: false)
+        try? self.applySession(duck: false)
         if let p = self.keepAlive, !p.isPlaying { p.play() }
       }
+    }
+
+    // ── The pocket ear (HushEar.swift) ─────────────────────────────────────────────────────────
+
+    /// Can this phone transcribe the locale on-device (iOS 26 SpeechAnalyzer)?
+    AsyncFunction("earAvailable") { (locale: String) async -> Bool in
+      guard #available(iOS 26.0, *) else { return false }
+      return await HushEar.supportedLocale(locale) != nil
+    }
+
+    /// The locale's model installed (downloaded on first use). False when it could not be.
+    AsyncFunction("earPrepare") { (locale: String) async -> Bool in
+      guard #available(iOS 26.0, *) else { return false }
+      return (try? await HushEar.ensureModel(locale)) ?? false
+    }
+
+    /// Open the microphone for the workout — ON GLASS ONLY (iOS refuses a recording started from
+    /// the background). Null when it runs; the reason when it does not.
+    AsyncFunction("earOpen") { (source: String) async -> String? in
+      guard #available(iOS 26.0, *) else { return "requires iOS 26" }
+      let ear = self.ear ?? self.makeEar()
+      do {
+        try ear.open(source: HushEar.Source(rawValue: source) ?? .headset)
+        if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
+        return nil
+      } catch {
+        return error.localizedDescription
+      }
+    }
+
+    AsyncFunction("earClose") { () in
+      guard #available(iOS 26.0, *), let ear = self.ear, ear.running else { return }
+      ear.close()
+      if self.keepAliveWanted {
+        try? Self.setPlayback(duck: false)
+        if let p = self.keepAlive, !p.isPlaying { p.play() }
+      } else {
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+      }
+    }
+
+    Function("earRunning") { () -> Bool in
+      self.earRunning
+    }
+
+    /// Hand the microphone to the recognizer until `earStopListening`. Null when listening.
+    AsyncFunction("earListen") { (locale: String, token: Int) async -> String? in
+      guard #available(iOS 26.0, *), let ear = self.ear else { return "ear not open" }
+      do {
+        try await ear.listen(localeIdentifier: locale, token: token)
+        return nil
+      } catch {
+        return error.localizedDescription
+      }
+    }
+
+    /// Stop listening; resolves after the last sentence she was saying has been reported.
+    AsyncFunction("earStopListening") { () async in
+      guard #available(iOS 26.0, *), let ear = self.ear else { return }
+      await ear.stopListening()
     }
 
     OnDestroy {
@@ -77,11 +169,41 @@ public class HushVoiceAudioModule: Module {
       return Self.headsetConnected()
     }
 
+    /// What the route actually is, in words — for the profile's voice row and the gate's telemetry.
+    /// The gate has been reported shut with earbuds in three times; this is the reading that says why.
+    Function("routeInfo") { () -> [String: Any] in
+      Self.ensureOurSession()
+      let session = AVAudioSession.sharedInstance()
+      return [
+        "outputs": session.currentRoute.outputs.map { ["type": $0.portType.rawValue, "name": $0.portName] },
+        "category": session.category.rawValue,
+        "mode": session.mode.rawValue,
+      ]
+    }
+
+    /// ⛔ THE MICROPHONE'S ROUTE IS TAKEN BEFORE THE RECOGNIZER STARTS (2026-09-15 audit).
+    /// `expo-speech-recognition` sets `.playAndRecord` itself when it starts, and that switch moves
+    /// Bluetooth earbuds from A2DP to HFP — a route change. The recognizer listens for route changes
+    /// from the moment it starts, and when the app is not in the foreground (the phone locked in her
+    /// pocket) it treats ANY route change as an interruption and ends the recognition. So every
+    /// window opened from the pocket died as it opened. Here the exact same category, mode and
+    /// options are set first; the caller waits for the route to settle; the recognizer's own
+    /// `setCategory` then changes nothing and posts nothing.
+    /// Keep in step with `LISTENING_SESSION` in `src/platform/voice/voiceCapture.ts`.
+    AsyncFunction("prepareListening") { () in
+      // The pocket ear already holds a record-and-play session; this is the screen-on ear's step.
+      if self.earRunning { return }
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .allowBluetooth, .defaultToSpeaker])
+      try session.setActive(true, options: .notifyOthersOnDeactivation)
+      if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
+    }
+
     /// Open the session for a workout with the voice on: playback under the silent switch, mixed
     /// with her music, and a looping second of silence so the process stays awake in the pocket.
     AsyncFunction("startKeepAlive") { () in
       self.keepAliveWanted = true
-      try Self.setPlayback(duck: false)
+      try self.applySession(duck: false)
       if self.keepAlive == nil {
         self.keepAlive = try AVAudioPlayer(data: Self.silentWav(seconds: 1.0))
         self.keepAlive?.numberOfLoops = -1
@@ -95,18 +217,28 @@ public class HushVoiceAudioModule: Module {
       self.keepAliveWanted = false
       self.keepAlive?.stop()
       self.keepAlive = nil
+      // A running ear is its own reason to stay awake; it is closed by `earClose`, not here.
+      if self.earRunning { return }
       try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
 
     /// Before a line is spoken: her music down to a quarter for as long as the session is active.
     AsyncFunction("duck") { () in
-      try Self.setPlayback(duck: true)
+      try self.applySession(duck: true)
       if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
     }
 
     /// After a line, or after a listening window: release the duck (deactivate, which is the only
     /// way iOS lets go of it), then restore playback-mixed and the keep-alive.
     AsyncFunction("unduck") { () in
+      // ⛔ With the pocket ear running, never deactivate: it would stop the microphone, and a
+      // microphone stopped in the pocket cannot be restarted there. The duck option is dropped on
+      // the live session instead (whether iOS releases the duck without a deactivation is one of the
+      // things the locked-phone test is for).
+      if self.earRunning {
+        try self.applySession(duck: false)
+        return
+      }
       let session = AVAudioSession.sharedInstance()
       self.keepAlive?.pause()
       try? session.setActive(false, options: [.notifyOthersOnDeactivation])
@@ -116,7 +248,7 @@ public class HushVoiceAudioModule: Module {
 
     /// The rest-over sound: half a second, generated, at the level of the music.
     AsyncFunction("playChime") { () in
-      try Self.setPlayback(duck: true)
+      try self.applySession(duck: true)
       if self.chime == nil {
         self.chime = try AVAudioPlayer(data: Self.toneWav(seconds: 0.5, hz: 880))
         self.chime?.prepareToPlay()
@@ -128,6 +260,18 @@ public class HushVoiceAudioModule: Module {
   }
 
   // MARK: - The session
+
+  /// Every session change goes through here: playback-mixed normally, record-and-play with the
+  /// ear's own options while the pocket ear runs (leaving `.playAndRecord` would stop its engine).
+  private func applySession(duck: Bool) throws {
+    if #available(iOS 26.0, *), let ear = self.ear, ear.running {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(ear.source, duck: duck))
+      try session.setActive(true)
+      return
+    }
+    try Self.setPlayback(duck: duck)
+  }
 
   private static func setPlayback(duck: Bool) throws {
     let session = AVAudioSession.sharedInstance()
@@ -146,15 +290,16 @@ public class HushVoiceAudioModule: Module {
     try? setPlayback(duck: false)
   }
 
+  /// ⛔ THE GATE ASKS "IS IT THE PHONE'S OWN SPEAKER?", NOT "IS IT A PORT ON MY LIST?" (2026-09-15).
+  /// The list (A2DP, HFP, LE, headphones, USB) answered "no" to any output it did not name — a port
+  /// type a newer iOS reports for newer earbuds would shut the gate for good, with earbuds in and no
+  /// sign why. What the gate exists to prevent is one thing: the coach talking out of the phone in
+  /// a gym. So any output that is not the built-in speaker or receiver opens it (earbuds, wired,
+  /// a car, a Bluetooth speaker); no route at all does not.
   static func headsetConnected() -> Bool {
     let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
     return outputs.contains { o in
-      switch o.portType {
-      case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .headphones, .usbAudio:
-        return true
-      default:
-        return false
-      }
+      o.portType != .builtInSpeaker && o.portType != .builtInReceiver
     }
   }
 

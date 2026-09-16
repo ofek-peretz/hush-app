@@ -12,6 +12,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  # HushEar.swift: the pocket ear (SpeechAnalyzer, iOS 26 - weak-linked, guarded by @available).
+  s.frameworks = 'AVFoundation', 'Speech'
 
   s.source_files = '**/*.{h,m,mm,swift,hpp,cpp}'
 end

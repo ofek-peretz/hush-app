@@ -318,7 +318,9 @@ export class VoiceConductor {
       if (this.mode !== 'loading') return;
       this.openWindow(WINDOWS.loading, (a, text, conf) => this.onLoadingAnswer(v, a, text, conf), (why) => {
         if (this.mode !== 'loading') return;
-        if (why === 'timeout') {
+        // An ear that failed (no network for the recognizer, the microphone taken) is a window that
+        // heard nothing: the same fallback line, never a coach gone quiet mid-dialogue (2026-09-15).
+        if (why === 'timeout' || why === 'error') {
           void this.speak([voiceScript.readyFallback()]);
           // The Ready button on the lock screen and the wrist carry the start from here.
         }
@@ -581,7 +583,9 @@ export class VoiceConductor {
 
   private onDoneWindowEnd(why: WindowEnd): void {
     if (this.mode !== 'asking' || !this.ask) return;
-    if (why !== 'timeout' && why !== 'silence') return;
+    // ⛔ An ear that failed is a silence (2026-09-15 audit): until today an `error` end left the ask
+    // open with nothing more ever said on that set — the coach simply stopped talking.
+    if (why !== 'timeout' && why !== 'silence' && why !== 'error') return;
     const v = this.d.getView();
     if (!v) return;
     if (this.ask.question === 'confirm' && this.ask.unconfirmed) {
