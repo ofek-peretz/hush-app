@@ -13,6 +13,7 @@
 
 // 
 
+import { relatchDirection } from './bidi';
 import { I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
@@ -90,6 +91,19 @@ export async function initI18n(): Promise<typeof i18next> {
     I18nManager.allowRTL(rtl);
     I18nManager.forceRTL(rtl);
   }
+  /*
+   * ⛔ THE LATCH IS RE-READ HERE, AND THE FIRST LAUNCH AFTER AN INSTALL IS WHY (2026-09-16).
+   *
+   * `bidi.rtl` is latched at MODULE LOAD, and on a fresh install every module loads before this
+   * function runs — so a Hebrew phone's very first launch latched `false`, then `forceRTL(true)`
+   * two lines up made the tree right-to-left underneath it. Everything computed from the latch
+   * spent that launch facing the wrong way (`PlanLifts` reverses the load row off it, on every
+   * screen that prints a prescription), and the app looked correct from the SECOND launch on —
+   * which is exactly the shape of bug nobody can reproduce.
+   *
+   * `reloadApp` has re-latched at its own seam since 2026-08-23; this is the same seam at boot.
+   */
+  relatchDirection();
 
   await i18next.use(initReactI18next).init({
     resources,

@@ -40,9 +40,14 @@ import { loadRemoteConfig } from '@/platform/remoteConfig';
 import { installCrashReporting } from '@/platform/crash';
 import { color } from '@/design/tokens';
 import { installGlobalFontDefault } from '@/design/typography';
+import { holdSplash } from '@/app/splash';
 
 installGlobalFontDefault();
 installCrashReporting(); // Sentry when a DSN is configured; a silent no-op otherwise
+/* ⛔ BEFORE REACT RENDERS ANYTHING (founder 2026-09-16: *"יש קפיצה של מסך"*). iOS hides the splash
+   the moment the root view mounts, which is before the fonts, the language and the store are ready —
+   so the hold has to be asked for here, at the entry, and `Root` releases it. See `app/splash`. */
+holdSplash();
 
 export default function App() {
   const [i18nReady, setI18nReady] = useState(false);

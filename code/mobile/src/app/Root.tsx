@@ -27,6 +27,7 @@ import { usePair } from '@/state/stores/pairStore';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { fullLayerAnimation, sheetAnimation } from './navAnimations';
 import { onReloadRequested } from './reload';
+import { releaseSplash } from './splash';
 import { navigationRef, navigateMain } from './navigationRef';
 import {
   addNotificationDeliveryListener,
@@ -437,6 +438,20 @@ export function Root() {
       removeDelivery();
     };
   }, []);
+
+  /*
+   * ⛔ THE LOGO STANDS UNTIL THERE IS A SCREEN UNDER IT (founder 2026-09-16: *"יש קפיצה של מסך"*).
+   *
+   * `app/splash` holds the native splash at the app's entry; this is the other half. It runs on the
+   * first render where `booted` is true — the render that draws the real first screen — and one
+   * frame later, so the release lands on a screen that has actually been painted rather than on the
+   * commit that asked for it. Idempotent, and its own timeout releases it anyway if boot hangs.
+   */
+  useEffect(() => {
+    if (!app.booted) return;
+    const id = requestAnimationFrame(() => void releaseSplash());
+    return () => cancelAnimationFrame(id);
+  }, [app.booted]);
 
   if (!app.booted) {
     return <View style={styles.canvas} />; // resolve-before-showing (UX §4)
