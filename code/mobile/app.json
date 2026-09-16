@@ -19,7 +19,7 @@
       "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "73",
+      "buildNumber": "74",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
         "NSHealthShareUsageDescription": "FERROX reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
