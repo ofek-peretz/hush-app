@@ -26,7 +26,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Arrive, Button } from '@/components/ds';
 import { Icon } from '@/components/Icon';
-import { RangeMark } from '@/components/RangeMark';
+import { FerroxMark } from '@/components/FerroxLogo';
 import { useCopy } from '@/i18n/useCopy';
 import { color, font, signal } from '@/design/tokens';
 
@@ -54,8 +54,8 @@ export function NotificationAsk({ onAllow, onDecline }: NotificationAskProps) {
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.body}>
-        {/* The brand's mark in CREAM here — this screen carries no signal, it makes a promise. */}
-        <RangeMark width={44} height={18} />
+        {/* The brand's mark — this screen carries no other signal, it makes a promise. */}
+        <FerroxMark width={56} />
 
         {/* ✦ IT ARRIVES (2026-08-27) — `Arrive` was built for the founder's largest note, that a
             screen should ARRIVE rather than appear (2026-08-12). See `HomeView` for the account. */}

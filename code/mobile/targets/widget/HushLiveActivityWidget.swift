@@ -38,22 +38,48 @@ private enum HX {
 /// v7 6.1/6.2 put this, not an SF Symbol, in the Dynamic Island's compact leading and at the head
 /// of the lock-screen card. A dumbbell glyph is a picture of a gym; the mark is what Hush actually
 /// is — a measured range — and it is the same glyph the tab bar and the wordmark strike.
+/// THE FERROX MARK (2026-09-16) — two horns whose flat middle is a bar, with a notch that cradles
+/// the dot. Geometry from `brand/logo/export/ferrox-mark.svg` (box 9.5,16 · 81×59); do not redraw.
+private struct FerroxHorns: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 81, rect.height / 59)
+    let ox = rect.minX + (rect.width - 81 * s) / 2
+    let oy = rect.minY + (rect.height - 59 * s) / 2
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + (x - 9.5) * s, y: oy + (y - 16) * s) }
+    var path = Path()
+    path.move(to: p(62, 60))
+    path.addCurve(to: p(89.5, 17), control1: p(79, 60), control2: p(88, 46))
+    path.addCurve(to: p(61, 44), control1: p(82, 34), control2: p(74, 44))
+    path.addLine(to: p(39, 44))
+    path.addCurve(to: p(10.5, 17), control1: p(26, 44), control2: p(18, 34))
+    path.addCurve(to: p(38, 60), control1: p(12, 46), control2: p(21, 60))
+    path.addLine(to: p(36.584, 60))
+    // the notch: over the top of a circle r 14 around the dot's centre (visually clockwise)
+    path.addArc(center: p(50, 64), radius: 14 * s, startAngle: .degrees(196.6), endAngle: .degrees(343.4), clockwise: false)
+    path.closeSubpath()
+    return path
+  }
+}
+
+private struct FerroxDot: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 81, rect.height / 59)
+    let cx = rect.minX + (rect.width - 81 * s) / 2 + (50 - 9.5) * s
+    let cy = rect.minY + (rect.height - 59 * s) / 2 + (64 - 16) * s
+    return Path(ellipseIn: CGRect(x: cx - 10 * s, y: cy - 10 * s, width: 20 * s, height: 20 * s))
+  }
+}
+
 private struct RangeMark: View {
   var width: CGFloat = 15
   var height: CGFloat = 8
   var tint: Color = HX.accent
-  private var bar: CGFloat { 1.5 }
   var body: some View {
-    ZStack(alignment: .leading) {
-      Rectangle().fill(tint).frame(width: width, height: bar)
-      HStack(spacing: 0) {
-        Rectangle().fill(tint).frame(width: bar, height: height)
-        Spacer(minLength: 0)
-        Rectangle().fill(tint).frame(width: bar, height: height)
-      }
-      .frame(width: width, height: height)
+    ZStack {
+      FerroxHorns().fill(tint)
+      FerroxDot().fill(tint)
     }
-    .frame(width: width, height: height)
+    .frame(width: width, height: width * 59 / 81)
   }
 }
 

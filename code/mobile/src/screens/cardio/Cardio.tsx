@@ -28,7 +28,7 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { RangeMark } from '@/components/RangeMark';
+import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import { Arrive, Legend, Button } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -1177,8 +1177,8 @@ export function CardioComplete(props: {
             carried whole. A phone screen is 9:16, and this is what goes on a story.
           */}
           <View style={styles.posterMark}>
-            <RangeMark />
-            <Text style={styles.posterWord}>hush</Text>
+            <FerroxMark width={26} />
+            <FerroxWordmark width={76} />
           </View>
 
           <View style={styles.posterFill} />
@@ -1620,8 +1620,7 @@ const styles = StyleSheet.create({
    */
   doneBody: { flex: 1, alignItems: 'center', gap: 20, paddingHorizontal: 34 },
   posterFill: { flex: 1 },
-  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },
-  posterWord: { fontFamily: font.serif, fontSize: 20, color: stageC.ink0, textAlign: 'left' },
+  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 10, direction: 'ltr', marginTop: 18 },
   /* ⛔ A hand-rolled `Legend` that opened its Hebrew by 1.9pt — one of ten found 2026-08-27 once the
      type lint learned to read a style BLOCK instead of a line. See `WellDone.heroLabel`. The
      `.toUpperCase()` went with it: `Legend` already does it, and it is a no-op on Hebrew anyway. */

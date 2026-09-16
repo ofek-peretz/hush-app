@@ -32,10 +32,10 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Arrive, Button, Legend } from '@/components/ds';
-import { RangeMark } from '@/components/RangeMark';
+import { FerroxMark } from '@/components/FerroxLogo';
 import { useCopy } from '@/i18n/useCopy';
 import { monoCanDraw } from '@/design/monoVoice';
-import { color, font, signal } from '@/design/tokens';
+import { color, font } from '@/design/tokens';
 
 /** One lift, standing where she left it. */
 export interface StandingLift {
@@ -69,7 +69,7 @@ export function WelcomeBackView({ daysAway, lifts, unit, onStart }: WelcomeBackV
           that waited for her.
         */}
         <Arrive order={0}>
-          <RangeMark width={44} height={18} tone={signal[0]} />
+          <FerroxMark width={56} />
         </Arrive>
         <Arrive order={0}>
           <Legend size={17} track={0.16}>{t('comeback.legend', { days: daysAway })}</Legend>

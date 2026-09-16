@@ -177,7 +177,7 @@ describe('the file has a name she can choose between', () => {
   it('⚠️ dated, and it sorts', () => {
     // She will end up with several in a Files folder, and the only question she will ask of them is
     // "which is the newest" — so the name answers it, and sorts correctly while doing so.
-    expect(recordFileName(0, '2026-08-22T09:00:00.000Z')).toBe('hush-record-2026-08-22.json');
+    expect(recordFileName(0, '2026-08-22T09:00:00.000Z')).toBe('ferrox-record-2026-08-22.json');
     expect(recordFileName(0, '2026-01-02T00:00:00.000Z') < recordFileName(0, '2026-08-22T09:00:00.000Z')).toBe(true);
   });
 });

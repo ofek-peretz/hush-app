@@ -25,6 +25,7 @@ import { bidi } from '@/i18n/bidi';
 import { muscleGroupsLabel } from '@/data/exercises';
 import { planLiftCount, type SharedPlan } from '@/domain/planShare';
 import { color, font, radius, signal, stage, press } from '@/design/tokens';
+import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 
 export interface SharePlanViewProps {
   plan: SharedPlan;
@@ -117,8 +118,8 @@ export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: Sh
 
           {/* the brand, carried whole — exactly as the record poster carries it */}
           <View style={styles.brand}>
-            <Text style={styles.wordmark}>hush</Text>
-            <View style={styles.brandDot} />
+            <FerroxMark width={22} color={stage.ink0} />
+            <FerroxWordmark width={68} color={stage.ink0} />
           </View>
 
           <View style={styles.cardHead}>
@@ -211,9 +212,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   // the brand, at the head of the card — the record poster's own arrangement
-  brand: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, direction: 'ltr' },
-  wordmark: { fontFamily: font.serif, fontSize: 18, color: stage.ink0, textAlign: 'left' },
-  brandDot: { width: 6, height: 6, borderRadius: 3, marginBottom: 5, backgroundColor: signal[0] },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8, direction: 'ltr' },
 
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   // The split is the card's SUBJECT, so it is set in the coach's serif — the record poster names

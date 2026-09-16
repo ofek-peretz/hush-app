@@ -70,6 +70,6 @@ describe('the export', () => {
   });
 
   it('names the file by the day', () => {
-    expect(exportFileName(Date.parse('2026-09-09T12:00:00Z'))).toBe('hush-log-2026-09-09.csv');
+    expect(exportFileName(Date.parse('2026-09-09T12:00:00Z'))).toBe('ferrox-log-2026-09-09.csv');
   });
 });

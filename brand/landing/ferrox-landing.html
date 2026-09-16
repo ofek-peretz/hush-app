@@ -1,0 +1,325 @@
+<title>FERROX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --stage: #131210;
+    --stage-lit: #1b1914;
+    --stage-deep: #0f0e0c;
+    --cream: #f1eee5;
+    --cream-2: #a8a290;
+    --muted: #8b8474;
+    --moss: #a9c49f;
+    --moss-deep: #3e573f;
+    --paper: #f3f0e8;
+    --paper-well: #e3ded0;
+    --ink: #1b1913;
+    --ink-2: #57534a;
+    --line: rgba(241, 238, 229, 0.12);
+    --settle: cubic-bezier(.22, 1, .36, 1);
+    --serif: 'Frank Ruhl Libre', 'Times New Roman', serif;
+    --sans: 'Assistant', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--stage);
+    color: var(--cream);
+    font-family: var(--sans);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    direction: rtl;
+    padding-inline: clamp(20px, 5vw, 64px);
+    background:
+      radial-gradient(ellipse 70% 520px at 50% -80px, rgba(241, 238, 229, 0.075), transparent 70%),
+      linear-gradient(180deg, var(--stage-lit) 0, var(--stage) 640px, var(--stage-deep) 100%);
+  }
+  .wrap { max-width: 1120px; margin-inline: auto; }
+  .num { font-family: var(--mono); font-weight: 500; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+  a { color: var(--moss); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--moss); outline-offset: 3px; }
+
+  /* ── top bar */
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 24px; }
+  .brand { display: flex; align-items: center; gap: 14px; direction: ltr; text-decoration: none; }
+  .brand .mark { width: 40px; height: auto; display: block; }
+  .brand .word { width: 124px; height: auto; display: block; }
+  .store {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--cream); color: var(--ink);
+    font: 700 17px/1 var(--sans); text-decoration: none;
+    padding: 15px 24px; border-radius: 999px;
+    transition: transform .5s var(--settle), background .3s;
+  }
+  .store:hover { background: #fff; transform: translateY(-2px); }
+  .store svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+  .store.small { font-size: 15px; padding: 11px 18px; }
+
+  /* ── hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: clamp(32px, 6vw, 88px); align-items: center; padding-block: clamp(40px, 8vw, 96px) clamp(56px, 9vw, 120px); }
+  .hero-mark { width: clamp(84px, 11vw, 128px); height: auto; display: block; margin-bottom: 28px; direction: ltr; }
+  .hero-mark .dot { animation: land 900ms var(--settle) 250ms both; }
+  @keyframes land { from { transform: translateY(-22px); } to { transform: translateY(0); } }
+  h1 {
+    font-family: var(--serif); font-weight: 500;
+    font-size: clamp(40px, 6.2vw, 76px); line-height: 1.06; letter-spacing: -0.01em;
+    margin: 0 0 24px; text-wrap: balance;
+  }
+  h1 em { font-style: normal; color: var(--moss); }
+  .lede { font-size: clamp(18px, 1.9vw, 21px); color: var(--cream-2); max-width: 34em; margin: 0 0 36px; text-wrap: pretty; }
+  .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+  .devices { color: var(--muted); font-size: 13px; letter-spacing: 0.08em; }
+
+  /* ── the rest card — paper on the stage, as on the lock screen */
+  .rest {
+    background: var(--paper); color: var(--ink);
+    border-radius: 28px; padding: 26px 26px 22px;
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0,0,0,0.2);
+    max-width: 380px; justify-self: start; width: 100%;
+  }
+  .rest-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .rest-lift { font-weight: 700; font-size: 20px; }
+  .rest-set { color: var(--ink-2); font-size: 14px; }
+  .rest-body { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; margin-block: 18px 22px; }
+  .rest-load { display: flex; flex-direction: column; gap: 2px; }
+  .rest-load .big { font-size: 28px; line-height: 1.1; color: var(--ink); white-space: nowrap; }
+  .rest-load .cap { font-size: 14px; color: var(--ink-2); }
+  .ring { width: 108px; height: 108px; position: relative; flex-shrink: 0; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+  .ring .clock { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; color: var(--ink); }
+  .rest-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .rest-actions span { background: var(--paper-well); border-radius: 14px; padding: 13px 10px; text-align: center; font-weight: 700; font-size: 16px; }
+  .rest-actions span.primary { background: var(--ink); color: var(--paper); }
+  .example { font-size: 13px; color: var(--muted); margin-top: 14px; max-width: 380px; justify-self: start; }
+  .rest-col { display: grid; }
+
+  /* ── sections */
+  section { border-top: 1px solid var(--line); padding-block: clamp(64px, 9vw, 112px); }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 88px); align-items: center; }
+  .eyebrow { font-size: 14px; font-weight: 600; color: var(--moss); margin: 0 0 14px; }
+  h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(32px, 4.2vw, 50px); line-height: 1.12; margin: 0 0 20px; text-wrap: balance; }
+  .copy p { color: var(--cream-2); margin: 0 0 16px; max-width: 32em; text-wrap: pretty; }
+
+  /* week instrument */
+  .week { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: rgba(241,238,229,0.02); }
+  .week-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 22px 24px 18px; border-bottom: 1px solid var(--line); }
+  .week-title { font-family: var(--serif); font-size: 24px; }
+  .week-days { color: var(--muted); font-size: 14px; }
+  .day { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--line); }
+  .day:last-child { border-bottom: 0; }
+  .day-name { color: var(--muted); font-size: 15px; }
+  .day-focus { font-weight: 600; }
+  .day-lifts { color: var(--cream-2); font-size: 14px; }
+  .day.today { background: rgba(169,196,159,0.08); }
+  .day.today .day-name { color: var(--moss); }
+
+  /* figure placeholder */
+  .shot {
+    aspect-ratio: 4 / 5; max-width: 100%; width: 100%; max-height: 520px;
+    border: 1px dashed rgba(241,238,229,0.28); border-radius: 28px;
+    display: grid; place-items: center; text-align: center; padding: 24px;
+    color: var(--muted); font-size: 15px;
+    background: radial-gradient(ellipse 60% 45% at 50% 30%, rgba(241,238,229,0.06), transparent 70%);
+  }
+
+  /* voice exchange */
+  .talk { display: flex; flex-direction: column; gap: 12px; max-width: 420px; width: 100%; }
+  .say { max-width: 78%; padding: 12px 18px; border-radius: 20px; font-size: 18px; }
+  .say.coach { align-self: flex-start; background: var(--paper); color: var(--ink); border-start-start-radius: 6px; }
+  .say.you { align-self: flex-end; background: transparent; border: 1px solid var(--line); color: var(--cream); border-start-end-radius: 6px; }
+  .who { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+  .say.coach .who { color: var(--ink-2); }
+  .logged { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 14px 18px; border-radius: 16px; border: 1px solid rgba(169,196,159,0.4); color: var(--cream); }
+  .logged svg { width: 20px; height: 20px; stroke: var(--moss); fill: none; stroke-width: 2.4; flex-shrink: 0; }
+  .logged .l { display: flex; align-items: center; gap: 10px; }
+  .surfaces { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 22px; }
+  .surfaces span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 15px; color: var(--cream-2); }
+
+  /* quiet facts */
+  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; }
+  .fact h3 { font-size: 18px; font-weight: 700; margin: 0 0 6px; }
+  .fact p { margin: 0; color: var(--cream-2); font-size: 16px; text-wrap: pretty; }
+
+  /* close */
+  .close { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .close .mark { width: 96px; height: auto; direction: ltr; }
+  .close h2 { margin: 0; }
+  .price { color: var(--muted); font-size: 15px; }
+  footer { border-top: 1px solid var(--line); padding-block: 28px 40px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; color: var(--muted); font-size: 14px; }
+  footer nav { display: flex; gap: 20px; }
+  footer a { color: var(--cream-2); text-decoration: none; }
+  footer a:hover { color: var(--cream); }
+
+  @media (max-width: 860px) {
+    .hero, .split { grid-template-columns: minmax(0, 1fr); }
+    .rest, .example { justify-self: stretch; max-width: 460px; }
+    .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .split .visual { order: 2; }
+  }
+  @media (max-width: 520px) {
+    .facts { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+    .bar .store.small { display: none; }
+    .day { grid-template-columns: 52px minmax(0, 1fr); }
+    .day .day-lifts { grid-column: 2; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-mark .dot { animation: none; }
+    .store { transition: none; }
+  }
+</style>
+
+<div class="page" lang="he">
+  <div class="wrap">
+
+    <header class="bar">
+      <a class="brand" href="#" aria-label="FERROX">
+        <svg class="mark" viewBox="9.5 16 81 59" aria-hidden="true"><path fill="#F1EEE5" d="M62 60 C79 60 88 46 89.5 17 C82 34 74 44 61 44 L39 44 C26 44 18 34 10.5 17 C12 46 21 60 38 60 L36.584 60 A14 14 0 0 1 63.416 60 Z"/><circle cx="50" cy="64" r="10" fill="#A9C49F"/></svg>
+        <svg class="word" viewBox="-2 -4 704 108" aria-hidden="true"><g fill="#F1EEE5"><rect x="0" y="0" width="16" height="100"/><rect x="0" y="0" width="66" height="16"/><rect x="0" y="40" width="56" height="16"/><rect x="110" y="0" width="16" height="100"/><rect x="110" y="0" width="68" height="16"/><rect x="110" y="40" width="60" height="16"/><rect x="110" y="84" width="68" height="16"/><path fill-rule="evenodd" d="M222 0 H270 A29 29 0 0 1 270 58 H222 Z M238 16 H270 A13 13 0 0 1 270 42 H238 Z"/><rect x="222" y="0" width="16" height="100"/><path d="M258 42 L276.4 42 L302 100 L283.6 100 Z"/><path fill-rule="evenodd" d="M346 0 H394 A29 29 0 0 1 394 58 H346 Z M362 16 H394 A13 13 0 0 1 394 42 H362 Z"/><rect x="346" y="0" width="16" height="100"/><path d="M382 42 L400.4 42 L426 100 L407.6 100 Z"/><path fill-rule="evenodd" d="M521 -1.5 A51 51.5 0 1 1 520.99 -1.5 Z M521 14.5 A35 35.5 0 1 0 521.01 14.5 Z"/><path d="M616 0 H635.2 L700 100 H680.8 Z"/><path d="M680.8 0 H700 L635.2 100 H616 Z"/></g></svg>
+      </a>
+      <a class="store small" href="#download">להורדה</a>
+    </header>
+
+    <div class="hero">
+      <div>
+        <svg class="hero-mark" viewBox="9.5 10 81 65" aria-hidden="true"><path fill="#F1EEE5" d="M62 60 C79 60 88 46 89.5 17 C82 34 74 44 61 44 L39 44 C26 44 18 34 10.5 17 C12 46 21 60 38 60 L36.584 60 A14 14 0 0 1 63.416 60 Z"/><circle class="dot" cx="50" cy="64" r="10" fill="#A9C49F"/></svg>
+        <h1>המאמן שכותב לך את השבוע, <em>ועומד לידך בכל סט.</em></h1>
+        <p class="lede">FERROX בונה תוכנית כוח ממה שסיפרת לו, מראה כל תרגיל על דמות שזזה כמוך, ומנהל את האימון מהאוזניות, מהשעון וממסך הנעילה. הטלפון נשאר בכיס.</p>
+        <div class="cta-row" id="download">
+          <a class="store" href="[קישור ל-App Store]">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.62c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-2.99-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.89 1.15 9.14.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.77-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.39-.92-2.41-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.02.61-2.67 1.37-.58.67-1.09 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.28z"/></svg>
+            להורדה ב-App Store
+          </a>
+          <span class="devices num">iPhone · Apple Watch</span>
+        </div>
+      </div>
+
+      <div class="rest-col">
+        <div class="rest" aria-label="דוגמה לכרטיס מנוחה">
+          <div class="rest-top">
+            <span class="rest-lift">סקוואט</span>
+            <span class="rest-set">סט <span class="num">3/4</span></span>
+          </div>
+          <div class="rest-body">
+            <div class="rest-load">
+              <span class="big num">100 kg × 5</span>
+              <span class="cap">הסט הבא</span>
+            </div>
+            <div class="ring">
+              <svg viewBox="0 0 108 108" aria-hidden="true">
+                <circle cx="54" cy="54" r="47" fill="none" stroke="#E3DED0" stroke-width="8"/>
+                <circle id="ring-arc" cx="54" cy="54" r="47" fill="none" stroke="#3E573F" stroke-width="8" stroke-linecap="round" stroke-dasharray="295.3" stroke-dashoffset="98"/>
+              </svg>
+              <span class="clock num" id="clock">1:00</span>
+            </div>
+          </div>
+          <div class="rest-actions">
+            <span class="primary">לרשום סט</span>
+            <span><span class="num">+15</span> שנ׳</span>
+          </div>
+        </div>
+        <p class="example">דוגמה: כרטיס המנוחה כמו שהוא מופיע במסך הנעילה, עם שעון שרץ גם כשהטלפון נעול.</p>
+      </div>
+    </div>
+
+    <section class="split">
+      <div class="copy">
+        <p class="eyebrow">התוכנית</p>
+        <h2>שבוע שלם, כתוב בשבילך.</h2>
+        <p>כמה ימים יש לך, איזה ציוד יש בחדר הכושר, מה המטרה ומה כואב. מזה נכתב שבוע שלם: עם שם, עם ימים ועם תרגילים שמתאימים לציוד שיש לך.</p>
+        <p>החלפת תרגיל, סידור מחדש בגרירה, או שבוע חדש כשמשהו משתנה. התוכנית זזה איתך.</p>
+      </div>
+      <div class="visual">
+        <div class="week" aria-label="דוגמה לשבוע אימונים">
+          <div class="week-head">
+            <span class="week-title">עליון / תחתון</span>
+            <span class="week-days"><span class="num">4</span> ימים בשבוע</span>
+          </div>
+          <div class="day today"><span class="day-name">היום</span><span class="day-focus">עליון א</span><span class="day-lifts">לחיצת חזה · חתירה · לחיצת כתפיים</span></div>
+          <div class="day"><span class="day-name">שלישי</span><span class="day-focus">תחתון א</span><span class="day-lifts">סקוואט · דדליפט רומני · לאנג׳</span></div>
+          <div class="day"><span class="day-name">חמישי</span><span class="day-focus">עליון ב</span><span class="day-lifts">מתח · לחיצה בשיפוע · פרפר</span></div>
+          <div class="day"><span class="day-name">שישי</span><span class="day-focus">תחתון ב</span><span class="day-lifts">דדליפט · לחיצת רגליים · תאומים</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="split">
+      <div class="visual">
+        <div class="shot">[צילום מסך מהאפליקציה: הדמות מבצעת תרגיל]</div>
+      </div>
+      <div class="copy">
+        <p class="eyebrow">התנועה</p>
+        <h2>הדמות מראה. לא מתארת.</h2>
+        <p>כל תרגיל מוצג על דמות תלת-ממדית שעושה אותו בקצב, בעומק ובטווח הנכונים, מהזווית שבה רואים הכי טוב. מתאמן או מתאמנת, אותה תנועה מדויקת.</p>
+        <p>במהלך האימון הדמות עושה את הסט יחד איתך, כך שאין צורך לקרוא הוראות בין חזרה לחזרה.</p>
+      </div>
+    </section>
+
+    <section class="split">
+      <div class="copy">
+        <p class="eyebrow">האימון</p>
+        <h2>הטלפון נשאר בכיס.</h2>
+        <p>המאמן מדבר איתך באוזניות: שואל אם אפשר להתחיל, סופר את המנוחה ורושם את החזרות לפי מה שאמרת. בלי לגעת במסך.</p>
+        <p>ואם נוח יותר ללחוץ: אותו אימון בדיוק מופיע בשעון, במסך הנעילה ובאפליקציה, עם שעון מנוחה אחד משותף לכולם.</p>
+        <div class="surfaces"><span>אוזניות</span><span>Apple Watch</span><span>מסך נעילה</span><span>iPhone</span></div>
+      </div>
+      <div class="visual">
+        <div class="talk" aria-label="דוגמה לשיחה עם המאמן">
+          <div class="say coach"><span class="who">המאמן</span>מוכן לסט השלישי?</div>
+          <div class="say you"><span class="who">את/ה</span>מוכן.</div>
+          <div class="say coach"><span class="who">המאמן</span>כמה חזרות?</div>
+          <div class="say you"><span class="who">את/ה</span>חמש.</div>
+          <div class="logged">
+            <span class="l"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke-linecap="round" stroke-linejoin="round"/></svg>סט 3 נרשם</span>
+            <span class="num">100 kg × 5</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="facts">
+        <div class="fact"><h3>ריצה והליכה</h3><p>מסלול, מרחק וקצב ב-GPS, או צעדים על ההליכון.</p></div>
+        <div class="fact"><h3>Apple Health</h3><p>הדופק נקרא מ-Health, והאימונים נשמרים בו.</p></div>
+        <div class="fact"><h3>עברית ואנגלית</h3><p>ובעברית, המאמן פונה אליך בלשון שלך.</p></div>
+        <div class="fact"><h3>הכול נשמר</h3><p>כל סט, כל משקל וכל שבוע, כדי שהשבוע הבא יתחיל ממה שכבר עשית.</p></div>
+      </div>
+    </section>
+
+    <section class="close">
+      <svg class="mark" viewBox="9.5 16 81 59" aria-hidden="true"><path fill="#F1EEE5" d="M62 60 C79 60 88 46 89.5 17 C82 34 74 44 61 44 L39 44 C26 44 18 34 10.5 17 C12 46 21 60 38 60 L36.584 60 A14 14 0 0 1 63.416 60 Z"/><circle cx="50" cy="64" r="10" fill="#A9C49F"/></svg>
+      <h2>הסט הבא שלך כבר כתוב.</h2>
+      <a class="store" href="[קישור ל-App Store]">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.37 12.62c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-2.99-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.89 1.15 9.14.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.77-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.39-.92-2.41-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.02.61-2.67 1.37-.58.67-1.09 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.28z"/></svg>
+        להורדה ב-App Store
+      </a>
+      <p class="price">FERROX Pro · [מחיר ותקופת ניסיון]</p>
+    </section>
+
+    <footer>
+      <span>© <span class="num">2026</span> FERROX</span>
+      <nav><a href="[קישור למדיניות פרטיות]">פרטיות</a><a href="[קישור לתנאי שימוש]">תנאי שימוש</a><a href="mailto:[כתובת תמיכה]">תמיכה</a></nav>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    var clock = document.getElementById('clock');
+    var arc = document.getElementById('ring-arc');
+    if (!clock || !arc) return;
+    var TOTAL = 90, C = 295.3, left = 60;
+    function paint() {
+      var m = Math.floor(left / 60), s = left % 60;
+      clock.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      arc.setAttribute('stroke-dashoffset', String(C * (1 - left / TOTAL)));
+    }
+    paint();
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setInterval(function () { left = left <= 0 ? TOTAL : left - 1; paint(); }, 1000);
+  })();
+</script>

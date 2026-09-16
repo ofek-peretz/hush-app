@@ -399,7 +399,7 @@ export default {
       const body = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta property="og:title" content="A training week, shared with you">
-<meta property="og:description" content="Someone built you a week in Hush — a strength coach that measures instead of guessing.">
+<meta property="og:description" content="Someone built you a week in FERROX — a strength coach that measures instead of guessing.">
 <title>A training week, shared with you</title>
 <style>
  body{margin:0;background:#131210;color:#f1eee5;font:400 17px/1.5 -apple-system,system-ui,sans-serif;
@@ -412,7 +412,7 @@ export default {
  .ghost{color:#a8a290}
 </style></head><body><main>
  <h1>A training week, shared with you</h1>
- <p>Open it in Hush and it becomes yours — loads and all, adjusted to you from the first set.</p>
+ <p>Open it in FERROX and it becomes yours — loads and all, adjusted to you from the first set.</p>
  ${token ? `<a class="primary" href="hush://plan?p=${token}">Open in the app</a>` : ''}
  <a class="ghost" href="${APP_STORE_URL}">Get the app</a>
 </main></body></html>`;
@@ -430,8 +430,8 @@ export default {
     if (req.method === 'GET' && path === '/') {
       const body = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Hush reads the reps you just did and moves the iron before your next set. No streaks, no scores — measured coaching for the gym floor.">
-<title>Hush</title>
+<meta name="description" content="FERROX reads the reps you just did and moves the iron before your next set. No streaks, no scores — measured coaching for the gym floor.">
+<title>FERROX</title>
 <style>
  body{margin:0;background:#000;color:#f1eee5;font:400 17px/1.6 -apple-system,system-ui,sans-serif;
       display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
@@ -441,10 +441,10 @@ export default {
  p{color:#a8a290;margin:0 0 32px}
  a{display:block;text-decoration:none;border-radius:19px;padding:18px;background:#f1eee5;color:#131210;font-weight:600}
 </style></head><body><main>
- <div class="mark">hush</div>
+ <div class="mark">FERROX</div>
  <h1>It saw your last set. It already changed your next.</h1>
  <p>A strength coach that measures instead of guessing. Your reps in, the next weight out — in about ninety seconds.</p>
- <a href="${APP_STORE_URL}">Get Hush on the App Store</a>
+ <a href="${APP_STORE_URL}">Get FERROX on the App Store</a>
 </main></body></html>`;
       return new Response(body, {
         status: 200,
@@ -463,14 +463,14 @@ export default {
     if (req.method === 'GET' && (path === '/privacy' || path === '/terms')) {
       const page = (title: string, sections: [string, string][]) =>
         `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Hush — ${title}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>FERROX — ${title}</title>
 <style>body{margin:0;background:#000;color:#f1eee5;font:400 17px/1.65 -apple-system,system-ui,sans-serif;padding:48px 24px}
 main{max-width:38rem;margin:0 auto}.mark{color:#a9c49f;letter-spacing:.18em;font-size:12px;text-transform:uppercase;margin-bottom:16px}
 h1{font:400 30px/1.25 Georgia,serif;margin:0 0 8px}h2{font:600 15px/1.4 -apple-system,system-ui,sans-serif;margin:28px 0 6px;color:#d8d3c4}
 p{color:#a8a290;margin:0 0 12px}.stamp{color:#6d675a;font-size:13px;margin-top:36px}</style></head><body><main>
-<div class="mark">hush</div><h1>${title}</h1>
+<div class="mark">FERROX</div><h1>${title}</h1>
 ${sections.map(([h, b]) => `<h2>${h}</h2><p>${b}</p>`).join('\n')}
-<p class="stamp">Hush · com.hushfitness.app · ofek34458@gmail.com · Last updated 2026-09-01</p>
+<p class="stamp">FERROX · com.hushfitness.app · ofek34458@gmail.com · Last updated 2026-09-01</p>
 </main></body></html>`;
       const body =
         path === '/privacy'
@@ -484,8 +484,8 @@ ${sections.map(([h, b]) => `<h2>${h}</h2><p>${b}</p>`).join('\n')}
               ['Where and on what basis', 'Data is processed in the EU and the US by the processors named above, under our instructions, on the basis of performing the service you asked for. Server records live only as long as the account does; sessions expire within 90 days.'],
             ])
           : page('Terms of Use', [
-              ['The service', 'Hush is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional.'],
-              ['Your licence', 'You receive a personal, non-transferable licence to use the app. Its content, code and figures are Hush’s property.'],
+              ['The service', 'FERROX is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional.'],
+              ['Your licence', 'You receive a personal, non-transferable licence to use the app. Its content, code and figures are FERROX’s property.'],
               ['Membership', 'The subscription is billed by Apple under their terms; the trial is free and takes no card. Your history, records and export stay yours with or without a membership.'],
               ['Conduct', 'Use that breaks the law or harms the service can close the account.'],
             ]);

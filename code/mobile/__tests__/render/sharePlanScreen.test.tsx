@@ -128,7 +128,8 @@ describe('the card is dressed as the poster it is', () => {
   });
 
   it('carries the wordmark, as the record poster does', () => {
-    expect(texts(mount(view()))).toContain('hush');
+    const r = mount(view());
+    expect(r.root.findAll((n) => n.props?.accessibilityLabel === 'FERROX').length).toBeGreaterThan(0);
   });
 
   /**

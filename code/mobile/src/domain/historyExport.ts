@@ -90,7 +90,7 @@ export function sessionsToCsv(sessions: Session[], units: Units, notes: Record<s
   return lines.join('\n') + '\n';
 }
 
-/** `hush-log-2026-09-09.csv` — dated, so two exports never overwrite each other in a folder. */
+/** `ferrox-log-2026-09-09.csv` — dated, so two exports never overwrite each other in a folder. */
 export function exportFileName(nowMs: number): string {
-  return `hush-log-${new Date(nowMs).toISOString().slice(0, 10)}.csv`;
+  return `ferrox-log-${new Date(nowMs).toISOString().slice(0, 10)}.csv`;
 }

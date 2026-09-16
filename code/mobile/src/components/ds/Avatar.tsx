@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
-import { HushMark } from '@/components/HushMark';
+import { FerroxMark } from '@/components/FerroxLogo';
 import { color, radius, font, paper, ink } from '@/design/tokens';
 
 function initials(name?: string): string {
@@ -47,7 +47,7 @@ export function Avatar({ name, size = 40, square = false, solid = false, style }
           {initials(name)}
         </Text>
       ) : (
-        <HushMark size={Math.round(size * 0.42)} />
+        <FerroxMark width={Math.round(size * 0.5)} />
       )}
     </View>
   );

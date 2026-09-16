@@ -12,7 +12,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hush</string>
+	<string>FERROX</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,8 +48,8 @@
 	     for the workout builder (share). Required in THIS plist — the request originates
 	     on the watch, not the companion. -->
 	<key>NSHealthShareUsageDescription</key>
-	<string>Hush reads your heart rate and active energy during a workout to record your training session.</string>
+	<string>FERROX reads your heart rate and active energy during a workout to record your training session.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Hush saves your completed strength workouts to Apple Health.</string>
+	<string>FERROX saves your completed strength workouts to Apple Health.</string>
 </dict>
 </plist>

@@ -194,12 +194,12 @@ export function restoreVerdict(record: AthleteRecord, sessionsOnPhone: number): 
 }
 
 /**
- * A stable, human-legible file name: `hush-record-2026-08-22.json`.
+ * A stable, human-legible file name: `ferrox-record-2026-08-22.json`.
  *
  * ⚠️ THE DATE IS THE POINT. She will end up with several of these in a Files folder and the only
  * question she will ever ask of them is "which is the newest" — so the name answers it, and sorts
  * correctly while doing so.
  */
 export function recordFileName(atMs: number, iso = new Date(atMs).toISOString()): string {
-  return `hush-record-${iso.slice(0, 10)}.json`;
+  return `ferrox-record-${iso.slice(0, 10)}.json`;
 }

@@ -177,6 +177,6 @@ describe('and its poster half asks for nothing — the door lives with the act',
 
   it('it ends on DONE, and the mark is carried whole so a screenshot brings the product with it', () => {
     expect(done()).toContain("label={t('cardio.done')}");
-    expect(done()).toContain('<RangeMark />');
+    expect(done()).toContain('<FerroxMark ');
   });
 });

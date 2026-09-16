@@ -54,10 +54,11 @@ import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { LegalSheet } from '@/components/LegalSheet';
-import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, press, motion } from '@/design/tokens';
+import { color, space, font, textScale, signal, control, radius, press, motion } from '@/design/tokens';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList, MainParamList } from '@/app/navigation';
 import { track } from '@/platform/telemetry';
+import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 
 /**
  * Registered on BOTH stacks (2026-09-09): the onboarding closer, and the main-stack closer for the
@@ -200,8 +201,7 @@ export function Authentication({ navigation: nav, route }: Props) {
         </Pressable>
       </View>
       <View style={styles.hero}>
-        {/* v7 1.1 mark: a moss ring blooms behind the cream span-bracket, and a moss dot
-            rests at its centre — "line grows, ticks strike, the dot rolls home". */}
+        {/* the FERROX mark: a moss ring blooms once behind the horns that hold the dot. */}
         <Arrive order={0} style={[styles.markWrap, styles.markLockup]}>
           <Animated.View
             pointerEvents="none"
@@ -213,17 +213,11 @@ export function Authentication({ navigation: nav, route }: Props) {
               },
             ]}
           />
-          <View style={styles.bracket}>
-            <View style={styles.bracketBar} />
-            <View style={styles.bracketTickStart} />
-            <View style={styles.bracketTickEnd} />
-            <View style={styles.bracketDot} />
-          </View>
+          <FerroxMark width={84} />
         </Arrive>
-        {/* v7 1.1: just "hush" in the coach's serif — no trailing moss dot. The moss on this
-            screen lives once, in the mark's halo above (the pulse ring), not after the word. */}
+        {/* the wordmark alone — the moss on this screen lives in the mark's dot and its halo. */}
         <Arrive order={1} style={[styles.brand, styles.brandLockup]}>
-          <Text style={styles.wordmark}>hush</Text>
+          <FerroxWordmark width={220} />
         </Arrive>
         {/* ONE CLAIM, NOT TWO (2026-07-17).
             This was a boast — "The best training experience in the world." — above the deal that
@@ -435,20 +429,8 @@ const styles = StyleSheet.create({
   /* borderWidth 1.5 → 2 (design review 2026-09-01): at 0.5 opacity a 1.5 hairline ring is nearly
      invisible on glass, and on this screen the mark IS the personality. */
   halo: { position: 'absolute', width: 118, height: 118, borderRadius: 59, borderWidth: 2, borderColor: signal[0] },
-  // The span-bracket: a cream hairline between two end ticks, wider than the ring (150×26).
-  bracket: { width: 150, height: 26 },
-  bracketBar: { position: 'absolute', left: 0, right: 0, top: 12, height: 2, backgroundColor: color.textPrimary },
-  bracketTickStart: { position: 'absolute', left: 0, top: 3, width: 2, height: 20, backgroundColor: color.textPrimary },
-  bracketTickEnd: { position: 'absolute', right: 0, top: 3, width: 2, height: 20, backgroundColor: color.textPrimary },
-  // The moss dot resting at the centre of the span.
-  // rtl-ok — the centring idiom: `left:'50%'` then back off HALF THE DOT's width. Both halves are
-  // about the dot's own geometry, not about a reading direction, so a logical margin here would
-  // shift it off centre in one locale and not the other.
-  bracketDot: { position: 'absolute', left: '50%', marginLeft: -6, top: 7, width: 12, height: 12, borderRadius: 6, backgroundColor: signal[0] }, // rtl-ok — centring idiom, not a reading direction
-  // Brand lockup stays LTR ("hush") in every locale rather than mirroring.
+  // Brand lockup stays LTR (FERROX) in every locale rather than mirroring.
   brand: { flexDirection: 'row', alignItems: 'flex-end', direction: 'ltr' },
-  // v7: the wordmark is the coach's serif, 76px — matching the welcome mock.
-  wordmark: { fontFamily: font.serif, fontSize: 76, lineHeight: 76, letterSpacing: trackingPx(76, tracking.display), color: color.textPrimary, textAlign: 'left' },
   /* ════ TWO LINES, BECAUSE IT IS TWO PROMISES (founder 2026-07-28) ════
      "You train. I carry the rest." is a deal with two halves — what SHE does, and what HUSH does —
      and set as one wrapped paragraph the split fell wherever the width happened to put it. Given a

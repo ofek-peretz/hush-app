@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Hush",
+    "name": "FERROX",
     "slug": "hush",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,12 +22,12 @@
       "buildNumber": "73",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
-        "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
-        "NSHealthUpdateUsageDescription": "Hush saves your completed strength workouts to Apple Health.",
+        "NSHealthShareUsageDescription": "FERROX reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
+        "NSHealthUpdateUsageDescription": "FERROX saves your completed strength workouts to Apple Health.",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSMicrophoneUsageDescription": "Hush listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
-        "NSSpeechRecognitionUsageDescription": "Hush turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised.",
-        "NSMotionUsageDescription": "Hush counts your steps with the phone's motion sensor to measure distance and pace on the treadmill.",
+        "NSMicrophoneUsageDescription": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+        "NSSpeechRecognitionUsageDescription": "FERROX turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised.",
+        "NSMotionUsageDescription": "FERROX counts your steps with the phone's motion sensor to measure distance and pace on the treadmill.",
         "UIBackgroundModes": [
           "location",
           "audio"
@@ -113,6 +113,7 @@
       "userInterfaceStyle": "light",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-mono.png",
         "backgroundColor": "#000000"
       }
     },
@@ -124,22 +125,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Hush opens your photos so you can show your coach a program you were given, or a machine you want to ask about."
+          "photosPermission": "FERROX opens your photos so you can show your coach a program you were given, or a machine you want to ask about."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Hush uses your location to measure distance and pace for the runs and walks you record.",
-          "locationAlwaysAndWhenInUsePermission": "Hush keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
-          "locationAlwaysPermission": "Hush keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
+          "locationWhenInUsePermission": "FERROX uses your location to measure distance and pace for the runs and walks you record.",
+          "locationAlwaysAndWhenInUsePermission": "FERROX keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
+          "locationAlwaysPermission": "FERROX keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
           "isIosBackgroundLocationEnabled": true
         }
       ],
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks."
+          "NSHealthShareUsageDescription": "FERROX reads your heart rate, calories and distance from Apple Health to record your runs and walks."
         }
       ],
       "@bacons/apple-targets",
@@ -157,8 +158,8 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Hush listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
-          "speechRecognitionPermission": "Hush turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised."
+          "microphonePermission": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+          "speechRecognitionPermission": "FERROX turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised."
         }
       ]
     ],

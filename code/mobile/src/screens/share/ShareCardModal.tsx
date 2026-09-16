@@ -46,7 +46,7 @@ export function ShareCardModal({ navigation, route }: Props) {
     if (busy) return;
     setBusy(true);
     setNote(null);
-    const res = await share.captureAndShare(cardRef, `hush-${card.kind}.png`, t('share.sheetTitle'));
+    const res = await share.captureAndShare(cardRef, `ferrox-${card.kind}.png`, t('share.sheetTitle'));
     // The funnel's second half — the result used to be thrown away, so the one growth surface the
     // product has was entirely unmeasured. 'shared' here means the OS sheet resolved, the closest
     // honest proxy iOS offers for "it left the phone".

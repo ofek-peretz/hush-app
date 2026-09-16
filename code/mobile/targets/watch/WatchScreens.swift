@@ -697,18 +697,45 @@ private struct DrawCheck: View {
  * `RangeMark` defaults to `color.textPrimary` too, so cream is not a compromise here; it is what
  * the component actually is on both surfaces.
  */
+/// THE FERROX MARK (2026-09-16) — two horns whose flat middle is a bar, with a notch that cradles
+/// the dot. Geometry from `brand/logo/export/ferrox-mark.svg` (box 9.5,16 · 81×59); do not redraw.
+private struct FerroxHorns: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 81, rect.height / 59)
+    let ox = rect.minX + (rect.width - 81 * s) / 2
+    let oy = rect.minY + (rect.height - 59 * s) / 2
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + (x - 9.5) * s, y: oy + (y - 16) * s) }
+    var path = Path()
+    path.move(to: p(62, 60))
+    path.addCurve(to: p(89.5, 17), control1: p(79, 60), control2: p(88, 46))
+    path.addCurve(to: p(61, 44), control1: p(82, 34), control2: p(74, 44))
+    path.addLine(to: p(39, 44))
+    path.addCurve(to: p(10.5, 17), control1: p(26, 44), control2: p(18, 34))
+    path.addCurve(to: p(38, 60), control1: p(12, 46), control2: p(21, 60))
+    path.addLine(to: p(36.584, 60))
+    // the notch: over the top of a circle r 14 around the dot's centre (visually clockwise)
+    path.addArc(center: p(50, 64), radius: 14 * s, startAngle: .degrees(196.6), endAngle: .degrees(343.4), clockwise: false)
+    path.closeSubpath()
+    return path
+  }
+}
+
+private struct FerroxDot: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 81, rect.height / 59)
+    let cx = rect.minX + (rect.width - 81 * s) / 2 + (50 - 9.5) * s
+    let cy = rect.minY + (rect.height - 59 * s) / 2 + (64 - 16) * s
+    return Path(ellipseIn: CGRect(x: cx - 10 * s, y: cy - 10 * s, width: 20 * s, height: 20 * s))
+  }
+}
+
 private struct RangeGlyph: View {
   var body: some View {
     ZStack {
-      Rectangle().fill(Palette.ink0).frame(width: Fit.s(20), height: Fit.s(1.3))
-      HStack {
-        Rectangle().fill(Palette.ink0).frame(width: Fit.s(1.3), height: Fit.s(9))
-        Spacer()
-        Rectangle().fill(Palette.ink0).frame(width: Fit.s(1.3), height: Fit.s(9))
-      }
-      .frame(width: Fit.s(20))
+      FerroxHorns().fill(Palette.ink0)
+      FerroxDot().fill(Palette.signal)
     }
-    .frame(width: Fit.s(20), height: Fit.s(9))
+    .frame(width: Fit.s(18), height: Fit.s(18) * 59 / 81)
   }
 }
 
@@ -1249,7 +1276,7 @@ struct WatchRootView: View {
         // borrowed SF glyph is nobody's product (design pass 2026-09-09).
         HStack(spacing: Fit.s(6)) {
           RangeGlyph()
-          Text("hush").font(.system(size: Fit.s(17), design: .serif)).foregroundStyle(Palette.ink0)
+          Text("FERROX").font(.system(size: Fit.s(14), weight: .semibold)).tracking(Fit.s(2)).foregroundStyle(Palette.ink0)
         }
         Text(WatchCopy.idleWaiting).font(.system(size: Fit.s(14), weight: .medium)).foregroundStyle(Palette.ink1)
         /*
@@ -3104,7 +3131,7 @@ struct CardioCompleteScreen: View {
         ClockLane {
           HStack(spacing: Fit.s(6)) {
             RangeGlyph()
-            Text("hush").font(.system(size: Fit.s(15), design: .serif)).foregroundStyle(Palette.ink0)
+            Text("FERROX").font(.system(size: Fit.s(12), weight: .semibold)).tracking(Fit.s(1.6)).foregroundStyle(Palette.ink0)
           }
         }
         .frame(height: Fit.s(Wrist.head))

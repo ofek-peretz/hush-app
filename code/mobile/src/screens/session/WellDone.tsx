@@ -52,7 +52,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { Arrive, ARRIVE_STAGGER, Button, Legend, FooterFade } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
-import { RangeMark } from '@/components/RangeMark';
+import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import { sessionPoster } from '@/domain/sessionPoster';
 import { useCopy } from '@/i18n/useCopy';
 import { sessionCardFromHistory } from '@/domain/shareCard';
@@ -1139,8 +1139,8 @@ export function SessionEarned({
               <Arrive order={0} style={styles.posterHead}>
                 {/* The mark, so a screenshot carries the product without a word of advertising. */}
                 <View style={styles.posterMark}>
-                  <RangeMark />
-                  <Text style={styles.posterWord}>hush</Text>
+                  <FerroxMark width={26} />
+                  <FerroxWordmark width={76} />
                 </View>
 
                 <Legend size={17} track={0.2} align="center" style={styles.posterLegend}>{savedLegend}</Legend>
@@ -1757,8 +1757,7 @@ const styles = StyleSheet.create({
   poster: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
   posterHead: { alignSelf: 'stretch', alignItems: 'center', gap: 10 },
   posterHero: { alignItems: 'center', gap: 6 },
-  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  posterWord: { fontFamily: font.serif, fontSize: 20, color: stage.ink0, textAlign: 'left' },
+  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 10, direction: 'ltr' },
   posterLegend: { color: stage.ink2 },
   posterName: {
     fontFamily: font.serif,

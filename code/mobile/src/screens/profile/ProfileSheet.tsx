@@ -21,7 +21,7 @@ import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { LegalSheet } from '@/components/LegalSheet';
-import { HushMark } from '@/components/HushMark';
+import { FerroxMark } from '@/components/FerroxLogo';
 import { Arrive, Avatar, SegmentedControl, Switch, Legend, Button, Badge, useToast } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -290,7 +290,7 @@ export function ProfileSheet({ navigation }: Props) {
           style={({ pressed }) => [styles.memberCard, pressed && styles.memberCardPressed]}
         >
           <View style={styles.memberIconBox}>
-            <HushMark size={22} />
+            <FerroxMark width={24} />
           </View>
           <View style={styles.memberBody}>
             <View style={styles.memberTitleRow}>
@@ -552,14 +552,13 @@ export function ProfileSheet({ navigation }: Props) {
   );
 }
 
-/** "hush v1.0.0 (23)" — version + iOS build read from the embedded config, so the line
- *  can never drift from what actually shipped. Lowercase: the wordmark is "hush" everywhere
- *  else in the product, and a brand does not change case for a version line (design review
- *  2026-09-01). */
+/** "FERROX v1.0.0 (23)" — version + iOS build read from the embedded config, so the line
+ *  can never drift from what actually shipped. Capitals: the wordmark is FERROX everywhere
+ *  else in the product, and a brand does not change case for a version line. */
 function versionLabel(): string {
   const v = Constants.expoConfig?.version ?? '1.0.0';
   const build = Constants.expoConfig?.ios?.buildNumber;
-  return `hush v${v}${build ? ` (${build})` : ''}`;
+  return `FERROX v${v}${build ? ` (${build})` : ''}`;
 }
 
 /**

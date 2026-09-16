@@ -26,6 +26,7 @@ import { bidi } from '@/i18n/bidi';
 import { exerciseDisplayName } from '@/data/exercises';
 import type { ShareCard as ShareCardData } from '@/domain/shareCard';
 import { MiniBody } from '@/components/MiniBody';
+import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import { monoCanDraw } from '@/design/monoVoice';
 import { fmtClock, fmtPace } from '@/platform/cardio/cardioMath';
 import { stage, signal, font, tracking, trackingPx, line } from '@/design/tokens';
@@ -134,10 +135,10 @@ export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card
         <Rect x="0" y="0" width={width} height={height} rx={px(28)} fill="url(#shareBg)" />
       </Svg>
 
-      {/* wordmark — the brand, carried whole */}
-      <View style={styles.head}>
-        <Text style={[styles.wordmark, { fontSize: px(19) }]}>hush</Text>
-        <View style={[styles.brandDot, { width: px(6), height: px(6), borderRadius: px(3), marginBottom: px(4) }]} />
+      {/* the brand, carried whole — the FERROX mark and wordmark */}
+      <View style={[styles.head, { gap: px(8) }]}>
+        <FerroxMark width={px(24)} color={stage.ink0} />
+        <FerroxWordmark width={px(74)} color={stage.ink0} />
       </View>
 
       {card.kind === 'record' ? (
@@ -408,9 +409,7 @@ function StatCell({ figure, label, px, accent }: { figure: string; label: string
 const styles = StyleSheet.create({
   card: { overflow: 'hidden', backgroundColor: stage[0], justifyContent: 'space-between' },
 
-  head: { flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
-  wordmark: { fontFamily: font.serif, color: stage.ink0, textAlign: 'left' },
-  brandDot: { backgroundColor: signal[0] },
+  head: { flexDirection: 'row', alignItems: 'center', direction: 'ltr' },
 
   body: { flex: 1, justifyContent: 'center' },
   /* Pushes what follows it to the foot of the card — see the note in `CardioBody`. */

@@ -105,19 +105,46 @@ struct HushProvider: TimelineProvider {
 // MARK: Marks
 
 /// The brand's range mark — a rule between two end ticks — at complication scale.
+/// THE FERROX MARK (2026-09-16) — two horns whose flat middle is a bar, with a notch that cradles
+/// the dot. Geometry from `brand/logo/export/ferrox-mark.svg` (box 9.5,16 · 81×59); do not redraw.
+private struct FerroxHorns: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 81, rect.height / 59)
+    let ox = rect.minX + (rect.width - 81 * s) / 2
+    let oy = rect.minY + (rect.height - 59 * s) / 2
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + (x - 9.5) * s, y: oy + (y - 16) * s) }
+    var path = Path()
+    path.move(to: p(62, 60))
+    path.addCurve(to: p(89.5, 17), control1: p(79, 60), control2: p(88, 46))
+    path.addCurve(to: p(61, 44), control1: p(82, 34), control2: p(74, 44))
+    path.addLine(to: p(39, 44))
+    path.addCurve(to: p(10.5, 17), control1: p(26, 44), control2: p(18, 34))
+    path.addCurve(to: p(38, 60), control1: p(12, 46), control2: p(21, 60))
+    path.addLine(to: p(36.584, 60))
+    // the notch: over the top of a circle r 14 around the dot's centre (visually clockwise)
+    path.addArc(center: p(50, 64), radius: 14 * s, startAngle: .degrees(196.6), endAngle: .degrees(343.4), clockwise: false)
+    path.closeSubpath()
+    return path
+  }
+}
+
+private struct FerroxDot: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 81, rect.height / 59)
+    let cx = rect.minX + (rect.width - 81 * s) / 2 + (50 - 9.5) * s
+    let cy = rect.minY + (rect.height - 59 * s) / 2 + (64 - 16) * s
+    return Path(ellipseIn: CGRect(x: cx - 10 * s, y: cy - 10 * s, width: 20 * s, height: 20 * s))
+  }
+}
+
 private struct RangeMark: View {
   var width: CGFloat = 18
   var body: some View {
     ZStack {
-      Rectangle().fill(FacePalette.ink0).frame(width: width, height: 1.4)
-      HStack {
-        Rectangle().fill(FacePalette.ink0).frame(width: 1.4, height: width * 0.45)
-        Spacer()
-        Rectangle().fill(FacePalette.ink0).frame(width: 1.4, height: width * 0.45)
-      }
-      .frame(width: width)
+      FerroxHorns().fill(FacePalette.ink0)
+      FerroxDot().fill(FacePalette.ink0)
     }
-    .frame(width: width, height: width * 0.45)
+    .frame(width: width, height: width * 59 / 81)
     .widgetAccentable()
   }
 }
@@ -164,11 +191,11 @@ struct HushComplicationView: View {
   @ViewBuilder private var launcher: some View {
     switch family {
     case .accessoryInline:
-      Text("hush")
+      Text("FERROX")
     case .accessoryRectangular:
       HStack(spacing: 6) {
         RangeMark()
-        Text("hush").font(.system(size: 15, design: .serif))
+        Text("FERROX").font(.system(size: 13, weight: .semibold)).tracking(1.6)
       }
     default:
       RangeMark(width: 22)
@@ -236,7 +263,7 @@ struct HushComplication: Widget {
     StaticConfiguration(kind: "HushComplication", provider: HushProvider()) { entry in
       HushComplicationView(entry: entry)
     }
-    .configurationDisplayName("Hush")
+    .configurationDisplayName("FERROX")
     .description("What is next, and how far into the week you are.")
     .supportedFamilies([.accessoryCircular, .accessoryCorner, .accessoryInline, .accessoryRectangular])
   }

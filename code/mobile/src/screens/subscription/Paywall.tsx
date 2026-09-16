@@ -41,7 +41,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { RangeMark } from '@/components/RangeMark';
+import { FerroxMark } from '@/components/FerroxLogo';
 import { Arrive, Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
@@ -229,7 +229,7 @@ export function Paywall({ navigation, route }: Props) {
           ════════════════════════════════════════════════════════════════════════════════════════
         */}
         <Arrive order={0}>
-          <RangeMark width={44} height={18} tone={signal[0]} />
+          <FerroxMark width={56} />
         </Arrive>
         <Arrive order={0}>
         <Legend tone="accent" track={0.16} style={styles.eyebrow}>

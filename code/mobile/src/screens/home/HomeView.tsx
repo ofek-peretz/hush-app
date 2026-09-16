@@ -83,6 +83,7 @@ import { displayWeight, unitLabel } from '@/domain/schedule';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { DayInMotion } from '@/components/DayInMotion';
+import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import type { FigureSex } from '@/motion/types';
 import { color, space, font, textScale, ramp, radius, signal, stage, motion, tracking, trackingPx, directionTone, type LoadDirection } from '@/design/tokens';
 import { TRIAL_NEWS_AT } from '@/domain/entitlement';
@@ -481,11 +482,11 @@ export function HomeView(props: HomeViewProps) {
     <View style={styles.root}>
       <Stage />
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        {/* brand + account — the range-mark and "hush" in the coach's serif, the avatar opposite */}
+        {/* brand + account — the FERROX mark and wordmark, the avatar opposite */}
         <View style={styles.brandRow}>
           <View style={styles.brand}>
-            <RangeMark />
-            <Text style={styles.wordmark}>hush</Text>
+            <FerroxMark width={30} />
+            <FerroxWordmark width={84} />
           </View>
           {/*
             ════ ⛔ THE CORNER IS HERS NOW (founder, 2026-09-16) ════
@@ -1142,20 +1143,6 @@ export function HomeView(props: HomeViewProps) {
   );
 }
 
-/**
- * The measured-range mark — a hairline spanning two end ticks, struck in cream beside the wordmark
- * (the brand's range glyph). The same glyph the tab bar strikes in moss under the active tab.
- */
-function RangeMark() {
-  return (
-    <View style={styles.mark}>
-      <View style={styles.markBar} />
-      <View style={[styles.markTick, styles.markTickStart]} />
-      <View style={[styles.markTick, styles.markTickEnd]} />
-    </View>
-  );
-}
-
 /*
  * ⛔ THE FIGURE ASSEMBLY LEFT WITH THE TABLE (2026-08-05). `figureLoad`, `figureUnit`,
  * `figureScheme` and `planFigureLabel` are the one place the app decides how a prescription READS
@@ -1281,13 +1268,6 @@ const styles = StyleSheet.create({
   togetherDiscPressed: { backgroundColor: 'rgba(241,238,229,0.14)' },
   // The wordmark stays LTR ("hush") in every locale rather than mirroring.
   brand: { flexDirection: 'row', alignItems: 'center', gap: 9, direction: 'ltr' },
-  wordmark: { fontFamily: font.serif, fontSize: 22, color: color.textPrimary, textAlign: 'left' },
-  // the range-mark beside the wordmark (cream), 26 × 11
-  mark: { width: 26, height: 11 },
-  markBar: { position: 'absolute', start: 0, end: 0, top: 5, height: 1.5, backgroundColor: color.textPrimary },
-  markTick: { position: 'absolute', top: 0, width: 1.5, height: 11, backgroundColor: color.textPrimary },
-  markTickStart: { start: 0 },
-  markTickEnd: { end: 0 },
   // ════ THE SHARE DOOR IS A CONTROL, SO IT LOOKS LIKE ONE (founder A.8) ════
   /*
    * ⛔ `shareDoor` GOES WITH THE DOOR IT DRESSED (2026-08-12) — see the brand row.

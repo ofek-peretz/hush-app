@@ -83,7 +83,8 @@ describe('ShareCard · record', () => {
     const all = texts(r).map((t) => t.text);
     expect(all.some((s) => s.includes('62.5'))).toBe(true);
     expect(all.some((s) => s.includes('8'))).toBe(true); // reps
-    expect(all.join(' ')).toContain('hush');
+    // the brand rides as the FERROX mark + wordmark (vector), named for assistive tech
+    expect(r.root.findAll((n) => n.props?.accessibilityLabel === 'FERROX').length).toBeGreaterThan(0);
   });
 
   it('renders a first-ever record (no delta) without throwing', () => {
