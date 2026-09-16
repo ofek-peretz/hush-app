@@ -78,7 +78,9 @@ describe('⛔ every swap door offers what her room holds', () => {
   });
 });
 
-describe('⛔ the room save says what happened to the week', () => {
+/* ⛔ THE ROOM ROW LEFT THE YOU TAB (founder 2026-09-16). What she has she tells the model in her own
+   words on the ask; `Profile.equipment` still binds every swap door above for a room already stored. */
+describe.skip('⛔ the room save says what happened to the week (the row is deleted)', () => {
   const room = strip(fs.readFileSync(path.join(SRC, 'screens/profile/ProfileSheet.tsx'), 'utf8'));
 
   it('the answer is read, never thrown away — the week may legitimately stay as it was', () => {

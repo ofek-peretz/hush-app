@@ -40,7 +40,6 @@ import { track } from '@/platform/telemetry';
 import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './navigation';
 
 import { Authentication } from '@/screens/onboarding/Authentication';
-import { Start } from '@/screens/onboarding/Start';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
@@ -48,7 +47,6 @@ import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
 import { ProgramTab } from '@/screens/program/ProgramTab';
 import { ProfileSheet } from '@/screens/profile/ProfileSheet';
-import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
 import { PlanBuilder } from '@/screens/plan/PlanBuilder';
 import { ImportPlan } from '@/screens/import/ImportPlan';
@@ -136,15 +134,9 @@ function OnboardingNavigator() {
         fullScreenGestureEnabled: true,
       }}
     >
-      {/* ⛔ THE FORK IS THE FRONT DOOR NOW (2026-09-01, audit lever 3 — the wall moved behind the
-          aha). It keeps its old argument whole: what she answers here decides what the intake is
-          for, and the import's read needs the whole of onboarding to finish underneath it. What
-          changed is only what stood in front of it — nothing does. */}
-      <OnboardingStack.Screen name="Start" component={Start} />
-      {/* THE CLOSER — sign-in + consent, reached from the Ready screen's save-CTA and from
-          nowhere else. Registered here because a route must exist on the stack that pushes it;
-          its position in this list carries no meaning (only the first child is the initial). */}
-      <OnboardingStack.Screen name="Authentication" component={Authentication} />
+      {/* ⛔ ABOUT YOU IS THE FRONT DOOR (founder 2026-09-16). The build-or-bring fork that stood here
+          was deleted — *"צריך רק בניה עצמית של הבינה שלנו"* — so the intake opens on its first
+          answering step. The first child is the initial route. */}
       {/* ⛔ TWO WHEELS LIVE ON THIS STEP NOW, so its full-screen back-drag is off (founder
           2026-07-13): a horizontal gesture over a horizontal rule is the rule losing. The step
           keeps a hand-held way back across its FOOTER, the one band with no wheel in it
@@ -154,6 +146,10 @@ function OnboardingNavigator() {
         component={AboutYou}
         options={{ fullScreenGestureEnabled: false }}
       />
+      {/* THE CLOSER — sign-in + consent, reached from the Ready screen's save-CTA and from
+          nowhere else. Registered here because a route must exist on the stack that pushes it;
+          its position in this list carries no meaning (only the first child is the initial). */}
+      <OnboardingStack.Screen name="Authentication" component={Authentication} />
       {/* ⛔ HEALTH SECOND, THE WEEK LAST (founder 2026-08-10, and 2026-08-29). The last answering
           step is the one that shapes the week, because the peak belongs beside the payoff — a
           permission ask was a fine thing to put in front of a conversation and a poor thing to put
@@ -242,7 +238,6 @@ function MainNavigator() {
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
-      <MainStack.Screen name="BodyMapEdit" component={BodyMapEdit} />
       <MainStack.Screen name="ExerciseLibrary" component={ExerciseLibrary} />
       {/* Same wheel, same reason — see the note on the onboarding registration. */}
       <MainStack.Screen name="PlanBuilder" component={PlanBuilder} options={{ fullScreenGestureEnabled: false }} />

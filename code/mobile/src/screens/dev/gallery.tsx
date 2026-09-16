@@ -36,7 +36,6 @@ import { SessionContext } from '@/state/stores/sessionStore';
 import { HushTabBar } from '@/app/HushTabBar';
 import { ToastProvider, Button } from '@/components/ds';
 import { Authentication } from '@/screens/onboarding/Authentication';
-import { Start } from '@/screens/onboarding/Start';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { BodyMapEdit } from '@/screens/profile/BodyMapEdit';
 import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
@@ -1791,7 +1790,6 @@ export const GALLERY: GalleryEntry[] = [
    * AFTER `Authentication`. **The index disagreed with the app about what comes first**, on the one
    * page that exists so the flow can be walked. An id is an address, and this one was lying.
    */
-  { id: '1.1b', label: 'Where do we start?', status: 'live', note: 'the fork, after sign-in: build one, or bring the one she has. Bringing it was a 14px underline under a button', render: () => mount(Start) },
   /*
    * ⛔ THE ONE NUMBER THE COACH CANNOT INFER (founder 2026-08-03): *"the coach didn't ask for my
    * weight, and it's critical for it."* Nobody asked — `coachFacts` spreads it conditionally, so an
@@ -3082,7 +3080,7 @@ export const GALLERY: GalleryEntry[] = [
       />
     </UnderTabs></InApp>
   ) },
-  { id: '4.5', label: 'The ask — intake step 3/3', status: 'live', note: 'the ONE screen where she talks to the model, and since 2026-09-07 the ONLY door in the intake (founder: "רק החלק של בנה תוכנית עבורי"). Her sentence leads, over three lines; the days and the session length follow', render: () => (
+  { id: '4.5', label: 'The ask — intake step 3/3', status: 'live', note: 'the ONE screen where she talks to the model, and since 2026-09-07 the ONLY door in the intake (founder: "רק החלק של בנה תוכנית עבורי"). Her sentence leads, over three lines; the days follow (the session-length wheel left 2026-09-16 — the model sets the length)', render: () => (
     <InApp><PlanBuilderView {...builderProps} draft={null} intake offerDoors advice={[]} onLetHushBuild={noop} /></InApp>
   ) },
   { id: '4.5a', label: 'the ask — off the Program tab', of: '4.5', status: 'live', note: 'the same step without the intake chrome: reached from the doors on the Program tab, where the blank sheet and the shelves still stand', render: () => (

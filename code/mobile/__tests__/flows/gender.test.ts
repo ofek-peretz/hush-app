@@ -268,7 +268,11 @@ describe('English is untouched by any of it', () => {
  * get wrong. This test guards the whole screen, not the one line that was caught.
  */
 describe('the front door speaks to a person whose gender it has not been told', () => {
-  const SIGN_IN_KEYS = ['ob.signinTagline', 'ob.apple', 'ob.google', 'ob.signinLegalPre', 'ob.signinLegalTerms'];
+  /* ⛔ `ob.signinTagline` LEFT THIS LIST ON 2026-09-16. Sign-in has been the CLOSER since 2026-09-01 —
+     it stands after About you, where sex is picked and published — so the premise above no longer
+     holds for it, and the founder's line *"אל תחשוב, תתאמן"* is an imperative that has to conjugate.
+     It carries a `_female` form now; the rest of the screen stays genderless. */
+  const SIGN_IN_KEYS = ['ob.apple', 'ob.google', 'ob.signinLegalPre', 'ob.signinLegalTerms'];
 
   it('no sign-in line is gendered — with no context, a variant can never be reached', () => {
     for (const g of ['male', 'female'] as const) {
@@ -279,11 +283,11 @@ describe('the front door speaks to a person whose gender it has not been told', 
         expect({ key: k, copy: tg(k) }).toEqual({ key: k, copy: tg(k) });
       }
     }
-    // …and the second-person masculine forms that started this are gone for good.
+    // …and the tagline, which may conjugate now, conjugates at the reader.
     setGender('male');
-    expect(tg('ob.signinTagline')).not.toMatch(/\bאתה\b|צריך\b/);
+    expect(tg('ob.signinTagline')).toContain('תחשוב');
     setGender('female');
-    expect(tg('ob.signinTagline')).not.toMatch(/\bאתה\b|צריך\b/);
+    expect(tg('ob.signinTagline')).toContain('תחשבי');
   });
 });
 

@@ -43,7 +43,9 @@ describe('⛔ the hero arrives, it does not appear', () => {
      * things landing together — both of which read as a bug rather than a rhythm.
      */
     const orders = [...door().matchAll(/<Arrive order=\{(\d+)\}/g)].map((m) => Number(m[1]));
-    expect(orders.length).toBeGreaterThanOrEqual(5);
+    // Four since 2026-09-16: mark, wordmark, the promise, the actions — the affirmation and the two
+    // fact lines under it were deleted (founder: *"תמחק את כל המלל … מאיפה שכתוב כל משקל עד בלי כרטיס"*).
+    expect(orders.length).toBeGreaterThanOrEqual(4);
     expect(orders).toEqual([...orders].sort((a, b) => a - b)); // reading order, in source order
     expect(orders).toEqual(Array.from({ length: orders.length }, (_, i) => i)); // 0,1,2,… no gaps
   });
@@ -90,7 +92,15 @@ describe('⛔ the hero arrives, it does not appear', () => {
 });
 
 describe('⛔ every sentence on it is one she could check', () => {
-  it('⛔ the affirmation is a CLAIM, not an adjective', () => {
+  it('⛔ the promise is the ONE line — nothing under it argues or sells', () => {
+    /* ⛔ THE AFFIRMATION BELOW IS DELETED WITH ITS LINE (founder 2026-09-16). What stands is the
+       founder's own two lines, and the screen carries no second sentence to dilute them. */
+    const code = door().replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const gone of ['ob.signinAffirm', 'ob.signinTrialFact', 'ob.signinSaveFact']) expect(code).not.toContain(gone);
+    expect(tg('ob.signinTagline')).toContain('\n');
+  });
+
+  it.skip('⛔ the affirmation is a CLAIM, not an adjective (deleted 2026-09-16)', () => {
     /*
      * ⛔ IT SAID "Built on facts", WHICH IS WHAT EVERY APP SAYS AND WHAT NONE OF THEM MEAN. It is the
      * one line on the screen that separates this from any other training app, and it was the
@@ -170,8 +180,9 @@ describe('⛔ and the door is documented as the decision it is', () => {
      * The header is asserted against the CURRENT route rather than a remembered one, which is the
      * entire point of this test.
      */
-    expect(door()).toMatch(/On success → `Start`/);
-    expect(door()).toMatch(/navigation\.navigate\('Start'\)/);
+    /* ⛔ AND AGAIN ON 2026-09-16: `Start` is deleted, About you is the first intake step. */
+    expect(door()).toMatch(/On success → `AboutYou`/);
+    expect(door()).toMatch(/navigation\.navigate\('AboutYou'\)/);
   });
 
   it('⛔ the screen the intake replaced is GONE, not merely unreachable', () => {

@@ -13,7 +13,8 @@ import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import type { AthleteRecord } from '@/domain/record';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
-import { applyWeekOpenDow, currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek } from '@/domain/weekCadence';
+import { applyWeekOpenDow, currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek, weekOpenDowForDevice } from '@/domain/weekCadence';
+import * as Localization from 'expo-localization';
 import { agedProfile } from '@/domain/profileAge';
 import { CONSENT_VERSION } from '@/domain/consent';
 import {
@@ -304,6 +305,8 @@ interface AppApi extends AppState {
     weekOpensDow?: number;
     /** The voice coach (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md). Absent = on; it still speaks only with earbuds. */
     voiceSpec?: boolean;
+    /** The pocket ear's microphone. Absent = headset. */
+    voiceMic?: 'headset' | 'phone';
   }) => Promise<boolean>;
   /**
    * ════ SHE TOLD THE COACH SOMETHING ABOUT HERSELF, AND THE APP WRITES IT DOWN ════
@@ -560,8 +563,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // year per full year elapsed, so program construction always sees the current
       // age. Best-effort persist; the aged value is used this session regardless.
       let profile = storedProfile;
-      // Her week-opening day (audit 07) applies BEFORE anything derives from the cadence this boot.
-      if (storedProfile?.weekOpensDow != null) applyWeekOpenDow(storedProfile.weekOpensDow);
+      // Her week-opening day applies BEFORE anything derives from the cadence this boot — read off
+      // the phone's own first weekday, never asked (founder 2026-09-16, `weekOpenDowForDevice`).
+      applyWeekOpenDow(weekOpenDowForDevice(Localization.getCalendars()[0]?.firstWeekday));
       if (storedProfile) {
         const aged = agedProfile(storedProfile, Date.now());
         if (aged) {
@@ -1315,6 +1319,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.bodyMap != null ? { bodyMap: fields.bodyMap } : {}),
           ...(fields.repBandByMuscle != null ? { repBandByMuscle: fields.repBandByMuscle } : {}),
           ...(fields.voiceSpec != null ? { voiceSpec: fields.voiceSpec } : {}),
+          ...(fields.voiceMic != null ? { voiceMic: fields.voiceMic } : {}),
         };
         // The room: null clears to the full-gym default (the key leaves the profile), a list sets it.
         if (fields.equipment === null) delete profile.equipment;

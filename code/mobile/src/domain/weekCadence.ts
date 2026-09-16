@@ -48,6 +48,23 @@ export function applyWeekOpenDow(dow: unknown): void {
   if (typeof dow !== 'number' || !Number.isInteger(dow) || dow < 0 || dow > 6) return;
   WEEK_OPEN_DOW = dow;
 }
+
+/*
+ * ════ ⛔ READ OFF THE PHONE, NEVER ASKED (founder, 2026-09-16) ════
+ *
+ * *"למה אנחנו בודקים באיזה יום השבוע מתחלף ולא פשוט לפי מיקום?"* — the same answer `unitsForDevice`
+ * gave the units switch. The phone already holds the fact: the first day of the week in her
+ * Language & Region settings, set correctly for where she lives. The week turns on the EVENING
+ * BEFORE that day — a Sunday-first phone (Israel, the US) turns on Saturday, a Monday-first phone
+ * (most of the world) on Sunday, a Saturday-first phone on Friday.
+ *
+ * `firstWeekday` is expo-localization's calendar field: 1 = Sunday … 7 = Saturday. A platform that
+ * does not answer keeps the default, so a phone we cannot read behaves exactly as before.
+ */
+export function weekOpenDowForDevice(firstWeekday: number | null | undefined): number {
+  if (typeof firstWeekday !== 'number' || !Number.isInteger(firstWeekday) || firstWeekday < 1 || firstWeekday > 7) return 6;
+  return (firstWeekday + 5) % 7;
+}
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**

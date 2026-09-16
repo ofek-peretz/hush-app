@@ -48,6 +48,8 @@ import React, { useState } from 'react';
 import { View, Text, Keyboard, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { setLocale, currentLocale, type Locale } from '@/i18n';
+import { reloadApp } from '@/app/reload';
 import { Button, Legend, TextField, WheelPicker } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { track } from '@/platform/telemetry';
@@ -67,7 +69,7 @@ import { useApp } from '@/state/stores/appStore';
  * ⚠️ AND NOTHING CAUGHT IT: this file carries `@ts-nocheck`, so the typechecker never looked, and
  * no test mounts `AboutYou`. 2,639 laws, a clean `tsc`, and the app did not start.
  */
-import { line, color, font, textScale, signal} from '@/design/tokens';
+import { line, color, font, textScale, signal, radius } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
@@ -96,10 +98,30 @@ const WEIGHT_OPENS_ON: Record<'kg' | 'lb', number> = { kg: 70, lb: 155 };
 
 export function AboutYou({ navigation }: Props) {
   const { t } = useCopy();
-  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. The first answering step. */
+  /* ⛔ FUNNEL (2026-08-23): one event per step REACHED — see `FUNNEL_EVENTS`. The first answering
+     step, and since 2026-09-16 the FRONT DOOR too: the build-or-bring fork that stood in front of it
+     was deleted (founder: *"צריך רק בניה עצמית של הבינה שלנו"*), so `startReached` fires here. */
+  React.useEffect(() => {
+    void track(FUNNEL_EVENTS.startReached);
+  }, []);
   React.useEffect(() => {
     void track(FUNNEL_EVENTS.aboutYouReached);
   }, []);
+  /*
+   * LANGUAGE LIVES ON THE FRONT DOOR (founder 2026-07-12) — and the front door is THIS screen now.
+   * Same control, same argument, same remount-on-direction-change; it moved here with the job when
+   * `Start` was deleted.
+   */
+  const locale = currentLocale();
+  async function pickLocale(next: Locale) {
+    if (next === locale) return;
+    try {
+      await setLocale(next);
+    } catch {
+      return; // the language did not switch; a reload would remount in the OLD language
+    }
+    reloadApp();
+  }
   const app = useApp();
   /*
    * ⛔ THE PHONE ALREADY KNOWS — AND THIS SCREEN ASKED THE ONE PLACE THAT DOES NOT.
@@ -217,17 +239,20 @@ export function AboutYou({ navigation }: Props) {
 
   return (
     <OnboardingScaffold
-      onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 4 }}
+      progress={{ index: 1, total: 3 }}
+      topAction={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={locale === 'he' ? 'English' : 'עברית'}
+          hitSlop={16}
+          onPress={() => void pickLocale(locale === 'he' ? 'en' : 'he')}
+          style={({ pressed }) => [styles.langSwap, pressed && styles.langSwapPressed]}
+        >
+          <Text style={styles.langSwapText}>{locale === 'he' ? 'English' : 'עברית'}</Text>
+        </Pressable>
+      }
 
-      /*
-       * ⛔ THE BODY OF THIS STEP IS TWO HORIZONTAL WHEELS, so it cannot also be a step you leave
-       * with a horizontal drag (founder 2026-07-13): every attempt to set a bodyweight would drag
-       * the screen back instead of turning the rule. The navigator's full-screen gesture is off for
-       * this step (`Root`), and the way back by hand lives in the footer — the one band with no
-       * wheel in it. The arrow in the top bar is, as ever, the way back that always works.
-       */
-      onSwipeBack={() => navigation.goBack()}
+      /* No back arrow and no back-drag: this is the first screen of the intake (2026-09-16). */
       keyboard
       title={t('ob.aboutTitle')}
       headGap={26}
@@ -377,6 +402,17 @@ const styles = StyleSheet.create({
   /* Two answers, drawn on the same rules the wheels below are drawn with — a hairline each, the
      chosen one lit. Whole-row targets: this is a question, not a toolbar. */
   choices: { flexDirection: 'row', gap: 10 },
+  /* The language offer — the exact capsule the deleted `Start` wore, at the end of the rail. */
+  langSwap: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: color.fillSubtle,
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.14)',
+  },
+  langSwapPressed: { backgroundColor: color.fillSubtleStrong },
+  langSwapText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
   /* The one line that names what is missing — quiet, and only ever present when it is true. */
   needs: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
   choice: {

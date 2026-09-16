@@ -66,11 +66,12 @@ describe('the Hebrew reads as Hebrew', () => {
    * only be the noun. It stays genderless, as the whole sign-in screen must: Hush has not been
    * told who it is speaking to yet (`the front door has no gender to speak in`).
    */
-  it('B.1 — the tagline cannot be read as "stay"', () => {
-    expect(he.ob.signinTagline).toContain('כל השאר עליי');
-    expect(he.ob.signinTagline).not.toMatch(/\.\nהשאר/);
-    // and no feminine variant was invented for a screen that must not have one
-    expect(Object.keys(he.ob)).not.toContain('signinTagline_female');
+  /* ⛔ B.1's SENTENCE IS REPLACED (founder 2026-09-16): *"המשפט צריך להיות ׳אל תחשוב, (ואז שורה
+     מתחת) תתאמן׳"*. "השאר" left with it, and so did the genderless rule: sign-in stands after About
+     you now, where her sex is known, so the imperative conjugates. */
+  it('B.1 — the tagline is the founder’s two lines, in both forms', () => {
+    expect(he.ob.signinTagline).toBe('אל תחשוב,\nתתאמן.');
+    expect(he.ob.signinTagline_female).toBe('אל תחשבי,\nתתאמני.');
   });
 
   it('B.2 — the sentence under the toggle speaks to the woman reading it', () => {

@@ -325,7 +325,6 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
      * None of those is visible from any single component.
      */
     const root = fs.readFileSync(path.join(ROOT, 'src/app/Root.tsx'), 'utf8');
-    const start = fs.readFileSync(path.join(ROOT, 'src/screens/onboarding/Start.tsx'), 'utf8');
     const building = fs.readFileSync(path.join(ROOT, 'src/screens/onboarding/BuildingProgramme.tsx'), 'utf8');
     // ⛔ 2026-08-23: the in-app door moved from You to TOGETHER (the social home) — the founder:
     // "החלק החברתי צריך להיות נישה נפרדת". The chain's shape is unchanged; only the door's address.
@@ -340,9 +339,10 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
      * this entire file. It is `Start` now — a fork where the two ways to begin are the same size —
      * and the timing argument that put it early is unchanged and is why it moved FORWARD, not back.
      */
-    expect(start).toMatch(/navigate\('ImportPlan', \{ fromOnboarding: true \}\)/);
-    // …and the intake still begins where it did, one screen later.
-    expect(start).toMatch(/navigate\('AboutYou'\)/);
+    /* ⛔ AND THE INTAKE DOOR IS DELETED (founder 2026-09-16: *"צריך רק בניה עצמית של הבינה שלנו"*).
+       `Start` and its bring-a-sheet panel are gone; the intake opens on About you. The import itself
+       stands — the Together door below, and every link after it. */
+    expect(root).not.toMatch(/OnboardingStack\.Screen name="Start"/);
     // …and the profile keeps its own door for an athlete who already finished onboarding.
     expect(profile).toMatch(/navigate\('ImportPlan'\)/);
 

@@ -149,10 +149,9 @@ export const LIFECYCLE_EVENTS = {
 } as const;
 
 export const FUNNEL_EVENTS = {
-  /** She is past sign-in and standing at the fork. */
+  /** The app opened into the intake. Since 2026-09-16 the fork is gone and this fires on About you,
+   *  beside `aboutYouReached` — kept so the series does not break where the dashboards start. */
   startReached: 'funnel_start_reached',
-  /** Which door she took: { door: 'build' | 'bring' }. */
-  doorChosen: 'funnel_door_chosen',
   aboutYouReached: 'funnel_about_you_reached',
   healthReached: 'funnel_health_reached',
   /**
@@ -197,6 +196,15 @@ export const FUNNEL_EVENTS = {
  */
 export const BUILD_EVENTS = {
   catalogueGap: 'build_catalogue_gap',
+  /**
+   * ⛔ A NAME THE MODEL WROTE CAME BACK UNREADABLE (founder 2026-09-16: *"חלק מהכתב יצא גיבריש"*).
+   *
+   * The week's title and the day names are the only prose in the product that is neither bundled nor
+   * typed by her — they cross a network, a Worker and two JSON parses — so they are the only strings
+   * a decoding fault can reach. `domain/modelText` refuses them; this counts them, with the FAULT
+   * and the first code points (never the text), which is what names the layer that broke the bytes.
+   */
+  unreadableText: 'build_unreadable_text',
   /**
    * ⛔ THE SAME QUESTION, ASKED BY A LOG SHE BROUGHT (2026-09-01, audit M1).
    *

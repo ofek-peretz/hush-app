@@ -179,7 +179,7 @@ export function ConnectHealth({ navigation, route }: Props) {
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 3, total: 4 }}
+      progress={{ index: 2, total: 3 }}
 
       /*
        * ════════════════════════════════════════════════════════════════════════════════════════

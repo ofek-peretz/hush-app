@@ -86,6 +86,12 @@ interface Props {
    * the kind of thing nobody can name and everybody feels.
    */
   titleSize?: number;
+  /**
+   * One control at the END of the top bar, opposite the back arrow. It exists for exactly one
+   * caller: the language offer, which moved onto the first intake step when the fork in front of it
+   * was deleted (founder 2026-09-16) — the front door keeps the switch, whichever screen that is.
+   */
+  topAction?: React.ReactNode;
   children?: React.ReactNode;
 }
 
@@ -135,6 +141,7 @@ export function OnboardingScaffold({
   headGap = 40,
   bodyTop = 44,
   titleSize = ramp.title,
+  topAction,
   children,
 }: Props) {
   const { t } = useCopy();
@@ -234,6 +241,7 @@ export function OnboardingScaffold({
             */}
           </>
         ) : null}
+        {topAction}
       </View>
 
       {keyboard ? (

@@ -1,9 +1,8 @@
 /**
  * Settings — a TAB now (founder 2026-07-17), not a modal. Identity (avatar + name) with Membership
  * directly beneath it (who you are + your plan, one zone — the Apple Settings idiom), then grouped
- * rows: Preferences (Units, Language), Health (Apple Health), Account (Body data, Body map). Sign
- * out + Delete account at the bottom; the version reads the REAL version from the binary, under the
- * product's own thesis — "Built on facts."
+ * rows: Preferences (Units, Language), Health (Apple Health, the wrist, reminders, voice, usage).
+ * Sign out + Delete account at the bottom; the version reads the REAL version from the binary.
  *
  * There is NO Experience row (v5 deleted the concept — the first set measures her). Every action is
  * the real one: units/language switch instantly, Health opens the system permission flow, Sign Out /
@@ -15,7 +14,7 @@
 import React, { useEffect, useState } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
 // the programme can never disagree about what she chose.
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -23,7 +22,6 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
-import { BodyMapFigure } from '@/components/BodyMapFigure';
 import { LegalSheet } from '@/components/LegalSheet';
 import { HushMark } from '@/components/HushMark';
 import { Arrive, Avatar, SegmentedControl, Switch, Legend, Button, Badge, useToast } from '@/components/ds';
@@ -40,16 +38,15 @@ import { setLocale, currentLocale } from '@/i18n';
 import { notifier } from '@/platform/notifications';
 import { reloadApp } from '@/app/reload';
 import { nativeWatchPairing, lastWatchPublish } from '@/platform/watch/watchTransportNative';
-import { audioSession } from '@/platform/voice/audioSession';
+import { audioSession, type EarSource } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
-import { voiceCapture } from '@/platform/voice/voiceCapture';
-import { recordFile } from '@/platform/recordFile';
-import { cloud } from '@/platform/cloud';
-import { readRecord, recordFileName, restoreVerdict } from '@/domain/record';
+import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
+
+/** The locked-phone test: time to lock the phone, then the window that asks for a number. */
+const PROBE_LOCK_MS = 15_000;
+const PROBE_LISTEN_MS = 8_000;
 import { track } from '@/platform/telemetry';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
-import { ROOM_FAMILIES, roomForStorage } from '@/domain/room';
-import type { EquipmentFamily } from '@/data/exercises';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
@@ -60,7 +57,7 @@ type Props = CompositeScreenProps<
   BottomTabScreenProps<HomeTabsParamList, 'You'>,
   NativeStackScreenProps<MainParamList>
 >;
-type Overlay = 'none' | 'delete' | 'signout' | 'room';
+type Overlay = 'none' | 'delete' | 'signout';
 
 export function ProfileSheet({ navigation }: Props) {
   // The training-day reminder's switch — read once; this screen is its only writer.
@@ -128,115 +125,6 @@ export function ProfileSheet({ navigation }: Props) {
       off();
     };
   }, [app, navigation]);
-  /** The height of the page's own viewport — how much of it the body map may have. See below. */
-  const [viewport, setViewport] = useState(0);
-
-  /*
-   * ⛔ HER RECORD — how many workouts a copy would carry, and what the two rows are doing.
-   *
-   * The count is read once on mount rather than derived at render: it is the one number that makes
-   * "save a copy" a fact rather than an offer, and a row that said nothing about size would be
-   * asking her to trust a file she cannot see the shape of.
-   */
-  const [recordCount, setRecordCount] = useState(0);
-  /** What just happened to her record, when something did — replaces the row's standing sub-line. */
-  const [recordNote, setRecordNote] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void db.loadHistory().then((h) => alive && setRecordCount(h.length)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  /**
-   * ⚠️ THE SNAPSHOT IS TAKEN AT THE TAP, not held in state. A copy she asked for at 19:04 must be
-   * her record at 19:04 — including the workout she finished twenty minutes ago on another screen.
-   */
-  async function onSaveRecord() {
-    if (!recordFile.available()) {
-      toast.show(t('profile.recordUnavailable'));
-      return;
-    }
-    const record = await db.snapshotRecord();
-    const result = await recordFile.save(recordFileName(Date.now()), JSON.stringify(record));
-    if (result === 'saved') {
-      setRecordNote(t('profile.recordSaved', { count: record.sessions.length }));
-      void track('record_saved', { sessions: record.sessions.length, cardio: record.cardio.length });
-    } else if (result === 'unavailable') toast.show(t('profile.recordUnavailable'));
-    else toast.show(t('errors.general'));
-  }
-
-  /**
-   * ⛔ THE VERDICT IS ASKED, AND IT IS SAID OUT LOUD. `domain/record.restoreVerdict` decides; this
-   * screen only carries the sentence. The dangerous case is not the empty phone — it is an athlete
-   * who has trained HERE, opens a file from an old phone, and loses six weeks from one tap.
-   */
-  async function onRestoreRecord() {
-    if (!recordFile.available()) {
-      toast.show(t('profile.recordUnavailable'));
-      return;
-    }
-    const picked = await recordFile.pick();
-    if (!picked.ok) {
-      if (picked.why === 'unavailable') toast.show(t('profile.recordUnavailable'));
-      else if (picked.why === 'error') toast.show(t('errors.general'));
-      return; // cancelled — she changed her mind, and that is not an error
-    }
-    const read = readRecord(picked.text);
-    if (!read.ok) {
-      /*
-       * ⛔ THE KEYS ARE LITERAL, NOT ASSEMBLED (2026-08-22). `t(`…_${why}`)` read cleanly and made
-       * four strings invisible to `nothingIsBuiltForNobody`, whose whole job is to find copy no
-       * reader can be seen to use — so the ratchet went red for four keys that ARE read. A computed
-       * key is copy that cannot be swept, and this codebase has a quarter of its strings in that
-       * state already; adding to it to save four lines is the wrong trade.
-       */
-      const REJECTED: Record<typeof read.why, string> = {
-        unreadable: t('profile.recordRejected_unreadable'),
-        not_a_record: t('profile.recordRejected_not_a_record'),
-        too_new: t('profile.recordRejected_too_new'),
-        empty: t('profile.recordRejected_empty'),
-      };
-      toast.show(REJECTED[read.why]);
-      void track('record_rejected', { why: read.why });
-      return;
-    }
-    const onPhone = (await db.loadHistory()).length;
-    const verdict = restoreVerdict(read.record, onPhone);
-    if (verdict.do === 'refuse') {
-      /*
-       * ⚠️ REFUSED WITH BOTH NUMBERS, never with "invalid". She is entitled to know that the file is
-       * real and simply smaller than what she has — that is what tells her she opened the wrong one
-       * rather than that her backup is broken.
-       */
-      toast.show(t('profile.recordSmaller', { onPhone: verdict.onPhone, inFile: verdict.inFile }));
-      void track('record_refused', { onPhone: verdict.onPhone, inFile: verdict.inFile });
-      return;
-    }
-    if (verdict.confirm) {
-      const ok = await new Promise<boolean>((resolve) => {
-        Alert.alert(
-          t('profile.recordConfirmTitle'),
-          t('profile.recordConfirmBody', { gaining: verdict.gaining, onPhone }),
-          [
-            { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-            { text: t('profile.recordConfirmDo'), onPress: () => resolve(true) },
-          ],
-        );
-      });
-      if (!ok) return;
-    }
-    await app.restoreRecord(read.record);
-    void track('record_restored', { sessions: read.record.sessions.length, hadOnPhone: onPhone });
-    /*
-     * ⛔ THE APP IS RELOADED RATHER THAN PATCHED. Every store in the tree — the profile, the week,
-     * the engine's cache of her learned rests — was hydrated from the storage that has just been
-     * replaced underneath it. `reloadApp` is the same hammer the language switch uses, and for the
-     * same reason: there is no honest way to tell a running tree that its whole substrate changed.
-     */
-    await reloadApp();
-  }
 
   const units = p?.units ?? 'kg';
   const locale = currentLocale();
@@ -350,47 +238,17 @@ export function ProfileSheet({ navigation }: Props) {
         <Text style={styles.headerTitle} accessibilityRole="header">{t('nav.you')}</Text>
       </View>
 
-      {/*
-        ⛔ THE BODY OWNS THE FIRST SCREEN (founder, 2026-08-18)
-
-          *"אני רוצה שהוא יהיה ממוקם בראש המסך כמו שצריך כך שהגוף יתפרש על כל המסך מהרגע הראשון."*
-
-        The figure drew at a fixed 220 pt inside a box `aspectRatio` had made 831 pt tall, so it hung
-        in the middle of that box: a dead band under the member line, the body slumped towards the tab
-        bar, and its own caption pushed off the bottom. It is measured now — the page says how much
-        room the first screen has and the figure fills it, from directly under her name down to the
-        two lines that name it. Everything else on this page is still a scroll away, which was always
-        the point of putting it here.
-      */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
-        onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
       >
         {/*
-          ════════════════════════════════════════════════════════════════════════════════════════
-          ⛔ THE BODY MAP IS THE FRONT OF THIS SCREEN (founder, 2026-08-12)
-
-            *"אתה בעצמך אמרת לי שיופיע בגדול קודם כל מפת הגוף ורק אז ההגדרות למטה בשביל לחסוך בעוד
-            פקד ב-TABBAR אבל בפועל לא עשית את זה והשארת אותו זרוק למטה."*
-
-          He is right, and it is my own argument I failed to carry out: the map earns this tab its
-          place instead of a fifth icon in the bar — and it was a plain chevron row at the very
-          bottom, under Health, indistinguishable from a units toggle. **The one thing on this
-          screen that is about her body was filed with the preferences.**
-
-          It is a card at the top now, above Membership, drawn as what it is.
-          ════════════════════════════════════════════════════════════════════════════════════════
-        */}
-        {/*
-          ✦ IT ARRIVES (2026-08-27). `Arrive` was built for the founder's largest note — a screen
-          should ARRIVE, not appear (2026-08-12).
-
-          Two beats, and the second one is the point. The founder's 2026-08-12 ruling for this tab
-          is *"התכוונתי שהגוף יהיה במסך בלי פקד ואז בגלילה למטה יופיע כל שאר הדברים"* — the body IS
-          the screen, no control in front of it. So: her name lands, and then her BODY does. Nothing
-          else on this tab gets a beat, because everything else is on the scroll he asked for.
+          ⛔ THE BODY MAP AND THE WEEK'S DAY LEFT THIS TAB (founder, 2026-09-16): *"דחפנו לשם את כל מה
+          שאין לנו איפה לדחוף … גוף האדם אפשר להעיף — התוכנית נבנית במסך התוכנית."* The map was an
+          input to a week the model now writes from her own words; the week's turning day is read off
+          the phone (`weekOpenDowForDevice`); the room, the record rows and the explanatory lines went
+          with them. `BodyMapEdit` keeps its route — the pain flow still draws on it.
         */}
         {/* identity */}
         <Arrive order={0} style={styles.identity}>
@@ -412,51 +270,6 @@ export function ProfileSheet({ navigation }: Props) {
         </Arrive>
 
         {/*
-          ⛔ THE BODY ITSELF, NOT A CARD THAT OPENS ONE (founder, 2026-08-12)
-
-            *"התכוונתי שהגוף יהיה במסך בלי פקד ואז בגלילה למטה יופיע כל שאר הדברים."*
-
-          My first pass answered "put the map at the front" with a titled card and a chevron —
-          which is the same row it replaced, in a bigger box. **He asked for the map, not a door to
-          it.** The figure is drawn here, at the size it is drawn everywhere else, carrying her
-          actual stances: what is on, what she leads with, what is being eased.
-
-          ⚠️ IT IS STILL PRESSABLE AND IT IS NOT A BUTTON. Pressing the body opens the editor, where
-          the three rungs live — the body is the affordance, so there is nothing beside it to label.
-          The two lines under it name what it is and get out of the way.
-        */}
-        <Arrive order={1}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('ob.mapTitle')}
-          onPress={() => navigation.navigate('BodyMapEdit')}
-          style={({ pressed }) => [styles.mapBlock, pressed && styles.mapBlockPressed]}
-        >
-          {/* ⛔ THE NAME BEFORE THE DRAWING (design review 2026-09-01). The first thing on this
-              tab was an unnamed anatomical figure, and its title arrived only after — a caption
-              excusing a picture instead of a heading preparing one. Reading order is title →
-              subject; the two lines moved above the body, nothing else changed. */}
-          <View style={styles.mapWords}>
-            <Text style={styles.frontTitle}>{t('ob.mapTitle')}</Text>
-            <Text style={styles.frontSub}>{t('profile.mapSub')}</Text>
-          </View>
-          <BodyMapFigure
-            face="front"
-            sex={p?.sex}
-            map={p?.bodyMap ?? {}}
-            selected={null}
-            /*
-             * The first screen, less what stands above and below it: the identity row (~76), the two
-             * lines above the body (~80) and the air between. Before it is measured the figure draws
-             * at its own floor, which is the size it drew at everywhere before this.
-             */
-            height={viewport ? Math.round(viewport - 176) : undefined}
-            onSelect={() => navigation.navigate('BodyMapEdit')}
-          />
-        </Pressable>
-        </Arrive>
-
-        {/*
           ════ ⛔ YOU IS FOR HER, NOT FOR EVERYTHING (founder, 2026-08-23) ════
 
             *"כרגע הכל נדחף למסך You ואני לא אוהב את זה… יש מלא דברים ב-You שסתם דחפנו לשם דברים."*
@@ -468,9 +281,8 @@ export function ProfileSheet({ navigation }: Props) {
               social act, and the social home is Together now (`screens/together`), one door from
               Progress. His 2026-08-12 unification ("one door for both directions") survives there.
 
-          What stays is what this screen says it is: her identity, her body, her membership, her
-          settings, her record. The body map stays by his own ruling (2026-08-16: "he asked for the
-          map, not a door to it") — the body is hers, and this is the page about her.
+          What stays is what this screen says it is: her identity, her membership, her settings. (The
+          body map that stood here left on 2026-09-16 — see the note above her name.)
         */}
 
         {/* Membership (Subscription + Apple Payments) — a prominent card with a state badge; trial
@@ -545,25 +357,6 @@ export function ProfileSheet({ navigation }: Props) {
             options={[{ value: 'en', label: 'English' }, { value: 'he', label: 'עברית' }]}
             value={locale}
             onChange={onLanguage}
-          />
-        </View>
-        {/*
-          ════ WHEN HER WEEK TURNS (2026-09-01, audit 07). ════
-          Three evenings, one hour. Saturday is the default (the founder's witnessable Israeli
-          evening); Sunday is most of the world's; Friday closes a Gulf week. The label names the
-          consequence — the letter and the new week land that evening at 20:30 — so the choice is
-          about her calendar, never about mechanics. Applied live via `updateProfileInfo`.
-        */}
-        <View style={styles.pickBlock}>
-          <Text style={styles.pickLabel}>{t('profile.weekTurns')}</Text>
-          <Pick
-            options={[
-              { value: '5', label: t('profile.weekFri') },
-              { value: '6', label: t('profile.weekSat') },
-              { value: '0', label: t('profile.weekSun') },
-            ]}
-            value={String(p?.weekOpensDow ?? 6)}
-            onChange={(v) => void app.updateProfileInfo({ weekOpensDow: Number(v) })}
           />
         </View>
 
@@ -641,7 +434,9 @@ export function ProfileSheet({ navigation }: Props) {
             />
           }
         />
-        {p?.voiceSpec !== false ? <VoiceGateLine /> : null}
+        {p?.voiceSpec !== false ? (
+          <VoiceGateLine mic={p?.voiceMic ?? 'headset'} onMic={(m) => void app.updateProfileInfo({ voiceMic: m })} />
+        ) : null}
         {/*
           THE WIRE'S SWITCH (2026-09-01, audit finding 4). GDPR wants an opt-out for behavioural
           analytics and the privacy text now promises one; this is it. It gates only the wire —
@@ -651,62 +446,6 @@ export function ProfileSheet({ navigation }: Props) {
           label={t('profile.usageRow')}
           sub={t('profile.usageSub')}
           control={<Switch checked={shareUsage} onChange={() => void onShareUsageToggle()} accessibilityLabel={t('profile.usageRow')} />}
-        />
-        {/*
-          ════ THE ROOM (2026-09-01, audit 06) — which equipment exists where she trains. ════
-          A row that opens a sheet of switches, one per family (`domain/room.ROOM_FAMILIES`); bodyweight is
-          never asked because it is never absent. The sub states the room in one word — full, or
-          how many families — so the fact is legible without opening anything. Saving routes
-          through `updateProfileInfo`, which rebuilds the week exactly like a body-map change:
-          the engine must stop prescribing furniture she does not have on the next assembly.
-        */}
-        <Row
-          label={t('profile.roomRow')}
-          sub={
-            p?.equipment
-              ? t('profile.roomSome', { count: p.equipment.length })
-              : t('profile.roomFull')
-          }
-          onPress={() => setOverlay('room')}
-          last
-        />
-        <Text style={styles.healthNote}>{t('profile.healthNote')}</Text>
-
-        {/*
-          ════════════════════════════════════════════════════════════════════════════════════════
-          ⛔ HER RECORD, AND THE HOLE IT CLOSES (2026-08-22)
-          ════════════════════════════════════════════════════════════════════════════════════════
-
-          Every measured fact about her lives in this phone's storage. iOS carries that into a
-          DEVICE backup, so a new phone restored from iCloud keeps everything — and three common
-          things are not that: **deleting the app and reinstalling it**, **an iCloud account with no
-          room**, and **signing in on a second device**. In each of them her history is gone, and
-          with it the engine: her reps-per-rung, the rungs she taught it, the rail she built, her
-          rest medians, the volume she earned.
-
-          ⚠️ IT IS TWO ROWS, NOT A SETTING WITH A SWITCH. There is nothing to configure — a copy is
-          an act she takes, and reading one back is another. Both are plain rows because both are
-          rare, and neither is a thing this screen should be inviting.
-
-          ⚠️ AND SAVING IS OFFERED FIRST. Whoever has come here to restore has already lost
-          something; whoever is here to save has not, and putting the cheap act above the expensive
-          one is the order in which they should be met.
-        */}
-        <Legend tone="accent" style={styles.sectionLegend}>{t('profile.recordSection')}</Legend>
-        {/* ⛔ THE INVISIBLE ACCOUNT, MADE VISIBLE (2026-08-23). The record reaches iCloud by
-            itself after every workout (`platform/cloudBackup`) — and a safety she cannot see is a
-            safety she does not feel. One quiet line, only when it is TRUE (an iCloud identity is
-            present); a signed-out device says nothing rather than promising a cloud it lacks. */}
-        {cloud.available() ? <Text style={styles.cloudNote}>{t('profile.cloudBacked')}</Text> : null}
-        <Row
-          label={t('profile.saveRecord')}
-          sub={recordNote ?? t('profile.saveRecordSub', { count: recordCount })}
-          onPress={() => void onSaveRecord()}
-        />
-        <Row
-          label={t('profile.restoreRecord')}
-          sub={t('profile.restoreRecordSub')}
-          onPress={() => void onRestoreRecord()}
           last
         />
 
@@ -770,10 +509,6 @@ export function ProfileSheet({ navigation }: Props) {
             <Text style={[styles.exitLabel, styles.exitDanger]}>{t('profile.deleteAccount')}</Text>
           </Pressable>
         </View>
-        {/* The version, and the thesis. "Built on facts" is not a slogan here — it is the literal
-            claim the whole product stakes (R7: it never states a reason it did not measure), so the
-            settings floor is exactly where it belongs, quietly. The version stays mono (Latin); the
-            tagline is its own sans line, because in Hebrew it is Hebrew and mono has no glyphs. */}
         {/* The same document the front door opens — reachable after sign-up too, where App
             Review and a curious athlete both look for it (founder 2026-09-01). */}
         <Pressable
@@ -785,44 +520,9 @@ export function ProfileSheet({ navigation }: Props) {
           <Text style={styles.legalRowText}>{t('legal.sheetLegend')}</Text>
         </Pressable>
         <Text style={styles.version}>{versionLabel()}</Text>
-        <Text style={styles.tagline}>{t('profile.tagline')}</Text>
       </ScrollView>
       {legalOpen ? <LegalSheet onClose={() => setLegalOpen(false)} /> : null}
 
-      {overlay === 'room' ? (
-        /*
-         * The room's sheet — five switches, saved on close. `roomForStorage` folds "everything on"
-         * and "everything off" back to the full-gym default, so the stored fact only exists when
-         * it says something. An `off` is obeyed in silence (constraint 10): no confirm, no
-         * argument — the rebuild happens on save and the week follows her furniture.
-         */
-        <RoomSheet
-          current={p?.equipment}
-          onClose={() => setOverlay('none')}
-          onSave={(picked) => {
-            setOverlay('none');
-            const stored = roomForStorage(picked);
-            /*
-             * ⛔ AND IT SAYS WHAT ACTUALLY HAPPENED (2026-09-14, found walking this on real glass).
-             *
-             * This was `void updateProfileInfo(...)`: the answer — did the week rebuild? — was
-             * thrown away, and the sheet just closed. On an ENGINE week that silence was harmless.
-             * On a week the MODEL wrote (every athlete who came through "build me a programme", so
-             * nearly everyone) `engineMayRebuild` refuses, so she turned her gym down to a bag of
-             * bands, was told nothing at all, and opened Today to the same barbell week.
-             *
-             * The week is still not ours to rewrite (`aWeekSheBroughtIsNotOursToRewrite`) — what
-             * was missing is the sentence. `BodyMapEdit` and `ExerciseLibrary` already draw this
-             * exact distinction; one fact keeps one sentence, so the room borrows their shape.
-             */
-            const changed = JSON.stringify(stored ?? null) !== JSON.stringify(p?.equipment ?? null);
-            void app.updateProfileInfo({ equipment: stored ?? null }).then((rebuilt) => {
-              if (!changed) return; // she opened the sheet and changed nothing — nothing to report
-              toast.show(rebuilt ? t('profile.roomSaved') : t('profile.roomKept'));
-            });
-          }}
-        />
-      ) : null}
       {overlay === 'signout' ? (
         <BottomSheet onClose={() => setOverlay('none')} heightFraction={0.3}>
           <Text style={styles.confirm}>{t('profile.signOutConfirm')}</Text>
@@ -856,55 +556,6 @@ function versionLabel(): string {
 }
 
 /**
- * The room's editor (audit 06): one switch per family, bodyweight never asked. Local state until
- * Done — five instant rebuilds for five flips would be five weeks written for one decision.
- */
-/* The families' labels, key by NAME — a template key (`profile.room_${f}`) is invisible to
- * `nothingIsBuiltForNobody`'s reader scan, and explicit is better here anyway. */
-const ROOM_LABEL: Record<EquipmentFamily, string> = {
-  barbell: 'profile.room_barbell',
-  fixed_barbell: 'profile.room_fixed_barbell',
-  dumbbell: 'profile.room_dumbbell',
-  machine: 'profile.room_machine',
-  cable: 'profile.room_cable',
-  kettlebell: 'profile.room_kettlebell',
-  band: 'profile.room_band',
-  bodyweight: 'profile.room_barbell', // never rendered — bodyweight is not an option (see ROOM_FAMILIES)
-};
-
-function RoomSheet({
-  current,
-  onClose,
-  onSave,
-}: {
-  current?: EquipmentFamily[];
-  onClose: () => void;
-  onSave: (picked: EquipmentFamily[]) => void;
-}) {
-  const { t } = useCopy();
-  const [picked, setPicked] = useState<EquipmentFamily[]>(current ?? [...ROOM_FAMILIES]);
-  const toggle = (f: EquipmentFamily) =>
-    setPicked((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
-  return (
-    <BottomSheet onClose={onClose} heightFraction={0.62}>
-      <Text style={styles.confirm}>{t('profile.roomTitle')}</Text>
-      <Text style={styles.rowSub}>{t('profile.roomSub')}</Text>
-      {ROOM_FAMILIES.map((f, i) => (
-        <Row
-          key={f}
-          label={t(ROOM_LABEL[f])}
-          control={<Switch checked={picked.includes(f)} onChange={() => toggle(f)} accessibilityLabel={t(ROOM_LABEL[f])} />}
-          last={i === ROOM_FAMILIES.length - 1}
-        />
-      ))}
-      <View style={styles.confirmActions}>
-        <Button block label={t('profile.roomDone')} onPress={() => onSave(picked)} />
-      </View>
-    </BottomSheet>
-  );
-}
-
-/**
  * ════ WHAT THE VOICE'S GATE SAYS RIGHT NOW (founder, 2026-09-09: *"הקול באימון לא עובד"*) ════
  *
  * The voice is silent by design behind three gates — the build has a mouth and an ear, and earbuds
@@ -912,13 +563,182 @@ function RoomSheet({
  * line reads the gates live, so the athlete (and the founder on a gym floor) can tell "no earbuds"
  * from "no engine" without a debugger. It draws nothing on the stage; the stage stays what it was.
  */
-function VoiceGateLine() {
+function VoiceGateLine({ mic, onMic }: { mic: EarSource; onMic: (m: EarSource) => void }) {
   const { t } = useCopy();
   const capable = Platform.OS === 'ios' && coachVoice.available() && voiceCapture.available() && audioSession.available();
   const [headset, setHeadset] = useState(() => audioSession.headsetConnected());
-  useEffect(() => audioSession.onRouteChange(setHeadset), []);
+  const [route, setRoute] = useState(() => audioSession.routeInfo());
+  const [test, setTest] = useState<'idle' | 'playing' | 'heard' | 'failed'>('idle');
+  const [testDetail, setTestDetail] = useState('');
+  const reread = () => {
+    setHeadset(audioSession.headsetConnected());
+    setRoute(audioSession.routeInfo());
+  };
+  useEffect(() => audioSession.onRouteChange(reread), []);
+  /*
+   * ⛔ THE VOICE TESTS ITSELF WHERE SHE CAN SEE IT (founder, 2026-09-15: *"כבר כמה פעמים טיפלנו
+   * בנושא הקול וזה לא משמיע קול ולא כלום"*). Three reports of a silent coach were each diagnosed
+   * from a description. This plays one line through the workout's exact path — the gate's read,
+   * the duck, the mouth, the unduck — and prints what the phone reported: the route by port type
+   * and name, and whether the synthesizer began and how the line ended. A silent voice is then a
+   * reading, not a guess.
+   */
+  const runTest = async () => {
+    setTest('playing');
+    setTestDetail('');
+    reread();
+    await audioSession.duck();
+    await coachVoice.say(t('profile.voiceTestLine'), currentLocale());
+    await audioSession.unduck();
+    const lastLine = coachVoice.lastLine();
+    reread();
+    const ok = !!lastLine && lastLine.started && lastLine.how === 'done';
+    setTest(ok ? 'heard' : 'failed');
+    setTestDetail(lastLine ? `${lastLine.how}${lastLine.started ? '' : ' · never started'}${lastLine.voice ? ` · ${lastLine.voice}` : ''}` : 'no line');
+    void track('voice_test', { ok, how: lastLine?.how ?? null, started: lastLine?.started ?? false, outputs: route?.outputs.map((o) => o.type).join(',') ?? null });
+  };
+  /*
+   * ════ THE LOCKED-PHONE TEST (founder, 2026-09-15: *"אי אפשר שהמיקרופון יפתח רק בחלקים ספציפיים
+   * באימון? זה היה החזון שלי"*) ════
+   * Whether a question can be answered from a pocket was, until this, a reading of Apple's forums —
+   * and those forums are old and not about an app that is already playing audio in the background,
+   * which is what a Hush workout is. So the phone is asked.
+   *
+   * `windows` — the founder's design, exactly: nothing is opened on glass; she locks the phone; then
+   * three short windows are opened FROM THE LOCKED PHONE, one after another, each asking for a
+   * number and saying back what it heard:
+   *   1 · today's ear (Apple's older recognizer, the earbuds' microphone)
+   *   2 · the new on-device recognizer, the earbuds' microphone, opened for this window only
+   *   3 · the new on-device recognizer, the phone's microphone, opened for this window only
+   * `continuous` — the fallback: the phone's microphone opened on glass and held (music untouched).
+   * Every step is written below with its second, so when she unlocks the page says which held.
+   */
+  const [probe, setProbe] = useState<'idle' | 'running' | 'done'>('idle');
+  const [probeLog, setProbeLog] = useState<string[]>([]);
+  const runProbe = async (kind: 'windows' | 'continuous') => {
+    setProbe('running');
+    const log: string[] = [];
+    const t0 = Date.now();
+    const note = (s: string) => {
+      log.push(`${((Date.now() - t0) / 1000).toFixed(1)}s · ${s}`);
+      setProbeLog([...log]);
+    };
+    const locale = currentLocale();
+    const lang = recognizerLang(locale);
+    const say = async (text: string) => {
+      await audioSession.duck();
+      await coachVoice.say(text, locale);
+      await audioSession.unduck();
+    };
+    const ask = async (n: number, label: string) => {
+      await say(t('profile.voiceProbeAsk', { n }));
+      note(`${n} · ${label} · app: ${AppState.currentState} · microphone held: ${audioSession.earRunning()}`);
+      const heard = await new Promise<string | null>((resolve) => {
+        let text: string | null = null;
+        voiceCapture.open({
+          locale,
+          ms: PROBE_LISTEN_MS,
+          onSentence: (s) => {
+            text = s;
+            return false;
+          },
+          onEnd: (why) => {
+            note(`${n} · window ended: ${why}${text ? ` · heard "${text}"` : ''}`);
+            resolve(text);
+          },
+        });
+      });
+      await say(heard ? t('profile.voiceProbeHeard', { text: heard }) : t('profile.voiceProbeNothing'));
+    };
+    if (audioSession.earRunning()) {
+      note('a workout holds the microphone — end it first');
+      setProbe('done');
+      return;
+    }
+    await audioSession.holdKeepAlive('voiceTest');
+    try {
+      note(`kind: ${kind} · permission: ${(await voiceCapture.ensurePermission()) ? 'granted' : 'REFUSED'}`);
+      const available = await audioSession.earAvailable(lang);
+      note(`new recognizer (${lang}): ${available ? 'available' : 'NOT available'}`);
+      const model = available && (await audioSession.earPrepare(lang));
+      if (available) note(`model: ${model ? 'installed' : 'NOT installed'}`);
+      if (kind === 'continuous' && model) note(`phone microphone held: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
+      await say(t('profile.voiceProbeLock'));
+      await new Promise((r) => setTimeout(r, PROBE_LOCK_MS));
+      if (kind === 'continuous') {
+        await ask(1, 'held phone microphone');
+      } else {
+        await ask(1, "today's ear · earbuds");
+        if (model) {
+          note(`2 · open earbuds microphone from here: ${(await audioSession.earOpen('headset')) ?? 'open'}`);
+          if (audioSession.earRunning()) await ask(2, 'new recognizer · earbuds');
+          await audioSession.earClose();
+          note(`3 · open phone microphone from here: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
+          if (audioSession.earRunning()) await ask(3, 'new recognizer · phone');
+          await audioSession.earClose();
+        }
+      }
+      const spoke = coachVoice.lastLine();
+      note(`last line: ${spoke ? `${spoke.how}${spoke.started ? '' : ' · never started'}` : 'none'}`);
+      void track('voice_probe', { kind, log: log.join(' | ') });
+    } finally {
+      await audioSession.earClose();
+      await audioSession.releaseKeepAlive('voiceTest');
+      setProbe('done');
+    }
+  };
   const line = !capable ? t('profile.voiceGateMissing') : headset ? t('profile.voiceGateOn') : t('profile.voiceGateNoHeadset');
-  return <Text style={styles.voiceGate}>{line}</Text>;
+  const routeLine = route
+    ? `${route.outputs.map((o) => `${o.name} (${o.type})`).join(', ') || '—'} · ${route.category.replace('AVAudioSessionCategory', '')}`
+    : null;
+  return (
+    <View style={styles.voiceGateBlock}>
+      <Text style={styles.voiceGate}>{line}</Text>
+      {capable && routeLine ? <Text style={styles.voiceGateRoute}>{routeLine}</Text> : null}
+      {capable ? (
+        <View style={styles.voiceGateTest}>
+          <Button
+            variant="secondary"
+            size="sm"
+            label={test === 'playing' ? t('profile.voiceTestPlaying') : t('profile.voiceTest')}
+            onPress={() => void runTest()}
+            disabled={test === 'playing'}
+          />
+          {test === 'heard' || test === 'failed' ? (
+            <Text style={styles.voiceGate}>
+              {test === 'heard' ? t('profile.voiceTestHeard') : t('profile.voiceTestFailed')} {testDetail ? `(${testDetail})` : ''}
+            </Text>
+          ) : null}
+          <Text style={styles.voiceGate}>{t('profile.voiceMicLabel')}</Text>
+          <SegmentedControl
+            size="pill"
+            options={[
+              { value: 'headset', label: t('profile.voiceMicHeadset') },
+              { value: 'phone', label: t('profile.voiceMicPhone') },
+            ]}
+            value={mic}
+            onChange={(v) => onMic(v === 'phone' ? 'phone' : 'headset')}
+          />
+          <Text style={styles.voiceGate}>{t('profile.voiceMicSub')}</Text>
+          <Button
+            variant="secondary"
+            size="sm"
+            label={probe === 'running' ? t('profile.voiceProbeRunning') : t('profile.voiceProbe')}
+            onPress={() => void runProbe('windows')}
+            disabled={probe === 'running' || test === 'playing'}
+          />
+          <Button
+            variant="quiet"
+            size="sm"
+            label={t('profile.voiceProbeContinuous')}
+            onPress={() => void runProbe('continuous')}
+            disabled={probe === 'running' || test === 'playing'}
+          />
+          {probeLog.length > 0 ? <Text style={styles.voiceGateRoute}>{probeLog.join('\n')}</Text> : null}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 function Row({
@@ -1009,7 +829,6 @@ const styles = StyleSheet.create({
      both 17 with only weight between them — the page's levels did not separate. The type floor
      forbids going smaller, so the level is said in the accent and in space instead. */
   sectionLegend: { marginTop: 28, marginBottom: 6 },
-  cloudNote: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, marginBottom: 6, textAlign: 'left' },
 
   /* The preference choices — the onboarding sex control's own geometry. */
   pickBlock: { marginTop: 16, gap: 10 },
@@ -1043,9 +862,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   /* ⛔ THE MAP IS THE FRONT OF THE SCREEN — the figure, drawn, not a door to it. */
-  mapBlock: { marginTop: 10, paddingBottom: 10, borderRadius: 20 },
-  mapBlockPressed: { backgroundColor: 'rgba(241,238,229,0.04)' },
-  mapWords: { marginTop: 10, gap: 4, alignItems: 'center' },
   /* The lifts door — a row, not a caption. See the note at the markup. */
   liftsRow: { marginTop: 10, paddingVertical: 14, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 12 },
   liftsWords: { flex: 1, gap: 4 },
@@ -1054,8 +870,6 @@ const styles = StyleSheet.create({
      HERE — last-key-wins in an object literal, and `@ts-nocheck` muted TS1117, the error that exists
      precisely to say so. The surviving declaration is the one the screen has actually been rendering. */
   frontText: { flex: 1, gap: 4 },
-  frontTitle: { fontFamily: font.sansSemibold, fontSize: 22, lineHeight: 28, color: color.textPrimary, textAlign: 'center' },
-  frontSub: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: color.textMuted, textAlign: 'center' },
   /* ⛔ THE ACCENT, SPENT ONCE. Moss means "a decision made" in this palette, and this is the only
      control on the page that changes what she trains rather than how it is shown. */
   planCard: { borderColor: 'rgba(169,196,159,0.42)', backgroundColor: 'rgba(169,196,159,0.08)' },
@@ -1077,7 +891,11 @@ const styles = StyleSheet.create({
   rowDanger: { color: alert.stage },
   rowSub: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: 2, textAlign: 'left' },
   /* The voice gate's live line, under its row — the row's own quiet voice, one step in. */
-  voiceGate: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, marginTop: -6, marginBottom: 10, textAlign: 'left' },
+  voiceGate: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textMuted, textAlign: 'left' },
+  voiceGateBlock: { marginTop: -6, marginBottom: 10, gap: 6 },
+  // A reading, not copy: port names and types as iOS reports them, in their own direction.
+  voiceGateRoute: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left', writingDirection: 'ltr' },
+  voiceGateTest: { gap: 6, alignItems: 'flex-start' },
 
   // membership card
   memberCard: {
@@ -1117,7 +935,6 @@ const styles = StyleSheet.create({
   memberChevronTop: { alignSelf: 'flex-start', marginTop: 4 },
   /* `trialNote` went INSIDE the card as `trialNoteIn` (design review 2026-09-01). */
   trialNoteIn: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: color.border, textAlign: 'left' },
-  healthNote: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textTertiary, lineHeight: 20, marginTop: 8, marginHorizontal: 2, textAlign: 'left' },
 
   // Text-only exits — still a full 44pt target, just no visual weight.
   /* A hairline sets the exits apart from the content above (design review 2026-09-01): two live
@@ -1143,7 +960,6 @@ const styles = StyleSheet.create({
   legalRowText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },
   /* ⚠️ NO TRACKING: this string is translated, and opening a Hebrew word is a rendering fault (`noTrackedHebrew`). */
-  tagline: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 4 },
   confirm: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'center', marginBottom: 18 },
   confirmActions: { gap: 10 },
 });

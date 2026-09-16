@@ -144,7 +144,9 @@ describe('onboarding asks for every one of them', () => {
        builder asks for nothing the coach needs: it is where she WRITES a week, not where she
        answers a question. So the answering path is three screens, and every requirement is still
        collected on it — which is the only claim this law has ever made. */
-    const flow = ['Start', 'AboutYou', 'ConnectHealth']
+    /* ⛔ AND `Start` LEFT IT AGAIN ON 2026-09-16 (founder: *"צריך רק בניה עצמית של הבינה שלנו"*) —
+       the fork is deleted, so the path opens on About you. */
+    const flow = ['AboutYou', 'ConnectHealth']
       .map((f) => read(`src/screens/onboarding/${f}.tsx`))
       .join('\n');
     for (const r of REQUIRED_FOR_COACH) {
@@ -237,7 +239,7 @@ describe('onboarding asks for every one of them', () => {
        over the sheet when the AI screen was designed. What this clause guards is unchanged: the one
        door that cannot derive a frequency is the one that asks for it. */
     expect(builderSrc).toContain('function AskTheCoach');
-    expect(builderSrc).toContain("inputs: { ...inputs, daysPerWeek, ...(minutes ? { workoutMinutes: minutes } : {}) },");
+    expect(builderSrc).toContain("inputs: { ...inputs, daysPerWeek },");
     // the doors that CAN derive it do, from the sealed week rather than from an earlier answer
     expect(builderSrc).toContain("daysPerWeek: sealed.days.filter((day) => !day.isRest).length");
     /*
@@ -274,10 +276,11 @@ describe('onboarding asks for every one of them', () => {
        opens the intake, the Ready screen's CTA pushes Authentication when no account exists, and
        success hands her back for the focus listener to finish. Both halves asserted. */
     const root = read('src/app/Root.tsx');
-    expect(root.indexOf('<OnboardingStack.Screen name="Start"')).toBeLessThan(
+    /* ⛔ AND THE FORK IS DELETED (founder 2026-09-16) — About you is the front door now. */
+    expect(root.indexOf('name="AboutYou"')).toBeLessThan(
       root.indexOf('<OnboardingStack.Screen name="Authentication"'),
     );
-    expect(read('src/screens/onboarding/Start.tsx')).toContain("navigation.navigate('AboutYou')");
+    expect(root).not.toContain('<OnboardingStack.Screen name="Start"');
     expect(read('src/screens/onboarding/ProgramCreated.tsx')).toContain("navigation.navigate('Authentication')");
     expect(read('src/screens/onboarding/Authentication.tsx')).toContain('navigation.goBack()');
   });

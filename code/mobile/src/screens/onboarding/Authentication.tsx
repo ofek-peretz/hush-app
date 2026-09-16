@@ -13,7 +13,7 @@
  * one line beneath the buttons. Consent is still affirmative, still versioned, still
  * idempotent (OD-3 / BB-33): pressing a provider button IS the agreement, `acceptConsent()`
  * records it the moment the provider returns, and the line above the buttons says so before
- * a finger lands on one. On success → `Start`, the fork. (This line said `NameEntry` until
+ * a finger lands on one. On success → `AboutYou`, the first intake step (the fork `Start` was deleted 2026-09-16). (This line said `NameEntry` until
  * 2026-08-12 — a screen deleted long before — and then `AboutYou` for an afternoon, until bringing
  * your own programme became a screen of its own rather than a line under a button.)
  *
@@ -53,10 +53,8 @@ import { useApp } from '@/state/stores/appStore';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
-import { FREE_SESSION_LIMIT, TRIAL_MAX_DAYS, TRIAL_MAX_DAYS_DEFAULT } from '@/domain/entitlement';
 import { LegalSheet } from '@/components/LegalSheet';
 import { color, space, font, textScale, tracking, trackingPx, signal, control, radius, press, motion } from '@/design/tokens';
-import { legendVoice } from '@/design/monoVoice';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList, MainParamList } from '@/app/navigation';
 import { track } from '@/platform/telemetry';
@@ -72,13 +70,13 @@ type Props =
 
 export function Authentication({ navigation: nav, route }: Props) {
   /* Typed as the onboarding closer — the shape both stacks share (`goBack`, `popToTop`,
-     `navigate('Start')`); which stack it is actually on is read from the state below. */
+     `navigate('AboutYou')`); which stack it is actually on is read from the state below. */
   const navigation = nav as NativeStackScreenProps<OnboardingParamList, 'Authentication'>['navigation'];
   /** From `WellDone`, over the tabs — dismissible, and success lands back on the tabs. */
   const afterWorkout = (route.params as { after?: 'workout' } | undefined)?.after === 'workout';
   /** From the You tab — also over the tabs, also dismissible. */
   const routeNames: string[] = navigation.getState?.()?.routeNames ?? [];
-  const overTabs = afterWorkout || !routeNames.includes('Start');
+  const overTabs = afterWorkout || !routeNames.includes('AboutYou');
   useEffect(() => {
     if (afterWorkout) void track('signin_wall_after_workout_shown');
   }, [afterWorkout]);
@@ -100,22 +98,6 @@ export function Authentication({ navigation: nav, route }: Props) {
    */
   const [failed, setFailed] = useState<null | 'network' | 'apple' | 'google'>(null);
   const locale = currentLocale();
-  const affirm = t('ob.signinAffirm').toUpperCase();
-  /*
-   * ⛔ THE FACE SWAPPED AND THE TRACKING DID NOT — ON THE FIRST SCREEN OF THE APP (2026-08-26).
-   *
-   * This slot has asked the STRING which face to use since it was built (`affirmSans`), and then
-   * merged that answer on top of a style still carrying `.22em`. So the product's one claim —
-   * the only thing this screen asserts — was drawn to a Hebrew reader as
-   * `כ ל  מ ש ק ל  מ ס ט  ש ה ר מ ת`: a sentence spelled out letter by letter, at the top of the
-   * funnel, on the screen that has to earn the download.
-   *
-   * `Legend` fixed exactly this on 2026-08-21 and the fix stayed inside `Legend`. It is one shared
-   * question now (`legendVoice`), and `noTrackedHebrew` in `lint-rtl` stops it being asked twice.
-   */
-  /* ⚠️ SIZED AT `md`, NOT `sm` — see the style. The tracking is computed from the size it is
-     actually drawn at, or the two drift and Latin gets the wrong track. */
-  const affirmVoice = legendVoice(affirm, textScale.md, 0.22);
 
   /**
    * LANGUAGE LIVES ON THE FRONT DOOR (founder 2026-07-12). It used to be buried in Settings,
@@ -178,7 +160,7 @@ export function Authentication({ navigation: nav, route }: Props) {
         return;
       }
       if (navigation.canGoBack()) navigation.goBack();
-      else navigation.navigate('Start');
+      else navigation.navigate('AboutYou');
     } catch (e) {
       /*
        * ⛔ A CANCELLED SIGN-IN IS SILENT, AND THAT IS THE RULE THIS BRANCH EXISTS FOR. She pressed
@@ -250,48 +232,12 @@ export function Authentication({ navigation: nav, route }: Props) {
             better in every way — first person, provable, and it IS the promise. So it takes the
             size the boast was wearing, and the boast is gone. */}
         <Arrive order={2} style={styles.promiseLockup}><Text style={styles.promise}>{t('ob.signinTagline')}</Text></Arrive>
-        {/* v7 1.1: the coach's affirmation under the promise — IBM Plex Mono 500 at .22em,
-            exactly as the handoff draws it. The face is chosen from the STRING: a locale mono
-            cannot draw falls back to Assistant rather than breaking mid-line. */}
-        {/*
-          ⛔ THE HAIRLINE OVER THE AFFIRMATION IS DELETED (2026-08-26, the elevation pass).
-
-          It was 30 × 1 points of cream, meant as *"a seal on the promise above rather than a stray
-          caption"*. Read on glass at the real size it is the opposite: a floating dash with nothing
-          either side of it, the only fragment on a screen otherwise made of whole objects. The
-          affirmation is already a different register — different face, different size, different
-          ink, thirty points of air — and none of those needed a rule to be seen.
-
-          The app's own copy law, arriving in a graphic: *a label that explains a control steals its
-          job; delete, don't shorten.* A rule that separates a line from a line is that label.
-        */}
-        <Arrive order={3}>
-          <Text
-            /* ⚠️ `affirmSans` STAYS BEFORE THE INLINE OBJECT. `monoCarriesNoWords` reads this style
-               expression with a regex that stops at the first `}`, and its escape hatch is seeing a
-               sans key in it — so a non-Latin fallback declared AFTER an inline object is invisible
-               to the law that exists to require one. The two keys set different properties, so the
-               order is free; being legible to the law is not. */
-            style={[styles.affirm, !affirmVoice.latin && styles.affirmSans, { letterSpacing: affirmVoice.letterSpacing }]}
-          >
-            {affirm}
-          </Text>
-        </Arrive>
-        {/* ⛔ THE VALUE, BEFORE THE WALL (founder 2026-09-01 · F5). The front door asked for an
-            account before showing anything but a slogan — and the one hesitation everyone brings
-            to that wall is "what will this cost me". One measured fact answers it: the fourteen
-            free sessions, from the same constant the trial actually runs on. No extra screen, no
-            demo mode — the door itself carries the reason to walk through it. */}
-        {/* THE REASON SHE IS HERE (2026-09-01): the programme is already built and on screen one
-            step back — the account is what keeps it hers. Stated as a fact, like everything. */}
-        <Arrive order={4}>
-          <Text style={styles.trialFact}>{t(afterWorkout ? 'ob.signinSaveFactAfterWorkout' : 'ob.signinSaveFact')}</Text>
-        </Arrive>
-        <Arrive order={5}>
-          <Text style={styles.trialFact}>{t('ob.signinTrialFact', { n: FREE_SESSION_LIMIT, d: TRIAL_MAX_DAYS ?? TRIAL_MAX_DAYS_DEFAULT })}</Text>
-        </Arrive>
+        {/* ⛔ ONE LINE, AND IT IS THE PROMISE (founder, 2026-09-16): *"המשפט צריך להיות ׳אל תחשוב, תתאמן׳
+            … תמחק את כל המלל שכתוב אחר שם מאיפה שכתוב כל משקל עד בלי כרטיס."* The affirmation, the
+            account's reason and the trial's terms are gone from this screen; the terms still stand
+            on the paywall and in the legal sheet, where a price is actually decided. */}
       </View>
-      <Arrive order={6} style={styles.actions}>
+      <Arrive order={3} style={styles.actions}>
         {failed ? (
           <Text style={styles.error}>
             {t(failed === 'network' ? 'ob.signinFailedNetwork' : failed === 'apple' ? 'ob.signinFailedProvider' : 'ob.signinFailedGoogle')}
@@ -477,13 +423,13 @@ const styles = StyleSheet.create({
    * wordmark, the promise they make, and the seal under it, and the eye should read one object.
    *
    * So the rhythm is graded the way the meaning is: the mark and the word are a LOCKUP and sit
-   * close (18); the promise is what they say, one register out (34); the affirmation is a different
-   * voice again and takes the most air (34). Same total height, one object instead of four.
+   * close (18); the promise is what they say, one register out (34). (The affirmation under it left
+   * on 2026-09-16 — the promise is the screen's one line now.)
    */
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40, marginTop: -20 },
   markLockup: { marginBottom: 18 },
   brandLockup: { marginBottom: 34 },
-  promiseLockup: { marginBottom: 34 },
+  promiseLockup: {},
   markWrap: { width: 180, height: 120, alignItems: 'center', justifyContent: 'center' },
   // The ignition — a moss ring that blooms once behind the mark and settles (118px).
   /* borderWidth 1.5 → 2 (design review 2026-09-01): at 0.5 opacity a 1.5 hairline ring is nearly
@@ -517,32 +463,6 @@ const styles = StyleSheet.create({
     color: color.textPrimary,
     textAlign: 'center',
   },
-  /* The affirmation: the mono legend voice at .22em (see `monoVoice` for the Hebrew fallback).
-     It is the only CLAIM this screen makes — the whole product's argument in three words — and it
-     was set at the smallest size the app has, in the faintest ink, where nobody noticed it
-     (founder 2026-07-28). Up two rungs and out of the muted tone: still a legend, no longer a
-     whisper. It sits under a hairline so it reads as a seal on the promise above rather than a
-     stray caption. */
-  /* ⚠️ NO `letterSpacing` HERE. It is supplied at the call site from `legendVoice`, because it is
-     an answer about the STRING and a StyleSheet cannot see one. See the note there. */
-  /*
-   * ⛔ 17 → 18, TO OUTRANK THE LEGAL LINE (2026-08-26).
-   *
-   * The type floor made `sm` and `xs` the same number, so the product's ONE CLAIM and the consent
-   * fine print were being set at the identical size — separated only by ink. On the screen that has
-   * to earn the download, the claim has to be the larger of the two, and `md` is the next rung the
-   * scale actually has.
-   */
-  affirm: {
-    fontFamily: font.monoMedium,
-    fontSize: textScale.md,
-    textTransform: 'uppercase',
-    color: color.textSecondary,
-    textAlign: 'center',
-  },
-  // …and the sans sibling the same slot swaps to when the string is not Latin. Naming a sans
-  // style here is also the contract `monoCarriesNoWords` reads: this mono slot keeps its promise.
-  affirmSans: { fontFamily: font.sansMedium },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 30, gap: 12 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
 
@@ -597,7 +517,6 @@ const styles = StyleSheet.create({
 
   // The legal line is READ, not decoration: one weight, one muted tone, 12px, 4px under the pair.
   legalPress: { marginTop: 4, minHeight: 44, justifyContent: 'center' },
-  trialFact: { fontFamily: font.sansMedium, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'center', marginTop: 18 },
   legal: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'center', lineHeight: 18 },
   legalLink: { color: color.textSecondary, textDecorationLine: 'underline' }, // rtl-ok: nested span, inherits the centred line
   notNow: { fontFamily: font.sansMedium, fontSize: textScale.md, color: color.textSecondary, textAlign: 'center', marginTop: 10 },

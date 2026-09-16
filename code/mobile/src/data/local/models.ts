@@ -91,6 +91,14 @@ export interface Profile {
    */
   voiceSpec?: boolean;
   /**
+   * Which microphone hears her answers (2026-09-15, `HushEar.swift`). Absent = `headset`: the
+   * earbuds' microphone, opened ONLY in the conductor's short windows (the founder's design) — for
+   * those seconds Bluetooth drops her music to call quality, never longer. `phone`: the phone's own
+   * microphone, held for the workout so a locked phone can answer; her music is never touched.
+   * ⛔ The earbuds' microphone is never held open for the workout (founder: the music must not suffer).
+   */
+  voiceMic?: 'headset' | 'phone';
+  /**
    * ⛔ HER OWN WORDS, from onboarding (founder 2026-08-04, taking the chat out of the front door).
    *
    * The ONLY goal the product carries since 2026-09-10 — the four-way `Goal` enum that used to sit

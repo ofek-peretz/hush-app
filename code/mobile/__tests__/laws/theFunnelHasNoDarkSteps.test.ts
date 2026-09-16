@@ -30,9 +30,9 @@ import { FUNNEL_EVENTS } from '@/platform/events';
 const SRC = path.resolve(__dirname, '..', '..', 'src');
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
 
-/** Step → the one screen that owns it. Start also owns the fork. */
+/** Step → the one screen that owns it. `startReached` moved to About you when the fork was deleted (2026-09-16). */
 const STEP_OWNERS: Record<string, string> = {
-  startReached: 'screens/onboarding/Start.tsx',
+  startReached: 'screens/onboarding/AboutYou.tsx',
   aboutYouReached: 'screens/onboarding/AboutYou.tsx',
   healthReached: 'screens/onboarding/ConnectHealth.tsx',
   /* ⛔ `bodyMapReached` BECAME `yourWeekReached` (founder 2026-08-29). The body map left the intake
@@ -65,10 +65,8 @@ describe('every funnel step is emitted by its screen', () => {
     expect(screen).toContain('if (revealed) void track(FUNNEL_EVENTS.revealSeen); }, [revealed])');
   });
 
-  it('⛔ the fork reports WHICH door — the two doors are two different products to fix', () => {
-    const start = read('screens/onboarding/Start.tsx').replace(/\s+/g, ' ');
-    expect(start).toContain("void track(FUNNEL_EVENTS.doorChosen, { door: where })");
-  });
+  /* ⛔ THE FIRST FORK AND ITS `doorChosen` ARE DELETED (founder 2026-09-16: *"צריך רק בניה עצמית של
+     הבינה שלנו"*). One way in counts nothing a step count does not already say. */
 
   it('⛔ and so does the SECOND fork — build it for me · a blank sheet · a shelf', () => {
     /*
@@ -86,7 +84,7 @@ describe('every funnel step is emitted by its screen', () => {
     // A new FUNNEL_EVENTS entry with no screen firing it counts nobody, which reads as
     // "everyone got here". Adding a step means adding its emitter AND its row above.
     // `revealSeen` rides the `revealed` latch, not a mount (its own test below) — owned, not dark.
-    const owned = new Set([...Object.keys(STEP_OWNERS), 'doorChosen', 'weekDoorChosen', 'revealSeen']);
+    const owned = new Set([...Object.keys(STEP_OWNERS), 'weekDoorChosen', 'revealSeen']);
     expect(Object.keys(FUNNEL_EVENTS).sort()).toEqual([...owned].sort());
   });
 });
@@ -106,7 +104,7 @@ describe('the far edges stay out of the funnel namespace', () => {
   });
 
   it('⚠️ no step carries her answers — a step is the fix granularity, not surveillance', () => {
-    // Only the two FORKS have a payload, and it is the door taken, not a field she typed.
+    // Only the week's fork has a payload, and it is the door taken, not a field she typed.
     for (const [step, rel] of Object.entries(STEP_OWNERS)) {
       const screen = read(rel).replace(/\s+/g, ' ');
       expect(screen).not.toContain(`void track(FUNNEL_EVENTS.${step}, {`);

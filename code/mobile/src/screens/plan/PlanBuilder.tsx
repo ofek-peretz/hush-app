@@ -109,7 +109,7 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
   /** Inside the intake it wears the step chrome; from the Program tab it is a screen of its own. */
   intake: boolean;
   onBack: () => void;
-  onAsk: (days: number, ask: string, minutes: number) => void;
+  onAsk: (days: number, ask: string) => void;
 }) {
   const { t } = useCopy();
   const [days, setDays] = useState(opensOn);
@@ -132,19 +132,27 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
    * sees it (see the no-examples note in `buildPrompt`).
    */
   /*
-   * ════ THE QUESTION THE PRODUCT STOPPED ASKING (2026-09-01, audit lever 3 — decided) ════
-   * `workoutMinutes` was silently defaulted to 60 at ProgramCreated after its screen was deleted —
-   * the exact category of default the intake's own law calls a lie (`daysPerWeek: 0` means "nobody
-   * asked her"). The wheel opens ON 60, which is a visible default she confirms by not turning it
-   * — a different thing from a number invented behind her back. The engine's time budget (S-64)
-   * reads this until her measured session times replace it.
+   * ════ ⛔ NO SESSION-LENGTH WHEEL (founder, 2026-09-16) ════
+   *
+   * *"צריך לבטל את משך זמן האימון בהגדרות בONBORDING ולתת לבינה ליצור את התוכנית שהיא רוצה ליצור
+   * … אני רוצה שיהיה לה חופש פעולה מלא."*
+   *
+   * The wheel (added 2026-09-01) never reached the model: `requestPlanBuild` sends days, sex,
+   * bodyweight and her sentence — never minutes — so "90" answered with a five-lift day was the
+   * model's own choice, and the wheel was a question whose answer nothing read. A length is a
+   * coaching decision; if she has one, she writes it in the line above and the model hears it.
    */
-  const [minutes, setMinutes] = useState(60);
 
   const body = (
     <View style={styles.askRows}>
+      {/*
+        ⛔ ONE QUESTION, ONE FIELD (founder, 2026-09-16): *"יש כמות ענקית של טקסט בכל המסך הזה בזמן
+        שהמוח של האדם הוא עצלן. צריך לדלל את כל המלל במסך הזה ולהיות ממוקד."* The legend over the
+        title, the sub under it, a second legend re-asking the title's question over the field, and a
+        line saying the field was optional — four texts around one sentence. The title asks; the
+        placeholder hints; nothing else speaks.
+      */}
       <View style={styles.askCol}>
-        <Legend size={22} track={0.26} style={styles.askLegend}>{t('ob.weekAskLegend')}</Legend>
         <TextField
           block
           value={ask}
@@ -157,7 +165,6 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
           returnKeyType="done"
           blurOnSubmit
         />
-        <Text style={styles.askOptional}>{t('ob.weekAskOptional')}</Text>
       </View>
       <View style={styles.askCol}>
         <Legend size={22} track={0.26} style={styles.askLegend}>{t('ob.daysPerWeek')}</Legend>
@@ -172,34 +179,19 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
           label={t('ob.daysPerWeek')}
         />
       </View>
-      <View style={styles.askCol}>
-        <Legend size={22} track={0.26} style={styles.askLegend}>{t('ob.sessionLength')}</Legend>
-        <WheelPicker
-          value={minutes}
-          onChange={setMinutes}
-          step={15}
-          min={30}
-          max={90}
-          size="lg"
-          ends="chevron"
-          label={t('ob.minutesLabel')}
-        />
-      </View>
     </View>
   );
 
-  const act = <Button variant="primary" size="lg" block label={t('ob.weekEngine')} onPress={() => onAsk(days, ask, minutes)} />;
+  const act = <Button variant="primary" size="lg" block label={t('ob.weekEngine')} onPress={() => onAsk(days, ask)} />;
 
   if (intake) {
     return (
       <OnboardingScaffold
         onBack={onBack}
-        /* 4/4 — the doors' step is gone (2026-09-07), so this is the last beat before the payoff. */
-        progress={{ index: 4, total: 4 }}
+        /* 3/3 — the last beat before the payoff. */
+        progress={{ index: 3, total: 3 }}
         keyboard
-        legend={t('ob.weekLegend')}
         title={t('ob.askTitle')}
-        sub={t('ob.askSub')}
         headGap={22}
         bodyTop={16}
         footer={act}
@@ -509,7 +501,7 @@ export interface PlanBuilderViewProps {
   /** Intake only: she wants the week assembled for her — the third door, and the ordinary path. */
   /** ⚠️ CARRIES THE FREQUENCY IT JUST ASKED FOR — see `AskTheCoach`. It is the one door with nobody
    *  to derive the number from, so it is the one door that asks. */
-  onLetHushBuild?: (daysPerWeek: number, ask: string, minutes?: number) => void;
+  onLetHushBuild?: (daysPerWeek: number, ask: string) => void;
   /** True while no draft exists yet and the saved week is the ENGINE's — the two-door opening. */
   offerDoors: boolean;
   savedIsAuthored: boolean;
@@ -602,9 +594,9 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
         opensOn={DAYS_OPENS_ON}
         intake={!!props.intake}
         onBack={intakeAsks ? props.onExit : () => setAsking(false)}
-        onAsk={(days, ask, minutes) => {
+        onAsk={(days, ask) => {
           setAsking(false);
-          props.onLetHushBuild?.(days, ask, minutes);
+          props.onLetHushBuild?.(days, ask);
         }}
       />
     );
@@ -702,7 +694,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
       return (
         <OnboardingScaffold
           onBack={props.onExit}
-          progress={{ index: 4, total: 4 }}
+          progress={{ index: 3, total: 3 }}
 
           /* The legend names the thing, the title asks the one question about it: HER WEEK — who
              writes it? A title that tried to carry both would be a sentence, and this step is a
@@ -1244,7 +1236,7 @@ export function PlanBuilder({ navigation, route }: Props) {
   /** Whoever can answer for her: the relay inside the intake, the stored profile outside it. */
   const canBuildForHer = !!(inputs || app.profile);
   const letTheModelBuild = useCallback(
-    (daysPerWeek: number, ask: string, minutes?: number) => {
+    (daysPerWeek: number, ask: string) => {
       /*
        * ════════════════════════════════════════════════════════════════════════════════════════
        * ⛔ THE WAIT BELONGS TO `BuildingProgramme`, NOT TO THIS BUTTON (founder 2026-08-29).
@@ -1272,8 +1264,8 @@ export function PlanBuilder({ navigation, route }: Props) {
 
       if (intake && inputs) {
         navigation.replace('BuildingProgramme', {
-          // Her session length rides the relay too now — answered, not defaulted (see AskTheCoach).
-          inputs: { ...inputs, daysPerWeek, ...(minutes ? { workoutMinutes: minutes } : {}) },
+          // No session length rides the relay — the model sets it (see AskTheCoach, 2026-09-16).
+          inputs: { ...inputs, daysPerWeek },
           /* ⚠️ ALWAYS PASSED, EVEN EMPTY — its PRESENCE is what says the model writes this week.
              She may press straight through without a line, and that is still the coach path. */
           coachAsk: ask.trim(),
@@ -1306,7 +1298,7 @@ export function PlanBuilder({ navigation, route }: Props) {
       const askAgainOrNot = () =>
         Alert.alert(t('ob.buildingFailedTitle'), t('ob.buildingFailedSub'), [
           { text: t('ob.buildingWithoutCoach'), style: 'cancel', onPress: assembleLocally },
-          { text: t('ob.buildingRetry'), onPress: () => letTheModelBuild(daysPerWeek, ask, minutes) },
+          { text: t('ob.buildingRetry'), onPress: () => letTheModelBuild(daysPerWeek, ask) },
         ]);
       const failed = ask.trim() ? () => { setBuildBusy(false); askAgainOrNot(); } : assembleLocally;
       void requestPlanBuild({
@@ -1545,7 +1537,6 @@ const styles = StyleSheet.create({
   askLegend: { color: color.textPrimary },
   /* Says the line may be left empty. Quiet, and below the field rather than inside it: a
      placeholder that says "optional" is a placeholder spending its one line on permission. */
-  askOptional: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
   askAct: { marginTop: 8 },
   flex: { flex: 1 },
 

@@ -11,7 +11,7 @@
  *
  * ⛔ AND THE THIRD ANSWERING STEP IS THE BUILDER NOW (founder 2026-08-29):
  *
- *     Authentication → Start → AboutYou (1/3) → ConnectHealth (2/3) → PlanBuilder (3/3)
+ *     AboutYou (1/3) → ConnectHealth (2/3) → PlanBuilder (3/3)
  *       → BuildingProgramme → ProgramCreated → Home
  *
  * The body map held that seat because it was the only step that shaped the week. The builder is
@@ -59,7 +59,6 @@ export type OnboardingParamList = {
    * and the model's read of a photograph runs underneath the rest of the intake rather than in
    * front of her (`domain/pendingImport`).
    */
-  Start: undefined;
   /*
    * ⛔ WHAT SHE WEIGHS (founder 2026-08-03) — *"the coach didn't ask for my weight, and it's
    * critical for it."* It was never asked by anyone: `coachFacts` spreads it conditionally, so an
@@ -177,8 +176,7 @@ export type OnboardingParamList = {
    * mark ten muscles off / normal / emphasis BEFORE she has ever trained — one screen away from a
    * sheet where she can write the week itself — is the same question asked twice, worse.
    *
-   * ⚠️ THE MAP ITSELF IS NOT GONE, and it is the only thing that keeps this honest: `BodyMapEdit`
-   * (4.1) is hers from her first minute in the app, and the pain flow (13.2) reaches it. What is
+   * ⚠️ (2026-09-16: the map left the You tab too, and `BodyMapEdit` is no longer a route.) What is
    * gone is asking her to fill one in before she has a programme. The engine door therefore builds
    * her first week from an ABSENT map — a full-body week with nothing switched off — which is the
    * one thing this ruling costs and the founder was told so before he made it.
@@ -374,11 +372,10 @@ export type MainParamList = {
    *  main-stack door cannot accidentally put it in intake chrome. */
   PlanBuilder: undefined;
   /*
-   * ⛔ HER BODY, EDITABLE (founder 2026-08-11). The map used to exist on ONE screen, in onboarding —
-   * drawn once and never reachable again — while the pain copy already told her *"adjust it any time
-   * in You → Body map."* The app was promising a screen that did not exist.
+   * ⛔ `BodyMapEdit` IS NO LONGER A ROUTE (founder 2026-09-16: *"גוף האדם אפשר להעיף — התוכנית נבנית
+   * במסך התוכנית"*). Its one door was the You tab; the week is written on the Program tab now, and
+   * the two sentences that pointed at the map were rewritten with it.
    */
-  BodyMapEdit: undefined;
   /*
    * ⛔ THE LIFTS SHE WANTS, AND THE ONES SHE NEVER WANTS (founder 2026-08-16). `programAssembly` has
    * read her picks and her refusals since the same day; until this route there was no way for her to
