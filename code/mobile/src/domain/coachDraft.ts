@@ -48,6 +48,7 @@ import { matchLift } from '@/domain/importedPlan';
 import type { Program } from '@/data/local/models';
 import { BUILDER_SETS_MAX, BUILDER_SETS_MIN } from '@/domain/planBuilder';
 import { BUILD_MAX_LIFTS, REPS_MAX, REPS_MIN } from '@/domain/buildPrompt';
+import { proseFingerprint, readableProse, type ProseFault } from '@/domain/modelText';
 import { materializeTemplate, type PlanTemplate } from '@/domain/planTemplates';
 
 /** The model's answer, exactly as `BUILD_WEEK_SCHEMA` shapes it. */
@@ -67,6 +68,19 @@ export interface CoachWeekDraft {
    * telemetry, and it is the shopping list for the catalogue.
    */
   missing: string[];
+  /*
+   * ⛔ THE WORDS THAT CAME BACK UNREADABLE (founder 2026-09-16: *"חלק מהכתב יצא גיבריש"*).
+   *
+   * A day name or a title whose BYTES are broken — see `domain/modelText` for the four fingerprints
+   * — is dropped rather than shown, and the drop is recorded here so `planBuild` can count it. One
+   * per refusal: `{ at: 'day[2].name', fault: 'control', shape: 'd7,2018,d7,201c' }`. Never the text
+   * itself; the code points are what say which layer broke it.
+   *
+   * ⚠️ IT IS NOT A FAILURE OF THE WEEK. Every lift, set, pair and rep band is untouched — only the
+   * label above the day, which the builder's own namer then writes. A week she can train with an
+   * honest name beats no week at all, which is what refusing the whole reply would have meant.
+   */
+  unreadable: { at: string; fault: ProseFault; shape: string }[];
 }
 
 /** Read the reply defensively — a shape that does not match is nothing, never a partial week. */
@@ -91,12 +105,20 @@ export function readCoachWeek(json: unknown): CoachWeekDraft | null {
 
   const days = (json as { days?: unknown }).days;
   if (!Array.isArray(days)) return null;
+  const unreadable: CoachWeekDraft['unreadable'] = [];
   const out: CoachWeekDraft['days'] = [];
   for (const d of days) {
     if (!d || typeof d !== 'object') continue;
-    const name = (d as { name?: unknown }).name;
+    const rawDayName = (d as { name?: unknown }).name;
     const lifts = (d as { lifts?: unknown }).lifts;
-    if (typeof name !== 'string' || !Array.isArray(lifts)) continue;
+    if (typeof rawDayName !== 'string' || !Array.isArray(lifts)) continue;
+    /* Unreadable → the day keeps its lifts and loses its label; `draftFromCoachWeek`'s `dayNamer`
+       writes "אימון A" in her language, exactly as it does for a day the model left blank. */
+    const dayName = readableProse(rawDayName, 60);
+    if (dayName && 'fault' in dayName) {
+      unreadable.push({ at: `day[${out.length}].name`, fault: dayName.fault, shape: proseFingerprint(rawDayName) });
+    }
+    const name = dayName && 'text' in dayName ? dayName.text : '';
     const rows: CoachWeekDraft['days'][number]['lifts'] = [];
     for (const l of lifts) {
       if (!l || typeof l !== 'object') continue;
@@ -144,10 +166,16 @@ export function readCoachWeek(json: unknown): CoachWeekDraft | null {
          */
         .filter((m) => !matchLift(m).id)
     : [];
-  /* The title, read like everything else: a string, trimmed, bounded; anything else is no title. */
+  /* The title, read like everything else: a string, trimmed, bounded; anything else is no title —
+     and since 2026-09-16 a string whose bytes are broken is no title either (`domain/modelText`).
+     The week is then named by the shape heuristic, which cannot lie (`programmeName`). */
   const rawName = (json as { name?: unknown }).name;
-  const name = typeof rawName === 'string' ? rawName.trim().slice(0, 80) : '';
-  return { days: out, missing, ...(name ? { name } : {}) };
+  const read = readableProse(rawName, 80);
+  if (read && 'fault' in read) {
+    unreadable.push({ at: 'name', fault: read.fault, shape: proseFingerprint(String(rawName)) });
+  }
+  const name = read && 'text' in read ? read.text : '';
+  return { days: out, missing, unreadable, ...(name ? { name } : {}) };
 }
 
 /**

@@ -23,6 +23,7 @@
 
 import type { Program } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
+import { proseFault } from '@/domain/modelText';
 import { addLift, moveLift, removeLift, replaceLift, setLiftSets, togglePair, isPaired, BUILDER_SETS_MAX, BUILDER_SETS_MIN } from '@/domain/planBuilder';
 
 /** One approvable atom of the AI's opinion. `day` is 1-based — the way a coach counts. */
@@ -111,7 +112,15 @@ export function parsePlanReview(raw: unknown): { ok: true; review: PlanReview } 
   }
   if (typeof obj !== 'object' || obj == null) return { ok: false, reason: 'not_json' };
   const x = obj as Record<string, unknown>;
-  if (typeof x.say !== 'string' || x.say.trim() === '') return { ok: false, reason: 'nothing_said' };
+  /*
+   * ⛔ AND A SENTENCE WHOSE BYTES ARE BROKEN IS NOTHING SAID (founder 2026-09-16: *"חלק מהכתב יצא
+   * גיבריש"*). This line is model prose on its way to her screen, exactly like a day name, so it
+   * meets the same gate (`domain/modelText`). The caller already draws a translated failure for
+   * `nothing_said`; a screen saying "the coach could not answer" beats one quoting mojibake at her.
+   */
+  if (typeof x.say !== 'string' || x.say.trim() === '' || proseFault(x.say.trim())) {
+    return { ok: false, reason: 'nothing_said' };
+  }
   const list = Array.isArray(x.suggestions) ? x.suggestions : [];
   return { ok: true, review: { say: x.say.trim(), suggestions: list.filter(validSuggestion) } };
 }

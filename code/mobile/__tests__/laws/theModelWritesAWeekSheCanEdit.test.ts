@@ -550,6 +550,9 @@ describe('3 · what it says is checked, and what survives is a real week', () =>
     expect(readCoachWeek({ days: [{ name: 'Push', lifts: [1, 'squat', null] }] })).toEqual({
       days: [{ name: 'Push', lifts: [] }],
       missing: [],
+      // …and nothing here was unreadable — the prose was fine, only the lifts were junk
+      // (`theModelsWordsAreReadable`, 2026-09-16).
+      unreadable: [],
     });
   });
 });
@@ -689,7 +692,7 @@ describe('4 · it can never strand her — and it can never fail her in silence'
     const builder = read('src/screens/plan/PlanBuilder.tsx');
     expect(builder).toContain("Alert.alert(t('ob.buildingFailedTitle'), t('ob.buildingFailedSub'), [");
     expect(builder).toContain("{ text: t('ob.buildingWithoutCoach'), style: 'cancel', onPress: assembleLocally },");
-    expect(builder).toContain("{ text: t('ob.buildingRetry'), onPress: () => letTheModelBuild(daysPerWeek, ask, minutes) },");
+    expect(builder).toContain("{ text: t('ob.buildingRetry'), onPress: () => letTheModelBuild(daysPerWeek, ask) },");
     // without a sentence the local week IS the answer, exactly as before
     expect(builder).toContain('const failed = ask.trim() ? () => { setBuildBusy(false); askAgainOrNot(); } : assembleLocally;');
     expect(builder).toContain('if (!res.ok) return failed();');

@@ -261,6 +261,23 @@ export async function requestPlanBuild(her: {
     if (week.missing.length > 0) {
       void track(BUILD_EVENTS.catalogueGap, { wanted: week.missing, days: her.daysPerWeek });
     }
+    /*
+     * ⛔ AND THE WORDS THAT CAME BACK UNREADABLE (founder 2026-09-16: *"חלק מהכתב יצא גיבריש"*).
+     *
+     * She saw it once and the app had nothing to say about it — the name was stored, drawn, and kept
+     * for as long as she kept the week, with no trace anywhere of what the bytes actually were.
+     * `readCoachWeek` drops such a name now; this is the half that makes the NEXT one diagnosable,
+     * because the fault plus the code points say which layer broke it: `control` is UTF-8 read as
+     * Latin-1 somewhere in the pipe, `replacement` is an upstream decoder that already gave up,
+     * `surrogate` is a cut through the middle of a character.
+     */
+    if (week.unreadable.length > 0) {
+      void track(BUILD_EVENTS.unreadableText, {
+        faults: week.unreadable.map((u) => `${u.at}:${u.fault}`),
+        shapes: week.unreadable.map((u) => u.shape),
+        model: reply.model ?? null,
+      });
+    }
     return done({ ok: true, week, attempts, ms: Date.now() - startedAt });
   }
   return done({ ok: false, reason: last, attempts, ms: Date.now() - startedAt });

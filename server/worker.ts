@@ -414,11 +414,26 @@ const CORS = {
   'access-control-max-age': '86400',
 } as const;
 
-/** One JSON reply, with the headers the app needs to read it from a phone. */
+/**
+ * One JSON reply, with the headers the app needs to read it from a phone.
+ *
+ * ⛔ `charset=utf-8` IS DECLARED, AND IT IS NOT DECORATION (founder 2026-09-16: *"חלק מהכתב יצא
+ * גיבריש"*).
+ *
+ * Everything this Worker answers with that is not ASCII is the MODEL'S PROSE in the athlete's own
+ * language — a week's title, a day's name — and it leaves here as UTF-8 bytes. An `application/json`
+ * with no charset leaves the decoding to whatever reads it: the JSON spec says UTF-8, but a reply is
+ * read by React Native's fetch on two platforms, by a browser in the web harness, and by whatever
+ * proxy sits in front of a gym's wifi — and the historical default for an undeclared text body is
+ * Latin-1, one byte per character, which turns every Hebrew letter into two mojibake glyphs.
+ *
+ * It costs fourteen characters and removes a whole class of guess. The phone refuses mangled prose
+ * on its own side too (`domain/modelText`), because a header cannot fix a decoder that ignores it.
+ */
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', ...CORS },
+    headers: { 'content-type': 'application/json; charset=utf-8', ...CORS },
   });
 }
 
