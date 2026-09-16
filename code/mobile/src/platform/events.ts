@@ -146,6 +146,12 @@ export const WATCH_EVENTS = {
  */
 export const LIFECYCLE_EVENTS = {
   appOpen: 'app_open',
+  /**
+   * Which Apple Search Ads campaign brought this install, once per install (2026-09-16, the growth
+   * playbook). `{ attribution, campaignId, adGroupId, keywordId, ... }` as Apple's AdServices API
+   * answers it — ids only, nothing about the athlete. `attribution: false` is an organic install.
+   */
+  adAttribution: 'install_ad_attribution',
 } as const;
 
 export const FUNNEL_EVENTS = {

@@ -36,6 +36,7 @@ import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
 import { installCrashHandler, flush as flushTelemetry, track } from '@/platform/telemetry';
 import { LIFECYCLE_EVENTS } from '@/platform/events';
+import { resolveAdAttribution } from '@/platform/adAttribution';
 import { loadRemoteConfig } from '@/platform/remoteConfig';
 import { installCrashReporting } from '@/platform/crash';
 import { color } from '@/design/tokens';
@@ -82,6 +83,8 @@ export default function App() {
      * gives us; the ship's own 10 s timeout fits inside it.
      */
     void track(LIFECYCLE_EVENTS.appOpen, { kind: 'cold' });
+    // Which Apple Search Ads campaign brought this install — once, silent, never waited on.
+    void resolveAdAttribution();
     let wasBackground = false;
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
