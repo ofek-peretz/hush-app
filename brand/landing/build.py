@@ -107,3 +107,50 @@ for key in ('terms', 'privacy'):
     (dist / key).mkdir(exist_ok=True)
     (dist / key / 'index.html').write_text(legal_page(key), encoding='utf-8')
 print('legal pages: /terms /privacy')
+
+# ── /press: the press kit — who we are in three lines, and the files a journalist needs ──
+import shutil as _shutil  # noqa: E402
+
+BRAND = HERE.parent
+press = dist / 'press'
+files = press / 'files'
+files.mkdir(parents=True, exist_ok=True)
+KIT = [
+    (BRAND / 'logo' / 'export' / 'ferrox-mark.svg', 'ferrox-mark.svg', 'הסימן · SVG'),
+    (BRAND / 'logo' / 'export' / 'ferrox-mark-ink.svg', 'ferrox-mark-ink.svg', 'הסימן על רקע בהיר · SVG'),
+    (BRAND / 'logo' / 'export' / 'ferrox-wordmark.svg', 'ferrox-wordmark.svg', 'שם המותג · SVG'),
+    (BRAND / 'logo' / 'export' / 'ferrox-app-icon.svg', 'ferrox-app-icon.svg', 'אייקון האפליקציה · SVG'),
+    (HERE.parent.parent / 'code' / 'mobile' / 'assets' / 'icon.png', 'ferrox-app-icon-1024.png', 'אייקון האפליקציה · PNG 1024'),
+]
+for i in range(1, 8):
+    KIT.append((BRAND / 'appstore' / 'screenshots' / 'iphone-he' / f'ferrox-he-{i}.png', f'ferrox-he-{i}.png', f'צילום מסך {i} · עברית'))
+for i in range(1, 8):
+    KIT.append((BRAND / 'appstore' / 'screenshots' / 'iphone-en' / f'ferrox-en-{i}.png', f'ferrox-en-{i}.png', f'Screenshot {i} · English'))
+rows = []
+for src_path, name, label in KIT:
+    _shutil.copyfile(src_path, files / name)
+    rows.append(f'<li><a href="/press/files/{name}" download>{_html.escape(label)}</a><span class="num">{name}</span></li>')
+PRESS_CSS = LEGAL_CSS + """
+ul.kit{list-style:none;margin:28px 0 0;padding:0;border-top:1px solid var(--line)}
+ul.kit li{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line)}
+ul.kit a{text-decoration:none;color:var(--ink0)}ul.kit a:hover{color:var(--moss)}
+.num{font-family:'IBM Plex Mono',monospace;color:var(--muted);font-size:13px;direction:ltr}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 28px;margin:26px 0 0}
+.facts b{display:block;color:var(--ink0);font-weight:600}
+@media(max-width:560px){.facts{grid-template-columns:minmax(0,1fr)}}
+"""
+press_html = '\n'.join([
+    '<!doctype html>', '<html lang="he" dir="rtl">', '<head>', '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
+    '<title>FERROX · Press</title>', f'<link rel="icon" href="{FAVICON}">',
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600&family=Frank+Ruhl+Libre:wght@400&family=IBM+Plex+Mono:wght@500&display=swap">',
+    f'<style>{PRESS_CSS}</style>', '</head>', '<body>', '<div class="page"><div class="wrap">',
+    f'<header><a href="/" aria-label="FERROX">{C.mark_svg("30px")}{WORDMARK}</a><nav><a href="/press" aria-current="page">עיתונות</a><a href="/privacy">פרטיות</a><a href="/terms">תנאי שימוש</a></nav></header>',
+    '<section lang="he" dir="rtl"><h1>ערכת עיתונות</h1><p class="stamp">FERROX · מאמן כוח ל-iPhone ול-Apple Watch</p>',
+    '<p>FERROX כותב לכל מתאמן שבוע אימונים שלם לפי הימים, הציוד והמטרה שלו, מראה כל תרגיל על דמות תלת-ממדית שזזה בקצב ובטווח הנכונים, ומנהל את האימון מהאוזניות, מהשעון וממסך הנעילה, כך שהטלפון נשאר בכיס. עברית ואנגלית. נבנה בישראל על ידי מייסד אחד.</p>',
+    '<div class="facts"><div><b>זמינות</b>App Store, iPhone ו-Apple Watch</div><div><b>מחיר</b>14 אימונים ראשונים (בתוך 30 יום) חינם, ואז מנוי FERROX Pro</div>'
+    '<div><b>מייסד</b>עופק פרץ</div><div><b>יצירת קשר</b><a href="mailto:ofek34458@gmail.com">ofek34458@gmail.com</a></div></div>',
+    '<h2>קבצים להורדה</h2>', f'<ul class="kit">{"".join(rows)}</ul>', '</section>',
+    '</div></div>', '</body>', '</html>'])
+(press / 'index.html').write_text(press_html, encoding='utf-8')
+print('press kit: /press', len(KIT), 'files')
