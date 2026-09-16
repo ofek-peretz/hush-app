@@ -274,6 +274,14 @@ private enum EditField { case weight, reps }
 
 // MARK: Formatting
 
+/// A hold's "0:45" or a carry's "400 m" — nil on every set. The phone's card formats the same way
+/// (`holdLabelOf`), so the wrist and the lock screen print one figure.
+private func holdText(_ seconds: Int?, _ metres: Int?) -> String? {
+  if let s = seconds { return "\(max(0, s) / 60):" + String(format: "%02d", max(0, s) % 60) }
+  if let m = metres { return "\(m) \(WatchCopy.metresUnit)" }
+  return nil
+}
+
 private func fmtW(_ w: Double) -> String {
   w.rounded() == w ? String(Int(w)) : String(format: "%.1f", w)
 }
@@ -1996,7 +2004,19 @@ struct ActiveSetScreen: View {
    */
   private var readout: some View {
     VStack(spacing: Fit.s(4)) {
-      if let wt = shownWeight {
+      if let hold = holdText(mirror.holdSeconds, mirror.holdMetres) {
+        // ⛔ A HOLD (2026-09-17): its duration is the hero, and there is nothing to edit — Done
+        // finishes it as prescribed. It used to show the NEXT lift's load here while she held it.
+        Text(hold)
+          .font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit()
+          .foregroundStyle(Palette.lift)
+          .lineLimit(1).minimumScaleFactor(0.5)
+        if let wt = mirror.targetWeight {
+          Text("\(fmtW(wt)) \(WatchCopy.kg)")
+            .font(.system(size: Fit.s(15), design: .monospaced)).monospacedDigit()
+            .foregroundStyle(Palette.ink2)
+        }
+      } else if let wt = shownWeight {
         Button { TapGate.pass { enterEdit(.weight) } } label: {
           HStack(alignment: .firstTextBaseline, spacing: Fit.s(4)) {
             Text(fmtW(wt)).font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit().foregroundStyle(Palette.lift)
@@ -2596,7 +2616,12 @@ struct InterRestScreen: View {
         .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.75)
-      if let wt = nextLoad {
+      if let hold = holdText(mirror.nextHoldSeconds, mirror.nextHoldMetres) {
+        Text(hold)
+          .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
+          .foregroundStyle(Palette.signal)
+          .lineLimit(1).minimumScaleFactor(0.6)
+      } else if let wt = nextLoad {
         HStack(alignment: .firstTextBaseline, spacing: Fit.s(3)) {
           Text(fmtW(wt))
             .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
@@ -2712,7 +2737,11 @@ struct TransitionRestScreen: View {
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.75)
       HStack(alignment: .firstTextBaseline, spacing: Fit.s(3)) {
-        if let wt = mirror.nextTargetWeight {
+        if let hold = holdText(mirror.nextHoldSeconds, mirror.nextHoldMetres) {
+          Text(hold)
+            .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
+            .foregroundStyle(Palette.signal)
+        } else if let wt = mirror.nextTargetWeight {
           Text(fmtW(wt))
             .font(.system(size: Fit.s(24), weight: .medium, design: .monospaced)).monospacedDigit()
             .foregroundStyle(Palette.signal)

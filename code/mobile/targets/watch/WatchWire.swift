@@ -164,6 +164,12 @@ struct WireMirror: Codable, Equatable {
   var nextExerciseGroup: String?
   var nextTargetWeight: Double?
   var nextTargetReps: Int?
+  /// ⛔ A HOLD OR A CARRY, NOT A SET (2026-09-17): its seconds or metres; nil on every set. The set
+  /// screen draws the duration in place of load and reps and opens no editor. `next*` = the step coming.
+  var holdSeconds: Int?
+  var holdMetres: Int?
+  var nextHoldSeconds: Int?
+  var nextHoldMetres: Int?
   var completedExerciseName: String?
   var canMarkBusy: Bool
   /// Signed kg load change of the current set: + increase, − decrease, 0 hold.

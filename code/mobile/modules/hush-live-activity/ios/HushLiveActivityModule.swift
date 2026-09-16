@@ -63,6 +63,8 @@ struct ActivityRecord: Record {
   @Field var actReady: String = "Ready"
   /// Her word for a lift with no external load — bodyweight, or the band's own word.
   @Field var wordBodyweight: String = "BW"
+  /// A hold or a carry: "0:45" / "400 m". Nil on every set.
+  @Field var holdLabel: String? = nil
 
   // ---- cardio ----
   @Field var gait: String = "run"
@@ -271,7 +273,8 @@ final class HushActivityController {
       wordReps: r.wordReps,
       wordBodyweight: r.wordBodyweight,
       awaitingReady: r.awaitingReady,
-      actReady: r.actReady
+      actReady: r.actReady,
+      holdLabel: r.holdLabel
     )
   }
 

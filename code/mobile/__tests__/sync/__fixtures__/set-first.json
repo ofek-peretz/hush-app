@@ -1,0 +1,87 @@
+{
+  "phone": {
+    "phase": "active_set",
+    "restEndsAtMs": null,
+    "exerciseName": "Barbell Bench Press",
+    "targetWeight": 60,
+    "setNumber": 1,
+    "holdSeconds": null,
+    "holdMetres": null
+  },
+  "envelope": {
+    "v": 1,
+    "type": "session_state",
+    "mirror": {
+      "schema": 1,
+      "phase": "active_set",
+      "setsSoFar": [],
+      "loadsSoFar": [],
+      "lastReps": [],
+      "lastLoadKg": null,
+      "exerciseName": "Barbell Bench Press",
+      "exerciseGroup": "Chest",
+      "setLabel": "Set 1 of 3",
+      "setNumber": 1,
+      "setsInExercise": 3,
+      "isWarmup": false,
+      "nextSetLabel": null,
+      "nextSetNumber": 0,
+      "nextSetsInExercise": 0,
+      "nextIsWarmup": false,
+      "globalIndex": 0,
+      "totalSets": 6,
+      "targetWeight": 60,
+      "targetReps": 8,
+      "targetRepsHi": 10,
+      "restEndsAt": null,
+      "restRemainingS": null,
+      "restTotalS": null,
+      "nextExerciseName": null,
+      "nextExerciseGroup": null,
+      "nextTargetWeight": null,
+      "nextTargetReps": null,
+      "completedExerciseName": null,
+      "canMarkBusy": true,
+      "loadDeltaKg": 0,
+      "nextLoadDeltaKg": 0,
+      "liftIndex": 1,
+      "liftCount": 3,
+      "workoutName": "Upper A",
+      "liveVolumeKg": 0,
+      "liveSets": 0,
+      "restIsLearned": false,
+      "summary": null,
+      "swapOptions": [
+        {
+          "id": "db_bench_press",
+          "name": "Dumbbell Bench Press"
+        },
+        {
+          "id": "smith_bench_press",
+          "name": "Smith Machine Bench Press"
+        }
+      ],
+      "nextSwapOptions": [],
+      "loadSetup": {
+        "style": "barbell",
+        "perSide": 20,
+        "plates": [
+          20
+        ],
+        "barKg": 20
+      },
+      "nextLoadSetup": null,
+      "toLoad": true,
+      "correction": null,
+      "holdSeconds": null,
+      "holdMetres": null,
+      "nextHoldSeconds": null,
+      "nextHoldMetres": null
+    },
+    "lobby": null,
+    "plan": null,
+    "authoritySeq": 2,
+    "authorityEpoch": 1800000000000,
+    "sentAt": "2027-01-15T08:00:00.000Z"
+  }
+}

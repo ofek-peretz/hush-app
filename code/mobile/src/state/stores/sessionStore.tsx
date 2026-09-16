@@ -28,6 +28,7 @@ import { db } from '@/data/local/db';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
 import { isTrainingGated } from '@/domain/entitlement';
 import { runSteps } from '@/domain/planRun';
+import { movementById } from '@/data/movements';
 import { liveActivity, drainLockIntents, addLockIntentListener, type LockExtras, type LockIntent, syncLiveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
@@ -1375,6 +1376,9 @@ function alreadyInPlan(plan: Step[], exerciseId: string): boolean {
  * Attaches the equipment-native load setup (kg) so the watch can show how to load the weight (item
  * 11), and the in-class swap alternatives at the start of each exercise.
  */
+/** The steps `buildMirrorSteps` keeps — a set, or a hold / carry. The cursor translation counts the same ones. */
+const isMirroredStep = (st: Step): boolean => !!st.target || (!!st.item && st.item.kind !== 'reps');
+
 export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/data/exercises').EquipmentFamily[]): MirrorStep[] {
   // THE session's lifts — every one of them, computed ONCE for the whole plan. The watch's swap
   // options are chosen against this list (founder 2026-07-12).
@@ -1414,9 +1418,30 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
           .filter((c) => c.sameMovement)
           .map((c) => ({ id: c.exercise.id, name: c.exercise.name }))
       : [];
-    // The wrist draws a weight and a rep band (WT2). A step with no rep prescription has neither,
-    // and publishing zeros would put "0 kg x 0" on her wrist — so it is not mirrored as a set.
-    if (!st.target) return [];
+    /*
+     * ⛔ A HOLD CROSSES AS A HOLD (sync simulator, 2026-09-17). It used to be dropped here — "publishing
+     * zeros would put 0 kg × 0 on her wrist" — and the cursor translated into set-space. The result
+     * was worse than zeros: during a plank the wrist and the lock card showed the next LIFT, and a
+     * Done on either was refused. It crosses with its seconds or metres and no reps; the surfaces
+     * draw the duration (`SessionMirror.holdSeconds`).
+     */
+    if (!st.target) {
+      const item = st.item;
+      if (!item || item.kind === 'reps') return [];
+      return {
+        // A hold is usually a MOVEMENT (a plank), not a lift in the exercise catalogue.
+        exerciseName: ex?.name ?? movementById(st.exerciseId)?.name ?? '',
+        exerciseGroup: ex?.muscle ?? '',
+        setIndexInExercise: st.exerciseSetIndex,
+        totalSetsInExercise: st.totalSetsInExercise,
+        globalIndex: st.globalIndex,
+        targetWeight: item.load ?? null,
+        targetReps: 0,
+        swapOptions,
+        loadSetup: null,
+        hold: item.kind === 'time' ? { seconds: item.seconds } : { metres: item.metres },
+      };
+    }
     const setup = loadSetup(st.exerciseId, st.target.recommendedWeight, 'kg');
     return {
       exerciseName: ex?.name ?? '',
@@ -1599,6 +1624,35 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // success timer) so they see a PAUSE that landed AFTER they were scheduled.
   const machineRef = useRef<SessionMachine>(state.machine);
   machineRef.current = state.machine;
+  /**
+   * ⛔ A MACHINE EVENT IS REDUCED FROM THE LATEST MACHINE, NOT FROM THE ONE THIS RENDER CLOSED OVER
+   * (sync simulator, 2026-09-17).
+   *
+   * The wrist's pause caught the clock up first (`afterClock`): the rest had run out while the phone
+   * slept, so the clock presented the next set. Then `pause()` — still the previous render's closure —
+   * reduced from the REST it remembered and dispatched it, resurrecting a rest the clock had just
+   * served out, with no anchor. The phone drew no clock; the wrist and the lock card each invented a
+   * fresh full rest. The ref is written here, synchronously, so two events in one tick chain too.
+   */
+  const advanceMachine = (event: SessionEvent) => {
+    const next = sessionReducer(machineRef.current, event);
+    machineRef.current = next;
+    dispatch({ type: 'MACHINE', machine: next });
+  };
+  const viewCaughtUpRef = useRef<() => Promise<void>>(async () => {});
+  /** The machine the CURRENT `viewRef` was built from — see `viewCaughtUp`. */
+  const viewMachineRef = useRef<SessionMachine>(state.machine);
+  /**
+   * Wait until the view reflects the machine — after a clock catch-up, the view's methods close
+   * over whatever they were built with, and a write judged against the old one is a write against a
+   * workout that no longer exists. Bounded: a render that never comes cannot hang a tap.
+   */
+  const viewCaughtUp = async () => {
+    for (let i = 0; i < 50 && viewMachineRef.current !== machineRef.current; i++) {
+      await new Promise<void>((r) => setTimeout(r, 0));
+    }
+  };
+  viewCaughtUpRef.current = viewCaughtUp;
   /** A set write is in flight (see completeSet) — the phone and the wrist can both ask at once. */
   const completingRef = useRef(false);
   // Temporal telemetry: when the current rest/pause began (ms epoch).
@@ -1979,6 +2033,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         seenLockIdsRef.current.add(i.id);
         await applyClockRef.current(i.atMs);
         await settle();
+        await viewCaughtUpRef.current();
         const v = viewRef.current;
         if (!v || !v.active) continue;
         nowOverrideMs = i.atMs;
@@ -1997,7 +2052,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
              * nothing behind it: no way to tell a tap that never reached the queue from one the
              * phase refused. One event, with the phase that refused it, is the whole diagnosis.
              */
-            if (v.displayPhase === 'SET_PRESENTED') {
+            if (v.displayPhase === 'SET_PRESENTED' && !v.currentTarget && v.currentItem && v.currentItem.kind !== 'reps') {
+              // A hold on the card (2026-09-17): Done finishes it as prescribed, like the stage's own button.
+              await v.completeItem();
+            } else if (v.displayPhase === 'SET_PRESENTED') {
               // The phone's beat for a set pressed on the lock screen — the same one a tap plays, and
               // only once the set is actually written (a refused second press plays nothing).
               const w = hers ? hers.weight : v.currentTarget?.recommendedWeight ?? null;
@@ -2102,15 +2160,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
      * indexes the PLAN, and the mirror reads it against its own shorter list: one plank early in a
      * session and every frame after it named the wrong lift, on the Lock Screen and the wrist alike.
      *
-     * So the cursor is translated into the mirror's space — the number of SETS she has reached.
-     * While she is on an item, that lands on the next set, which is the honest approximation
-     * available to a surface that cannot draw the item at all.
+     * So the cursor is translated into the mirror's space.
      *
-     * ⏸️ Drawing the item ITSELF on those two surfaces is watch work, and the watch is deferred by
-     * the founder until his QA batch. This keeps them truthful in the meantime.
+     * ⛔ AND "THE NEXT SET" WAS NOT AN HONEST APPROXIMATION (sync simulator, 2026-09-17). While she
+     * held a plank the wrist and the lock card showed the next lift's load, a Done on either was
+     * refused, and the rest either side of the hold named the wrong set. Holds are mirrored now
+     * (`MirrorStep.hold`); the translation below only skips a step that is neither a set nor a hold.
      */
     const mirrorSteps = buildMirrorSteps(plan, appRef.current?.profile?.equipment);
-    const setsBeforeCursor = plan.slice(0, machine.setIndex).filter((s) => s.target).length;
+    // Holds are mirrored now (2026-09-17), so the translation counts every MIRRORED step — which is
+    // every step, unless the plan ever carries one with neither a target nor a hold.
+    const setsBeforeCursor = plan.slice(0, machine.setIndex).filter(isMirroredStep).length;
     const mirror = projectSessionMirror({
       steps: mirrorSteps,
       total: plan.length,
@@ -3348,7 +3408,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           restStartedAtRef.current = null;
         }
         restExtraSecondsRef.current = 0;
-        dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'REST_ELAPSED' }) });
+        // From the LATEST machine, never this render's — see `advanceMachine`.
+        advanceMachine({ type: 'REST_ELAPSED' });
       },
       extendRest(seconds: number) {
         if (restStartedAtRef.current == null) return; // only while resting
@@ -3363,7 +3424,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       pause() {
         pauseStartedAtRef.current = Date.now();
         void track('pause', { sessionId: sessionRef.current?.id, phase: machine.phase });
-        dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'PAUSE' }) });
+        advanceMachine({ type: 'PAUSE' });
       },
       resume() {
         if (pauseStartedAtRef.current != null) {
@@ -3391,11 +3452,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           void track('resume', { sessionId: sessionRef.current?.id, pausedMs });
           pauseStartedAtRef.current = null;
         }
-        dispatch({ type: 'MACHINE', machine: sessionReducer(machine, { type: 'RESUME' }) });
+        advanceMachine({ type: 'RESUME' });
       },
       async finishEarly(): Promise<CompleteResult> {
-        const m = sessionReducer(machine, { type: 'FINISH_EARLY' });
-        dispatch({ type: 'MACHINE', machine: m });
+        advanceMachine({ type: 'FINISH_EARLY' });
         return finalize(true);
       },
       amendSet(exerciseId, setIndex, v) {
@@ -3614,6 +3674,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.
   viewRef.current = view;
+  viewMachineRef.current = state.machine;
   /*
    * ⛔ THE WRIST KEEPS ITS OWN TIME — CATCH THE CLOCK UP BEFORE JUDGING WHAT IT SAYS (2026-09-07).
    * A phone that slept in a pocket is behind the wall clock; a tap that lands on its stale machine
@@ -3623,6 +3684,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
    */
   const afterClock = (act: (v: SessionView) => void) => async () => {
     await applyClockRef.current(Date.now());
+    await viewCaughtUp();
     const v = viewRef.current;
     if (v) act(v);
   };
@@ -3660,6 +3722,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // become an edited actual; each falls back to the recommended target when the watch
   // didn't adjust it. Processed identically to an on-phone entry — phone is the truth.
   watchCompleteRef.current = (actualReps, actualWeight) => {
+    /* A hold on stage (the wrist draws it since 2026-09-17): Done finishes it as prescribed — there
+       are no figures to report, and `completeSet` would refuse a step with no target. */
+    if (!view.currentTarget && view.currentItem && view.currentItem.kind !== 'reps') {
+      void view.completeItem();
+      return;
+    }
     const tgt = view.currentTarget;
     // What the phone is about to write — captured HERE, before the machine advances and the
     // current step becomes the next one. This is what the phone's stage prints on its "Set

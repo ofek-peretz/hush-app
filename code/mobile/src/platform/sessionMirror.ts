@@ -86,6 +86,14 @@ export interface MirrorStep {
   /** Equipment-native setup (kg) for this step's load — the watch reads it so the
    *  athlete never has to do mental math on the wrist (item 11). */
   loadSetup?: MirrorLoadSetup | null;
+  /**
+   * ⛔ A HOLD OR A CARRY, NOT A SET (sync simulator, 2026-09-17). A timed or distance step — a plank,
+   * a carry — used to be left OUT of the mirror, and the cursor was translated into "sets reached".
+   * So while she held a plank the wrist and the lock card showed the NEXT lift's load and reps, a
+   * Done pressed on either did nothing, and the rest either side of the hold named the wrong set.
+   * The step now crosses as what it is: its seconds or its metres, and no reps.
+   */
+  hold?: { seconds?: number; metres?: number };
 }
 
 /**
@@ -288,6 +296,16 @@ export interface SessionMirror {
    * and still shows the correct next load.
    */
   correction?: { from: number; to: number; direction: 'up' | 'down'; reps: number } | null;
+  /**
+   * ⛔ THE STEP IS A HOLD (seconds) OR A CARRY (metres), NOT A SET — see `MirrorStep.hold`. Both null on
+   * every set. A surface that sees either draws the duration instead of a load and a rep band, and
+   * offers no editor: there is nothing to type. Optional both ways, like every later field.
+   */
+  holdSeconds?: number | null;
+  holdMetres?: number | null;
+  /** …and the same fact about the COMING step, for rest frames. */
+  nextHoldSeconds?: number | null;
+  nextHoldMetres?: number | null;
 }
 
 export interface MirrorInputs {
@@ -487,8 +505,14 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   // from any live phase, so it cannot hang off the terminal branch below).
   // Working sets only, both figures — the wrist's glance and the phone's Well Done must read the
   // same numbers, and the phone's (sessionMetrics) draw the warm-up line already.
-  const isWork = (i: number) => !steps[i]?.warmup;
-  const liveSets = Math.min(inp.completedSets ?? 0, steps.length) - steps.slice(0, inp.completedSets ?? 0).filter((s) => s.warmup).length;
+  /*
+   * ⚠️ LOGGED SETS ARE INDEXED IN SET-SPACE. `loggedSets` holds sets only — a hold is recorded as an
+   * item, never as a set — so everything that walks the two lists side by side walks `setSteps`,
+   * while the CURSOR (`machine.setIndex`) walks `steps`, which includes the holds.
+   */
+  const setSteps = steps.filter((s) => !s.hold);
+  const isWork = (i: number) => !setSteps[i]?.warmup;
+  const liveSets = Math.min(inp.completedSets ?? 0, setSteps.length) - setSteps.slice(0, inp.completedSets ?? 0).filter((s) => s.warmup).length;
   const liveVolumeKg = (inp.loggedSets ?? []).reduce((sum, x, i) => (isWork(i) ? sum + (x.weight ?? 0) * x.reps : sum), 0);
 
   if (machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE') {
@@ -506,7 +530,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     const startedMs = inp.sessionStartedAtMs ?? null;
     // The frontier for the terminal frame — a caller with no live count means "all of it".
     const frontier = inp.completedSets ?? total;
-    const doneWorkSets = Math.min(frontier, steps.length) - steps.slice(0, frontier).filter((s) => s.warmup).length;
+    const doneWorkSets = Math.min(frontier, setSteps.length) - setSteps.slice(0, frontier).filter((s) => s.warmup).length;
     const doneVolumeKg = (inp.loggedSets ?? []).reduce((sum, x, i) => (isWork(i) ? sum + (x.weight ?? 0) * x.reps : sum), 0);
     const summary: MirrorSummary = {
       timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',
@@ -519,7 +543,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       // (sessionMetrics draws the same warm-up line). Bodyweight sets (weight null) contribute 0.
       volumeKg: doneVolumeKg,
       kcal: inp.kcal ?? null,
-      lifts: summaryLifts(steps, inp.completedSets ?? total, inp.loggedSets),
+      lifts: summaryLifts(setSteps, inp.completedSets ?? total, inp.loggedSets),
       milestone: inp.milestone ?? null,
     };
     return {
@@ -538,7 +562,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       targetWeight: cur.targetWeight,
       targetReps: cur.targetReps,
       targetRepsHi: cur.repBandHi ?? null,
-      ...soFarFields(steps, inp, cur.exerciseName),
+      ...soFarFields(setSteps, inp, cur.exerciseName),
       restEndsAt: null,
       restRemainingS: null,
       nextExerciseName: null,
@@ -561,6 +585,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       nextLoadSetup: null,
       toLoad: false,
       correction: null,
+      holdSeconds: null,
+      holdMetres: null,
+      nextHoldSeconds: null,
+      nextHoldMetres: null,
     };
   }
 
@@ -619,7 +647,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   return {
     schema: MIRROR_SCHEMA_VERSION,
     phase,
-    ...soFarFields(steps, inp, cur.exerciseName, !!cur.warmup),
+    ...soFarFields(setSteps, inp, cur.exerciseName, !!cur.warmup),
     exerciseName: cur.exerciseName,
     exerciseGroup: cur.exerciseGroup ?? '',
     setLabel,
@@ -670,7 +698,7 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     loadSetup: phase === 'active_set' ? cur.loadSetup ?? null : null,
     nextLoadSetup: isTransition && next ? next.loadSetup ?? null : null,
     // TO-LOAD only matters on the live set; the caller computes it from the logged sets.
-    toLoad: phase === 'active_set' ? inp.toLoad ?? false : false,
+    toLoad: phase === 'active_set' && !cur.hold ? inp.toLoad ?? false : false,
     // ONLY on an inter-set rest. Two reasons, and both matter:
     //  - On the ACTIVE SET she is lifting, and the load in front of her IS the corrected one —
     //    announcing it there would narrate the present, not the change.
@@ -682,6 +710,10 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     //    it from a rule two modules away. The wrist must never say "I added weight" over the name
     //    of a lift that earned nothing.
     correction: phase === 'rest_inter' ? inp.correction ?? null : null,
+    holdSeconds: cur.hold?.seconds ?? null,
+    holdMetres: cur.hold?.metres ?? null,
+    nextHoldSeconds: next?.hold?.seconds ?? null,
+    nextHoldMetres: next?.hold?.metres ?? null,
   };
 }
 

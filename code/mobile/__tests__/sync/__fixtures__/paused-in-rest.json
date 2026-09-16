@@ -1,0 +1,70 @@
+{
+  "phone": {
+    "phase": "paused",
+    "restEndsAtMs": null
+  },
+  "envelope": {
+    "v": 1,
+    "type": "session_state",
+    "mirror": {
+      "schema": 1,
+      "phase": "paused",
+      "setsSoFar": [
+        8
+      ],
+      "loadsSoFar": [
+        60
+      ],
+      "lastReps": [],
+      "lastLoadKg": null,
+      "exerciseName": "Barbell Bench Press",
+      "exerciseGroup": "Chest",
+      "setLabel": "Set 1 of 3",
+      "setNumber": 1,
+      "setsInExercise": 3,
+      "isWarmup": false,
+      "nextSetLabel": "Set 2 of 3",
+      "nextSetNumber": 2,
+      "nextSetsInExercise": 3,
+      "nextIsWarmup": false,
+      "globalIndex": 0,
+      "totalSets": 6,
+      "targetWeight": 60,
+      "targetReps": 8,
+      "targetRepsHi": 10,
+      "restEndsAt": null,
+      "restRemainingS": null,
+      "restTotalS": null,
+      "nextExerciseName": "Barbell Bench Press",
+      "nextExerciseGroup": "Chest",
+      "nextTargetWeight": 60,
+      "nextTargetReps": 8,
+      "completedExerciseName": null,
+      "canMarkBusy": false,
+      "loadDeltaKg": 0,
+      "nextLoadDeltaKg": 0,
+      "liftIndex": 1,
+      "liftCount": 3,
+      "workoutName": "Upper A",
+      "liveVolumeKg": 480,
+      "liveSets": 1,
+      "restIsLearned": false,
+      "summary": null,
+      "swapOptions": [],
+      "nextSwapOptions": [],
+      "loadSetup": null,
+      "nextLoadSetup": null,
+      "toLoad": false,
+      "correction": null,
+      "holdSeconds": null,
+      "holdMetres": null,
+      "nextHoldSeconds": null,
+      "nextHoldMetres": null
+    },
+    "lobby": null,
+    "plan": null,
+    "authoritySeq": 7,
+    "authorityEpoch": 1800000000000,
+    "sentAt": "2027-01-15T08:00:20.000Z"
+  }
+}

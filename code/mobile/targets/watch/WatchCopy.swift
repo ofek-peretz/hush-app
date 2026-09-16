@@ -148,6 +148,8 @@ enum WatchCopy {
   // them (founder 2026-07-11 — the athlete on a pull-up already knows what they are lifting).
   static var reps: String { L("reps", "reps") }
   static var bodyweightQuiet: String { L("bodyweightQuiet", "Bodyweight") }
+  /// The unit beside a carry's distance ("400 m") — a hold's "0:45" needs no word.
+  static var metresUnit: String { L("metresUnit", "m") }
   // Equipment-native setup line (item 11)
   static var perHand: String { L("perHand", "per hand") }
   static var pin: String { L("pin", "pin") }

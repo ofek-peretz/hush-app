@@ -85,5 +85,9 @@ struct HushSessionAttributes: ActivityAttributes {
     /// is the set's start (`set_ready` on the wire).
     var awaitingReady: Bool
     var actReady: String
+    // ── A hold or a carry (sync simulator, 2026-09-17) ──
+    /// "0:45" / "400 m", baked on the phone in her language — the step on stage, or on a rest the
+    /// step coming. Nil on every set. Drawn in place of the load and reps; no steppers.
+    var holdLabel: String?
   }
 }

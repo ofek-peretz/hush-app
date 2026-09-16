@@ -167,7 +167,7 @@ struct HushStrengthLiveActivity: Widget {
               .foregroundColor(HX.ink0)
               .frame(maxWidth: 96)
           } else if s.phase != "paused" {
-            StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17, unit: s.unitLabel, bw: s.wordBodyweight)
+            StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17, unit: s.unitLabel, bw: s.wordBodyweight, hold: s.holdLabel)
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
@@ -195,6 +195,11 @@ struct HushStrengthLiveActivity: Widget {
             .frame(maxWidth: 48)
         } else if s.phase == "paused" {
           Image(systemName: "pause.fill").foregroundColor(HX.ink2)
+        } else if let hold = s.holdLabel {
+          Text(hold)
+            .font(.system(size: 15, design: .monospaced))
+            .monospacedDigit()
+            .foregroundColor(HX.ink0)
         } else if let w = s.targetWeight {
           Text(fmtWeight(w))
             .font(.system(size: 15, design: .monospaced))
@@ -310,10 +315,21 @@ private struct StrengthLoadText: View {
   var unit: String = "kg"
   /// Her word for a lift with no external load — never a hard "BW" (sync audit, 2026-09-14).
   var bw: String = "BW"
+  /// A hold or a carry ("0:45" / "400 m") — drawn INSTEAD of reps, with the load beside it when it has one.
+  var hold: String? = nil
   private var tail: CGFloat { max(11, size * 0.38) }
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 5) {
-      if let w = weight {
+      if let hold {
+        Text(hold)
+          .font(.system(size: size, design: .monospaced)).monospacedDigit()
+          .foregroundColor(HX.ink0)
+        if let w = weight {
+          Text("\(fmtWeight(w)) \(unit)")
+            .font(.system(size: tail, design: .monospaced)).monospacedDigit()
+            .foregroundColor(HX.ink2)
+        }
+      } else if let w = weight {
         Text(fmtWeight(w))
           .font(.system(size: size, design: .monospaced)).monospacedDigit()
           .foregroundColor(HX.ink0)
@@ -389,11 +405,12 @@ private struct StrengthLockView: View {
           Image(systemName: "pause.fill").font(.system(size: 24)).foregroundColor(HX.ink2)
           Spacer(minLength: 8)
           SetDots(index: state.setIndex, count: state.setCount)
-        } else if state.phase == "set" {
+        } else if state.phase == "set", state.holdLabel == nil {
           // On a set: HER FIGURES, with the two steppers that let her type them from here.
           StrengthSetEntry(state: state)
         } else {
-          StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 34, unit: state.unitLabel, bw: state.wordBodyweight)
+          // A hold has no figures to type — its duration is the card's one big figure.
+          StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 34, unit: state.unitLabel, bw: state.wordBodyweight, hold: state.holdLabel)
           Spacer(minLength: 8)
           SetDots(index: state.setIndex, count: state.setCount)
         }

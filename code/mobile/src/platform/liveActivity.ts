@@ -87,6 +87,13 @@ export interface LiveActivityState {
   // ── The voice's loading dialogue (spec §3.2 / §4): the card offers Ready beside Done. ──
   awaitingReady: boolean;
   actReady: string;
+  /**
+   * ⛔ A HOLD OR A CARRY, DRAWN AS ONE (sync simulator, 2026-09-17): "0:45" or "400 מ׳", baked here
+   * in her language — for the step on stage, or on a rest for the step coming. Null on every set.
+   * The card draws it in place of the load and the reps, and offers no steppers: there is nothing
+   * to type. Before this the card showed the NEXT lift's load while she held a plank.
+   */
+  holdLabel: string | null;
 }
 
 /**
@@ -292,6 +299,16 @@ const NO_LOCK: LockExtras = {
   weightStep: 2.5,
 };
 
+/** "0:45" for a hold, "400 m" for a carry — the one duration format every surface draws. */
+export function holdLabelOf(seconds: number | null | undefined, metres: number | null | undefined): string | null {
+  if (seconds != null && Number.isFinite(seconds)) {
+    const s = Math.max(0, Math.round(seconds));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+  if (metres != null && Number.isFinite(metres)) return `${Math.round(metres)} ${tg('cardio.metresUnit')}`;
+  return null;
+}
+
 export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExtras = NO_LOCK): LiveActivityState {
   const isResting = mirror.phase === 'rest_inter' || mirror.phase === 'rest_transition';
   /*
@@ -356,6 +373,8 @@ export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExt
     awaitingReady: lock.awaitingReady && phaseFromMirror(mirror.phase) === 'set',
     actReady: lock.words.ready,
     wordBodyweight: lock.words.bodyweight,
+    // The step the card names: the coming one on a rest (like the label and the load above), else this one.
+    holdLabel: restNamesNext ? holdLabelOf(mirror.nextHoldSeconds, mirror.nextHoldMetres) : holdLabelOf(mirror.holdSeconds, mirror.holdMetres),
   };
 }
 

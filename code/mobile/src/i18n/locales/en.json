@@ -1397,6 +1397,7 @@
     "reps": "reps",
     "repsCount": "{{n}} reps",
     "bodyweightQuiet": "Bodyweight",
+    "metresUnit": "m",
     "perHand": "per hand",
     "pin": "pin",
     "aSide": "a side",

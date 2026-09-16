@@ -1,0 +1,86 @@
+{
+  "phone": {
+    "phase": "rest_transition",
+    "restEndsAtMs": 1800000260000,
+    "nextSetNumber": 1,
+    "nextTargetWeight": 50,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null
+  },
+  "envelope": {
+    "v": 1,
+    "type": "session_state",
+    "mirror": {
+      "schema": 1,
+      "phase": "rest_transition",
+      "setsSoFar": [],
+      "loadsSoFar": [],
+      "lastReps": [],
+      "lastLoadKg": null,
+      "exerciseName": "Plank",
+      "exerciseGroup": "",
+      "setLabel": "Set 1 of 1",
+      "setNumber": 1,
+      "setsInExercise": 1,
+      "isWarmup": false,
+      "nextSetLabel": "Set 1 of 2",
+      "nextSetNumber": 1,
+      "nextSetsInExercise": 2,
+      "nextIsWarmup": false,
+      "globalIndex": 3,
+      "totalSets": 6,
+      "targetWeight": null,
+      "targetReps": 0,
+      "targetRepsHi": null,
+      "restEndsAt": "2027-01-15T08:04:20.000Z",
+      "restRemainingS": 120,
+      "restTotalS": 120,
+      "nextExerciseName": "Barbell Row",
+      "nextExerciseGroup": "Back",
+      "nextTargetWeight": 50,
+      "nextTargetReps": 8,
+      "completedExerciseName": "Plank",
+      "canMarkBusy": false,
+      "loadDeltaKg": 0,
+      "nextLoadDeltaKg": 0,
+      "liftIndex": 2,
+      "liftCount": 3,
+      "workoutName": "Upper A",
+      "liveVolumeKg": 1440,
+      "liveSets": 3,
+      "restIsLearned": false,
+      "summary": null,
+      "swapOptions": [],
+      "nextSwapOptions": [
+        {
+          "id": "t_bar_row",
+          "name": "T-Bar Row"
+        },
+        {
+          "id": "smith_row",
+          "name": "Smith Machine Row"
+        }
+      ],
+      "loadSetup": null,
+      "nextLoadSetup": {
+        "style": "barbell",
+        "perSide": 15,
+        "plates": [
+          15
+        ],
+        "barKg": 20
+      },
+      "toLoad": false,
+      "correction": null,
+      "holdSeconds": 45,
+      "holdMetres": null,
+      "nextHoldSeconds": null,
+      "nextHoldMetres": null
+    },
+    "lobby": null,
+    "plan": null,
+    "authoritySeq": 18,
+    "authorityEpoch": 1800000000000,
+    "sentAt": "2027-01-15T08:02:20.000Z"
+  }
+}
