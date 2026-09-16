@@ -247,6 +247,10 @@ final class WatchModel: ObservableObject {
   // Locally-scheduled rest countdown + completion haptics (item 7) — the watch OWNS the rest
   // haptics (it fires reliably wrist-down/screen-off), anchored to the phone's absolute rest end.
   private var restHaptics: [DispatchWorkItem] = []
+  /// The sync report the next tap carries (`WireIntent.rx` / `.hx`) — bounded, cleared once sent.
+  private var syncRx: [[Double]] = []
+  private var syncHx: [[Double]] = []
+  private static func nowMs() -> Double { (Date().timeIntervalSince1970 * 1000).rounded() }
   private var lastReturnHaptic = Date.distantPast
 
   private let manager = WatchSessionManager()
@@ -370,6 +374,7 @@ final class WatchModel: ObservableObject {
     }
     guard envelope.authoritySeq > highestSeq else { return } // reorder-proof
     highestSeq = envelope.authoritySeq
+    if syncRx.count < 200 { syncRx.append([Double(envelope.authoritySeq), WatchModel.nowMs()]) }
 
     // Standalone execution data: persist every published plan snapshot so a
     // workout can start with the phone absent, days after this envelope.
@@ -772,6 +777,9 @@ final class WatchModel: ObservableObject {
         let lateBy = -intended.timeIntervalSinceNow
         let tolerance: TimeInterval = offset == 0 ? 3.0 : 1.2
         guard lateBy < tolerance else { return }
+        if let s = self, s.syncHx.count < 200 {
+          s.syncHx.append([offset, WatchModel.nowMs(), (intended.timeIntervalSince1970 * 1000).rounded()])
+        }
         self?.onEntryHaptic.send(event)
       }
       restHaptics.append(work)
@@ -1405,10 +1413,18 @@ final class WatchModel: ObservableObject {
       exerciseId: exerciseId,
       seconds: seconds,
       severity: severity,
-      area: area
+      area: area,
+      issuedAtMs: WatchModel.nowMs(),
+      rx: syncRx.isEmpty ? nil : syncRx,
+      hx: syncHx.isEmpty ? nil : syncHx
     )
     guard let json = WatchWire.encodeIntent(intent) else { return false }
-    return manager.send(intentJSON: json)
+    let sent = manager.send(intentJSON: json)
+    if sent {
+      syncRx.removeAll()
+      syncHx.removeAll()
+    }
+    return sent
   }
 
   /// An intent did not leave the watch — the phone is not reachable right now.

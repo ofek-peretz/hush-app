@@ -1267,6 +1267,7 @@
     "importKeep": "לשמור אותם"
   },
   "profile": {
+    "syncTestOn": "בדיקת סנכרון פעילה",
     "units": "יחידות",
     "membership": "מנוי",
     "memberSince": "חבר מאז",

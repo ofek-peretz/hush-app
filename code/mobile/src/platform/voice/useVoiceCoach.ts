@@ -17,6 +17,7 @@ import { coachVoice } from '@/platform/voice/coachVoice';
 import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
 import { VoiceConductor } from '@/platform/voice/voiceConductor';
 import { useApp } from '@/state/stores/appStore';
+import { syncTrace } from '@/platform/syncTrace';
 import type { SessionView } from '@/state/stores/sessionStore';
 
 /**
@@ -86,7 +87,15 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
   // The conductor, once per stage — built over the real mouth, ear and session.
   if (!conductorRef.current) {
     conductorRef.current = new VoiceConductor({
-      mouth: coachVoice,
+      // The mouth, traced: when a line began and when it ended (`platform/syncTrace`; inert when off).
+      mouth: {
+        say: async (text: string, locale: string) => {
+          syncTrace.add('V', text.length);
+          await coachVoice.say(text, locale);
+          syncTrace.add('v');
+        },
+        interrupt: () => coachVoice.interrupt(),
+      },
       ear: voiceCapture,
       audio: audioSession,
       now: () => Date.now(),

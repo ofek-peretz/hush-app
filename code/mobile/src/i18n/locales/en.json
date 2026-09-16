@@ -1116,6 +1116,7 @@
     "importKeep": "Keep them"
   },
   "profile": {
+    "syncTestOn": "Sync test is on",
     "units": "Units",
     "membership": "Membership",
     "memberSince": "Member since",

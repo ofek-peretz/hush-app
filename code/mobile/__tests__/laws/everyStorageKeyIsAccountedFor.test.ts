@@ -32,6 +32,7 @@ const SRC = join(__dirname, '../../src');
  */
 const SURVIVES_A_WIPE: Record<string, string> = {
   'hush.locale': 'a DEVICE preference — erasing the athlete must not change the phone language',
+  'hush.syncTrace': "the founder's sync-test switch on THIS phone (`platform/syncTrace`) — an instrument, not her data; it records nothing of hers",
   'hush.device.id': 'the device identity for telemetry, deliberately outlives every account',
   'hush.billing.stub.entitlement': 'the dev-only stub store, never present in a real build',
   // Remote config (2026-09-01, audit 03): a fact about the BUILD's tuning, not about the athlete —

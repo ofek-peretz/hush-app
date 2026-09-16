@@ -22,6 +22,7 @@ import type { SessionEvent } from '@/state/machines/sessionState';
 import type { SessionMirror } from '@/platform/sessionMirror';
 import { WATCH_EVENTS } from '@/platform/events';
 import { watchCopyPack } from './watchCopyPack';
+import { syncTrace, traceWristReport } from '@/platform/syncTrace';
 import {
   decideWatchIntent,
   makeStateEnvelope,
@@ -330,6 +331,7 @@ export class WatchSession {
       this.adoptedRecordId,
     );
     const ok = this.send(env);
+    syncTrace.add('P', this.authoritySeq, mirror?.phase ?? 'none', mirror?.globalIndex, syncTrace.rel(mirror?.restEndsAt ? Date.parse(mirror.restEndsAt) : null), ok);
     this.d.track(ok ? WATCH_EVENTS.statePublished : WATCH_EVENTS.statePublishFailed, {
       phase: mirror ? mirror.phase : 'none',
       seq: this.authoritySeq,
@@ -507,6 +509,12 @@ export class WatchSession {
       return;
     }
     const decision = decideWatchIntent(raw, this.lastMirror, this.d.now(), this.seen, this.lastCardio);
+    if (syncTrace.isOn()) {
+      const r = raw as { type?: unknown; issuedAtMs?: unknown; issuedAt?: unknown };
+      const issued = typeof r.issuedAtMs === 'number' ? r.issuedAtMs : typeof r.issuedAt === 'string' ? Date.parse(r.issuedAt) : null;
+      syncTrace.add('W', typeof r.type === 'string' ? r.type : '?', syncTrace.rel(issued), decision.accept, decision.reason ?? '');
+      traceWristReport(raw);
+    }
     if (!decision.accept || !decision.action) {
       this.d.track(WATCH_EVENTS.actionIgnored, {
         reason: decision.reason ?? 'unknown',

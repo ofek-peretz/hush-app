@@ -575,6 +575,16 @@ export interface WatchIntent {
   /** How sharp it is, in her words (WT14b) — the wrist asks the SAME three the phone asks, so the
    *  window is hers and never a default the engine picked for her. */
   severity?: string;
+  /**
+   * ⛔ THE WRIST'S OWN SYNC REPORT, RIDING ON ITS TAPS (2026-09-17 — `platform/syncTrace`).
+   * `issuedAtMs` is `issuedAt` to the millisecond (the ISO form is whole seconds on the wrist).
+   * `rx` = `[seq, receivedMs]` for every frame it applied since its last tap; `hx` =
+   * `[offsetS, firedMs, intendedMs]` for every rest beat it played. Read only by the sync trace —
+   * nothing about the session is decided from them. Optional: an older wrist sends none.
+   */
+  issuedAtMs?: number;
+  rx?: number[][];
+  hx?: number[][];
 }
 
 /** Why an intent was rejected (telemetered + useful in tests). */
@@ -718,6 +728,17 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
   const exerciseId = str(o, 'exerciseId');
   const area = str(o, 'area');
   const severity = str(o, 'severity');
+  const issuedAtMs = typeof o.issuedAtMs === 'number' && Number.isFinite(o.issuedAtMs) ? o.issuedAtMs : undefined;
+  /* The report is best-effort telemetry: a malformed one is DROPPED, never a reason to refuse her tap. */
+  const report = (v: unknown): number[][] | undefined =>
+    Array.isArray(v)
+      ? v
+          .slice(0, 200)
+          .filter((r): r is unknown[] => Array.isArray(r) && r.length <= 4 && r.every((x) => typeof x === 'number' && Number.isFinite(x)))
+          .map((r) => r as number[])
+      : undefined;
+  const rx = report(o.rx);
+  const hx = report(o.hx);
   // `actualWeight: null` is MEANINGFUL — it is bodyweight, and it must survive the sieve.
   const rawWeight = o.actualWeight;
   const actualWeight =
@@ -751,6 +772,9 @@ export function parseWatchIntent(raw: unknown): WatchIntent | null {
     seconds,
     area,
     severity,
+    ...(issuedAtMs !== undefined ? { issuedAtMs } : {}),
+    ...(rx ? { rx } : {}),
+    ...(hx ? { hx } : {}),
   };
 }
 

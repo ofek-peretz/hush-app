@@ -31,6 +31,7 @@ import { hasNotificationPermission } from '@/platform/notifications';
 import { watchTransport } from '@/platform/watch/watchTransportNative';
 import { liveActivityRunning } from '@/platform/liveActivity';
 import { track } from '@/platform/telemetry';
+import { syncTrace } from '@/platform/syncTrace';
 import { NOTIFICATION_EVENTS } from '@/platform/events';
 
 /** Stable ids so a re-arm (+15s / resume) coalesces instead of stacking. */
@@ -95,6 +96,7 @@ async function clearDelivered(): Promise<void> {
 
 export const restHaptics: RestHaptics = {
   async arm(endAtMs, done) {
+    syncTrace.add('A', syncTrace.rel(endAtMs));
     try {
       // Re-arm is idempotent: always clear the prior pair first (+15s / resume reschedule) —
       // scheduled AND delivered, so the tray never carries the last rest's card into this one.

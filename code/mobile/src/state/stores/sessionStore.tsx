@@ -29,6 +29,7 @@ import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
 import { isTrainingGated } from '@/domain/entitlement';
 import { runSteps } from '@/domain/planRun';
 import { movementById } from '@/data/movements';
+import { syncTrace } from '@/platform/syncTrace';
 import { liveActivity, drainLockIntents, addLockIntentListener, type LockExtras, type LockIntent, syncLiveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
@@ -2031,6 +2032,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         .sort((a, b) => a.atMs - b.atMs);
       for (const i of fresh) {
         seenLockIdsRef.current.add(i.id);
+        syncTrace.add('K', i.type, syncTrace.rel(i.atMs));
         await applyClockRef.current(i.atMs);
         await settle();
         await viewCaughtUpRef.current();
@@ -2322,9 +2324,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        */
       void audioSession.holdKeepAlive('workout');
       void track(LIVE_ACTIVITY_EVENTS.started);
-      void liveActivity.start(mirror, lock).catch(() => void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'start' }));
+      syncTrace.add('L', 'start', mirror.phase, syncTrace.rel(mirror.restEndsAt ? Date.parse(mirror.restEndsAt) : null));
+      void liveActivity.start(mirror, lock).then(() => syncTrace.add('l', 'start', true)).catch(() => {
+        syncTrace.add('l', 'start', false);
+        void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'start' });
+      });
     } else {
-      void liveActivity.update(mirror, lock).catch(() => void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'update' }));
+      syncTrace.add('L', 'update', mirror.phase, syncTrace.rel(mirror.restEndsAt ? Date.parse(mirror.restEndsAt) : null));
+      void liveActivity.update(mirror, lock).then(() => syncTrace.add('l', 'update', true)).catch(() => {
+        syncTrace.add('l', 'update', false);
+        void track(LIVE_ACTIVITY_EVENTS.failed, { op: 'update' });
+      });
     }
     // restNonce: re-publish when "+15 sec" extended the current rest (ref change alone
     // would not re-run this effect). awaitingReady: the lock card gains or loses its Ready button.
@@ -2353,6 +2363,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const restSeconds = current ? restAfterStep(current) : restTransitionSeconds();
 
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
+      // The workout's trace ships a moment after the end, so the closing frames are in it; the next workout starts its own.
+      setTimeout(() => void syncTrace.end(), 3_000);
       const session = sessionRef.current;
       if (!session) return { ended: true, unlockedPortrait: false };
 

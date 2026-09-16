@@ -345,6 +345,7 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       v: WATCH_PROTOCOL_VERSION, type: 'report_pain', intentId: 'i1',
       issuedAt: new Date(NOW).toISOString(), expectedGlobalIndex: 0, actualReps: 8, actualWeight: 60,
       workoutId: 'd1', exerciseId: 'db_bench_press', seconds: 15, area: 'Shoulders', severity: 'pain',
+      issuedAtMs: NOW, rx: [[12, NOW - 40]], hx: [[0, NOW - 5, NOW - 6]],
     };
     joined('WireIntent', keysOf(intent));
     // …and every field the wrist SENDS is one the phone's parser reads back, or the payload is

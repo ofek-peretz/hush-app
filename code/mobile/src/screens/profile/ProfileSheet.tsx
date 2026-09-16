@@ -44,6 +44,7 @@ import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
 const PROBE_LOCK_MS = 15_000;
 const PROBE_LISTEN_MS = 8_000;
 import { track } from '@/platform/telemetry';
+import { syncTrace } from '@/platform/syncTrace';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
@@ -105,6 +106,7 @@ export function ProfileSheet({ navigation }: Props) {
    * question no pixel asked, and its docblock described a row that does not exist.
    */
   const toast = useToast();
+  const [syncTraceOn, setSyncTraceOn] = useState(() => syncTrace.isOn());
   const p = app.profile;
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [legalOpen, setLegalOpen] = useState(false);
@@ -526,7 +528,24 @@ export function ProfileSheet({ navigation }: Props) {
         >
           <Text style={styles.legalRowText}>{t('legal.sheetLegend')}</Text>
         </Pressable>
-        <Text style={styles.version}>{versionLabel()}</Text>
+        {/*
+          ⛔ THE SYNC TEST SWITCH (founder 2026-09-17) — a long press on the version line, because it is
+          the founder's instrument and not an athlete's setting. On, every workout records how the
+          phone, the wrist, the lock screen and the voice actually kept time (`platform/syncTrace`).
+        */}
+        <Pressable
+          accessibilityRole="text"
+          delayLongPress={2500}
+          onLongPress={() => {
+            const next = !syncTraceOn;
+            setSyncTraceOn(next);
+            void syncTrace.setOn(next);
+            haptics.success();
+          }}
+        >
+          <Text style={styles.version}>{versionLabel()}</Text>
+          {syncTraceOn ? <Text style={styles.versionNote}>{t('profile.syncTestOn')}</Text> : null}
+        </Pressable>
       </ScrollView>
       {legalOpen ? <LegalSheet onClose={() => setLegalOpen(false)} /> : null}
 
@@ -965,6 +984,8 @@ const styles = StyleSheet.create({
   legalRow: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
   legalRowText: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },
   version: { fontFamily: font.mono, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 18 },
+  // The sync-test line is WORDS, so it is sans — the mono face has no Hebrew (`monoCarriesNoWords`).
+  versionNote: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textTertiary, textAlign: 'center', marginTop: 4 },
   /* ⚠️ NO TRACKING: this string is translated, and opening a Hebrew word is a rendering fault (`noTrackedHebrew`). */
   confirm: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: color.textPrimary, textAlign: 'center', marginBottom: 18 },
   confirmActions: { gap: 10 },

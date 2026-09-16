@@ -431,6 +431,12 @@ struct WireIntent: Codable {
   /// half-finished flow, and the engine may not choose a rest window she did not choose.
   var severity: String?
   var area: String?
+  /// ⛔ THE WRIST'S SYNC REPORT (2026-09-17) — mirror of protocol.ts. `issuedAtMs` is `issuedAt` to the
+  /// millisecond; `rx` = [seq, receivedMs] per frame applied since the last tap; `hx` =
+  /// [offsetS, firedMs, intendedMs] per rest beat played. Telemetry only: the phone decides nothing from them.
+  var issuedAtMs: Double?
+  var rx: [[Double]]?
+  var hx: [[Double]]?
 }
 
 /// A workout this watch is RUNNING, offered to the phone so the authority can move — mirror of

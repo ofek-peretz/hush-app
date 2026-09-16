@@ -34,6 +34,7 @@ import { SessionProvider } from '@/state/stores/sessionStore';
 import { PairProvider } from '@/state/stores/pairStore';
 import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
+import { syncTrace } from '@/platform/syncTrace';
 import { installCrashHandler, flush as flushTelemetry, track } from '@/platform/telemetry';
 import { LIFECYCLE_EVENTS } from '@/platform/events';
 import { resolveAdAttribution } from '@/platform/adAttribution';
@@ -83,6 +84,7 @@ export default function App() {
      * gives us; the ship's own 10 s timeout fits inside it.
      */
     void track(LIFECYCLE_EVENTS.appOpen, { kind: 'cold' });
+    void syncTrace.load(); // the founder's sync-test switch (off for everyone else — `platform/syncTrace`)
     // Which Apple Search Ads campaign brought this install — once, silent, never waited on.
     void resolveAdAttribution();
     let wasBackground = false;
