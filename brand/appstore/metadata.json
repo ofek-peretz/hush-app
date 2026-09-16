@@ -5,8 +5,9 @@
     "promotionalText": "שבוע אימונים שלם שנכתב לפי הימים, הציוד והמטרה שלך. דמות שמראה כל תרגיל, ומאמן שמנהל את הסטים מהאוזניות, מהשעון וממסך הנעילה.",
     "keywords": "חדר כושר,משקולות,פיתוח גוף,יומן,ריצה,הליכה,שעון,סקוואט,דדליפט,חיטוב,שריר,gym,workout",
     "description": "FERROX הוא מאמן כוח שכותב לך את השבוע ועומד לידך בכל סט.\n\nשבוע שלם, כתוב בשבילך\nכמה ימים יש לך, איזה ציוד יש בחדר הכושר, מה המטרה ומה כואב. מזה נכתב שבוע אימונים שלם, עם שם, ימים ותרגילים שמתאימים לציוד שיש לך. אפשר להחליף תרגיל, לסדר מחדש בגרירה, או לבנות שבוע חדש כשמשהו משתנה.\n\nהדמות מראה, לא מתארת\nכל תרגיל מוצג על דמות תלת-ממדית שעושה אותו בקצב, בעומק ובטווח הנכונים. באימון היא עושה את הסט יחד איתך, כך שאין צורך לקרוא הוראות בין חזרה לחזרה.\n\nהטלפון נשאר בכיס\nעם אוזניות, המאמן שואל אם אפשר להתחיל, סופר את המנוחה ורושם את החזרות לפי מה שאמרת. ואם נוח יותר ללחוץ, אותו אימון מופיע במסך הנעילה, ב-Apple Watch ובאפליקציה, עם שעון מנוחה אחד משותף לכולם.\n\nכל סט נשמר\nכל משקל, כל חזרה וכל שבוע נשמרים, כדי שהשבוע הבא יתחיל ממה שכבר עשית. בסוף השבוע מחכה סיכום של מה השתנה.\n\nריצה והליכה\nמרחק, קצב ודופק ב-GPS בחוץ, או צעדים על ההליכון.\n\nApple Health\nהדופק נקרא מ-Health, והאימונים שהושלמו נשמרים בו.\n\nFERROX Pro\n14 האימונים הראשונים חינם, בלי כרטיס אשראי. אחר כך FERROX Pro זמין כמנוי חודשי או שנתי שמתחדש אוטומטית, במחיר שמוצג באפליקציה במטבע שלך. החיוב מתבצע בחשבון ה-Apple ID, והמנוי מתחדש אלא אם בוטל לפחות 24 שעות לפני סוף התקופה. ניהול וביטול בהגדרות חשבון ה-App Store.\n\nתנאי שימוש: https://hush-identity.hush-app.workers.dev/terms\nמדיניות פרטיות: https://hush-identity.hush-app.workers.dev/privacy",
-    "supportUrl": "https://hush-identity.hush-app.workers.dev/",
-    "copyright": "2026 FERROX"
+    "supportUrl": "https://getferrox.com/",
+    "copyright": "2026 FERROX",
+    "marketingUrl": "https://getferrox.com/"
   },
   "en": {
     "name": "FERROX: Strength Coach",
@@ -14,7 +15,8 @@
     "promotionalText": "A full training week built around your days, gym and goal. A figure that shows every lift, and a coach that runs your sets from earbuds, watch and lock screen.",
     "keywords": "gym,workout,weightlifting,bodybuilding,log,tracker,planner,running,squat,deadlift,muscle,personal",
     "description": "FERROX is a strength coach that writes your week and stands with you through every set.\n\nA week written for you\nHow many days you have, what your gym has, what you're after and what hurts. From that comes a full week: named, with days and lifts that fit your equipment. Swap a lift, drag to reorder, or get a new week when something changes.\n\nThe figure shows, it doesn't describe\nEvery lift is shown on a 3D figure moving at the right tempo, depth and range. During the workout it does the set with you, so there's nothing to read between reps.\n\nYour phone stays in your pocket\nWith earbuds in, the coach asks when you're ready, counts your rest and logs your reps from what you say. Prefer to tap? The same workout lives on your lock screen, your Apple Watch and in the app, with one rest clock shared by all of them.\n\nEvery set is kept\nEvery weight, every rep and every week, so next week starts from what you've already done. At the end of the week, a summary of what changed.\n\nRuns and walks\nDistance, pace and heart rate with GPS outdoors, or steps on the treadmill.\n\nApple Health\nHeart rate is read from Health, and finished workouts are saved to it.\n\nFERROX Pro\nYour first 14 workouts are free, no card needed. After that, FERROX Pro is a monthly or yearly auto-renewing subscription, priced in the app in your currency. Payment is charged to your Apple ID account, and the subscription renews unless cancelled at least 24 hours before the end of the period. Manage or cancel in your App Store account settings.\n\nTerms of Use: https://hush-identity.hush-app.workers.dev/terms\nPrivacy Policy: https://hush-identity.hush-app.workers.dev/privacy",
-    "supportUrl": "https://hush-identity.hush-app.workers.dev/",
-    "copyright": "2026 FERROX"
+    "supportUrl": "https://getferrox.com/",
+    "copyright": "2026 FERROX",
+    "marketingUrl": "https://getferrox.com/"
   }
 }
