@@ -49,7 +49,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { I18nManager } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
-import { Arrive, Legend, Display, Body, Button, Stage, FooterFade } from '@/components/ds';
+import { Arrive, Avatar, Legend, Display, Body, Button, Stage, FooterFade } from '@/components/ds';
 /*
  * ⛔ NEITHER THE WEEK COLUMN NOR THE WEEK SHEET IS DRAWN HERE ANY MORE.
  *
@@ -69,7 +69,6 @@ import { Arrive, Legend, Display, Body, Button, Stage, FooterFade } from '@/comp
  * the card below, which is also the door to the weekly update), and the update surface still holds
  * the whole week's account. What is gone is seeing at a glance that Thursday moved.
  */
-import { usePair } from '@/state/stores/pairStore';
 import { WeekMeter } from '@/components/WeekMeter';
 import { MiniBody } from '@/components/MiniBody';
 import { sheetSegments } from '@/components/WeekMeter';
@@ -229,18 +228,10 @@ export interface HomeNextMark {
 
 export interface HomeViewProps {
   resting: boolean;
-  /** The corner disc — Together, the people around her training (founder 2026-08-24). Absent
-   *  draws nothing (a fixture that predates it, never a door to nowhere). */
-  onTogether?: () => void;
-  /**
-   * ⛔ TRAIN TOGETHER — the door to the live pair (§11.2), and it is HERE rather than on Together
-   * for one reason: two brothers deciding to share a bench are standing in a gym looking at the
-   * Begin button. A social feature filed under the social tab is a feature they find at home on the
-   * sofa, which is not when they need it.
-   *
-   * Absent draws nothing — and so does a build with no wire, which the row checks itself.
-   */
-  onTrainTogether?: () => void;
+  /** The corner disc — HER (founder 2026-09-16). Absent draws nothing, never a door to nowhere. */
+  onProfile?: () => void;
+  /** Whether an account exists, for the disc alone: `false` draws the figure and offers sign-in. */
+  signedIn?: boolean | null;
   /** The living half — see above. Absent (day one, nothing logged) draws nothing. */
   weekLive?: HomeLiveWeek | null;
   nextMark?: HomeNextMark | null;
@@ -497,46 +488,35 @@ export function HomeView(props: HomeViewProps) {
             <Text style={styles.wordmark}>hush</Text>
           </View>
           {/*
-            ════ ⛔ THE CORNER DOOR IS GONE, AND IT HAD ALREADY LEFT THE PRODUCT ════
+            ════ ⛔ THE CORNER IS HERS NOW (founder, 2026-09-16) ════
 
-            FOUNDER, 2026-08-12: *"ומה זה החלונית של הAI למעלה, אתה ממליץ להשאיר אותה? כרגע זה לא
-            מובן."* The answer is not a recommendation — it is a measurement. **`Home.tsx` has never
-            passed `onCoach`.** The route it opened (`Coach`) was deleted on 2026-08-11 with
-            `CoachScreen`, and this block is `props.onCoach ? … : null`, so on a real device the
-            speech bubble has not been drawn since. The only thing still handing it a function was
-            the gallery fixture — which is why he could see it and nobody else could.
+            *"תוריד את הפקד של הביחד מצד שמאל למעלה ובמקומו אני רוצה שיהיה אפשרות להרשם עם פרופיל …
+            כמו שיש בספוטיפיי. ואז נעביר את הפקד של 'אני' לשם."*
 
-            ⚠️ THAT IS THE SECOND TIME THIS EXACT HARNESS LIE HAS COST A REVIEW. `1.5` mounted a
-            `model: {}` that the app never has, and now Today mounted a coach door the app never
-            has. **A fixture that supplies something the product does not is not a convenience —
-            it is a screen nobody can act on**, and the founder spent one of his notes on a control
-            that was not there.
+            The disc kept its geometry and changed its subject: 36 points, opposite the wordmark, the
+            same grammar every stage door speaks. What it opens is the tab that used to sit in the
+            bar — so the bar is four surfaces of TRAINING, and the person is where a person goes.
 
-            What it USED to be, kept because the argument is still binding on whatever stands here
-            next: the founder put the coach in the corner rather than the tab bar — *"I don't want
-            to put the AI in the tab bar, because that would signal hardest of all that we're just
-            another AI app."* A tab is a section; that was not a section. The AI has one job
-            (`theAiHasOneJob`) and it is reached from the import screen.
+            ⚠️ IT SAYS WHETHER SHE HAS AN ACCOUNT, because that is the Spotify shape he is naming:
+            her initial when the app knows her, a plain figure when it does not, and the press goes
+            to the sign-in door rather than to a settings page she has no account behind.
 
-            ════ THE CORNER BELONGS TO HER PEOPLE NOW (founder, 2026-08-24) ════
-
-            *"איך זה קשור לשם? זה לא. אולי אפשר לשים את זה במסך הבית."* — the Together disc sat on
-            Progress for one day, and the founder is right that pride and people are different
-            subjects. The corner is the honest home: one quiet chrome disc, opposite the wordmark,
-            in the same 36-pt disc grammar every stage door already speaks — the people around her
-            training, one tap off the screen she opens every day, and not one word added to it.
-            The old ruling stands undisturbed: this is not an AI door, and the daily screen still
-            has exactly one act.
+            The old ruling that put the coach out of this corner still stands: this is not an AI
+            door, and the daily screen still has exactly one act.
           */}
-          {props.onTogether ? (
+          {props.onProfile ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={t('together.title')}
+              accessibilityLabel={props.signedIn === false ? t('profile.signIn') : t('nav.you')}
               hitSlop={8}
-              onPress={props.onTogether}
+              onPress={props.onProfile}
               style={({ pressed }) => [styles.togetherDisc, pressed && styles.togetherDiscPressed]}
             >
-              <Icon name="twoPeople" size={17} color={stage.ink0} strokeWidth={1.8} />
+              {props.name && props.signedIn !== false ? (
+                <Avatar name={props.name} size={36} />
+              ) : (
+                <Icon name="user" size={17} color={stage.ink0} strokeWidth={1.8} />
+              )}
             </Pressable>
           ) : null}
         </View>
@@ -1131,8 +1111,7 @@ export function HomeView(props: HomeViewProps) {
                   not: a GUEST needs no workout of his own, he adopts his partner's and his own
                   engine prices it, so hiding the door there would close the guest path to anybody
                   whose own week happens to be done. */}
-              <TrainTogetherRow onPress={props.onTrainTogether} hidden={!!props.resumable} />
-
+        
               {/* the trial — one quiet mono line under the act, gone when the trial is.
 
                   ⛔ TRACKING 0.1 → 0.04 (founder's screenshot, 2026-08-12). At 17px with 0.1 em of
@@ -1228,46 +1207,15 @@ function RestFact({ value, label, accent }: { value: string; label: string; acce
    `planFigure` and the five `figure*` spans among them. They are in `components/PlanLifts` now.
    An orphaned style is what `styles.ask` became when the band graphic was deleted around it, and
    it then rendered the second largest figure on the set screen at the platform default for a week. */
-/**
- * The pair's door on Home. Draws NOTHING when the build has no wire, when the caller passed no
- * handler (the gallery's fixtures), or when there is no workout to start — a door onto a room she
- * cannot use is worse than no door.
+/*
+ * ⛔ `TrainTogetherRow` IS DELETED (founder, 2026-09-16: *"תוריד ממסך הTODAY את כפתור להתאמן ביחד"*).
+ *
+ * Its argument was that two brothers deciding to share a bench are standing in front of the Begin
+ * button — true, and it was still a second act on the one screen the product allows exactly one. The
+ * pair itself is untouched: a partner's LINK still opens the sheet (`Home.joinedByLink`), which is
+ * how the second athlete arrives in the first place, and Together is one press from the corner disc.
  */
-function TrainTogetherRow({ onPress, hidden }: { onPress?: () => void; hidden: boolean }) {
-  const { t } = useCopy();
-  const pair = usePair();
-  if (!onPress || !pair.ready || hidden) return null;
-  const label =
-    pair.stage === 'waiting' && pair.code
-      ? `${t('pair.codeLabel')} · ${pair.code}`
-      : pair.partnerHere
-        ? (pair.partnerName ? t('pair.here', { name: bidi(pair.partnerName) }) : t('pair.hereAnon'))
-        : t('pair.door');
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t('pair.title')}
-      onPress={onPress}
-      style={({ pressed }) => [homeStyles.pairRow, pressed && homeStyles.pairRowPressed]}
-    >
-      <Icon name="twoPeople" size={16} color={color.textTertiary} strokeWidth={2} />
-      <Text style={homeStyles.pairLabel} numberOfLines={1}>{label}</Text>
-    </Pressable>
-  );
-}
 
-const homeStyles = StyleSheet.create({
-  pairRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 44,
-    marginTop: 4,
-  },
-  pairRowPressed: { opacity: 1, backgroundColor: color.fillSubtle, borderRadius: 12 },
-  pairLabel: { fontFamily: font.sans, fontSize: 17, lineHeight: 21, color: color.textTertiary, textAlign: 'center' },
-});
 
 const styles = StyleSheet.create({
   /* ════ the living half (founder 2026-08-23) ════ */

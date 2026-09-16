@@ -576,7 +576,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   // "Progress" at 40 — a surface title, one step below the letter's 56 and above a step's 32.
-  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
+/* 46, not 42: two points of leading shears a 40-point serif's descenders — the Program tab's
+     own finding, 2026-09-16. `rampLine.title` is the app's answer for `ramp.title`. */
+    title: { fontFamily: font.serif, fontSize: 40, lineHeight: 46, color: color.textPrimary, textAlign: 'left' },
   // The Lifts / Log switch rides on the headline's shoulder, not on its baseline.
   /* ⛔ `lensRow`/`lensOn`/`lensPressed`/`lensText`/`lensTextOn` ARE DELETED (2026-08-27) — they
      were the bespoke half of a switch the other half drew from the design system. See the note at

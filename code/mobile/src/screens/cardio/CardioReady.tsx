@@ -202,7 +202,9 @@ const styles = StyleSheet.create({
   art: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   /* the bracket-dot styles left with the mark they dressed (design review 2026-09-01) — an
      orphaned style is the exact class of thing this codebase has been bitten by before. */
-  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: stageC.ink0, textAlign: 'left' },
+/* 46, not 42: two points of leading shears a 40-point serif's descenders — the Program tab's
+     own finding, 2026-09-16. `rampLine.title` is the app's answer for `ramp.title`. */
+    title: { fontFamily: font.serif, fontSize: 40, lineHeight: 46, color: stageC.ink0, textAlign: 'left' },
   sub: { fontFamily: font.serif, fontSize: 22, lineHeight: 30, color: stageC.ink1, textAlign: 'left' },
   whereNote: { fontFamily: font.sans, fontSize: 20, lineHeight: 28, color: stageC.ink2, textAlign: 'center', alignSelf: 'center', maxWidth: 320, marginTop: 18, paddingHorizontal: 26 },
   /* Quieter than the sensor note above it — a reminder, not an instruction. */

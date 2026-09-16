@@ -105,6 +105,23 @@ export function Home({ navigation, route }: Props) {
   /** The pairing sheet is open (§11.2's lobby). Never open during a live session — Home is not on
    *  screen then, and the sheet's `live` state exists only for the case where she comes back. */
   const [pairing, setPairing] = useState(false);
+  /*
+   * ⛔ WHETHER SHE HAS AN ACCOUNT — read for the corner disc alone (founder 2026-09-16), and read on
+   * every FOCUS rather than once: the sign-in door stands over the tabs, so she can come back from it
+   * with an account while this screen was never unmounted. `null` until the first read answers, and a
+   * `null` disc draws her initial rather than flashing the stranger's figure at somebody who is known.
+   */
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () => void app.isSignedIn().then((v) => alive && setSignedIn(v)).catch(() => {});
+    read();
+    const off = navigation.addListener('focus', read);
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [app, navigation]);
   /* The live pair — read here for two things only: the name stamped on the record at Begin, and
      the gate the guest's start has to answer to. Solo, both are inert. */
   const pair = usePair();
@@ -1043,8 +1060,16 @@ export function Home({ navigation, route }: Props) {
     <>
     <HomeView
       resting={resting}
-      onTogether={() => navigation.navigate('Together')}
-      onTrainTogether={() => setPairing(true)}
+      /* The corner is hers (2026-09-16). Signed out it opens the sign-in door — the account IS the
+         thing the disc offers — and signed in it opens the tab that left the bar. */
+      onProfile={() => {
+        /* ⚠️ TWO LITERAL CALLS, NOT A COMPUTED ROUTE NAME. `everyScreenIsReachable` reads the source
+           for `navigate('X')` — a route reached only through a ternary is a route the law reports as
+           orphaned, and rightly: nobody grepping for the door would find it either. */
+        if (signedIn === false) navigation.navigate('Authentication');
+        else navigation.navigate('You');
+      }}
+      signedIn={signedIn}
       name={app.profile?.name}
       dayName={todayName || null}
       dayId={todayId}

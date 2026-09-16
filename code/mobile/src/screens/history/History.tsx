@@ -490,7 +490,9 @@ const styles = StyleSheet.create({
   },
   lens: { marginTop: 8 },
   // The same 40px surface title the Lifts lens wears — one Progress, two lenses.
-  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
+/* 46, not 42: two points of leading shears a 40-point serif's descenders — the Program tab's
+     own finding, 2026-09-16. `rampLine.title` is the app's answer for `ramp.title`. */
+    title: { fontFamily: font.serif, fontSize: 40, lineHeight: 46, color: color.textPrimary, textAlign: 'left' },
 
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, paddingBottom: 40 },
   emptyMark: {

@@ -29,8 +29,14 @@ export type PlanReviewResult =
   | { ok: true; review: PlanReview }
   | { ok: false; reason: CoachFailure | 'not_json' | 'nothing_said' };
 
-/** Ask the coach's opinion on a DRAFT week she built. Never throws; never retries; never writes. */
-export async function requestPlanReview(draft: Program): Promise<PlanReviewResult> {
+/**
+ * Ask the coach about a DRAFT week she built. Never throws; never retries; never writes.
+ *
+ * ⛔ `ask` IS WHAT SHE TYPED (founder 2026-09-16). Without it this is the opinion it has always been;
+ * with it the same call becomes *"do this to my week"* — and the answer still arrives as suggestions
+ * she approves one at a time, which is the whole reason this surface is safe to point at her plan.
+ */
+export async function requestPlanReview(draft: Program, ask?: string): Promise<PlanReviewResult> {
   const [profile, history, brief] = await Promise.all([
     db.loadProfile().catch(() => null),
     db.loadHistory().catch(() => []),
@@ -53,7 +59,14 @@ export async function requestPlanReview(draft: Program): Promise<PlanReviewResul
     language: currentLocale(),
   });
 
-  const reply = await askCoach(coachRequest({ facts, ask: { kind: 'plan_review' }, cache: true }), PLAN_REVIEW_SCHEMA, undefined, undefined, 'review');
+  const said = (ask ?? '').trim().slice(0, 400);
+  const reply = await askCoach(
+    coachRequest({ facts, ask: { kind: 'plan_review', ...(said ? { ask: said } : {}) }, cache: true }),
+    PLAN_REVIEW_SCHEMA,
+    undefined,
+    undefined,
+    'review',
+  );
   if (!reply.ok) return { ok: false, reason: reply.reason };
   const parsed = parsePlanReview(reply.text);
   if (!parsed.ok) return { ok: false, reason: parsed.reason };

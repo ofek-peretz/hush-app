@@ -39,7 +39,6 @@ const ICON: Record<string, IconName> = {
   Program: 'program',
   Cardio: 'activity',
   Progress: 'lineChart',
-  You: 'user',
 };
 
 const LABEL: Record<string, string> = {
@@ -47,7 +46,6 @@ const LABEL: Record<string, string> = {
   Program: 'nav.program',
   Cardio: 'nav.cardio',
   Progress: 'nav.progress',
-  You: 'nav.you',
 };
 
 export function HushTabBar({ state, navigation }: BottomTabBarProps) {

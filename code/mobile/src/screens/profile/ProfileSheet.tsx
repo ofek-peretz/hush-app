@@ -17,8 +17,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import type { CompositeScreenProps } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
@@ -49,14 +47,11 @@ import { track } from '@/platform/telemetry';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
-import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
+import type { MainParamList } from '@/app/navigation';
 
-// A TAB now (founder 2026-07-17), so it pushes onto the parent stack — the Props are the
-// composite of the tab it lives in and the stack above it.
-type Props = CompositeScreenProps<
-  BottomTabScreenProps<HomeTabsParamList, 'You'>,
-  NativeStackScreenProps<MainParamList>
->;
+/* ⛔ A PUSHED SCREEN AGAIN SINCE 2026-09-16 (founder: the corner of Today, not a tab). It was a tab
+   from 2026-07-17; what changed is only the door, so the composite props collapse to the stack's. */
+type Props = NativeStackScreenProps<MainParamList, 'You'>;
 type Overlay = 'none' | 'delete' | 'signout';
 
 export function ProfileSheet({ navigation }: Props) {
@@ -342,6 +337,18 @@ export function ProfileSheet({ navigation }: Props) {
           about the product, which is what the onboarding sex control is for, and it is the shape
           she has already used once. Two cards, a lit border on the answer, a wash on press.
         */}
+        {/*
+          ⛔ TOGETHER KEEPS A DOOR (founder 2026-09-16). Its old one was the corner disc on Today, and
+          the corner is hers now — so the social surface moved where a person's people belong, one row
+          under her own card. The feature is untouched: share a week, bring a friend's, the pair.
+        */}
+        <Row
+          label={t('together.title')}
+          sub={t('together.sub')}
+          onPress={() => navigation.navigate('Together')}
+          last
+        />
+
         <Legend tone="accent" style={styles.sectionLegend}>{t('profile.preferences')}</Legend>
         <View style={styles.pickBlock}>
           <Text style={styles.pickLabel}>{t('profile.units')}</Text>

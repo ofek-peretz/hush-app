@@ -991,7 +991,9 @@ const styles = StyleSheet.create({
   // chrome. It opens the mirror, so it carries the size of a statement.
   // "Week six." — 56px, the largest headline in the product. A letter opens by naming itself.
   title: { fontFamily: font.serif, fontSize: 56, lineHeight: 59, color: color.textPrimary, textAlign: 'left' },
-  titleAsking: { fontSize: 40, lineHeight: 42 }, // rtl-ok: merged onto title, which sets textAlign
+/* 46, not 42: two points of leading shears a 40-point serif's descenders — the Program tab's
+     own finding, 2026-09-16. `rampLine.title` is the app's answer for `ramp.title`. */
+    titleAsking: { fontSize: 40, lineHeight: 46 }, // rtl-ok: merged onto title, which sets textAlign
   // The framing sentence is the COACH speaking, so it is the serif — not UI sans.
   /* 17/26 → 19/29. It is the letter's opening sentence and the only prose left on a steady week;
      air is what he asked for, and leading is where a page gets it. */

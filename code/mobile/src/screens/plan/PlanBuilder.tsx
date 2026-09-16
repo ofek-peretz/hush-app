@@ -40,6 +40,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { MainParamList } from '@/app/navigation';
 import { BottomSheet, useSheetScroll } from '@/components/BottomSheet';
+import { ExercisePickerSheet } from '@/components/ExercisePickerSheet';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { SwapSheet } from '@/components/SwapSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
@@ -57,7 +58,7 @@ import { clearImport } from '@/domain/pendingImport';
 import type { OnboardingInputs, Program, ProgramDay } from '@/data/local/models';
 import { EXERCISES, exerciseById, exerciseCues, exerciseDisplayName, isSwapOnly, type Exercise, type EquipmentFamily } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
-import { swapChoices } from '@/domain/swapPool';
+import { swapChoices, swapMore } from '@/domain/swapPool';
 import { useApp } from '@/state/stores/appStore';
 import type { WeekFinding } from '@/domain/weekQuality';
 import {
@@ -226,97 +227,10 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
 
 /* ─────────────────────────────────────────────────────────────────── the add-lift sheet */
 
-/*
- * ⛔ CORE IS ON THE SHELF AGAIN (founder, 2026-08-29: *"אין אפשרות של להוסיף תרגילי בטן משום מה"*).
- *
- * The chip row was `CANONICAL_MUSCLE_ORDER` minus `'Core'`, borrowed from `weekQuality`'s
- * `structural` list — and there the exclusion is correct: abs are not a STRUCTURAL volume target,
- * so the scoreboard does not price a week by them. That is a statement about auditing, and it was
- * copied into a control whose whole job is letting her ask for something. Nine core movements sat
- * in the catalogue, reachable only by guessing their name into the search box.
- *
- * The chips now name the whole canonical order. The two ADVANCED core lifts (hanging leg raise,
- * ab wheel) stay out of this sheet — that is `isSwapOnly` on line 91 doing its documented job,
- * a separate ruling made on the founder's own device QA (2026-08-23) and untouched here.
- */
-const MUSCLES = CANONICAL_MUSCLE_ORDER;
-
-function AddLiftSheet({ taken, figure, onPick, onClose }: {
-  /** Lifts already in the day — drawn dimmed and unpickable, never hidden (no mystery gaps). */
-  taken: ReadonlySet<string>;
-  figure: FigureSex;
-  onPick: (exerciseId: string) => void;
-  onClose: () => void;
-}) {
-  const { t } = useCopy();
-  const scroll = useSheetScroll();
-  const [query, setQuery] = useState('');
-  const [muscle, setMuscle] = useState<string | null>(null);
-
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return EXERCISES.filter((e) => {
-      if (e.id.startsWith('_') || isSwapOnly(e.id)) return false;
-      if (muscle && e.muscle !== muscle) return false;
-      if (!q) return true;
-      return exerciseDisplayName(e.id).toLowerCase().includes(q) || e.name.toLowerCase().includes(q);
-    }).slice(0, 40);
-  }, [query, muscle]);
-
-  return (
-    <BottomSheet onClose={onClose}>
-      <Legend style={styles.sheetLegend}>{t('builder.addLift')}</Legend>
-      <View style={styles.searchWell}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder={t('builder.searchPlaceholder')}
-          placeholderTextColor={color.textTertiary}
-          value={query}
-          onChangeText={setQuery}
-          accessibilityLabel={t('builder.searchPlaceholder')}
-        />
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow} contentContainerStyle={styles.chipsContent}>
-        {MUSCLES.map((m) => (
-          <Pressable
-            key={m}
-            accessibilityRole="button"
-            onPress={() => setMuscle(muscle === m ? null : m)}
-            style={[styles.chip, muscle === m && styles.chipOn]}
-          >
-            <Text style={[styles.chipText, muscle === m && styles.chipTextOn]}>{t(`muscle.${m}`)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      <ScrollView style={styles.sheetList} {...scroll}>
-        {matches.map((e) => {
-          const inDay = taken.has(e.id);
-          return (
-            <Pressable
-              key={e.id}
-              accessibilityRole="button"
-              accessibilityLabel={exerciseDisplayName(e.id)}
-              disabled={inDay}
-              onPress={() => onPick(e.id)}
-              style={({ pressed }) => [styles.pickRow, pressed && styles.pickRowPressed, inDay && styles.pickRowTaken]}
-            >
-              {/* The still of the movement itself (founder 2026-08-25): while she builds, every
-                  row says what it IS at a glance — our own athlete, not a stock clip. */}
-              <MotionThumb exerciseId={e.id} size={44} figure={figure} style={styles.pickThumb} />
-              <View style={styles.pickText}>
-                <Text style={styles.pickName} numberOfLines={1}>{bidi(exerciseDisplayName(e.id))}</Text>
-                <Legend size={17} track={0.1}>{`${t(`muscle.${e.muscle}`)} · ${t(`equipment.${e.equipment}`, { defaultValue: e.equipment })}`}</Legend>
-              </View>
-              {inDay ? <Legend size={17} track={0.1}>{t('builder.inDay')}</Legend> : <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />}
-            </Pressable>
-          );
-        })}
-        {matches.length === 0 ? <Text style={styles.noMatch}>{t('builder.noMatches')}</Text> : null}
-      </ScrollView>
-    </BottomSheet>
-  );
-}
-
+/* ⛔ THE PICKER MOVED TO `components/ExercisePickerSheet` (2026-09-16), because the SWAP needed the
+   same one: the founder asked for the whole library behind a replace, and two copies of a catalogue
+   browser is two places for the search, the chips and the swap-only rule to drift. The builder's own
+   add-a-lift door opens it with its own legend; nothing about the list changed. */
 /* ─────────────────────────────────────────────────────────────────── one lift row */
 
 function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggleSets, onSets, onMove, onRemove, onSwap, onDemo, isFirst, isLast }: {
@@ -409,8 +323,10 @@ function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggle
  * mount (her tap opened it — that IS the request), never retries by itself, and every Apply runs
  * through `applyPlanSuggestion`, so the model obeys the same algebra her fingers do.
  */
-function PlanReviewSheet({ draft, onDraft, onClose }: {
+function PlanReviewSheet({ draft, ask, onDraft, onClose }: {
   draft: Program;
+  /** What she wrote in the coach box, when she opened this by writing (2026-09-16). */
+  ask?: string;
   onDraft: (next: Program) => void;
   onClose: () => void;
 }) {
@@ -421,7 +337,7 @@ function PlanReviewSheet({ draft, onDraft, onClose }: {
 
   useEffect(() => {
     let alive = true;
-    void requestPlanReview(draft).then((r: PlanReviewResult) => {
+    void requestPlanReview(draft, ask).then((r: PlanReviewResult) => {
       if (!alive) return;
       setState(r.ok ? { kind: 'ready', review: r.review } : { kind: 'failed', reason: r.reason });
     });
@@ -444,7 +360,9 @@ function PlanReviewSheet({ draft, onDraft, onClose }: {
 
   return (
     <BottomSheet onClose={onClose}>
-      <Legend style={styles.sheetLegend}>{t('builder.aiReview')}</Legend>
+      <Legend style={styles.sheetLegend}>{ask ? t('builder.coachAsking') : t('builder.aiReview')}</Legend>
+      {/* Her own sentence, quoted back while the coach works — so the wait has a subject. */}
+      {ask ? <Text style={styles.reviewAsk}>{bidi(ask)}</Text> : null}
       {state.kind === 'busy' ? (
         <Text style={styles.reviewBody}>{t('builder.review.busy')}</Text>
       ) : state.kind === 'failed' ? (
@@ -542,6 +460,8 @@ export interface PlanBuilderViewProps {
    *  way to file a screen that is otherwise one press inside another one. */
   previewAsking?: boolean;
   reviewOpen: boolean;
+  /** What she wrote in the coach box on the Program tab, when that is how the review was opened. */
+  reviewAsk?: string;
   onReviewClose: () => void;
 }
 
@@ -549,6 +469,8 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
   const { t } = useCopy();
   const [addFor, setAddFor] = useState<number | null>(null);
   const [swapFor, setSwapFor] = useState<{ day: number; slot: number } | null>(null);
+  /** The seat a whole-library replace is aimed at — the swap menu's own door (2026-09-16). */
+  const [allFor, setAllFor] = useState<{ day: number; slot: number } | null>(null);
   const [setsFor, setSetsFor] = useState<string | null>(null);
   const [demoFor, setDemoFor] = useState<string | null>(null);
   const [confirmRevert, setConfirmRevert] = useState(false);
@@ -1011,11 +933,26 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
       </ScrollView>
 
       {addFor != null && d.days[addFor] ? (
-        <AddLiftSheet
+        <ExercisePickerSheet
+          legend={t('builder.addLift')}
+          takenLabel={t('builder.inDay')}
           figure={props.figure}
           taken={new Set(d.days[addFor].slots.map((s) => s.exerciseId))}
           onPick={(id) => { props.onDraft(addLift(d, addFor, id)); setAddFor(null); }}
           onClose={() => setAddFor(null)}
+        />
+      ) : null}
+
+      {/* ⛔ THE WHOLE LIBRARY BEHIND A REPLACE (founder 2026-09-16) — the same picker the plus button
+          opens, landing on `replaceLift` instead of `addLift`. See `SwapSheet.onAll`. */}
+      {allFor && d.days[allFor.day]?.slots[allFor.slot] ? (
+        <ExercisePickerSheet
+          legend={t('swap.replaceWith')}
+          takenLabel={t('builder.inDay')}
+          figure={props.figure}
+          taken={new Set(d.days[allFor.day].slots.map((s) => s.exerciseId))}
+          onPick={(id) => { props.onDraft(replaceLift(d, allFor.day, allFor.slot, id)); setAllFor(null); }}
+          onClose={() => setAllFor(null)}
         />
       ) : null}
 
@@ -1032,7 +969,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
       ) : null}
 
       {props.reviewOpen ? (
-        <PlanReviewSheet draft={d} onDraft={props.onDraft} onClose={props.onReviewClose} />
+        <PlanReviewSheet draft={d} {...(props.reviewAsk ? { ask: props.reviewAsk } : {})} onDraft={props.onDraft} onClose={props.onReviewClose} />
       ) : null}
 
       {swapFor && d.days[swapFor.day]?.slots[swapFor.slot] ? (
@@ -1042,7 +979,12 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
             sessionExerciseIds: d.days[swapFor.day].slots.map((s) => s.exerciseId),
             equipment: props.equipment,
           })}
+          more={swapMore(d.days[swapFor.day].slots[swapFor.slot].exerciseId, {
+            sessionExerciseIds: d.days[swapFor.day].slots.map((s) => s.exerciseId),
+            equipment: props.equipment,
+          })}
           onPick={(toId) => { props.onDraft(replaceLift(d, swapFor.day, swapFor.slot, toId)); setSwapFor(null); }}
+          onAll={() => { setAllFor(swapFor); setSwapFor(null); }}
           onClose={() => setSwapFor(null)}
         />
       ) : null}
@@ -1067,7 +1009,8 @@ type Props = {
        route that nothing in the app opens. */
     replace: (name: string, params?: unknown) => void;
   };
-  route?: { params?: { inputs?: OnboardingInputs } };
+  /** `ask` is what she wrote in the coach box on the Program tab (2026-09-16) — see `coachAsk`. */
+  route?: { params?: { inputs?: OnboardingInputs; ask?: string } };
 };
 
 export function PlanBuilder({ navigation, route }: Props) {
@@ -1232,6 +1175,21 @@ export function PlanBuilder({ navigation, route }: Props) {
   const onAiReview = useCallback(() => {
     if (draft) setReviewOpen(true);
   }, [draft]);
+  /*
+   * ⛔ SHE WROTE TO THE COACH AND THE SCREEN OPENS ON THE ANSWER (founder, 2026-09-16: *"כל שינוי
+   * שרוצים לבצע פשוט כותבים שם לבינה"*).
+   *
+   * The Program tab's box hands the sentence here as a route param; the builder is where a week can
+   * actually be changed, so this is the screen that carries it. It opens ONCE, when the draft is on
+   * screen — a review is asked about a week, and there is no week until the disk answers.
+   */
+  const coachAsk = route?.params?.ask?.trim() || '';
+  const askedOnce = useRef(false);
+  useEffect(() => {
+    if (!coachAsk || askedOnce.current || !draft) return;
+    askedOnce.current = true;
+    setReviewOpen(true);
+  }, [coachAsk, draft]);
 
   /** Whoever can answer for her: the relay inside the intake, the stored profile outside it. */
   const canBuildForHer = !!(inputs || app.profile);
@@ -1402,6 +1360,7 @@ export function PlanBuilder({ navigation, route }: Props) {
       onAiReview={onAiReview}
       aiBusy={aiBusy}
       reviewOpen={reviewOpen}
+      {...(coachAsk ? { reviewAsk: coachAsk } : {})}
       onReviewClose={() => setReviewOpen(false)}
     />
   );
@@ -1563,6 +1522,9 @@ const styles = StyleSheet.create({
   pickName: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textPrimary, textAlign: 'left' },
   noMatch: { fontFamily: font.sans, fontSize: 17, color: color.textTertiary, paddingVertical: 16, textAlign: 'center' },
 
+  /* Her own words, quoted back over the coach's answer (2026-09-16) — her voice, so it is set in
+     the serif the coach's own lines use, one rung down from the body. */
+  reviewAsk: { fontFamily: font.serif, fontSize: 19, lineHeight: 26, color: color.textPrimary, marginBottom: 10, textAlign: 'left' },
   reviewBody: { fontFamily: font.sans, fontSize: 17, lineHeight: 24, color: color.textSecondary, paddingVertical: 12, textAlign: 'left' },
   reviewSay: { fontFamily: font.serif, fontSize: 19, lineHeight: 27, color: color.textPrimary, marginBottom: 12, textAlign: 'left' },
   reviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: color.border, paddingVertical: 10 },

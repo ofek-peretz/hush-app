@@ -27,7 +27,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { plannedMinutes } from '@/domain/duration';
-import { View, Text, Pressable, ScrollView, StyleSheet, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -43,7 +43,7 @@ import { loadWeekPlan } from '@/data/local/weekPlan';
 import { figureLoad, figureUnit, figureScheme, type PlanLift, FigureCells} from '@/components/PlanLifts';
 import { coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
-import { color, font, textScale, tracking } from '@/design/tokens';
+import { color, font, radius, ramp, rampLine, textScale, tracking, trackingPx } from '@/design/tokens';
 import { Icon } from '@/components/Icon';
 import { DayInMotion } from '@/components/DayInMotion';
 import { exerciseMotion } from '@/motion/registry';
@@ -117,13 +117,16 @@ export interface ProgramTabViewProps {
   /** The engine's receipt over her log (2026-09-07) — null or no decisions draws nothing. */
   receipt?: EngineReceipt | null;
   /** The edit door — at the TOP of the tab (founder 2026-09-07). The library door is gone from here. */
-  onBuild: () => void;
+  /** She wrote to the coach (or pressed with nothing written — see the box). */
+  onBuild: (ask?: string) => void;
 }
 
 /** Where the eye rests on a scrolling list — a little above centre, where the card she stopped on sits. */
 const FOCUS_FRACTION = 0.42;
 
 export function ProgramTabView({ workouts, units, settled, figure, motionPaused, onDay, onBuild, receipt = null }: ProgramTabViewProps) {
+  /* Her sentence to the coach, held only until it is sent (2026-09-16). */
+  const [ask, setAsk] = useState('');
   const { t } = useCopy();
   const insets = useSafeAreaInsets();
   /*
@@ -151,8 +154,24 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
   const onCardLayout = useCallback((id: string, e: LayoutChangeEvent) => {
     frames.current[id] = { y: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height };
   }, []);
+  /*
+   * ⛔ A SCROLL MUST NOT RE-RENDER THE WHOLE WEEK (founder, 2026-09-16: *"אין תקיעות"*).
+   *
+   * This wrote the raw focus line into React state every 48 ms of every scroll — four workout cards,
+   * each carrying a drawn athlete, re-rendering on every tick of the finger. The VALUE is never read
+   * directly: it is only ever compared against the cards' frames to decide WHICH card moves, and that
+   * answer changes a handful of times in a whole scroll. So the comparison happens here, in a
+   * callback, and state is written only when the answer is different — the same figure, decided the
+   * same way, at a fraction of the renders.
+   */
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setFocusY(e.nativeEvent.contentOffset.y + viewportH.current * FOCUS_FRACTION);
+    const line = e.nativeEvent.contentOffset.y + viewportH.current * FOCUS_FRACTION;
+    setFocusY((prev) => {
+      /* Re-decide only when the line has crossed into a different card's box (or near enough to
+         change which one is nearest); `focusedId` below does the real arithmetic either way. */
+      if (prev != null && Math.abs(prev - line) < 24) return prev;
+      return line;
+    });
   }, []);
   const onViewportLayout = useCallback((e: LayoutChangeEvent) => {
     viewportH.current = e.nativeEvent.layout.height;
@@ -217,11 +236,15 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
             <Text style={styles.title}>{t('program.tabTitle')}</Text>
           </View>
 
-          {/* The station note — the ordering the engine has kept since 2026-07-27, finally said. */}
-          <View style={styles.note}>
-            <Icon name="layers" size={16} color={color.textMuted} />
-            <Text style={styles.noteText}>{t('program.stationNote')}</Text>
-          </View>
+          {/*
+            ⛔ THE STATION NOTE IS DELETED (founder, 2026-09-16): *"תוריד את הכתוביות של כל אימון
+            מסודר לפי תחנות לא צריך את כל זה."*
+
+            Two lines of muted prose explaining an ordering rule, above the week — the app explaining
+            its own cleverness on the screen she opens to see what she trains. The RULE is untouched
+            (`reorderDayForStations`, and the engine has kept it since 2026-07-27); what is gone is
+            the paragraph about it. A week that reads itself needs no caption.
+          */}
 
           {/*
             ════ THE RECEIPT (founder, 2026-09-07 — the plan's fourth part) ════
@@ -261,18 +284,49 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
             this tab (its screen keeps a quiet door on the builder's chooser, off the Program tab),
             and the one door left is the first row, before the week it edits.
           */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('program.buildRow')}
-            onPress={onBuild}
-            style={({ pressed }) => [styles.editDoor, pressed && styles.cardPressed]}
-          >
-            <View style={styles.cardHeadText}>
-              <Text style={styles.editDoorTitle}>{t('program.buildRow')}</Text>
-              <Text style={styles.dayMeta}>{t('program.buildSub')}</Text>
-            </View>
-            <Icon name="pencil" size={18} color={color.accent} strokeWidth={2} />
-          </Pressable>
+          {/*
+            ════ ⛔ A BOX SHE WRITES IN, NOT A DOOR SHE OPENS (founder, 2026-09-16) ════
+
+            *"במקום הפקד 'בנה את התוכנית שלך' אני רוצה שיהיה חלון שכותבים לבינה ביצירת התוכנית. וכך
+            כל שינוי שרוצים לבצע פשוט כותבים שם לבינה."*
+
+            The door said "build your programme" and led to a screen of verbs — a plus button, a
+            grip, a chevron stepper — which is the app asking her to learn its vocabulary in order to
+            say a thing she can already say in one sentence. The sentence IS the interface now: she
+            writes what she wants changed, the coach answers with the edits that carry it out, and
+            she approves them one at a time (`PlanReviewSheet` — nothing the model says reaches her
+            week unread).
+
+            ⚠️ THE VERBS ARE NOT DELETED. Pressing the box with nothing written opens the same
+            builder it always opened, because an athlete who wants to move one lift by hand should
+            not have to describe it to anybody.
+          */}
+          <View style={styles.coachBox}>
+            <TextInput
+              style={styles.coachInput}
+              value={ask}
+              onChangeText={setAsk}
+              placeholder={t('program.coachBoxPlaceholder')}
+              placeholderTextColor={color.textTertiary}
+              accessibilityLabel={t('program.coachBoxPlaceholder')}
+              multiline
+              maxLength={400}
+              returnKeyType="done"
+              blurOnSubmit
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={ask.trim() ? t('program.coachBoxSend') : t('program.buildRow')}
+              onPress={() => {
+                const said = ask.trim();
+                setAsk('');
+                onBuild(said || undefined);
+              }}
+              style={({ pressed }) => [styles.coachSend, pressed && styles.coachSendPressed]}
+            >
+              <Text style={styles.coachSendText}>{ask.trim() ? t('program.coachBoxSend') : t('program.buildRow')}</Text>
+            </Pressable>
+          </View>
         </Arrive>
 
         {settled && workouts.length === 0 ? <Text style={styles.empty}>{t('program.emptyWeek')}</Text> : null}
@@ -405,34 +459,69 @@ export function ProgramTab({ navigation }: Props) {
          `useIsFocused` answer Today passes down, for the same rAF-does-not-care reason. */
       motionPaused={!isFocused}
       onDay={(workoutId) => navigation.navigate('PreWorkout', { workoutId })}
-      onBuild={() => navigation.navigate('PlanBuilder')}
+      onBuild={(ask) => navigation.navigate('PlanBuilder', ask ? { ask } : undefined)}
       receipt={receipt}
     />
   );
 }
 
 const styles = StyleSheet.create({
+  /* ════ THE COACH BOX (founder 2026-09-16) — a sheet of paper she writes on, and one act under it. */
+  coachBox: {
+    marginHorizontal: 30,
+    marginTop: 12,
+    marginBottom: 6,
+    padding: 14,
+    gap: 10,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.accentWash,
+  },
+  coachInput: {
+    fontFamily: font.sans,
+    fontSize: 17,
+    lineHeight: 23,
+    color: color.textPrimary,
+    minHeight: 74,
+    textAlign: 'left',
+    textAlignVertical: 'top',
+  },
+  coachSend: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    backgroundColor: color.textPrimary,
+  },
+  /* A press is a WASH, never a fade of the thing you pressed (founder A.13 / `aPressNeverDims…`). */
+  coachSendPressed: { backgroundColor: color.textSecondary },
+  coachSendText: { fontFamily: font.sansSemibold, fontSize: 17, color: color.bg, textAlign: 'center' },
   root: { flex: 1, backgroundColor: color.bg },
   header: { paddingHorizontal: 30, paddingTop: 20, paddingBottom: 6 },
-  // The surface title at 40 — the Progress page's own step (one below the letter's 56).
-  title: { fontFamily: font.serif, fontSize: 40, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
-
-  note: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginHorizontal: 30,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  noteText: {
-    flex: 1,
-    fontFamily: font.sans,
-    fontSize: textScale.base,
-    lineHeight: 24,
-    color: color.textMuted,
+  /*
+   * The surface title at 40 — the Progress page's own step (one below the letter's 56).
+   *
+   * ⛔ THE LEADING WAS 42 ON A 40-POINT SERIF, AND THE FOUNDER SAW THE RESULT (2026-09-16: *"הכיתוב
+   * בראש המסך 'התוכנית שלך' גבוה מידי ויוצאת מהפריים של המסך"*). Two points of leading on Frank Ruhl
+   * Libre is less than the face's own ascender-to-descender run, so the line box shears the glyphs —
+   * and the Hebrew string ends in a final kaf (ך), which is exactly the deep descender
+   * `noGlyphIsClipped` was written about. That law only forbids `lineHeight < fontSize`, so 42-over-40
+   * passed it while still clipping.
+   *
+   * `rampLine.title` (46) is the app's own answer for `ramp.title` (40) and every sibling headline
+   * uses it. The tracking comes with it — `trackingPx(40, tracking.display)` is what every other
+   * 40-point serif headline in the product is drawn with.
+   */
+  title: {
+    fontFamily: font.serif,
+    fontSize: ramp.title,
+    lineHeight: rampLine.title,
+    letterSpacing: trackingPx(ramp.title, tracking.display),
+    color: color.textPrimary,
     textAlign: 'left',
   },
+
   /* The receipt (2026-09-07): a legend and one or two lines, in the same quiet ink as the note above. */
   /* The same 30-point inset the note above keeps — seen edge-to-edge on glass, 2026-09-08. */
   receipt: { gap: 6, marginHorizontal: 30, marginTop: 10, marginBottom: 14 },

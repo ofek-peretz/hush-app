@@ -140,9 +140,12 @@ it('⛔ …and it reads in HER units — the half that was actually broken', asy
   }
 });
 
-it('⛔ the station ordering is finally SAID — his styling ask, on the page', async () => {
+/* ⛔ THE STATION NOTE IS DELETED (founder 2026-09-16: *"תוריד את הכתוביות של כל אימון מסודר לפי
+   תחנות לא צריך את כל זה"*). The ordering RULE is untouched — `reorderDayForStations` still keeps it
+   — so what this clause guards now is the absence of the paragraph about it. */
+it('⛔ the week explains no rule to her — the station paragraph is gone', async () => {
   const tree = await mount();
-  expect(allText(tree)).toContain(tg('program.stationNote'));
+  expect(allText(tree)).not.toContain('תחנות');
 });
 
 it('⛔ a day opens the ONE management surface — the pre-workout card, by workout id', async () => {
@@ -170,7 +173,9 @@ it('⛔ no library door on the tab; the edit door is the FIRST button, before th
   const buttons = tree.root.findAll((n) => n.props?.accessibilityRole === 'button' && typeof n.props?.accessibilityLabel === 'string');
   expect(buttons[0]?.props.accessibilityLabel).toBe(tg('program.buildRow'));
   await act(async () => buttons[0].props.onPress());
-  expect(navigate).toHaveBeenCalledWith('PlanBuilder');
+  /* Pressed with nothing written, the box is the door it replaced — the same builder, no params
+     (the coach box, 2026-09-16). With a sentence it carries `{ ask }`. */
+  expect(navigate).toHaveBeenCalledWith('PlanBuilder', undefined);
 });
 
 /**

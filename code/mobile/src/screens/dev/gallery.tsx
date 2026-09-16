@@ -697,7 +697,7 @@ function InApp({ children, session = sessionFixture }: { children: React.ReactNo
  * navigation state, so what the browser draws is what the device draws.
  */
 function UnderTabs({ active, children }: { active: number; children: React.ReactNode }) {
-  const routes = ['Today', 'Program', 'Cardio', 'Progress', 'You'].map((name) => ({ key: name, name }));
+  const routes = ['Today', 'Program', 'Cardio', 'Progress'].map((name) => ({ key: name, name }));
   const tabProps = {
     state: { index: active, routes },
     navigation: { emit: () => ({ defaultPrevented: false }), navigate: noop },
@@ -1404,7 +1404,10 @@ const sharedFixture = {
 /** 3.5 · THE WEEK IS DONE — Today, on a rest day that closes a full week (4/4). */
 const weekDoneView = (
   <HomeView
-    onTogether={noop}
+    /* The corner disc is HERS since 2026-09-16 — a fixture that hands the screen a control the app
+       no longer has is exactly the harness lie the Today docblock records. */
+    onProfile={noop}
+    signedIn
     resting
     name="Erez"
     dayName={null}
@@ -1554,6 +1557,10 @@ const todayView = () => (
   <HomeView
     resting={false}
     name="Erez"
+    /* The corner disc — hers since 2026-09-16. The fixture hands it over because the app does; a
+       harness that omits a shipping control is the same lie as one that invents a missing one. */
+    onProfile={noop}
+    signedIn
     /*
      * ⛔ THE SECOND AI ARTEFACT ON THIS SCREEN, AND THE ONE THE FOUNDER ACTUALLY READ.
      *

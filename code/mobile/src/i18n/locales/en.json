@@ -782,7 +782,6 @@
     "perExerciseBw": "Bodyweight · {{sets}} × {{reps}}",
     "doneThisWeek": "Trained this week",
     "tabTitle": "Your programme",
-    "stationNote": "Each workout is ordered by station — the plan keeps you on one piece of equipment until you are done with it, so you never criss-cross the gym.",
     "receiptLegend": "The receipt",
     "receiptDecisions_one": "{{count}} decision on your loads so far — {{raises}} raised, {{holds}} held, {{eases}} eased.",
     "receiptDecisions_other": "{{count}} decisions on your loads so far — {{raises}} raised, {{holds}} held, {{eases}} eased.",
@@ -790,7 +789,9 @@
     "buildRow": "Build your program",
     "buildSub": "Write the week yourself — I keep the clock and the loads",
     "libraryRow": "Exercise library",
-    "librarySub": "Choose the lifts the plan builds with, or rule ones out."
+    "librarySub": "Choose the lifts the plan builds with, or rule ones out.",
+    "coachBoxPlaceholder": "What do you want changed? Write it here.",
+    "coachBoxSend": "Send to coach"
   },
   "swap": {
     "title": "Swap exercise",
@@ -809,7 +810,9 @@
     "more_one": "Show 1 more option",
     "more_other": "Show {{count}} more options",
     "none": "No other lift trains this the same way. This one stays.",
-    "moved": "You moved on — that lift is behind you now."
+    "moved": "You moved on — that lift is behind you now.",
+    "all": "All exercises",
+    "replaceWith": "Replace with"
   },
   "builder": {
     "title": "Build your program",
@@ -956,7 +959,8 @@
         "not_json": "The answer came back unreadable. Ask again.",
         "nothing_said": "The answer came back unreadable. Ask again."
       }
-    }
+    },
+    "coachAsking": "The coach is reading your request"
   },
   "equipment": {
     "barbell": "Barbell",

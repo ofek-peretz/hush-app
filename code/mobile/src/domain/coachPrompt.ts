@@ -523,7 +523,13 @@ export type CoachAsk =
    * authors: there is no `sessions` in this reply, by schema, which is what keeps this surface
    * inside the 2026-08-08 ruling — the model reads a programme she already has.
    */
-  | { kind: 'plan_review' };
+  /**
+   * ⛔ AND SINCE 2026-09-16 IT MAY CARRY WHAT SHE ASKED FOR, IN HER WORDS (founder: *"כל שינוי שרוצים
+   * לבצע פשוט כותבים שם לבינה"*). Absent, it is the open question it has always been — *what do you
+   * make of this week*. Present, the review becomes a REQUEST: the same schema, the same atomic
+   * suggestions she approves one at a time, aimed at the thing she actually asked for.
+   */
+  | { kind: 'plan_review'; ask?: string };
 
 
 /**
@@ -657,6 +663,23 @@ ${JSON.stringify(hersAlone(facts))}
       });
       break;
     case 'plan_review':
+      if (ask.ask) {
+        /*
+         * Her sentence LAST and labelled as hers — the same discipline `buildPrompt` keeps: a line
+         * dropped among our facts reads as one more of our constraints, and it is the opposite.
+         */
+        blocks.push({
+          text:
+            'She BUILT the programme in "programme" and is asking you to CHANGE it. Reply with ' +
+            '"say" — what you are doing and why, in her language, two to four sentences — and ' +
+            '"suggestions": the edits that carry out what she asked, each one verb on one lift on ' +
+            'one day (1-based), each with its own one-line reason in "say". Exercise ids must come ' +
+            'from the catalogue above. Change nothing she did not ask about. If what she asks for ' +
+            'is not possible with the verbs you have, say so in "say" and suggest nothing.' +
+            `\n\nWHAT SHE ASKED FOR, in her own words:\n${ask.ask}`,
+        });
+        break;
+      }
       blocks.push({
         text:
           'She BUILT the programme in "programme" herself, by hand, and asked for your opinion on ' +

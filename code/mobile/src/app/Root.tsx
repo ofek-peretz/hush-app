@@ -96,7 +96,7 @@ function CardioTab() {
   return <CardioReady onBegin={(indoor) => navigateMain('CardioLive', { indoor })} />;
 }
 
-/** The four peer surfaces, under the bottom bar (v7: Today · Cardio · Progress · You). Everything
+/** The four peer surfaces, under the bottom bar (Today · Program · Cardio · Progress). Everything
  *  deeper is pushed above them. The Cardio tab shows the READY stage at rest; "Start cardio" opens
  *  the Main-stack live stage, so a live run has no tab bar in its tree. */
 function HomeTabs() {
@@ -109,7 +109,8 @@ function HomeTabs() {
       <Tabs.Screen name="Program" component={ProgramTab} />
       <Tabs.Screen name="Cardio" component={CardioTab} />
       <Tabs.Screen name="Progress" component={Progress} />
-      <Tabs.Screen name="You" component={ProfileSheet} />
+      {/* ⛔ `You` IS NOT A TAB (founder 2026-09-16) — the corner disc on Today opens it, and the bar
+          is four surfaces of training. Registered on the main stack below. */}
     </Tabs.Navigator>
   );
 }
@@ -238,6 +239,8 @@ function MainNavigator() {
       <MainStack.Screen name="SessionFlow" component={SessionFlow} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="WellDone" component={WellDone} options={{ animation: 'fade', gestureEnabled: false }} />
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
+      {/* Her own page — pushed from the corner disc on Today (founder 2026-09-16). */}
+      <MainStack.Screen name="You" component={ProfileSheet} />
       <MainStack.Screen name="ExerciseLibrary" component={ExerciseLibrary} />
       {/* Same wheel, same reason — see the note on the onboarding registration. */}
       <MainStack.Screen name="PlanBuilder" component={PlanBuilder} options={{ fullScreenGestureEnabled: false }} />

@@ -21,15 +21,33 @@
  * row that reaches a locked seat is held at the last movable seat before it, so "done cannot be
  * moved" is true in both directions — a done row never moves, and nothing moves INTO its place.
  *
- * ⚠️ THE DROP REPORTS INDICES IN THE HOST'S OWN LIST (`from`, `to`), and the host does the real
- * move — in the programme on disk, or in the live plan. This component only animates the promise;
- * the host's re-render with the new order is what makes it true, and every translation is reset the
- * moment the finger lifts so the two cannot disagree for longer than a frame.
+ * ── ⛔ AND IT LANDS, IT DOES NOT SNAP BACK (founder, 2026-09-16) ─────────────────────────────────
+ *
+ * *"אין הרגשה שהם מתחלפים בצורה חלקה בינהם אלא רק שאני מניח תרגיל על תרגיל אחר פתאום זה קופץ
+ * ומתחלף. צריך שיהיה הרגשה שההחלפה 'מרחפת'."*
+ *
+ * He is describing a real seam, and this file's own docblock used to describe it as a feature: the
+ * drop reset every translation to zero, which put the list back in its OLD order, and the true order
+ * arrived only after the host had written to disk and re-read it — two renders and a remount later.
+ * Between them: one frame of the week as it was, then a jump.
+ *
+ * Three changes, and together they are the "hover":
+ *   1 · **THE LIFTED ROW FLIES TO ITS SEAT.** On release it springs from the finger to the exact
+ *       offset of the seat it chose — it is not dropped, it is landed — while the rows that made way
+ *       stay where they are.
+ *   2 · **THE LIST TELLS THE TRUTH AT THE INSTANT IT LANDS.** `shown` is the host's list with the
+ *       move already applied, so the order is right on the frame the flight ends; every translation
+ *       is cleared in the same commit, and because the row is already sitting in that seat the
+ *       clearing is invisible. Nothing moves twice, nothing moves back.
+ *   3 · **THE HOST'S ANSWER IS ONLY A HANDOVER.** The real move still happens where it always did —
+ *       the programme on disk, the live plan — and when it comes back the optimistic order is
+ *       dropped, because by then it is the host's order too. A commit that never lands is released
+ *       after `SETTLE_GRACE_MS`, so the screen can go stale but can never lie for ever.
  */
 
 //
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, type ViewStyle, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS, type SharedValue } from 'react-native-reanimated';
@@ -61,13 +79,50 @@ interface Props<T extends ReorderItem> {
 }
 
 const HOLD_MS = 160;
+/** How long the optimistic order may outlive the host's answer before it is given up (see above). */
+const SETTLE_GRACE_MS = 2000;
+
+/** The host's list with one row moved — the same algebra `moveLift` runs on the week itself. */
+function moved<T>(list: readonly T[], from: number, to: number): T[] {
+  const out = list.slice();
+  const [row] = out.splice(from, 1);
+  out.splice(to, 0, row!);
+  return out;
+}
 
 export function ReorderRows<T extends ReorderItem>({ items, onMove, onDragging, renderItem, gap = 0, gripColor, gripLabel, style }: Props<T>) {
+  /*
+   * ⛔ THE ORDER SHE JUST MADE, HELD UNTIL THE HOST HAS IT (see the header, point 2). `null` the rest
+   * of the time — this is a handover, never a second source of truth about her week.
+   */
+  const [landed, setLanded] = useState<readonly T[] | null>(null);
+  /* The host's own list is the authority; `landed` only stands in front of it between the landing
+     and the host's answer, and the effect below hands back the moment that answer arrives. */
+  const shown = landed && landed.length === items.length ? landed : items;
+  const itemsKey = items.map((it) => it.key).join('|');
+  const lastItemsKey = useRef(itemsKey);
+  useEffect(() => {
+    /* The host re-rendered with a DIFFERENT list — the move landed (or something else moved her
+       week). Either way the optimistic copy has nothing left to say. */
+    if (itemsKey !== lastItemsKey.current) {
+      lastItemsKey.current = itemsKey;
+      setLanded(null);
+    }
+  }, [itemsKey]);
+  useEffect(() => {
+    if (!landed) return;
+    const t = setTimeout(() => setLanded(null), SETTLE_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [landed]);
+
   const heights = useSharedValue<number[]>(items.map(() => 0));
   const active = useSharedValue(-1);
   const target = useSharedValue(-1);
   const dragY = useSharedValue(0);
-  const movable = items.map((it) => it.movable);
+  /* Set for the one commit that clears a landing: the rows are already where they belong, so the
+     reset must be instant — an animated zero here would walk the whole list back and forth. */
+  const snap = useSharedValue(0);
+  const movable = shown.map((it) => it.movable);
   const movableRef = useRef(movable);
   movableRef.current = movable;
   /* Reduced Motion: the rows still make way, but they step rather than spring (`nothingMovesForeverWithoutAsking`). */
@@ -75,8 +130,23 @@ export function ReorderRows<T extends ReorderItem>({ items, onMove, onDragging, 
 
   // The list may grow or shrink under us (a swap re-reads the week); keep the height table sized.
   useEffect(() => {
-    if (heights.value.length !== items.length) heights.value = items.map((_, i) => heights.value[i] ?? 0);
-  }, [items, heights]);
+    if (heights.value.length !== shown.length) heights.value = shown.map((_, i) => heights.value[i] ?? 0);
+  }, [shown, heights]);
+
+  /**
+   * The finger has lifted and the row has flown to its seat. The list becomes true HERE — in the
+   * same commit that clears every translation — and the host is told after, because its answer is a
+   * disk write and a re-read, which is exactly the wait this hand-over exists to cover.
+   */
+  const land = useCallback(
+    (from: number, to: number) => {
+      if (from === to || from < 0 || to < 0) return;
+      setLanded(moved(shown, from, to));
+      heights.value = moved(heights.value, from, to);
+      onMove(from, to);
+    },
+    [shown, heights, onMove],
+  );
 
   const setHeight = useCallback(
     (i: number, h: number) => {
@@ -90,19 +160,20 @@ export function ReorderRows<T extends ReorderItem>({ items, onMove, onDragging, 
 
   return (
     <View style={style}>
-      {items.map((item, i) => (
+      {shown.map((item, i) => (
         <Row
           key={item.key}
           index={i}
-          count={items.length}
+          count={shown.length}
           movable={movable}
           gap={gap}
           heights={heights}
           active={active}
           target={target}
           dragY={dragY}
+          snap={snap}
           onLayout={setHeight}
-          onMove={onMove}
+          onMove={land}
           onDragging={onDragging}
           reduced={reduced}
           gripColor={gripColor}
@@ -123,6 +194,7 @@ function Row({
   active,
   target,
   dragY,
+  snap,
   onLayout,
   onMove,
   onDragging,
@@ -139,6 +211,7 @@ function Row({
   active: SharedValue<number>;
   target: SharedValue<number>;
   dragY: SharedValue<number>;
+  snap: SharedValue<number>;
   onLayout: (i: number, h: number) => void;
   onMove: (from: number, to: number) => void;
   onDragging?: (dragging: boolean) => void;
@@ -154,13 +227,27 @@ function Row({
     setLifted(true);
     onDragging?.(true);
   }, [onDragging]);
+  /**
+   * The landing is complete: the row is sitting in its seat, held there by a translation. This is
+   * the one commit where the LIST changes and every translation is dropped — together, so the two
+   * cancel out and nothing on screen moves. `snap` makes the drop instant rather than animated.
+   */
   const settle = useCallback(
     (from: number, to: number) => {
+      snap.value = 1;
+      active.value = -1;
+      target.value = -1;
+      dragY.value = 0;
       setLifted(false);
       onDragging?.(false);
-      if (from !== to && from >= 0 && to >= 0) onMove(from, to);
+      onMove(from, to);
+      /* One frame later the rows are drawn in their new seats at rest, and the ordinary animated
+         zero can come back for the next drag. */
+      requestAnimationFrame(() => {
+        snap.value = 0;
+      });
     },
-    [onDragging, onMove],
+    [active, dragY, onDragging, onMove, snap, target],
   );
 
   const pan = Gesture.Pan()
@@ -207,16 +294,35 @@ function Row({
     .onFinalize(() => {
       const from = active.value;
       const to = target.value;
-      active.value = -1;
-      target.value = -1;
-      dragY.value = withTiming(0, { duration: motion.dur[1] });
-      runOnJS(settle)(from, to);
+      if (from < 0) return;
+      /*
+       * ⛔ IT FLIES TO THE SEAT IT CHOSE, IT DOES NOT FALL BACK. The landing offset is the exact
+       * distance between the row's own seat and the one it is taking — the same arithmetic the rows
+       * it crossed have already used to make way — so at the end of this spring the row is sitting
+       * where the list is about to say it sits. `settle` then swaps the two facts in one commit.
+       */
+      const h = heights.value;
+      let landing = 0;
+      if (to > from) for (let i = from + 1; i <= to; i++) landing += h[i] + gap;
+      else if (to < from) for (let i = to; i < from; i++) landing -= h[i] + gap;
+      if (reduced) {
+        dragY.value = landing;
+        runOnJS(settle)(from, to);
+        return;
+      }
+      dragY.value = withSpring(landing, { damping: 26, stiffness: 240, overshootClamping: true }, (done) => {
+        if (done) runOnJS(settle)(from, to);
+      });
     });
 
   const animated = useAnimatedStyle(() => {
     const a = active.value;
     const t = target.value;
-    if (a < 0) return { transform: [{ translateY: withTiming(0, { duration: motion.dur[1] }) }], zIndex: 0 };
+    if (a < 0) {
+      /* `snap` is the frame a landing is handed over on: the row is already in the right seat, so
+         the translation must vanish rather than travel (see `settle`). */
+      return { transform: [{ translateY: withTiming(0, { duration: snap.value ? 0 : motion.dur[1] }) }], zIndex: 0 };
+    }
     if (a === index) return { transform: [{ translateY: dragY.value }, { scale: 1.02 }], zIndex: 10 };
     const step = heights.value[a] + gap;
     let shift = 0;

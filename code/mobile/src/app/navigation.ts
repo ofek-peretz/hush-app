@@ -253,12 +253,24 @@ export type HomeTabsParamList = {
   // `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens (the former
   // QuarterlyReport screen, merged in here 2026-07-15). History folds into this surface in v7.
   Progress: { window?: 'all' | 'quarter' } | undefined;
-  // YOU (ProfileSheet) — a peer surface you return to, not a one-off sheet. It exits by tapping
-  // another tab. Renamed from "Settings" in v7.
-  You: undefined;
+  /*
+   * ⛔ `You` LEFT THE BAR ON 2026-09-16 (founder: *"נעביר את הפקד של 'אני' לשם"*). The four tabs are
+   * TRAINING — the day, the week, the run, the record — and the person is reached from the corner
+   * disc on Today, the way an account is reached everywhere else. It is a pushed screen now; see
+   * `MainParamList.You`.
+   */
 };
 
 export type MainParamList = {
+  /**
+   * HER — identity, membership, preferences (the `ProfileSheet`).
+   *
+   * ⛔ A TAB UNTIL 2026-09-16, AND THE CORNER OF TODAY IS A BETTER DOOR. The founder's own model is
+   * Spotify's: the bar is what the product DOES, and the person sits in the corner of the first
+   * screen, showing whether the app knows her yet. Pushed rather than presented, because it is a
+   * place you go and come back from — the same grammar as History and Lift detail.
+   */
+  You: undefined;
   /**
    * THE COACH — the conversation, reached from the corner of Today rather than the tab bar.
    *
@@ -370,7 +382,9 @@ export type MainParamList = {
    *  ⚠️ AND IT IS ALSO AN ONBOARDING STEP (2026-08-29) — see `OnboardingParamList.PlanBuilder`. NO
    *  PARAMS HERE, deliberately: the relay is what tells the screen which of the two it is, so the
    *  main-stack door cannot accidentally put it in intake chrome. */
-  PlanBuilder: undefined;
+  /* `ask` is what she wrote in the coach box on the Program tab (founder 2026-09-16): the builder
+     opens on the coach's answer to it. Absent — the plain builder, with every verb where it was. */
+  PlanBuilder: { ask?: string } | undefined;
   /*
    * ⛔ `BodyMapEdit` IS NO LONGER A ROUTE (founder 2026-09-16: *"גוף האדם אפשר להעיף — התוכנית נבנית
    * במסך התוכנית"*). Its one door was the You tab; the week is written on the Program tab now, and

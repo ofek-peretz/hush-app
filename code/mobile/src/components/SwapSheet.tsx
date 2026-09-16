@@ -80,6 +80,16 @@ export interface SwapSheetProps {
   units?: 'kg' | 'lb';
   figure?: FigureSex;
   onPick: (exerciseId: string) => void;
+  /**
+   * ⛔ THE WHOLE LIBRARY, ONE PRESS AWAY (founder, 2026-09-16: *"אני רוצה שתציג את כל הספרייה בלחיצה
+   * על זה כי יכול להיות שארצה תרגיל אחר על שריר אחר לגמרי"*).
+   *
+   * Everything above this line lives inside the pool's own gates — same muscle, same capability,
+   * same pattern — and those gates are what make the three rows trustworthy. They also make the
+   * menu unable to answer *"I want something else entirely"*, which is a question an athlete
+   * standing in front of a taken rack really does ask. This door leaves the pool.
+   */
+  onAll?: () => void;
   onClose: () => void;
 }
 
@@ -152,6 +162,12 @@ export function SwapSheet(props: SwapSheetProps) {
           onPress={() => setExpanded(true)}
           style={styles.close}
         />
+      ) : null}
+      {/* …and the way out of the pool entirely — see `onAll`. Always drawn where it is wired: it is
+          not "more of the same", it is a different question, and it must not depend on how many
+          synonyms this particular lift happens to have. */}
+      {props.onAll ? (
+        <Button variant="ghost" block label={t('swap.all')} onPress={props.onAll} style={styles.close} />
       ) : null}
       <Button variant="ghost" block label={t('swap.close')} onPress={props.onClose} style={styles.close} />
     </BottomSheet>

@@ -65,7 +65,7 @@ describe('the phone — every route has a door', () => {
      * and the five tabs. Everything else has to be navigated to by something, or it is a screen
      * that can only be reached by editing the code.
      */
-    const entries = new Set(['HomeTabs', 'Authentication', 'Today', 'Program', 'Cardio', 'Progress', 'You']);
+    const entries = new Set(['HomeTabs', 'Authentication', 'Today', 'Program', 'Cardio', 'Progress']);
     const called = everyNavCall();
     const orphans = [...new Set(routes)].filter((r) => !called.has(r) && !entries.has(r));
     expect(orphans).toEqual([]);

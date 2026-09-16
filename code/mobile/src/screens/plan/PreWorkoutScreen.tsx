@@ -25,7 +25,8 @@ import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, coachChanges } from '@/domain/coachWeek';
 import { SwapSheet } from '@/components/SwapSheet';
-import { swapChoices } from '@/domain/swapPool';
+import { ExercisePickerSheet } from '@/components/ExercisePickerSheet';
+import { swapChoices, swapMore } from '@/domain/swapPool';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { SESSION_MAX } from '@/engine/v5/constants';
@@ -68,6 +69,8 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
    * time to think (`db.OwnedPreferences.declaredSubs`).
    */
   const [swapFor, setSwapFor] = useState<string | null>(null);
+  /** The lift a whole-library replace is aimed at — the swap menu's own door (2026-09-16). */
+  const [allFor, setAllFor] = useState<string | null>(null);
   /** Bumped after a declaration lands, so the week is re-read rather than patched in place. */
   const [rev, setRev] = useState(0);
   const [directions, setDirections] = useState<Record<string, LoadDirection>>({});
@@ -339,6 +342,11 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
           <SwapSheet
             currentName={exerciseDisplayName(swapFor)}
             choices={swapChoices(swapFor, { sessionExerciseIds: lifts.map((l) => l.exerciseId), equipment: app.profile?.equipment })}
+            /* The rest of the same pool, folded away — the gym finding of 2026-09-14, which had
+               reached the live session and not this card. */
+            more={swapMore(swapFor, { sessionExerciseIds: lifts.map((l) => l.exerciseId), equipment: app.profile?.equipment })}
+            /* …and out of the pool entirely: the whole catalogue (founder 2026-09-16). */
+            onAll={() => { setAllFor(swapFor); setSwapFor(null); }}
             onClose={() => setSwapFor(null)}
             onPick={(toId) => {
               const from = swapFor;
@@ -354,6 +362,28 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
                * she made it — by saying the other thing — rather than by a second control that
                * exists only to undo the first.
                */
+              void app
+                .declareSwap(from, toId)
+                .then(() => setRev((n) => n + 1))
+                .catch(() => {});
+            }}
+          />
+        </View>
+      ) : null}
+      {allFor ? (
+        <View style={StyleSheet.absoluteFill}>
+          <ExercisePickerSheet
+            legend={t('swap.replaceWith')}
+            takenLabel={t('builder.inDay')}
+            figure={app.profile?.sex === 'female' ? 'female' : 'male'}
+            taken={new Set(lifts.map((l) => l.exerciseId))}
+            onClose={() => setAllFor(null)}
+            onPick={(toId) => {
+              const from = allFor;
+              setAllFor(null);
+              if (!from) return;
+              /* The same declaration the pool's own rows make — see `onPick` above. A lift chosen
+                 from the catalogue is her word about this seat exactly as a synonym is. */
               void app
                 .declareSwap(from, toId)
                 .then(() => setRev((n) => n + 1))

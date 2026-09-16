@@ -454,10 +454,12 @@ describe('7 · whose lifts, how you are invited, and what the room remembers', (
     expect(sheet).toContain("pair.role === 'host' && !onBegin");
     expect(sheet).toContain("t('pair.hostElsewhere')");
     /*
-     * ⚠️ AND THE DOOR ITSELF STILL DRAWS. A guest needs no workout of his own — he adopts his
-     * partner's, and his engine prices it — so the row hides only for a real conflict.
+     * ⛔ AND THE ROW ON TODAY IS DELETED (founder, 2026-09-16: *"תוריד ממסך הTODAY את כפתור להתאמן
+     * ביחד"*). The daily screen keeps exactly one act. The pair itself is untouched and is asserted
+     * above: a partner's LINK still opens the sheet (`Home.joinedByLink`), Together still carries the
+     * door, and the host's Begin is still the gated one this clause exists for.
      */
-    expect(read('src/screens/home/HomeView.tsx')).toContain('hidden={!!props.resumable}');
+    expect(read('src/screens/home/HomeView.tsx')).not.toContain('TrainTogetherRow onPress');
   });
 
   it('one shared hour reads as one kind of thing in both histories', () => {
