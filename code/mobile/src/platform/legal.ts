@@ -13,6 +13,6 @@
  * App Store Connect requires the privacy URL, and "null means the in-app sheet is the document"
  * was never going to pass review. The in-app LegalSheet remains the athlete-facing summary.
  */
-export const TERMS_URL: string | null = 'https://hush-identity.hush-app.workers.dev/terms';
+export const TERMS_URL: string | null = 'https://getferrox.com/terms';
 
-export const PRIVACY_URL: string | null = 'https://hush-identity.hush-app.workers.dev/privacy';
+export const PRIVACY_URL: string | null = 'https://getferrox.com/privacy';

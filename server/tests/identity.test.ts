@@ -11,6 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker from '../hush-identity/src/index.ts';
 
 function memKv() {
@@ -49,16 +50,23 @@ const post = (path: string, body: unknown, headers: Record<string, string> = {})
     body: JSON.stringify(body),
   });
 
-test('the front door and the legal pages answer', async () => {
+test('the front door and the legal pages moved to getferrox.com, and the old URLs still land there', async () => {
   const e = env();
-  for (const path of ['/', '/privacy', '/terms', '/plan?p=abc']) {
+  for (const path of ['/', '/privacy', '/terms']) {
     const res = await worker.fetch(new Request(`${BASE}${path}`), e);
-    assert.equal(res.status, 200, path);
-    assert.match(res.headers.get('content-type') ?? '', /text\/html/);
+    assert.equal(res.status, 301, path);
+    assert.equal(res.headers.get('location'), `https://getferrox.com${path}`, path);
   }
-  const privacy = await (await worker.fetch(new Request(`${BASE}/privacy`), env())).text();
-  // The policy must name its processors — the audit's finding 4 was that it named none.
-  for (const name of ['Google', 'PostHog', 'Sentry', 'Cloudflare']) assert.match(privacy, new RegExp(name));
+  const plan = await worker.fetch(new Request(`${BASE}/plan?p=abc`), e);
+  assert.equal(plan.status, 200);
+  assert.match(plan.headers.get('content-type') ?? '', /text\/html/);
+  // The policy must name its processors — the audit's finding 4 was that it named none. Its one
+  // source is the site's legal.json now, in both languages.
+  const legal = JSON.parse(readFileSync(new URL('../../brand/landing/src/legal.json', import.meta.url), 'utf8'));
+  for (const lang of ['he', 'en']) {
+    const privacy = legal.privacy.sections.map((s: Record<string, string[]>) => s[lang].join(' ')).join(' ');
+    for (const name of ['Google', 'PostHog', 'Sentry', 'Cloudflare']) assert.match(privacy, new RegExp(name), `${lang}: ${name}`);
+  }
 });
 
 test('an unarmed sink says so — 503, never a lying 204 (audit finding 2)', async () => {

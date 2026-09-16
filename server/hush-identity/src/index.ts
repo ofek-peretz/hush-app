@@ -82,6 +82,8 @@ export interface Env {
 const APPLE_TEAM_ID = 'T6ZRTBRT2U';
 /** The App Store listing, for a phone with no app on it (`ascAppId`, `code/mobile/eas.json`). */
 const APP_STORE_URL = 'https://apps.apple.com/app/id6780763348';
+/** The product's own site — the front door and the legal documents of record (2026-09-16). */
+const SITE_ORIGIN = 'https://getferrox.com';
 
 const APPLE_ISS = 'https://appleid.apple.com';
 const APPLE_JWKS = 'https://appleid.apple.com/auth/keys';
@@ -420,78 +422,18 @@ export default {
     }
 
     /*
-     * ════ / — A FRONT DOOR INSTEAD OF A 404 (2026-09-01, the audit's finding 09) ═════════════════
+     * ════ /, /terms, /privacy MOVED TO getferrox.com (2026-09-16, the FERROX rename) ════
      *
-     * The origin existed, served the pair page, and answered its own root with an error. This is
-     * the smallest owned web presence: the name, the one-sentence claim, the App Store link. Not a
-     * marketing site — a signpost, like /pair — and the copy is the founder's to rewrite in a
-     * redeploy. Static, no KV, cacheable.
+     * The front door and the legal documents of record live on the product's own domain now —
+     * one source, `brand/landing/src/legal.json`, built into getferrox.com/terms and /privacy in
+     * Hebrew and English. This origin keeps answering the old URLs, because they are already out
+     * there (build ≤ 73's `platform/legal.ts`, and App Store Connect before the switch): a
+     * permanent redirect, so nothing that ever linked here reaches a dead page.
      */
-    if (req.method === 'GET' && path === '/') {
-      const body = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="FERROX reads the reps you just did and moves the iron before your next set. No streaks, no scores — measured coaching for the gym floor.">
-<title>FERROX</title>
-<style>
- body{margin:0;background:#000;color:#f1eee5;font:400 17px/1.6 -apple-system,system-ui,sans-serif;
-      display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
- main{max-width:23rem;width:100%;text-align:center}
- .mark{color:#a9c49f;letter-spacing:.18em;font-size:12px;text-transform:uppercase;margin-bottom:16px}
- h1{font:400 34px/1.25 Georgia,serif;margin:0 0 14px}
- p{color:#a8a290;margin:0 0 32px}
- a{display:block;text-decoration:none;border-radius:19px;padding:18px;background:#f1eee5;color:#131210;font-weight:600}
-</style></head><body><main>
- <div class="mark">FERROX</div>
- <h1>It saw your last set. It already changed your next.</h1>
- <p>A strength coach that measures instead of guessing. Your reps in, the next weight out — in about ninety seconds.</p>
- <a href="${APP_STORE_URL}">Get FERROX on the App Store</a>
-</main></body></html>`;
-      return new Response(body, {
-        status: 200,
-        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600' },
-      });
-    }
-
-    /*
-     * ════ THE HOSTED LEGAL PAGES (2026-09-01, audit finding 4) ════
-     *
-     * App Store Connect requires a privacy-policy URL; `platform/legal.ts` points here. The
-     * in-app LegalSheet stays the athlete-facing summary; these are the documents of record —
-     * same voice, fuller facts. ⚠️ The TEXT is a draft pending the founder's legal review; the
-     * route and the wiring are not.
-     */
-    if (req.method === 'GET' && (path === '/privacy' || path === '/terms')) {
-      const page = (title: string, sections: [string, string][]) =>
-        `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>FERROX — ${title}</title>
-<style>body{margin:0;background:#000;color:#f1eee5;font:400 17px/1.65 -apple-system,system-ui,sans-serif;padding:48px 24px}
-main{max-width:38rem;margin:0 auto}.mark{color:#a9c49f;letter-spacing:.18em;font-size:12px;text-transform:uppercase;margin-bottom:16px}
-h1{font:400 30px/1.25 Georgia,serif;margin:0 0 8px}h2{font:600 15px/1.4 -apple-system,system-ui,sans-serif;margin:28px 0 6px;color:#d8d3c4}
-p{color:#a8a290;margin:0 0 12px}.stamp{color:#6d675a;font-size:13px;margin-top:36px}</style></head><body><main>
-<div class="mark">FERROX</div><h1>${title}</h1>
-${sections.map(([h, b]) => `<h2>${h}</h2><p>${b}</p>`).join('\n')}
-<p class="stamp">FERROX · com.hushfitness.app · ofek34458@gmail.com · Last updated 2026-09-01</p>
-</main></body></html>`;
-      const body =
-        path === '/privacy'
-          ? page('Privacy Policy', [
-              ['What stays on your device', 'Your workouts, loads, body map, pain reports and training history are stored on your phone. An encrypted backup lives in iCloud under your own Apple ID; we cannot read it.'],
-              ['The coach', 'When you ask the coach to build or review a week, the training data needed for that request is processed on our behalf by Google (Gemini) over our own relay. It is not used to train Google’s models, and we never store the request.'],
-              ['Measurement', 'Product usage is measured with PostHog under a random install identifier — never your name, email or Apple ID. Crash reports reach Sentry with personal data disabled. Neither is sold or used for advertising, ever.'],
-              ['The circle', 'If you join a circle or a shared workout, your first name and weekly workout counts are held on Cloudflare servers so your partners can see them, until you leave or delete the account.'],
-              ['Sign in', 'Sign in with Apple gives us a pseudonymous identifier and, if you share it, your name. We never receive your password.'],
-              ['Deletion', 'Delete Account, in the You tab, erases what our servers hold and what the device holds, immediately. The iCloud backup is under your Apple ID and yours to remove. You can also write to us for any access, correction or deletion request.'],
-              ['Where and on what basis', 'Data is processed in the EU and the US by the processors named above, under our instructions, on the basis of performing the service you asked for. Server records live only as long as the account does; sessions expire within 90 days.'],
-            ])
-          : page('Terms of Use', [
-              ['The service', 'FERROX is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional.'],
-              ['Your licence', 'You receive a personal, non-transferable licence to use the app. Its content, code and figures are FERROX’s property.'],
-              ['Membership', 'The subscription is billed by Apple under their terms; the trial is free and takes no card. Your history, records and export stay yours with or without a membership.'],
-              ['Conduct', 'Use that breaks the law or harms the service can close the account.'],
-            ]);
-      return new Response(body, {
-        status: 200,
-        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600' },
+    if (req.method === 'GET' && (path === '/' || path === '/privacy' || path === '/terms')) {
+      return new Response(null, {
+        status: 301,
+        headers: { location: `${SITE_ORIGIN}${path}`, 'cache-control': 'public, max-age=86400' },
       });
     }
 
