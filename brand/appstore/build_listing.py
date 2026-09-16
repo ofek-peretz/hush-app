@@ -93,15 +93,15 @@ figcaption{{color:var(--muted);font-size:13px}}
 
 <section><h2>מצב ב-App Store Connect</h2><div class="status">
 <div class="ok"><b>שם וכותרת משנה</b><span>FERROX: Strength Coach · FERROX: מאמן כוח אישי</span></div>
-<div class="ok"><b>תיאור, קידום, מילות מפתח</b><span>אנגלית ועברית, נשמר ונבדק אחרי טעינה מחדש</span></div>
-<div class="ok"><b>קישור תמיכה וזכויות יוצרים</b><span>שתי השפות</span></div>
-<div class="ok"><b>מדיניות פרטיות</b><span>הקישור קיים באנגלית, ונוסף בעברית</span></div>
-<div class="ok"><b>שמות המנויים</b><span>FERROX Pro Annual / Monthly, שנתי / חודשי</span></div>
-<div class="ok"><b>שפות</b><span>אנגלית (ראשית) ועברית</span></div>
-<div class="todo"><b>צילומי מסך</b><span>לגרור מהתיקיות שלמטה (הדפדפן כאן לא מעלה קבצים)</span></div>
-<div class="todo"><b>שם קבוצת המנויים</b><span>עדיין "Hush Pro" אצל המשתמשים. ליצור לוקליזציה FERROX Pro</span></div>
-<div class="todo"><b>פרטי סקירה</b><span>חשבון דמו, איש קשר וטלפון לצוות של אפל</span></div>
-<div class="todo"><b>בילד</b><span>לבחור בילד אחרי העלאה, ואז Add for Review</span></div>
+<div class="ok"><b>תיאור, קידום, מילות מפתח</b><span>אנגלית ועברית, כולל "14 אימונים בתוך 30 יום"</span></div>
+<div class="ok"><b>צילומי מסך</b><span>7 לאייפון ו-3 לשעון בכל שפה, בסדר הנכון</span></div>
+<div class="ok"><b>קישורים</b><span>getferrox.com, תנאים ופרטיות בדומיין, בשתי השפות</span></div>
+<div class="ok"><b>מנויים</b><span>FERROX Pro, שמות, קבוצה ותמונת paywall לסקירה</span></div>
+<div class="ok"><b>סקירת Apple</b><span>בלי חשבון דמו, הערות וטלפון ליצירת קשר</span></div>
+<div class="ok"><b>מחיר וזמינות</b><span>חינם, 175 מדינות</span></div>
+<div class="ok"><b>דירוג גיל וזכויות</b><span>+9, בלי תוכן של צד שלישי</span></div>
+<div class="todo"><b>בילד 74</b><span>מספר הבילד מוכן. לבנות, לבחור ב-1.0 ולשלוח לסקירה</span></div>
+<div class="todo"><b>Google Sign-In</b><span>ללחוץ Publish app ב-Google Auth Platform (כרגע רק משתמשי בדיקה יכולים להתחבר)</span></div>
 </div></section>
 
 <section><h2>iPhone · עברית</h2><div class="shots">{strip('iphone-he', 336, 'p')}</div></section>
