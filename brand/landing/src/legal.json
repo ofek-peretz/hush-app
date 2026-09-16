@@ -1,0 +1,69 @@
+{
+  "updated": { "he": "עודכן: 16 בספטמבר 2026", "en": "Last updated: September 16, 2026" },
+  "privacy": {
+    "title": { "he": "מדיניות פרטיות", "en": "Privacy Policy" },
+    "sections": [
+      {
+        "he": ["מה נשאר במכשיר שלך", "האימונים, המשקלים, מפת הגוף, דיווחי הכאב והיסטוריית האימונים נשמרים בטלפון שלך. גיבוי מוצפן נשמר ב-iCloud תחת ה-Apple ID שלך, ואין לנו גישה אליו."],
+        "en": ["What stays on your device", "Your workouts, loads, body map, pain reports and training history are stored on your phone. An encrypted backup lives in iCloud under your own Apple ID; we cannot read it."]
+      },
+      {
+        "he": ["המאמן", "כשמבקשים מהמאמן לבנות או לסקור שבוע, נתוני האימון הנחוצים לבקשה מעובדים עבורנו על ידי Google (Gemini) דרך שרת ביניים שלנו. הם אינם משמשים לאימון המודלים של Google, ואנחנו לא שומרים את הבקשה."],
+        "en": ["The coach", "When you ask the coach to build or review a week, the training data needed for that request is processed on our behalf by Google (Gemini) over our own relay. It is not used to train Google’s models, and we never store the request."]
+      },
+      {
+        "he": ["מדידה", "השימוש במוצר נמדד באמצעות PostHog תחת מזהה התקנה אקראי, לעולם לא תחת השם, האימייל או ה-Apple ID שלך. דוחות קריסה מגיעים ל-Sentry כשהנתונים האישיים מנוטרלים. שום דבר מאלה לא נמכר ולא משמש לפרסום."],
+        "en": ["Measurement", "Product usage is measured with PostHog under a random install identifier — never your name, email or Apple ID. Crash reports reach Sentry with personal data disabled. Neither is sold or used for advertising, ever."]
+      },
+      {
+        "he": ["אימון משותף", "בהצטרפות למעגל או לאימון משותף, השם הפרטי וספירת האימונים השבועית נשמרים בשרתי Cloudflare כדי שהשותפים יראו אותם, עד שיוצאים מהמעגל או מוחקים את החשבון."],
+        "en": ["The circle", "If you join a circle or a shared workout, your first name and weekly workout counts are held on Cloudflare servers so your partners can see them, until you leave or delete the account."]
+      },
+      {
+        "he": ["התחברות", "Sign in with Apple ו-Google נותנים לנו מזהה אנונימי, ואת השם שלך אם בחרת לשתף אותו. אנחנו לעולם לא מקבלים את הסיסמה שלך."],
+        "en": ["Sign in", "Sign in with Apple and Google give us a pseudonymous identifier and, if you share it, your name. We never receive your password."]
+      },
+      {
+        "he": ["נתוני בריאות", "החיבור ל-Apple Health הוא רק באישורך. הדופק, הקלוריות והמרחק נקראים כדי להציג אותם לצד האימון, ואימון שהסתיים נכתב חזרה ל-Health. נתוני Health אינם משמשים לפרסום ואינם נמכרים."],
+        "en": ["Health data", "Apple Health is connected only with your permission. Heart rate, calories and distance are read to show them beside your workout, and a finished workout is written back to Health. Health data is never used for advertising or sold."]
+      },
+      {
+        "he": ["מחיקה", "מחיקת החשבון, בלשונית שלך באפליקציה, מוחקת מיד את מה שהשרתים שלנו מחזיקים ואת מה שבמכשיר. גיבוי ה-iCloud נמצא תחת ה-Apple ID שלך ובשליטתך. אפשר גם לכתוב לנו כל בקשה לעיון, תיקון או מחיקה."],
+        "en": ["Deletion", "Delete Account, in the You tab, erases what our servers hold and what the device holds, immediately. The iCloud backup is under your Apple ID and yours to remove. You can also write to us for any access, correction or deletion request."]
+      },
+      {
+        "he": ["היכן ועל איזה בסיס", "הנתונים מעובדים באיחוד האירופי ובארה\"ב על ידי הספקים שצוינו למעלה, לפי ההוראות שלנו, לצורך מתן השירות שביקשת. רשומות בשרת נשמרות רק כל עוד החשבון קיים, והתחברויות פגות בתוך 90 יום."],
+        "en": ["Where and on what basis", "Data is processed in the EU and the US by the processors named above, under our instructions, on the basis of performing the service you asked for. Server records live only as long as the account does; sessions expire within 90 days."]
+      },
+      {
+        "he": ["יצירת קשר", "שאלות ובקשות: ofek34458@gmail.com"],
+        "en": ["Contact", "Questions and requests: ofek34458@gmail.com"]
+      }
+    ]
+  },
+  "terms": {
+    "title": { "he": "תנאי שימוש", "en": "Terms of Use" },
+    "sections": [
+      {
+        "he": ["השירות", "FERROX היא תוכנית אימון אישית. היא אינה ייעוץ רפואי: לפני שינוי משמעותי בהרגלי האימון, ובמיוחד אחרי פציעה, כדאי להתייעץ עם גורם מקצועי."],
+        "en": ["The service", "FERROX is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional."]
+      },
+      {
+        "he": ["הרישיון", "את/ה מקבל/ת רישיון אישי שאינו ניתן להעברה להשתמש באפליקציה. התוכן, הקוד והדמויות שלה הם קניינה של FERROX. השימוש כפוף גם להסכם הרישיון הסטנדרטי של Apple למשתמש קצה."],
+        "en": ["Your licence", "You receive a personal, non-transferable licence to use the app. Its content, code and figures are FERROX’s property. Use is also subject to Apple’s Standard Licensed Application End User License Agreement."]
+      },
+      {
+        "he": ["מנוי", "14 האימונים הראשונים, בתוך 30 יום, חינם ובלי כרטיס אשראי. לאחר מכן FERROX Pro זמין כמנוי חודשי או שנתי שמתחדש אוטומטית ומחויב על ידי Apple, במחיר שמוצג לפני כל חיוב. המנוי מתחדש אלא אם בוטל לפחות 24 שעות לפני סוף התקופה, וניתן לנהל ולבטל אותו בהגדרות ה-Apple ID. ההיסטוריה, השיאים והייצוא נשארים שלך, עם מנוי או בלעדיו."],
+        "en": ["Membership", "Your first 14 workouts, within 30 days, are free and take no card. After that, FERROX Pro is a monthly or yearly auto-renewing subscription billed by Apple, at the price shown before any charge. It renews unless cancelled at least 24 hours before the end of the period, and you can manage or cancel it in your Apple ID settings. Your history, records and export stay yours with or without a membership."]
+      },
+      {
+        "he": ["התנהלות", "שימוש שמפר את החוק או פוגע בשירות עלול להביא לסגירת החשבון."],
+        "en": ["Conduct", "Use that breaks the law or harms the service can close the account."]
+      },
+      {
+        "he": ["יצירת קשר", "ofek34458@gmail.com"],
+        "en": ["Contact", "ofek34458@gmail.com"]
+      }
+    ]
+  }
+}

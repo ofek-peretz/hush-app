@@ -1,0 +1,84 @@
+{
+  "phone": {
+    "phase": "complete"
+  },
+  "envelope": {
+    "v": 1,
+    "type": "session_state",
+    "mirror": {
+      "schema": 1,
+      "phase": "complete",
+      "exerciseName": "Barbell Row",
+      "exerciseGroup": "Back",
+      "setLabel": "Set 2 of 2",
+      "setNumber": 2,
+      "setsInExercise": 2,
+      "nextSetLabel": null,
+      "nextSetNumber": 0,
+      "nextSetsInExercise": 0,
+      "globalIndex": 5,
+      "totalSets": 6,
+      "targetWeight": 50,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "setsSoFar": [
+        8,
+        8
+      ],
+      "loadsSoFar": [
+        50,
+        50
+      ],
+      "lastReps": [],
+      "lastLoadKg": null,
+      "restEndsAt": null,
+      "restRemainingS": null,
+      "nextExerciseName": null,
+      "nextTargetWeight": null,
+      "nextTargetReps": null,
+      "completedExerciseName": null,
+      "canMarkBusy": false,
+      "loadDeltaKg": 0,
+      "nextLoadDeltaKg": 0,
+      "liftIndex": 3,
+      "liftCount": 3,
+      "workoutName": "Upper A",
+      "liveVolumeKg": 2240,
+      "liveSets": 5,
+      "restIsLearned": false,
+      "summary": {
+        "timeLabel": "5:40",
+        "sets": 5,
+        "up": 0,
+        "volumeKg": 2240,
+        "kcal": 26,
+        "lifts": [
+          {
+            "name": "Barbell Bench Press",
+            "best": "60 × 8"
+          },
+          {
+            "name": "Barbell Row",
+            "best": "50 × 8"
+          }
+        ],
+        "milestone": null
+      },
+      "swapOptions": [],
+      "nextSwapOptions": [],
+      "loadSetup": null,
+      "nextLoadSetup": null,
+      "toLoad": false,
+      "correction": null,
+      "holdSeconds": null,
+      "holdMetres": null,
+      "nextHoldSeconds": null,
+      "nextHoldMetres": null
+    },
+    "lobby": null,
+    "plan": null,
+    "authoritySeq": 26,
+    "authorityEpoch": 1800000000000,
+    "sentAt": "2027-01-15T08:05:40.000Z"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ferrox",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-15",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    { "pattern": "getferrox.com", "custom_domain": true },
+    { "pattern": "www.getferrox.com", "custom_domain": true }
+  ]
+}

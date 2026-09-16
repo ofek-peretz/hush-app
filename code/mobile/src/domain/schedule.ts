@@ -2,7 +2,11 @@
  * Schedule + unit formatting helpers.
  * Today's program day drives Home's Workout/Rest variant (spec §1.6/§1.7).
  */
+
+// 
+
 import type { Program, ProgramDay, Session, Units } from '@/data/local/models';
+import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
 
 /**
  * The WEEKLY-PROGRAM model (ratified): there is NO calendar / day assignment. Home offers the
@@ -26,28 +30,74 @@ export function weekProgress(program: Program): { done: number; total: number } 
  * regenerations), then a live program lookup for legacy sessions, then a neutral
  * fallback — never an empty or "—" label (§7.9).
  */
-export function sessionDayName(session: Session, program: Program | null): string {
-  if (session.programDayName) return session.programDayName;
-  const fromProgram = program?.days.find((d) => d.id === session.programDayId)?.name;
-  return fromProgram ?? 'Workout';
+/**
+ * What to call a saved session.
+ *
+ * It used to fall back to a programme lookup for rows written before `programDayName` was stamped
+ * at start. There is no programme to look in any more — and the fallback was always the weaker
+ * answer anyway, because it named the workout by what the plan says TODAY rather than by what she
+ * actually trained.
+ */
+export function sessionDayName(session: Session): string {
+  return session.programDayName || 'Workout';
 }
 
-/**
- * Whether the Weekly Program Ready note should be re-anchored to today: true only
- * on the rest→trainable transition, i.e. the day a fresh week actually becomes
- * ready (§8.6). Keeps the weekly cadence aligned with real readiness instead of
- * the enrollment weekday.
- */
-export function shouldReanchorWeekly(prevRest: boolean, nextRest: boolean): boolean {
-  return prevRest && !nextRest;
-}
+/** One conversion constant for the whole app — three different literals (2.2046226, 2.20462) and
+ *  three roundings lived in `SessionFlow` alone until 2026-09-09, one of them in the sheet that
+ *  writes to the record. */
+export const LB_PER_KG = 2.2046226;
 
 /** kg<->lb display. Stored values are kg; display follows the athlete's setting (§10.1). */
 export function displayWeight(kg: number | null, units: Units): number | null {
   if (kg == null) return null;
-  return units === 'lb' ? Math.round(kg * 2.2046226) : kg;
+  return units === 'lb' ? Math.round(kg * LB_PER_KG) : kg;
+}
+
+/** The inverse, for a figure she dialled in her units → the kilograms the record stores. Two
+ *  decimals: a 2.5 lb step is 1.13 kg, and a tenth would round two adjacent detents together. */
+export function kgFromDisplay(value: number, units: Units): number {
+  return units === 'lb' ? Math.round((value / LB_PER_KG) * 100) / 100 : value;
 }
 
 export function unitLabel(units: Units): string {
   return units; // "kg" | "lb"
+}
+
+/**
+ * ════ HOW MANY WORKOUTS THE ENGINE MUST MEET BEFORE IT KNOWS HER ════
+ *
+ * The "I learn you" phase is not a round number and never was — it is however many DIFFERENT
+ * workouts her programme holds, because Loop 1 learns a lift the first time it meets it, and a
+ * workout it has already seen teaches it nothing new about which loads to open at.
+ *
+ * It shipped as a constant `4`, which is right only for an athlete whose week happens to hold four
+ * distinct days. She trains twice a week and the app promised to spend four sessions learning her
+ * — two of them re-runs. She trains six and it stopped counting at four (founder 2026-07-28).
+ *
+ * DISTINCT means distinct WORK, not distinct names. Two days can carry the same lifts — the
+ * assembler's hole guard borrows a donor's lead lift for an empty day — and a repeat is a repeat
+ * whatever it is called, so the signature is the set of exercises, order-independent.
+ */
+export function distinctWorkoutCount(days: { isRest?: boolean; slots: { exerciseId: string }[] }[]): number {
+  const signatures = new Set<string>();
+  for (const d of days) {
+    if (d.isRest || d.slots.length === 0) continue;
+    signatures.add([...new Set(d.slots.map((s) => s.exerciseId))].sort().join('|'));
+  }
+  return signatures.size;
+}
+
+/**
+ * The learning phase as a NUMBER THE SURFACES MAY SAY — one home, so two screens cannot promise
+ * two different lengths.
+ *
+ * 1.5 makes the promise ("1–n") before the programme exists, from the assembler run on her map;
+ * 2.0 repeats it ("these n workouts") once it does, from the programme itself. Both are the same
+ * pure count, so both land on the same figure — but only if they clamp it the same way, and they
+ * did not: the clamp lived inside 1.5. Never zero (a promise about nothing) and never past the
+ * fourteen the trial holds (the timeline paints n of FREE_SESSION_LIMIT ticks; a count past the
+ * end paints nothing).
+ */
+export function learnPhaseLength(days: { isRest?: boolean; slots: { exerciseId: string }[] }[]): number {
+  return Math.max(1, Math.min(distinctWorkoutCount(days), FREE_SESSION_LIMIT));
 }

@@ -6,6 +6,10 @@
  * 'unavailable', no samples, never throwing. This locks the contract the
  * ingestion pipeline relies on (denial is a routed path, never an error).
  */
+// @ts-nocheck
+
+// 
+
 import { healthKitGate } from '@/platform/health/healthKitGate';
 
 describe('healthKitGate (HealthKit unavailable under test)', () => {

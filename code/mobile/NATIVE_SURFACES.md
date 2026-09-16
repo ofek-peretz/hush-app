@@ -5,6 +5,54 @@ These iOS-native surfaces are **wired in JS and configured**, but require a
 or on Windows. Each has a clean swap point in the app; dropping in the native
 module is the only remaining step.
 
+## ⏳ GOOGLE SIGN-IN — code shipped 2026-09-16, waiting on three OAuth clients
+
+**Why it exists:** there is no Sign in with Apple on Android, and until this was wired
+`signInWith('google')` returned a local stub — a session no server could verify. The code is in
+(`src/platform/auth.ts`, `/auth/google` in `server/hush-identity`, laws in
+`__tests__/laws/theSecondProviderIsReal.test.ts` + `server/tests/identityGoogle.test.ts`), and it is
+INERT until the ids below exist: an unconfigured build keeps the stub, and an unconfigured worker
+refuses every Google token. Both are deliberate — see the docblocks.
+
+**Founder steps (Google Cloud console → APIs & Services → Credentials), ~20 minutes:**
+
+1. **Create three OAuth 2.0 client ids** under one project, with the consent screen set to External
+   and the app name/logo/support email filled in:
+   - **Web** — this is the one whose id both the phone and the worker treat as the AUDIENCE.
+   - **iOS** — bundle id `com.hushfitness.app`.
+   - **Android** — package `com.hushfitness.app`, plus the SHA-1 of the signing certificate.
+     Get it from EAS: `npx eas credentials` → Android → production → *Keystore*. A build signed with
+     a key whose SHA-1 is not registered gets `DEVELOPER_ERROR` at the sheet and nothing else.
+2. **Put them in the build's environment** (EAS → project → Environment variables, all three
+   environments; they are PUBLIC by nature — an OAuth client id ships inside every binary):
+   - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
+   - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`
+3. **Add the config plugin to `app.json`**, with the iOS client's REVERSED id as the URL scheme
+   (Google prints it on the client's page as *iOS URL scheme*):
+   ```json
+   ["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.XXXX-YYYY" }]
+   ```
+   It cannot be added before the client exists: the scheme is the client's own id, and a placeholder
+   would ship a URL scheme that opens nothing.
+4. **Tell the worker whose tokens to accept** — `GOOGLE_CLIENT_IDS` in
+   `server/hush-identity/wrangler.toml`, comma-separated (iOS + Android + Web), then deploy that
+   worker and smoke-call `/auth/google` with a junk token: it must answer 401, never 200.
+
+**Until then:** iOS is unaffected (Apple is wired), and the Google button behaves exactly as it has
+all along — a local session, no verified identity. Android cannot ship before step 4.
+
+---
+
+## ✅ SHIPPED AND RUNNING (updated 2026-08-25)
+
+**Nothing here is pending.** All four surfaces compiled and went to TestFlight in builds 58/59 with
+their capabilities provisioned (see `IOS_CAPABILITIES_PENDING.md`, itself now closed). The section
+below is the original hand-off note and is kept for the swap points it documents — read the dates
+in it as history, not as a status. The test count it quotes (218) predates the rebuild; the suite
+is over 3,400 today.
+
+---
+
 ## NATIVE IMPLEMENTATION COMPLETE (2026-06-16) — compile-pending only
 
 All four surfaces now have their native code in the repo behind the existing swap
@@ -192,6 +240,30 @@ invariant (§8.4) and the watch never triggers the save.
 **Offline rule:** the watch is a terminal — completion intents are never queued
 on it (would risk double-logging / broken save-order); a stale intent after a
 reconnect is rejected; the phone completes workouts entirely on its own.
+
+**Is there a watch at all? (`pairingState`, added 2026-07-29.)** The one native
+read that is not about the connection but about the DEVICE. `isReachable` cannot
+answer it — that is false whenever the watch app is not in the foreground, which
+is nearly always — so the module exposes `WCSession.isPaired` /
+`isWatchAppInstalled` alongside an `activated` flag, and JS reads them through
+`src/platform/watch/watchPresence.ts`. Nothing built on it may ever appear for an
+athlete who owns no Apple Watch, so the seam is deliberately three-valued:
+**UNKNOWN** (no native module, or activation has not finished) is never spent as a
+"no". On web / Expo Go / jest it is always UNKNOWN and nothing shows.
+
+Two surfaces read it, and between them every athlete is covered exactly once —
+`hush.watch.offered` ("she has been told") is the single seam:
+
+| when she got the watch | who tells her |
+| --- | --- |
+| before onboarding | **1.3 · Connect health** — a ruled notice row under the Health card, drawn only when paired. Sets the flag on the way out. |
+| after onboarding, or WCSession answered too late for 1.3 | **10.4 · On your wrist** — a state of Today, armed because the flag is unset. |
+| never | neither |
+
+Both surfaces resolve the face through the same pure `wristFace()`, so they cannot
+disagree. Neither is drivable from the browser gallery (no WCSession), so each has
+a documented preview seam: `ConnectHealth`'s `previewWrist` route param, and
+10.4's `offer` prop.
 
 **Native steps (require macOS + a watchOS target — out of this phase):**
 1. Add a watchOS app target (SwiftUI) to the prebuilt iOS project, protected by a

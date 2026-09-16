@@ -1,0 +1,505 @@
+<title>FERROX Growth Playbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@400;500&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --stage: #0f0e0c; --lit: #1b1914; --panel: #16140f;
+    --ink0: #f1eee5; --ink1: #d8d3c4; --ink2: #a8a290; --muted: #8b8474;
+    --moss: #a9c49f; --moss-wash: rgba(169,196,159,.10); --amber: #d8b86a;
+    --line: rgba(241,238,229,.11); --line2: rgba(241,238,229,.2);
+    --serif: 'Frank Ruhl Libre', Georgia, serif;
+    --sans: 'Assistant', 'Segoe UI', Arial, sans-serif;
+    --mono: 'IBM Plex Mono', Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--stage); color: var(--ink0); font: 17px/1.75 var(--sans); -webkit-font-smoothing: antialiased; }
+  .page { direction: rtl; padding-inline: clamp(16px, 4vw, 56px); padding-block: 40px 96px;
+    background: radial-gradient(ellipse 60% 520px at 70% -120px, rgba(241,238,229,.07), transparent 70%), linear-gradient(180deg, var(--lit), var(--stage) 600px); }
+  .layout { max-width: 1180px; margin-inline: auto; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 64px; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+  a { color: var(--moss); }
+  :focus-visible { outline: 2px solid var(--moss); outline-offset: 3px; border-radius: 4px; }
+
+  /* toc */
+  nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 28px); align-self: start; }
+  nav.toc .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; direction: ltr; justify-content: flex-end; }
+  nav.toc .brand svg { width: 34px; height: auto; }
+  nav.toc .brand span { font: 600 13px/1 var(--mono); letter-spacing: .2em; color: var(--ink2); }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: t; }
+  nav.toc li a { display: flex; gap: 10px; text-decoration: none; color: var(--ink2); font-size: 15px; padding: 6px 10px; border-radius: 8px; }
+  nav.toc li a::before { counter-increment: t; content: counter(t, decimal-leading-zero); font: 500 12px/2 var(--mono); color: var(--muted); }
+  nav.toc li a:hover { color: var(--ink0); background: rgba(241,238,229,.04); }
+  .progress { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  .bar { height: 6px; border-radius: 9px; background: rgba(241,238,229,.08); margin-top: 8px; overflow: hidden; direction: ltr; }
+  .bar b { display: block; height: 100%; width: 0; background: var(--moss); border-radius: 9px; transition: width .4s; }
+
+  /* hero */
+  header.hero { padding-bottom: 48px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font-size: 14px; font-weight: 600; color: var(--moss); margin: 0 0 14px; }
+  h1 { font: 400 clamp(44px, 6.6vw, 84px)/1.02 var(--serif); letter-spacing: -.01em; margin: 0 0 22px; text-wrap: balance; }
+  .lede { font-size: clamp(18px, 1.8vw, 21px); color: var(--ink2); max-width: 36em; margin: 0; text-wrap: pretty; }
+  .rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 40px; border-top: 1px solid var(--line); }
+  .rules div { padding: 22px 0 0 24px; padding-inline: 0 24px; border-inline-start: 1px solid var(--line); padding-inline-start: 24px; }
+  .rules div:first-child { border-inline-start: 0; padding-inline-start: 0; }
+  .rules b { display: block; font: 400 26px/1.2 var(--serif); margin-bottom: 6px; }
+  .rules p { margin: 0; color: var(--ink2); font-size: 16px; }
+
+  /* sections */
+  section { padding-block: 64px 8px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+  section:last-of-type { border-bottom: 0; }
+  h2 { font: 400 clamp(32px, 4vw, 46px)/1.1 var(--serif); margin: 0 0 12px; text-wrap: balance; }
+  h2 .n { font: 500 14px/1 var(--mono); color: var(--muted); display: block; margin-bottom: 14px; letter-spacing: .1em; text-align: right; }
+  h3 { font: 700 19px/1.4 var(--sans); margin: 38px 0 10px; color: var(--ink0); }
+  p { margin: 0 0 14px; color: var(--ink1); max-width: 44em; text-wrap: pretty; }
+  .sub { color: var(--ink2); font-size: 18px; max-width: 40em; }
+  ul.plain { margin: 0 0 14px; padding-inline-start: 20px; color: var(--ink1); max-width: 44em; }
+  ul.plain li { margin-bottom: 6px; }
+  strong { color: var(--ink0); font-weight: 600; }
+
+  .callout { border: 1px solid var(--line2); border-inline-start: 3px solid var(--moss); background: var(--moss-wash); border-radius: 12px; padding: 18px 22px; margin: 22px 0; max-width: 46em; }
+  .callout.warn { border-inline-start-color: var(--amber); background: rgba(216,184,106,.07); }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout .t { font-weight: 700; color: var(--ink0); margin-bottom: 6px; display: block; }
+
+  /* timeline */
+  .timeline { display: grid; gap: 0; margin-top: 26px; border-top: 1px solid var(--line); }
+  .phase { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 28px; padding: 22px 0; border-bottom: 1px solid var(--line); }
+  .phase .when { font: 500 13px/1.6 var(--mono); color: var(--moss); letter-spacing: .04em; }
+  .phase .when b { display: block; font: 400 24px/1.2 var(--serif); color: var(--ink0); letter-spacing: 0; margin-top: 4px; }
+  .phase p { margin-bottom: 6px; }
+
+  /* checklist */
+  .checks { list-style: none; margin: 14px 0 6px; padding: 0; display: grid; gap: 2px; max-width: 46em; }
+  .checks li label { display: flex; gap: 14px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; cursor: pointer; color: var(--ink1); }
+  .checks li label:hover { background: rgba(241,238,229,.035); }
+  .checks input { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line2); flex-shrink: 0; margin-top: 4px; display: grid; place-items: center; cursor: pointer; }
+  .checks input:checked { background: var(--moss); border-color: var(--moss); }
+  .checks input:checked::after { content: ""; width: 10px; height: 5px; border: solid #131210; border-width: 0 0 2px 2px; transform: rotate(-45deg) translateY(-1px); }
+  .checks input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(139,132,116,.6); }
+  .who { font: 500 11px/1 var(--mono); letter-spacing: .08em; padding: 4px 7px; border-radius: 5px; margin-inline-start: 8px; vertical-align: 2px; white-space: nowrap; }
+  .who.you { color: var(--amber); background: rgba(216,184,106,.12); }
+  .who.me { color: var(--moss); background: var(--moss-wash); }
+
+  /* scripts */
+  .scripts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+  .script { border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; background: var(--panel); }
+  .script .k { font: 500 12px/1 var(--mono); color: var(--muted); letter-spacing: .08em; }
+  .script h4 { font: 400 22px/1.25 var(--serif); margin: 8px 0 12px; }
+  .script dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 15px; }
+  .script dt { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .script dd { margin: 0; color: var(--ink1); }
+
+  /* templates */
+  .tpl { position: relative; border: 1px solid var(--line2); border-radius: 14px; padding: 20px 22px; margin: 16px 0 20px; background: rgba(241,238,229,.025); max-width: 46em; }
+  .tpl pre { margin: 0; white-space: pre-wrap; font: 16px/1.8 var(--sans); color: var(--ink1); }
+  .tpl .copy { position: absolute; top: 12px; inset-inline-end: 12px; font: 600 13px var(--sans); color: var(--ink2); background: transparent; border: 1px solid var(--line2); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+  .tpl .copy:hover { color: var(--ink0); }
+  .tpl .copy.done { color: var(--moss); border-color: var(--moss); }
+  .tpl .label { display: block; font: 500 12px/1 var(--mono); color: var(--muted); letter-spacing: .08em; margin-bottom: 12px; }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; margin: 18px 0 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 15.5px; }
+  th { text-align: start; font: 600 13px/1.4 var(--sans); color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line2); }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--ink1); vertical-align: top; }
+  td:first-child { color: var(--ink0); font-weight: 600; }
+
+  .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
+  .opt { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+  .opt.rec { border-color: rgba(169,196,159,.55); background: var(--moss-wash); }
+  .opt b { display: block; font-size: 17px; margin-bottom: 6px; }
+  .opt .tag { font: 500 11px/1 var(--mono); color: var(--moss); letter-spacing: .08em; display: block; margin-bottom: 10px; }
+  .opt p { font-size: 15px; margin: 0; color: var(--ink2); }
+
+  footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    nav.toc { position: static; margin-bottom: 36px; }
+    nav.toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .scripts, .options { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 620px) {
+    .rules { grid-template-columns: minmax(0, 1fr); }
+    .rules div { border-inline-start: 0; padding-inline-start: 0; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 4px; }
+    .rules div:first-child { border-top: 0; }
+    .phase { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    nav.toc ol { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+
+<div class="page" lang="he">
+<div class="layout">
+
+<nav class="toc" aria-label="תוכן העניינים">
+  <div class="brand">
+    <svg viewBox="9.5 16 81 59" aria-hidden="true"><path fill="#F1EEE5" d="M62 60 C79 60 88 46 89.5 17 C82 34 74 44 61 44 L39 44 C26 44 18 34 10.5 17 C12 46 21 60 38 60 L36.584 60 A14 14 0 0 1 63.416 60 Z"/><circle cx="50" cy="64" r="10" fill="#A9C49F"/></svg>
+    <span>FERROX</span>
+  </div>
+  <ol>
+    <li><a href="#timeline">מפת הדרכים</a></li>
+    <li><a href="#decide">החלטה לפני הבילד</a></li>
+    <li><a href="#accounts">חשבונות ברשתות</a></li>
+    <li><a href="#video">וידאו קצר</a></li>
+    <li><a href="#creators">יוצרי תוכן</a></li>
+    <li><a href="#gyms">חדרי כושר</a></li>
+    <li><a href="#product">צמיחה מתוך המוצר</a></li>
+    <li><a href="#apple">Apple וה-App Store</a></li>
+    <li><a href="#paid">פרסום ממומן</a></li>
+    <li><a href="#pr">עיתונות והשקה בעולם</a></li>
+    <li><a href="#measure">מדידה</a></li>
+    <li><a href="#roles">מי עושה מה</a></li>
+  </ol>
+  <div class="progress" aria-live="polite">
+    <span id="progress-text">0 מתוך 0 משימות</span>
+    <div class="bar"><b id="progress-bar"></b></div>
+  </div>
+</nav>
+
+<main>
+  <header class="hero">
+    <p class="eyebrow">מדריך צמיחה · עודכן 16 בספטמבר 2026</p>
+    <h1>איך העולם שומע על FERROX.</h1>
+    <p class="lede">לא מנסים להגיע לכולם בבת אחת. מנצחים שוק אחד שבו יש לנו יתרון לא הוגן, בונים מערכת שמראה בדיוק מה מביא משתמשים שנשארים, ומתרחבים לעולם כשיש כבר הוכחה ביד.</p>
+    <div class="rules">
+      <div><b>שוק אחד קודם.</b><p>ישראל, בעברית. אנחנו מבינים את המשתמשים, ואף מתחרה גדול לא מדבר אליהם בשפה שלהם.</p></div>
+      <div><b>שמירה לפני הורדות.</b><p>כסף על פרסום שווה משהו רק אם אנשים חוזרים לאימון השני. קודם מוכיחים את זה, אחר כך מגדילים.</p></div>
+      <div><b>כל ערוץ נמדד.</b><p>לכל ערוץ ולכל יוצר יש קישור משלו. מה שלא נמדד, לא מקבל עוד שקל.</p></div>
+    </div>
+  </header>
+
+  <section id="timeline">
+    <h2><span class="n num">01</span>מפת הדרכים</h2>
+    <p class="sub">ארבעה שלבים. לא מדלגים על שלב, כי כל שלב מייצר את מה שהשלב הבא צריך.</p>
+    <div class="timeline">
+      <div class="phase">
+        <div class="when">שבועיים לפני ההשקה<b>הכנה</b></div>
+        <div>
+          <p><strong>המטרה:</strong> 30 עד 50 אנשים אמיתיים מאמנים עם FERROX דרך TestFlight, ויש 10 סרטונים מוכנים.</p>
+          <p>פותחים חשבונות, מצלמים תוכן, מחברים את המדידה, מגישים ל-Apple בקשה לקידום, ומבקשים מהמשתמשים הראשונים לצלם תגובות.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="when">שבועות 1 עד 6<b>השקה בישראל</b></div>
+        <div>
+          <p><strong>המטרה:</strong> לגלות אילו ערוצים מביאים משתמשים שמסיימים אימון ראשון וחוזרים לשני.</p>
+          <p>סרטונים כל שבוע, 5 עד 10 יוצרים קטנים, 2 עד 3 חדרי כושר, ובדיקת פרסום ממומן בתקציב קטן.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="when">שבועות 7 עד 12<b>הגדלה</b></div>
+        <div>
+          <p><strong>המטרה:</strong> להכפיל את מה שעובד ולעצור את מה שלא.</p>
+          <p>מגדילים תקציב רק על הסרטון והערוץ שמנצחים, מרחיבים את רשת היוצרים, ומוסיפים את Meta ו-TikTok לאפליקציה לאופטימיזציה טובה יותר.</p>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="when">מהחודש השלישי<b>העולם</b></div>
+        <div>
+          <p><strong>המטרה:</strong> להיכנס לשוק דובר האנגלית עם מוצר מוכח ונתונים.</p>
+          <p>אתר וסרטונים באנגלית, Product Hunt, קהילות Reddit, פרסום ממומן בארה"ב ובבריטניה, ויוצרים באנגלית.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="decide">
+    <h2><span class="n num">02</span>החלטה אחת לפני בילד 74</h2>
+    <p class="sub">פרסום ממומן צריך לדעת מה קרה אחרי ההורדה. חלק מזה נכנס לתוך האפליקציה, ולכן צריך להחליט עכשיו, לפני הבילד.</p>
+    <div class="options">
+      <div class="opt rec">
+        <span class="tag">המלצה</span>
+        <b>מדידת Apple Search Ads</b>
+        <p>תוספת קטנה (AdServices), בלי חלון בקשת מעקב ובלי שינוי בהצהרת הפרטיות. נכנסת לבילד 74.</p>
+      </div>
+      <div class="opt">
+        <b>גם Meta ו-TikTok</b>
+        <p>אופטימיזציה טובה יותר לקמפיינים, אבל מוסיפה חלון בקשת מעקב (ATT), מחייבת עדכון הצהרת הפרטיות ומוסיפה סיכון לפני הסקירה הראשונה.</p>
+      </div>
+      <div class="opt">
+        <b>כלום עכשיו</b>
+        <p>מוסיפים בגרסה הבאה. הכי בטוח לסקירה, אבל בשבועות הראשונים לא נדע מה מביא משתמשים מהמודעות.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <span class="t">ההמלצה</span>
+      <p>מדידת Apple Search Ads נכנסת לבילד 74. Meta ו-TikTok נכנסים בגרסה הבאה, אחרי ההשקה, כשיש כבר סרטונים ונתוני שמירה. בינתיים מודעות Meta ו-TikTok (אם רצות) נמדדות דרך קישורי קמפיין של App Store Connect.</p>
+    </div>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="decide-1" checked><span>להחליט איזו מדידה נכנסת לבילד 74 <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="decide-2" checked><span>להוסיף את מדידת Apple Search Ads לקוד ולבדוק שהכול עובר <span class="who me">אני</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="accounts">
+    <h2><span class="n num">03</span>חשבונות ברשתות</h2>
+    <p class="sub">פותחים עכשיו, גם אם לא מפרסמים עדיין: כדי לשמור את השם, וכדי שכשהכסף יתחיל להיכנס, יהיה לחשבון תוכן ואמינות.</p>
+    <h3>איפה, ובאיזה שם</h3>
+    <ul class="plain">
+      <li><strong>Instagram, TikTok, YouTube (Shorts)</strong>: שלושת המקומות שבהם הסרטונים יחיו.</li>
+      <li><strong>Facebook</strong>: דף עסקי, כי הוא הבסיס של מנהל המודעות של Meta (גם למודעות באינסטגרם).</li>
+      <li><strong>השם:</strong> ‎<span class="num">@ferrox</span> אם פנוי. אחרת ‎<span class="num">@getferrox</span>, ואותו שם בכל הרשתות.</li>
+    </ul>
+    <h3>הביו</h3>
+    <div class="tpl"><span class="label">BIO · עברית</span><button type="button" class="copy">העתקה</button><pre>אל תחשוב. תתאמן.
+המאמן שכותב לך את השבוע ועומד לידך בכל סט.
+14 אימונים חינם ⬇️
+getferrox.com</pre></div>
+    <h3>לפני שמשהו מתפרסם</h3>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="acc-1"><span>לפתוח חשבונות Instagram, TikTok, YouTube ודף Facebook עסקי באותו שם <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="acc-2" checked><span>להכין תמונת פרופיל (הלוגו על רקע כהה), באנר לכל רשת, וביו <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="acc-3"><span>להעלות 6 עד 9 סרטונים ראשונים לפני שמפעילים פרסום <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="acc-4"><span>לקשר בביו ל-getferrox.com, עם קישור קמפיין נפרד לכל רשת <span class="who me">אני</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="video">
+    <h2><span class="n num">04</span>וידאו קצר: הערוץ החזק ביותר</h2>
+    <p class="sub">ל-FERROX יש שלושה רגעים שנראים מדהים בעשר שניות: הדמות שעושה את התרגיל, סט שנרשם בקול מהאוזניות בלי לגעת בטלפון, ומסך הנעילה שמנהל את המנוחה. על זה בונים.</p>
+    <h3>הנוסחה</h3>
+    <ul class="plain">
+      <li><strong>שנייה 0 עד 2, הוק:</strong> בעיה אמיתית שכל מתאמן מכיר, בטקסט גדול על המסך.</li>
+      <li><strong>שנייה 2 עד 10, הפתרון:</strong> FERROX פותר אותה בצילום אחד, בלי הסברים.</li>
+      <li><strong>סוף:</strong> הלוגו והמשפט "14 אימונים חינם".</li>
+    </ul>
+    <p><strong>הקצב:</strong> 3 עד 4 סרטונים בשבוע, אותו סרטון בכל שלוש הרשתות. מצלמים באמת בחדר כושר, מהזווית של המתאמן, ולא בסגנון פרסומת.</p>
+    <div class="callout warn">
+      <span class="t">חשוב</span>
+      <p>הסרטונים האלה הם גם המודעות. סרטון שעובד טוב אורגנית הוא המועמד הראשון לקבל תקציב, ולכן כל סרטון צריך לעמוד בפני עצמו גם בלי קול.</p>
+    </div>
+    <h3>עשרה תסריטים מוכנים לצילום</h3>
+    <div class="scripts">
+      <div class="script"><span class="k num">01</span><h4>"מה עושים היום?"</h4><dl><dt>הוק</dt><dd>"נכנסת לחדר כושר ואין לך מושג מה לעשות היום"</dd><dt>צילום</dt><dd>יד פותחת את האפליקציה, השבוע כבר כתוב, לחיצה על "התחל"</dd><dt>טקסט</dt><dd>"השבוע שלך כבר כתוב"</dd></dl></div>
+      <div class="script"><span class="k num">02</span><h4>בלי לגעת בטלפון</h4><dl><dt>הוק</dt><dd>"כמה פעמים נגעת בטלפון באימון האחרון?"</dd><dt>צילום</dt><dd>מתאמן עם אוזניות, המאמן שואל "מוכן?", הוא עונה, מרים, אומר "חמש", הסט נרשם</dd><dt>טקסט</dt><dd>"הטלפון נשאר בכיס"</dd></dl></div>
+      <div class="script"><span class="k num">03</span><h4>מסך הנעילה</h4><dl><dt>הוק</dt><dd>"המנוחה שלך נגמרה ואתה עדיין בטיקטוק"</dd><dt>צילום</dt><dd>טלפון נעול על הספסל, כרטיס המנוחה סופר, לחיצה על "הסט הבא" מהנעילה</dd><dt>טקסט</dt><dd>"מנוחה, סט הבא, בלי לפתוח את הטלפון"</dd></dl></div>
+      <div class="script"><span class="k num">04</span><h4>הטכניקה</h4><dl><dt>הוק</dt><dd>"אתה בטוח שאתה עושה דדליפט נכון?"</dd><dt>צילום</dt><dd>מסך מפוצל: המתאמן מול הדמות שעושה את התנועה באותו קצב</dd><dt>טקסט</dt><dd>"הדמות מראה, לא מתארת"</dd></dl></div>
+      <div class="script"><span class="k num">05</span><h4>השעון</h4><dl><dt>הוק</dt><dd>"שכחת את הטלפון בלוקר?"</dd><dt>צילום</dt><dd>אימון שלם מהשעון: המשקל, לחיצה על "השלם סט", רטט בסוף המנוחה</dd><dt>טקסט</dt><dd>"הסט על היד"</dd></dl></div>
+      <div class="script"><span class="k num">06</span><h4>התקדמות אמיתית</h4><dl><dt>הוק</dt><dd>"חודשיים באותו משקל?"</dd><dt>צילום</dt><dd>מסך ההתקדמות, הגרף עולה, המשקל של השבוע הבא כבר מעודכן</dd><dt>טקסט</dt><dd>"השבוע הבא מתחיל ממה שעשית"</dd></dl></div>
+      <div class="script"><span class="k num">07</span><h4>כרטיס הסיום</h4><dl><dt>הוק</dt><dd>"כמה הרמת היום?"</dd><dt>צילום</dt><dd>סוף אימון, כרטיס עם הטונות מופיע, שיתוף לסטורי</dd><dt>טקסט</dt><dd>"4.2 טון. היום."</dd></dl></div>
+      <div class="script"><span class="k num">08</span><h4>ריצה</h4><dl><dt>הוק</dt><dd>"גם אתה שונא לעצור כדי לבדוק קצב?"</dd><dt>צילום</dt><dd>ריצה בחוץ, קילומטר נסגר, הקצב והדופק על המסך</dd><dt>טקסט</dt><dd>"כל קילומטר נרשם בזמן אמת"</dd></dl></div>
+      <div class="script"><span class="k num">09</span><h4>לפני ואחרי: המחברת</h4><dl><dt>הוק</dt><dd>"עדיין רושם סטים במחברת?"</dd><dt>צילום</dt><dd>מחברת מבולגנת נסגרת, FERROX נפתח עם אותו אימון מסודר</dd><dt>טקסט</dt><dd>"כל סט נשמר. לבד."</dd></dl></div>
+      <div class="script"><span class="k num">10</span><h4>תגובה אמיתית</h4><dl><dt>הוק</dt><dd>משתמש מ-TestFlight: "חשבתי שזה עוד אפליקציה..."</dd><dt>צילום</dt><dd>פנים של משתמש אמיתי בחדר כושר, מספר במשפט אחד מה השתנה</dd><dt>טקסט</dt><dd>השם והציטוט שלו</dd></dl></div>
+    </div>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="vid-1"><span>לצלם את 10 הסרטונים הראשונים <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="vid-2"><span>להכין כתוביות, טקסטים על המסך וסגירה ממותגת לכל סרטון <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="vid-3"><span>לוח פרסום: 3 עד 4 סרטונים בשבוע, קבוע <span class="who you">אתה</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="creators">
+    <h2><span class="n num">05</span>יוצרי תוכן</h2>
+    <p class="sub">לא סלבס. מאמנים ויוצרי כושר קטנים, עם 10 עד 100 אלף עוקבים, שהקהל שלהם באמת מתאמן ובאמת מקשיב להם.</p>
+    <h3>איך מוצאים</h3>
+    <ul class="plain">
+      <li>חיפוש באינסטגרם ובטיקטוק לפי האשטגים כמו כושר, חדרכושר, אימוןכוח ומאמןכושר.</li>
+      <li>מסתכלים על מעורבות, לא על עוקבים: תגובות אמיתיות על הסרטונים האחרונים.</li>
+      <li>מעדיפים מי שמצלם בחדר כושר אמיתי ומדבר על תוכניות אימון.</li>
+    </ul>
+    <h3>מה מציעים</h3>
+    <ul class="plain">
+      <li>FERROX Pro חינם לתמיד.</li>
+      <li>קישור אישי שמודד הורדות, ותשלום לכל משתמש שמסיים אימון ראשון דרכו. את הסכום מחליטים אחרי שרואים את נתוני השבועות הראשונים.</li>
+      <li>חופש מלא בתוכן: הם יודעים מה עובד אצל הקהל שלהם.</li>
+    </ul>
+    <h3>הודעת הפנייה</h3>
+    <div class="tpl"><span class="label">DM · עברית</span><button type="button" class="copy">העתקה</button><pre>היי [שם], אני עופק, בניתי את FERROX, מאמן אישי לחדר הכושר בעברית, ל-iPhone ול-Apple Watch.
+ראיתי את הסרטון שלך על [נושא ספציפי] והוא בדיוק מה שהאפליקציה מנסה לפתור.
+
+FERROX כותב שבוע אימונים שלם, מראה כל תרגיל על דמות, ומנהל את הסטים מהאוזניות ומהשעון.
+
+אשמח לתת לך גישה מלאה בחינם. אם תאהב, בוא נדבר על שיתוף פעולה עם קישור אישי ותשלום לפי משתמשים שמגיעים ממך.
+
+אפשר לשלוח לך קישור?</pre></div>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="cr-1"><span>רשימה של 30 יוצרים מתאימים <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="cr-2"><span>לשלוח 30 פניות ולקבוע שיחות עם המתעניינים <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="cr-3"><span>קישור קמפיין ייחודי לכל יוצר, וטבלת מעקב <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="cr-4"><span>לסגור 5 עד 10 יוצרים לחודש הראשון <span class="who you">אתה</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="gyms">
+    <h2><span class="n num">06</span>חדרי כושר</h2>
+    <p class="sub">המקום היחיד שבו כל האנשים הם בדיוק הקהל, ברגע שבו הם צריכים את המוצר.</p>
+    <ul class="plain">
+      <li><strong>פוסטר ליד המשקולות החופשיות:</strong> הלוגו, "לא יודע מה לעשות היום?", וקוד QR לקישור קמפיין של החדר.</li>
+      <li><strong>הצעה לבעלים:</strong> חודש FERROX Pro לכל חבר חדש במכון, והמכון מקבל כלי שמחזיק את המתאמנים חוזרים.</li>
+      <li><strong>מאמני המכון:</strong> הם יוצרי התוכן המקומיים הכי אמינים. אותה הצעה כמו ליוצרים.</li>
+    </ul>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="gym-1" checked><span>לעצב פוסטר A3 עם QR <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="gym-2"><span>לסגור 2 עד 3 חדרי כושר קרובים <span class="who you">אתה</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="product">
+    <h2><span class="n num">07</span>צמיחה מתוך המוצר</h2>
+    <p class="sub">הערוצים הזולים ביותר כבר בנויים בתוך האפליקציה. כל אחד מהם הופך משתמש אחד לעוד משתמש.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>מנגנון</th><th>מה קורה</th><th>מצב</th></tr></thead>
+      <tbody>
+        <tr><td>כרטיס סיום אימון</td><td>משתמשים משתפים לסטורי כרטיס עם הלוגו והמשפט "ב-App Store"</td><td>בנוי</td></tr>
+        <tr><td>שיתוף שבוע</td><td>חבר מקבל עמוד נחיתה עם התוכנית וקישור להורדה</td><td>בנוי ופעיל</td></tr>
+        <tr><td>אימון משותף</td><td>שותף לאימון חייב להתקין כדי להצטרף</td><td>בנוי והשרת פעיל. עוד לא נבדק על שני טלפונים</td></tr>
+        <tr><td>בקשת דירוג</td><td>האפליקציה מבקשת דירוג פעם אחת, ברגע של הישג</td><td>בנוי</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="prod-1"><span>לבדוק אימון משותף על שני טלפונים אחרי בילד 74, ואז להוסיף אותו לתיאור בחנות <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="prod-2" checked><span>להוסיף לכרטיס הסיום את כתובת getferrox.com <span class="who me">אני</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="apple">
+    <h2><span class="n num">08</span>Apple וה-App Store</h2>
+    <h3>בקשת קידום מ-Apple (Featuring)</h3>
+    <p>ב-App Store Connect יש אזור Nominations שבו מגישים בקשה ש-Apple תבליט את האפליקציה. אפליקציה חדשה, מעוצבת, בעברית, עם אפליקציית שעון ו-Live Activity, היא מועמדת טובה. מגישים כמה שבועות לפני תאריך ההשקה.</p>
+    <h3>חיפוש בחנות (ASO)</h3>
+    <p>השם, כותרת המשנה, מילות המפתח והצילומים מוכנים. אחרי ההשקה בודקים ב-App Analytics מאילו חיפושים מגיעים, ומעדכנים מילות מפתח פעם בחודש.</p>
+    <h3>עמודי מוצר מותאמים</h3>
+    <p>App Store Connect מאפשר לבנות גרסאות נוספות של עמוד החנות, כל אחת עם צילומים וטקסט משלה וקישור משלה. בונים עמוד לכל קהל: מתאמני כוח, רצים, ומי שמגיע מסרטון על השעון. כל מודעה מובילה לעמוד שמתאים לה.</p>
+    <h3>קישורי קמפיין</h3>
+    <p>לכל ערוץ, יוצר וחדר כושר יש קישור App Store משלו עם פרמטרים של ספק וקמפיין. App Store Connect מראה כמה הורדות הגיעו מכל קישור.</p>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="ap-1"><span>להגיש בקשת Featuring ב-App Store Connect <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="ap-2"><span>לבנות 3 עמודי מוצר מותאמים (חדר כושר, ריצה, שעון) <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="ap-3"><span>להפיק קישור קמפיין לכל ערוץ ולכל יוצר <span class="who me">אני</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="paid">
+    <h2><span class="n num">09</span>פרסום ממומן: בכל הכוח, בסדר הנכון</h2>
+    <div class="callout warn">
+      <span class="t">שלושה תנאים לפני השקל הראשון</span>
+      <p>1. <strong>מדידה מחוברת</strong> (סעיף 02, וקישורי קמפיין). 2. <strong>שמירה מוכחת</strong>: שבועיים עד שלושה של משתמשים אמיתיים שחוזרים לאימון השני. 3. <strong>5 עד 10 סרטונים מוכנים</strong>, שנראים כמו תוכן ולא כמו פרסומת.</p>
+    </div>
+    <h3>הערוצים</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>ערוץ</th><th>למה</th><th>איך מתחילים</th></tr></thead>
+      <tbody>
+        <tr><td>Apple Search Ads</td><td>אנשים שמחפשים עכשיו אפליקציית אימונים. הכוונה הכי גבוהה</td><td>קמפיין על מילים מדויקות כמו "תוכנית אימונים", "חדר כושר", "gym workout", ועל השם FERROX</td></tr>
+        <tr><td>Meta (Instagram)</td><td>הקהל הגדול ביותר של מתאמנים בישראל, ומודעות וידאו ב-Reels</td><td>קמפיין קידום אפליקציה, 3 עד 5 סרטונים, קהל רחב בישראל בגילאי 18 עד 45</td></tr>
+        <tr><td>TikTok</td><td>קהל צעיר, וסרטונים אותנטיים עובדים בו הכי טוב</td><td>קמפיין קידום אפליקציה, אותם סרטונים, כמה וריאציות של הוק</td></tr>
+      </tbody>
+    </table></div>
+    <h3>שלב הבדיקה (שבועיים עד שלושה)</h3>
+    <ul class="plain">
+      <li><strong>תקציב:</strong> הצעה להתחלה, 50 עד 100 ₪ ליום לכל ערוץ. את המספר קובעים לפי מה שנוח לך להפסיד בזמן שלומדים.</li>
+      <li><strong>מבנה:</strong> ערוץ אחד, קהל אחד, 3 עד 5 סרטונים. משנים דבר אחד בכל פעם.</li>
+      <li><strong>מודדים:</strong> עלות לאימון ראשון שהושלם ועלות למנוי. לא עלות להורדה.</li>
+    </ul>
+    <h3>כללי הגדלה ועצירה</h3>
+    <ul class="plain">
+      <li><strong>עוצרים</strong> סרטון שאחרי 3 עד 4 ימים מביא אימונים ראשונים ביוקר משמעותי משאר הסרטונים.</li>
+      <li><strong>מגדילים</strong> את הסרטון המנצח בהדרגה, עד 20 עד 30 אחוז בכל כמה ימים, כדי לא לשבור את הלמידה של הפלטפורמה.</li>
+      <li><strong>מחדשים</strong> סרטונים כל שבועיים, כי גם סרטון מנצח נשחק.</li>
+    </ul>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="paid-1"><span>לפתוח חשבון Apple Search Ads ומנהל מודעות ב-Meta וב-TikTok, ולהזין אמצעי תשלום <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="paid-2"><span>להקים את מבנה הקמפיינים והמודעות, מוכן להפעלה <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="paid-3"><span>לאשר תקציב בדיקה ולהפעיל <span class="who you">אתה</span></span></label></li>
+      <li><label><input type="checkbox" data-id="paid-4"><span>דו"ח שבועי: מה לעצור ומה להגדיל <span class="who me">אני</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="pr">
+    <h2><span class="n num">10</span>עיתונות, והשקה בעולם</h2>
+    <h3>בישראל</h3>
+    <p>סיפור ההשקה: אפליקציה ישראלית עם מאמן AI, דמות שמראה כל תרגיל ואפליקציית Apple Watch, שנבנתה על ידי מייסד אחד. יעדים: Geektime, כלכליסט, Ynet (טכנולוגיה וכושר), ופודקאסטים של כושר ויזמות.</p>
+    <div class="tpl"><span class="label">PITCH · עיתונאי</span><button type="button" class="copy">העתקה</button><pre>שלום [שם],
+אני עופק פרץ, בניתי את FERROX, מאמן אישי לחדר הכושר בעברית, ל-iPhone ול-Apple Watch שיוצא ב-[תאריך].
+
+מה שונה: המאמן כותב שבוע אימונים שלם לפי הציוד והמטרה, דמות תלת-ממדית מראה כל תרגיל, ואפשר לנהל אימון שלם מהאוזניות, מהשעון וממסך הנעילה, בלי לגעת בטלפון.
+
+אשמח לתת לך גישה מוקדמת ולספר איך מייסד אחד בנה את זה.
+ערכת עיתונות: getferrox.com</pre></div>
+    <h3>בעולם (מהחודש השלישי)</h3>
+    <ul class="plain">
+      <li><strong>Product Hunt:</strong> יום השקה אחד, מתוכנן מראש, עם סרטון ותגובות של משתמשים.</li>
+      <li><strong>Reddit:</strong> ב-r/Fitness, r/weightroom ו-r/AppleWatch מספרים את סיפור הבנייה ומבקשים משוב. לא מפרסמים שם פרסומת, קוראים את חוקי כל קהילה לפני שכותבים.</li>
+      <li><strong>אתר וסרטונים באנגלית</strong>, ואותה שיטה של יוצרים ופרסום ממומן בארה"ב ובבריטניה.</li>
+    </ul>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="pr-1" checked><span>עמוד ערכת עיתונות ב-getferrox.com: לוגו, צילומים, תיאור קצר <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="pr-2"><span>גרסה אנגלית מלאה לאתר <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="pr-3"><span>לשלוח פניות לעיתונאים שבוע לפני ההשקה <span class="who you">אתה</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="measure">
+    <h2><span class="n num">11</span>מדידה: שלושה מספרים</h2>
+    <p class="sub">הורדות הן לא המטרה. אלה שלושת המספרים שמחליטים לאן הולך כל שקל.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>מספר</th><th>מה הוא אומר</th><th>איפה רואים</th></tr></thead>
+      <tbody>
+        <tr><td>סיום אימון ראשון</td><td>מתוך מי שהוריד, כמה באמת התאמנו. אם נמוך, הבעיה בכניסה לאפליקציה ולא בפרסום</td><td>PostHog</td></tr>
+        <tr><td>חזרה בשבוע השני</td><td>האם המוצר מחזיק אנשים. זה המספר שמכשיר פרסום ממומן</td><td>PostHog</td></tr>
+        <tr><td>מנוי אחרי 14 האימונים</td><td>האם FERROX מרוויח. מזה נגזר כמה מותר לשלם על משתמש</td><td>App Store Connect</td></tr>
+      </tbody>
+    </table></div>
+    <h3>הטקס השבועי (כל יום ראשון, 30 דקות)</h3>
+    <ul class="plain">
+      <li>לכל ערוץ: הורדות, אימונים ראשונים, עלות לאימון ראשון.</li>
+      <li>שלושת המספרים מול השבוע הקודם.</li>
+      <li>החלטה אחת: מה מגדילים, מה עוצרים, מה בודקים השבוע.</li>
+    </ul>
+    <div class="callout"><span class="t">טופל 16 בספטמבר: המדידה פועלת</span><p>האנליטיקה הייתה כבויה (מפתחות PostHog מעולם לא הוגדרו). עכשיו השרת מעביר את האירועים ל-PostHog (אזור EU), ואירועי בדיקה נראו מגיעים. נבנה לוח בקרה עם 5 גרפים: המסלול לאימון ראשון, חזרה שבועית, מנוי, מקור ההתקנות לפי קמפיין Apple Search Ads, ופעילות יומית. בנוסף, מדידת Apple Search Ads נבנתה באפליקציה ותיכנס לבילד 74.</p></div>
+    <ul class="checks">
+      <li><label><input type="checkbox" data-id="m-0" checked><span>לפתוח חשבון PostHog ולהגדיר את המפתחות בשרת <span class="who you">אתה</span><span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="m-1" checked><span>לוח בקרה ב-PostHog עם שלושת המספרים, לפי ערוץ <span class="who me">אני</span></span></label></li>
+      <li><label><input type="checkbox" data-id="m-2"><span>לקבוע את הטקס השבועי ביומן <span class="who you">אתה</span></span></label></li>
+    </ul>
+  </section>
+
+  <section id="roles">
+    <h2><span class="n num">12</span>מי עושה מה</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>אתה</th><th>אני</th></tr></thead>
+      <tbody>
+        <tr><td>פתיחת חשבונות ואמצעי תשלום</td><td>ביו, תמונות, באנרים, קישורי קמפיין</td></tr>
+        <tr><td>צילום הסרטונים</td><td>תסריטים, כתוביות, טקסטים, סגירה ממותגת</td></tr>
+        <tr><td>שיחות וסגירה מול יוצרים, מכונים ועיתונאים</td><td>רשימות, הודעות, פוסטר, ערכת עיתונות</td></tr>
+        <tr><td>אישור תקציבים והחלטות</td><td>הקמת קמפיינים, לוח בקרה, דו"ח שבועי</td></tr>
+        <tr><td></td><td>מדידה באפליקציה, אימון משותף, אתר באנגלית, Featuring, עמודי מוצר</td></tr>
+      </tbody>
+    </table></div>
+    <footer>המדריך הזה חי: מסמנים משימות כשהן נגמרות (הסימונים נשמרים בדפדפן שלך), ומעדכנים את המספרים אחרי כל שבוע. הצעות התקציב הן נקודת פתיחה, לא יעד.</footer>
+  </section>
+</main>
+</div>
+</div>
+
+<script>
+  (function () {
+    var KEY = 'ferrox.playbook.checks';
+    var state = {};
+    try { state = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { state = {}; }
+    var boxes = [].slice.call(document.querySelectorAll('.checks input[type=checkbox]'));
+    var text = document.getElementById('progress-text');
+    var bar = document.getElementById('progress-bar');
+    function paint() {
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      text.textContent = done + ' מתוך ' + boxes.length + ' משימות';
+      bar.style.width = (boxes.length ? (100 * done / boxes.length) : 0) + '%';
+    }
+    boxes.forEach(function (b) {
+      if (Object.prototype.hasOwnProperty.call(state, b.dataset.id)) b.checked = !!state[b.dataset.id];
+      b.addEventListener('change', function () {
+        state[b.dataset.id] = b.checked;
+        try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+        paint();
+      });
+    });
+    paint();
+    [].slice.call(document.querySelectorAll('.tpl .copy')).forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var t = btn.parentElement.querySelector('pre').textContent;
+        var ok = function () { btn.textContent = 'הועתק'; btn.classList.add('done'); setTimeout(function () { btn.textContent = 'העתקה'; btn.classList.remove('done'); }, 1600); };
+        try { navigator.clipboard.writeText(t).then(ok, ok); } catch (e) { ok(); }
+      });
+    });
+  })();
+</script>

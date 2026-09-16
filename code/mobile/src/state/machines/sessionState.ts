@@ -1,8 +1,13 @@
 /**
  * Session state machine (spec §6.3, §6.5). The second orthogonal machine.
  *
- * Per set: SET_PRESENTED -> (SET_COMPLETED | SET_EDITED)
- *          -> REST(INTER | TRANSITION[->AUTO_SWAPPED]) -> next
+ * Per set: SET_PRESENTED -> COMPLETE_SET
+ *          -> REST(INTER | TRANSITION) -> next
+ * (`EDIT_RESULT` and `AUTO_SWAP` / `REST_TRANSITION_AUTO_SWAPPED` were declared and never
+ * dispatched by anything — an edit is a plan write and a swap is a plan write, neither moves the
+ * machine — so they left on 2026-09-09.)
+ * The clock (2026-09-07) presumes a set done as written when its expected duration elapses with no
+ * word from her; it moves exactly as a completion does, except it can never save the session.
  * PAUSED is enterable from SET_PRESENTED / REST_INTER / REST_TRANSITION and
  * exits to the EXACT prior state, or to FINISH -> SESSION_SAVED.
  *
@@ -12,11 +17,13 @@
  * Rest is skipped entirely when rest <= 5s (spec §1.14).
  */
 
+// 
+
+
 export type SessionPhase =
   | 'SET_PRESENTED'
   | 'REST_INTER'
   | 'REST_TRANSITION'
-  | 'REST_TRANSITION_AUTO_SWAPPED'
   | 'PAUSED'
   | 'SESSION_SAVED'
   | 'WELL_DONE';
@@ -33,9 +40,9 @@ export interface SessionMachine {
 
 export type SessionEvent =
   | { type: 'COMPLETE_SET'; restSeconds: number; lastSetOfExercise: boolean }
-  | { type: 'EDIT_RESULT'; restSeconds: number; lastSetOfExercise: boolean }
+  /* `PRESUME_SET` (2026-09-07 → 2026-09-09) is DELETED: no clock writes a set. A set is completed by
+     her — hand, voice, wrist or lock screen — or it stays on stage (founder, 2026-09-09). */
   | { type: 'REST_ELAPSED' } // timer 00:00 or "Ready"
-  | { type: 'AUTO_SWAP' } // equipment conflict during transition
   | { type: 'PAUSE' }
   | { type: 'RESUME' }
   | { type: 'FINISH_EARLY' };
@@ -72,17 +79,10 @@ function afterSetCompletion(
 export function sessionReducer(s: SessionMachine, e: SessionEvent): SessionMachine {
   switch (e.type) {
     case 'COMPLETE_SET':
-    case 'EDIT_RESULT':
       if (s.phase !== 'SET_PRESENTED') return s;
       return afterSetCompletion(s, e.restSeconds, e.lastSetOfExercise);
-
-    case 'AUTO_SWAP':
-      return s.phase === 'REST_TRANSITION'
-        ? { ...s, phase: 'REST_TRANSITION_AUTO_SWAPPED' }
-        : s;
-
     case 'REST_ELAPSED':
-      if (s.phase === 'REST_INTER' || s.phase === 'REST_TRANSITION' || s.phase === 'REST_TRANSITION_AUTO_SWAPPED') {
+      if (s.phase === 'REST_INTER' || s.phase === 'REST_TRANSITION') {
         return { ...s, phase: 'SET_PRESENTED', setIndex: s.setIndex + 1 };
       }
       return s;

@@ -1,32 +1,54 @@
 {
   "expo": {
-    "name": "Hush",
+    "name": "FERROX",
     "slug": "hush",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "hush",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#fbfaf8",
+    "backgroundColor": "#000000",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#fbfaf8"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": false,
       "userInterfaceStyle": "light",
       "bundleIdentifier": "com.hushfitness.app",
       "appleTeamId": "T6ZRTBRT2U",
-      "buildNumber": "16",
+      "buildNumber": "74",
       "infoPlist": {
         "NSSupportsLiveActivities": true,
-        "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health.",
-        "ITSAppUsesNonExemptEncryption": false
+        "NSHealthShareUsageDescription": "FERROX reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
+        "NSHealthUpdateUsageDescription": "FERROX saves your completed strength workouts to Apple Health.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+        "NSSpeechRecognitionUsageDescription": "FERROX turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised.",
+        "NSMotionUsageDescription": "FERROX counts your steps with the phone's motion sensor to measure distance and pace on the treadmill.",
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ]
       },
       "entitlements": {
-        "com.apple.developer.healthkit": true
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.usernotifications.time-sensitive": true,
+        "com.apple.security.application-groups": [
+          "group.com.hushfitness.app"
+        ],
+        "com.apple.developer.icloud-container-identifiers": [
+          "iCloud.com.hushfitness.app"
+        ],
+        "com.apple.developer.icloud-services": [
+          "CloudDocuments"
+        ],
+        "com.apple.developer.ubiquity-container-identifiers": [
+          "iCloud.com.hushfitness.app"
+        ],
+        "com.apple.developer.ubiquity-kvstore-identifier": "$(TeamIdentifierPrefix)$(CFBundleIdentifier)"
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -34,16 +56,66 @@
         "NSPrivacyAccessedAPITypes": [
           {
             "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
-            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ],
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeFitness",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCrashData",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAnalytics"
+            ]
           }
         ]
-      }
+      },
+      "associatedDomains": [
+        "applinks:getferrox.com",
+        "applinks:hush-identity.hush-app.workers.dev"
+      ]
     },
     "android": {
+      "package": "com.hushfitness.app",
       "userInterfaceStyle": "light",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#08080E"
+        "monochromeImage": "./assets/adaptive-icon-mono.png",
+        "backgroundColor": "#000000"
       }
     },
     "plugins": [
@@ -52,14 +124,45 @@
       "expo-notifications",
       "expo-dev-client",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "FERROX opens your photos so you can show your coach a program you were given, or a machine you want to ask about."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FERROX uses your location to measure distance and pace for the runs and walks you record.",
+          "locationAlwaysAndWhenInUsePermission": "FERROX keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
+          "locationAlwaysPermission": "FERROX keeps measuring your run while your phone is in your pocket or the screen is off. It only ever runs while a run is recording, and it stops the moment you finish.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Hush reads your heart rate, calories and distance from Apple Health to record your runs and walks. It never writes to Health."
+          "NSHealthShareUsageDescription": "FERROX reads your heart rate, calories and distance from Apple Health to record your runs and walks."
         }
       ],
       "@bacons/apple-targets",
+      "./plugins/withLockIntents",
       "expo-font",
-      "expo-video"
+      "expo-video",
+      "@sentry/react-native/expo",
+      "expo-apple-authentication",
+    [
+      "@react-native-google-signin/google-signin",
+      {
+        "iosUrlScheme": "com.googleusercontent.apps.515963027403-41cctg308okfcd66hao596alfnci630g"
+      }
+    ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+          "speechRecognitionPermission": "FERROX turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised."
+        }
+      ]
     ],
     "extra": {
       "eas": {
@@ -69,11 +172,31 @@
               "appExtensions": [
                 {
                   "bundleIdentifier": "com.hushfitness.app.widget",
-                  "targetName": "HushWidget"
+                  "targetName": "HushWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.hushfitness.app"
+                    ]
+                  }
                 },
                 {
                   "bundleIdentifier": "com.hushfitness.app.watch",
-                  "targetName": "HushWatch"
+                  "targetName": "HushWatch",
+                  "entitlements": {
+                    "com.apple.developer.healthkit": true,
+                    "com.apple.security.application-groups": [
+                      "group.com.hushfitness.app"
+                    ]
+                  }
+                },
+                {
+                  "bundleIdentifier": "com.hushfitness.app.watch.widget",
+                  "targetName": "HushWatchWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.hushfitness.app"
+                    ]
+                  }
                 }
               ]
             }

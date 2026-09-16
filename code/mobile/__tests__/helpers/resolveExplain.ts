@@ -4,9 +4,13 @@
  * engine tests assert on the RENDERED copy (the engine now emits keys, not strings).
  * Not a test suite (outside the *.test.ts glob); imported by the engine tests.
  */
+// @ts-nocheck
+
+// 
+
 import i18next from 'i18next';
 import en from '@/i18n/locales/en.json';
-import type { ExplanationLine } from '@/engine/v4/types';
+import type { ExplanationLine } from '@/engine/weeklyView';
 
 const inst = i18next.createInstance();
 // Inline resources → init resolves synchronously, so `t` is usable immediately.

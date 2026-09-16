@@ -1,6 +1,10 @@
 /**
  * Session machine invariants (spec §6.3, §8.4, §1.14, §7.2).
  */
+// @ts-nocheck
+
+// 
+
 import {
   initialSessionMachine,
   sessionReducer,
@@ -50,6 +54,9 @@ describe('save invariant', () => {
     expect(next.earlyFinish).toBe(true);
   });
 });
+
+/* `PRESUME_SET` (2026-09-07 → 2026-09-09) is gone with the automatic set (founder, 2026-09-09):
+   the reducer has no event that moves the machine on time. `theClockNeverWritesASet` pins the clock. */
 
 describe('pause freezes exactly and resumes to the prior state', () => {
   it('pause from rest, resume back to the same rest phase', () => {

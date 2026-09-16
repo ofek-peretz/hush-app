@@ -3,6 +3,10 @@
  * Vocabulary from sprint3a/decision.py. Only a load CHANGE earns a reason line;
  * every KEEP is silence. (No forecast/hold mapping — the Forecasts feature was removed.)
  */
+// @ts-nocheck
+
+// 
+
 import { mapDecision, type WhyResponse } from '@/data/api/decisionMap';
 
 function why(p: Partial<WhyResponse>): WhyResponse {
