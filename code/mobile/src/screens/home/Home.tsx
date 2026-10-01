@@ -24,12 +24,12 @@ import { homePlanRows, settledPlanRows } from '@/screens/home/homePlan';
 import { TrainTogetherSheet } from '@/components/TrainTogetherSheet';
 import { usePair } from '@/state/stores/pairStore';
 import { useCopy } from '@/i18n/useCopy';
-import { tg } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { loadWeekPlan } from '@/data/local/weekPlan';
-import { nextUp } from '@/domain/milestones';
-import { milestoneCopy } from '@/domain/milestoneCopy';
+import { circleTabShown, refreshCircleIfStale, useCircle, type CircleSnapshot } from '@/state/stores/circleStore';
+import { circleMembersView } from '@/domain/circle';
 import { useApp } from '@/state/stores/appStore';
+import { voiceCapture } from '@/platform/voice/voiceCapture';
 import { db } from '@/data/local/db';
 import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, queuedWorkout } from '@/domain/coachWeek';
@@ -41,7 +41,7 @@ import { useSession } from '@/state/stores/sessionStore';
 import { REST_INTER_S, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds, refreshLearnedRests } from '@/domain/restPrescription';
 import { buildCoachWatchPlan, watchPlanToPublish } from '@/platform/watch/watchPlan';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
-import { flush as flushTelemetry } from '@/platform/telemetry';
+import { flush as flushTelemetry, track } from '@/platform/telemetry';
 import { nextWorkout, sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
 import { displayWeekNumber, currentWeekOpen } from '@/domain/weekCadence';
 import { sessionKcal } from '@/domain/energy';
@@ -65,13 +65,21 @@ import {
 import { weekBriefing, type BriefChange } from '@/domain/weekBriefing';
 
 import { weekNotice } from '@/domain/weekNotice';
+import { dayTitle } from '@/i18n/dayTitle';
+import { launchFigureFlight } from '@/components/FigureFlight';
 
 /* ⛔ `Line` and `coachBrief` went with the week's brief and its unseen dot — see the deletion
    note in the effect below. */
-import { muscleGroupsLabel, muscleOf } from '@/data/exercises';
+import { exerciseDisplayName, muscleGroupsLabel, muscleOf } from '@/data/exercises';
 import type { SetTarget } from '@/data/local/models';
 import type { LoadDirection } from '@/design/tokens';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
+import { CoachTrackContext } from '@/state/stores/coachStore';
+import { useCoachWeekOwner } from '@/state/useCoachWeekOwner';
+import { localDay } from '@/domain/coachTrack';
+import { diffCount, updateCardGroups, weekdayOfLocalDay } from '@/domain/coachTrackAthlete';
+import { shareViaWhatsApp } from '@/platform/share';
+import type { CoachUpdateCardProps } from '@/components/CoachUpdateCard';
 
 // Home is a TAB now, but it pushes onto the parent stack (SessionFlow, Cardio, WeeklyUpdate…), so
 // its navigation is the composite of both — the tab it lives in and the stack above it.
@@ -83,6 +91,90 @@ type Props = CompositeScreenProps<
 export function Home({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  /* ✦ THE CIRCLE'S FACES ON THE WEEK LINE (2026-09-29) — the same snapshot the circle tab reads,
+     refreshed at most once a minute as she comes back to Today. */
+  const circleSnap = useCircle();
+  const todayFocused = useIsFocused();
+  useEffect(() => {
+    if (todayFocused && circleTabShown()) refreshCircleIfStale();
+  }, [todayFocused]);
+  /*
+   * ⛔ THE COACH TRACK ON TODAY (2026-09-17). Read through the raw context, not `useCoachTrack()`:
+   * Today is mounted by render suites and the gallery without the track's provider, and a screen
+   * that throws for want of a coach would be the track costing every athlete who never met one.
+   */
+  const coachTrack = React.useContext(CoachTrackContext);
+  const owner = useCoachWeekOwner();
+  const coachWeekOwner = owner.coachName;
+  const coachUpdate = React.useMemo<CoachUpdateCardProps | null>(() => {
+    const u = coachTrack?.pendingUpdate;
+    if (!u) return null;
+    const count = diffCount(u.diff);
+    /*
+     * Version 1 is a coach's FIRST week for her — the waiting card gives way to the named week; a
+     * card listing every lift of it as a "change" would be the week reported as news.
+     * …and a landing that changed nothing (the same week, re-landed) is not news either.
+     *
+     * ⛔ EXCEPT A DROPPED LIFT (2026-09-18). A lift this build does not stock leaves the day SHORT —
+     * worst case one lift — and that is true of a first week exactly as of a fifth. It was the one
+     * state with something for her to do and no surface to say it on, because both gates above shut
+     * on it. A drop opens the card; the changes (none) simply say nothing.
+     */
+    if (u.dropped.length === 0 && (u.version <= 1 || count === 0)) return null;
+    const wd = weekdayOfLocalDay(u.effectiveDay);
+    const dayLabel =
+      u.effectiveDay === localDay(new Date()) || wd == null
+        ? t('coachTrack.athlete.updateToday')
+        : t(`weekdayLong.${['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][wd]}`);
+    /* An order line carries the sentence in `name`: it is about the DAY it hangs under, and there
+       is no lift to look up. Everything else is the lift, spoken. */
+    const groups = updateCardGroups(u.diff).map((g) => ({
+      day: g.day,
+      lines: g.lines.map((l) => ({
+        sign: l.sign,
+        name:
+          l.order === 'day'
+            ? t('coachTrack.athlete.updateOrderDay', { n: l.to ?? 1 })
+            : l.order === 'lifts'
+              ? t('coachTrack.athlete.updateOrderLifts')
+              : exerciseDisplayName(l.ex),
+        ...(l.detail ? { detail: l.detail } : {}),
+      })),
+    }));
+    /* ⛔ LAW 7 — no chat. The ask leaves through HER WhatsApp, names the lift and the day, and
+       touches nothing of ours. A card stored before `droppedAt` existed has no day, so no ask. */
+    const first = u.droppedAt?.[0];
+    return {
+      coachName: u.coachName,
+      count,
+      dayLabel,
+      groups,
+      dropped: u.dropped.length,
+      ...(first
+        ? {
+            /*
+             * ⛔ THE LABEL DOES NOT CARRY HIS NAME (2026-09-18). It read "בקש מ{{coach}} להחליף",
+             * and a Hebrew one-letter prefix glued to a LATIN name renders the wrong way round —
+             * "בקש מDani Azoulay להחליף". The card's own title already names him, so the act says
+             * what it does and nothing else. The WhatsApp line below still greets him by name,
+             * where a space separates the two scripts and the order survives.
+             */
+            askLabel: t('coachTrack.athlete.updateDroppedAsk'),
+            onAskCoach: () => {
+              void track('coach_dropped_ask', { ex: first.ex });
+              void shareViaWhatsApp(
+                t('coachTrack.athlete.updateDroppedMessage', {
+                  coach: u.coachName,
+                  ex: exerciseDisplayName(first.ex),
+                  day: first.day,
+                }),
+              );
+            },
+          }
+        : {}),
+      onDismiss: () => void coachTrack?.dismissUpdate(),
+    };
+  }, [coachTrack, t]);
   const session = useSession();
   // WEEKLY model: Home offers the next UNFINISHED workout in the week (any order, no calendar).
   /*
@@ -158,7 +250,8 @@ export function Home({ navigation, route }: Props) {
    * session up by the engine day's id (`day_1`) while the coach issues `coach_0` — ids that can
    * never match, so the coach branch was unreachable and every workout quietly ran the engine's.
    */
-  const coachWorkouts = React.useMemo(() => coachWeek(coachPlan), [coachPlan]);
+  // Named as she reads them (`i18n/dayTitle`): the engine's "Upper A" is a key on disk, not a word.
+  const coachWorkouts = React.useMemo(() => coachWeek(coachPlan).map((w) => ({ ...w, name: dayTitle(w.name) })), [coachPlan]);
   /*
    * ⚠️ NOT "the first one she has not done" any more. If the coach named a weekday and one of them
    * is TODAY, that is the workout Today offers — see `queuedWorkout`. For a hypertrophy week, where
@@ -248,7 +341,9 @@ export function Home({ navigation, route }: Props) {
         setCoachPlan(plan);
         // The week is now KNOWN — whatever it turned out to be. See `weekLoaded`.
         setWeekLoaded(true);
-        const notice = weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek });
+        /* ⛔ The coach track: a coach's week is not hers to re-balance, so the engine's advice about her
+           inputs is not printed over it — the coach answers for its shape. */
+        const notice = program?.authored === 'coach' ? null : weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek });
         setEngineNotice(notice ? t(notice.key, notice.params) : null);
         const since = weekOpenMs ?? 0;
         setDoneCoachIds(
@@ -265,7 +360,12 @@ export function Home({ navigation, route }: Props) {
     return () => {
       alive = false;
     };
-  }, [isFocused]);
+    /* `app.program` — a coach's week can LAND while Today is on the glass (the pull at foreground,
+       the coach track); the page it is drawn from is re-read then, not at the next focus.
+       `app.weekOpenMs` — the rotation (2026-09-28): a cycle that closes moves the anchor and nothing
+       else, and the done marks are counted from it. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused, app.program, app.weekOpenMs]);
 
   /*
    * TODAY'S LIFTS, WITH THEIR LOADS — read here so Home can show the athlete what is waiting.
@@ -300,6 +400,8 @@ export function Home({ navigation, route }: Props) {
   // direction it moved (founder 2026-07-29; it used to be one ochre for all three, which named a
   // change and refused to say whether the load had gone up or down). Empty in week one.
   const [changedDir, setChangedDir] = useState<Record<string, LoadDirection>>({});
+  /** How far each moved load moved, in kg — the amount beside the colour (founder 2026-09-28, "what's new today"). */
+  const [changedKg, setChangedKg] = useState<Record<string, number>>({});
 
   /*
    * ⛔ THESE LIVE **BELOW** `changedDir`, AND THAT IS NOT TIDINESS — IT IS A CRASH AVOIDED.
@@ -432,32 +534,31 @@ export function Home({ navigation, route }: Props) {
      */
     if (!rows) return null;
     return rows.map((r) =>
-      changedDir[r.exerciseId] ? { ...r, changed: changedDir[r.exerciseId] } : r,
+      changedDir[r.exerciseId]
+        ? { ...r, changed: changedDir[r.exerciseId], ...(changedKg[r.exerciseId] ? { changedByKg: changedKg[r.exerciseId] } : {}) }
+        : r,
     );
-  }, [coachPlan, todayId, app.profile?.units, changedDir]);
+  }, [coachPlan, todayId, app.profile?.units, changedDir, changedKg]);
 
   const nowMs = Date.now();
-  // Recovery: every workout in the loaded week is done, so there is no next workout to offer. The
-  // bucket only regenerates at the Saturday-20:30 calendar roll (appStore.refreshProgram), so a week
-  // finished early holds Recovery until the new week opens — the "no starting early" gate is now
-  // structural (no fresh bucket exists before the roll), so no separate lock is needed here.
-  //
-  // It reads `nextUp`, not `day`: `day` can now be a FINISHED workout the athlete tapped to re-read,
-  // and looking back at Monday's session is not a reason to stop saying the week is complete —
-  // choosing one simply shows it, and Recovery returns the moment the selection is cleared.
   /*
-   * RECOVERY: every workout of the loaded week is done, so there is no next one to offer. The week
-   * only turns over at the Saturday roll, so a week finished early holds Recovery until then —
-   * the "no starting early" gate is structural rather than a separate lock.
+   * ⛔ RECOVERY IS A MOMENT NOW, NOT A WAIT (the rotation, founder 2026-09-28).
+   *
+   * It meant "every workout of this week is done — come back Saturday", and for the lifter who
+   * trains four times a week it was a locked door on his fourth visit. The cycle turns the moment
+   * its last workout is saved (`appStore.markWorkoutCompleted` → `rollClosedCycles`), so by the
+   * time she is back here workout A is next again. `resting` is only ever true in the gap before a
+   * roll lands — a coach week that arrived already done, a record that has not reconciled — and
+   * Today's focus asks for the roll (`refreshProgram`), so the gap closes on its own.
    *
    * It reads `nextCoach`, not the chosen one: tapping a finished workout to re-read it is not a
    * reason to stop saying the week is complete, and Recovery returns when the selection clears.
    */
   const resting = coachWorkouts.length > 0 && !nextCoach && !chosenCoach;
 
-  // Training-week counter ("Week N") — a mid-week signup's extended first bucket
-  // stays "Week 1" until it actually rolls (domain/weekCadence.displayWeekNumber).
-  const weekNumber = displayWeekNumber(app.profile?.memberSince, app.weekOpenMs, nowMs);
+  // "Week N" counts her CYCLES since the rotation (2026-09-28) — the calendar count only stands in
+  // until her first cycle closes, so a member from the Saturday weeks keeps her number.
+  const weekNumber = app.weekCycle ?? displayWeekNumber(app.profile?.memberSince, app.weekOpenMs, nowMs);
 
   // Free-trial gate (Subscription + Apple Payments): once the free sessions are
   // spent and no membership is active, starting another session opens the paywall.
@@ -580,7 +681,7 @@ export function Home({ navigation, route }: Props) {
         /* ⛔ TWO READS LEFT WITH THE COUNTS THEY FED (2026-08-26): `loadCoachLetterSeen` (the
            unseen dot) and `loadCoachPlanWeek` (the week's change total). Both were spent on props
            this screen's view never read; the log went with the WHY sheet (2026-09-07). */
-        const [before, engine] = await Promise.all([
+        const [before, engine, prevOpen] = await Promise.all([
           db.loadCoachPlanPrev().catch(() => null),
           /*
            * ⛔ THE ENGINE'S OWN RECORD OF THIS WEEK (2026-08-19). Everything below was derived from
@@ -590,6 +691,7 @@ export function Home({ navigation, route }: Props) {
            * makes into `changeLog`; that is where a direction has been living all along.
            */
           db.loadEngineV5().catch(() => null),
+          db.loadWeekPrevOpen().catch(() => null),
         ]);
         if (cancelled) return;
         /*
@@ -606,12 +708,18 @@ export function Home({ navigation, route }: Props) {
          * over a sheet that said nothing had changed. The engine only stamps a change when
          * something moved, so the map now contains only lifts that really did.
          */
-        const weekFrom = app.weekOpenMs ?? 0;
+        /* ⛔ FROM THE CYCLE SHE JUST CLOSED, NOT ONLY THE ONE SHE IS IN (the rotation, 2026-09-28).
+           The engine stamps a decision with the session that earned it, and the session that closed
+           her week sits just before the new cycle's opening — so a window starting at the opening
+           dropped the raises of her last workout at the exact moment workout A came round again. */
+        const weekFrom = prevOpen ?? app.weekOpenMs ?? 0;
         const engineDirections: Record<string, 'up' | 'down'> = {};
+        const engineDeltas: Record<string, number> = {};
         for (const c of engine?.changeLog ?? []) {
           if (c.at < weekFrom) continue;
           if (c.loadFrom == null || c.loadTo == null || c.loadFrom === c.loadTo) continue;
           engineDirections[c.exerciseId] = c.loadTo > c.loadFrom ? 'up' : 'down';
+          engineDeltas[c.exerciseId] = c.loadTo - c.loadFrom;
         }
         const fromPlans = coachLoadDirections(coachPlan, before);
         // The coach's pair still answers for an athlete whose week predates v5; the engine wins.
@@ -641,9 +749,12 @@ export function Home({ navigation, route }: Props) {
          * programme means nothing changed. All three still hold, one derivation, two lines down.
          */
         setChangedDir(directions);
+        // Only the engine knows HOW FAR; the coach's pair says which way and no more.
+        setChangedKg(directions === engineDirections ? engineDeltas : {});
       } catch {
         if (!cancelled) {
           setChangedDir({});
+          setChangedKg({});
           setLoadsUp(0);
         }
       }
@@ -767,8 +878,10 @@ export function Home({ navigation, route }: Props) {
   const [weekEnergy, setWeekEnergy] = useState<{ tonnes: number; kcal: number | null } | null>(null);
   /** Muscles her logged sets touched this week — the moss on the living half's figure. */
   const [weekMuscles, setWeekMuscles] = useState<string[]>([]);
-  /** The closest milestone, formatted for the paper card. */
-  const [nextMark, setNextMark] = useState<{ figure: string; title: string; progress: number } | null>(null);
+  /* ⛔ THE CLOSEST-MILESTONE CARD LEFT TODAY (founder 2026-09-28, on "הציון הבא · המשכת להגיע ·
+     0/10": approved with the review that it be dropped). On a day-one page it read as a zero score
+     under the one act she came for. Milestones are Progress's to tell; `HomeView.nextMark` stays as
+     kept code and the gallery still draws it. */
   /*
    * ════ THE LETTER'S UNREAD DOT (2026-09-01, audit quick win) ════
    *
@@ -832,21 +945,6 @@ export function Home({ navigation, route }: Props) {
           if (m) touched.add(m);
         }
         setWeekMuscles([...touched]);
-        // The closest mark — nearest by fraction, formatted once, here, so the view stays dumb.
-        const next = nextUp(all, app.profile)[0] ?? null;
-        if (next) {
-          // `tg`, not the hook's `t`: the hook's function is born fresh each render, and holding
-          // it in this effect's deps made the effect re-run on every render — a setState loop that
-          // froze Home outright (caught by `onboardingCanBeFinished`'s 120s timeout).
-          const c = milestoneCopy(next.milestone, tg, app.profile?.units ?? 'kg');
-          const figure =
-            next.milestone.family === 'tonnage'
-              ? `${(next.current / 1000).toFixed(1)}/${Math.round(next.target / 1000)}`
-              : `${Math.round(next.current)}/${Math.round(next.target)}`;
-          setNextMark({ figure, title: c.title, progress: next.target > 0 ? next.current / next.target : 0 });
-        } else {
-          setNextMark(null);
-        }
       } catch {
         if (!cancelled) setWeekEnergy(null);
       }
@@ -874,7 +972,11 @@ export function Home({ navigation, route }: Props) {
 
   async function onStart() {
     if (!todayId) return;
-    if (resting) return; // hard gate: the next week is locked until the Saturday 20:30 roll
+    // The rotation (2026-09-28): a "done" week is a roll that has not landed yet — ask for it.
+    if (resting) {
+      void app.refreshProgram();
+      return;
+    }
     if (gated) {
       navigation.navigate('Paywall', { source: 'gate' });
       return;
@@ -905,7 +1007,13 @@ export function Home({ navigation, route }: Props) {
       }
       /* Whoever is in the room with her, by the name they gave — see `Session.partners`. Absent on
          every solo start, which is what an absent field has always meant on that record. */
+      // Her first Start is where Apple's microphone dialog belongs — not the first set (2026-09-28).
+      await voiceCapture.askAtStart(app.profile?.voiceSpec !== false);
       await session.startCoach(planned, todayId, pair.partnerName ? [pair.partnerName] : undefined);
+      /* ✦ The athlete on Today's card walks onto the stage (`FigureFlight`) — the first lift, in the
+         pose the stage opens on. Fire and forget: the stage never waits for it. */
+      const firstLift = planned.blocks.flatMap((b) => b.items).find((it) => it.kind === 'reps')?.ex;
+      void launchFigureFlight(firstLift, app.profile?.sex === 'female' ? 'female' : 'male');
       navigation.navigate('SessionFlow');
     } catch {
       setStartError(true);
@@ -1060,15 +1168,13 @@ export function Home({ navigation, route }: Props) {
     <>
     <HomeView
       resting={resting}
-      /* The corner is hers (2026-09-16). Signed out it opens the sign-in door — the account IS the
-         thing the disc offers — and signed in it opens the tab that left the bar. */
-      onProfile={() => {
-        /* ⚠️ TWO LITERAL CALLS, NOT A COMPUTED ROUTE NAME. `everyScreenIsReachable` reads the source
-           for `navigate('X')` — a route reached only through a ternary is a route the law reports as
-           orphaned, and rightly: nobody grepping for the door would find it either. */
-        if (signedIn === false) navigation.navigate('Authentication');
-        else navigation.navigate('You');
-      }}
+      /*
+       * ⛔ THE CORNER OPENS HER PROFILE, SIGNED IN OR NOT (founder 2026-09-28: *"כאשר לוחצים על הפרופיל
+       * מופיע פתאום האפשרות להרשם עם משתמש ולא הבנתי למה"*). Signed out, it used to open the sign-in
+       * screen instead — a tap on "me" answered with "log in". The profile holds the sign-in row for
+       * whoever wants it (`ProfileSheet`); the account is asked for once, after her first workout.
+       */
+      onProfile={() => navigation.navigate('You')}
       signedIn={signedIn}
       name={app.profile?.name}
       dayName={todayName || null}
@@ -1218,9 +1324,11 @@ export function Home({ navigation, route }: Props) {
        */
       onWeeklyUpdate={() => navigation.navigate('WeeklyUpdate')}
       letterUnseen={letterUnseen}
+      /* ✦ The circle on Today (2026-09-29): friends' faces beside "week N", ringed when they trained
+         today, one tap to the circle tab. A build without the circle draws nothing here. */
+      {...circleFaces(circleSnap, app.profile?.name, () => navigation.navigate('HomeTabs', { screen: 'Crew' } as never))}
       weekStats={weekEnergy ? { ...weekEnergy, loadsUp } : null}
       weekLive={!resting && weekEnergy ? { ...weekEnergy, loadsUp, muscles: weekMuscles } : null}
-      nextMark={!resting ? nextMark : null}
       sex={app.profile?.sex === 'male' ? 'male' : 'female'}
       /*
        * ⛔ NULL EXACTLY WHEN THE SCREEN THAT DRAWS IT IS SHOWN. `resting` is
@@ -1229,6 +1337,16 @@ export function Home({ navigation, route }: Props) {
        * What opens next week is the rotation's first workout, which is known.
        */
       nextWorkoutName={nextCoach?.name ?? coachWorkouts[0]?.name ?? null}
+      coachUpdate={coachUpdate}
+      coachSignature={coachWeekOwner}
+      /*
+       * ⛔ "IT IS ON ITS WAY" AND "HERE IT IS" CANNOT BOTH BE TRUE (found on the walk, 2026-09-18).
+       * Today drew the waiting card UNDER the update card — the coach's week announced as arrived
+       * and promised as still coming, 90 points apart. Two independent reasons it could happen, and
+       * both are closed here: the week is a coach's even when the stored copy carries no NAME
+       * (`isCoachWeek`, not `coachName`), and an update on the glass is itself proof it landed.
+       */
+      coachWaiting={coachTrack?.link && owner.known && !owner.isCoachWeek && !coachUpdate ? coachTrack.link.coachName : null}
       />
       {/*
         ⛔ THE PAIR'S SHEET IS MOUNTED HERE AND NOWHERE ELSE, and the reason is the Begin button.
@@ -1263,4 +1381,22 @@ export function Home({ navigation, route }: Props) {
     </>
 
   );
+}
+
+/**
+ * Her friends as Today draws them — everyone but her. `{}` when the circle is not in this build;
+ * `crew: null` (the "+ friend" pill) when she has no friends in a circle yet.
+ */
+function circleFaces(
+  snap: CircleSnapshot,
+  myName: string | null | undefined,
+  onCrew: () => void,
+): { crew?: { name: string; today: boolean }[] | null; onCrew?: () => void } {
+  if (!circleTabShown()) return {};
+  if (!snap.circle) return { crew: null, onCrew };
+  const now = Date.now();
+  const friends = circleMembersView(snap.circle, { nowMs: now, weekOpenMs: currentWeekOpen(now), myName })
+    .filter((m) => !m.me)
+    .map((m) => ({ name: m.name, today: m.lastDays === 0 }));
+  return { crew: friends.length > 0 ? friends : null, onCrew };
 }

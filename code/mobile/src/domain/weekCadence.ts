@@ -24,6 +24,7 @@
 
 import type { Program, ProgramDay, Session } from '@/data/local/models';
 import { sessionTrained } from '@/domain/completion';
+import { sameDayName } from '@/i18n/dayTitle';
 
 /*
  * ════ THE OPENING DAY IS HERS TO MOVE (2026-09-01, audit finding 07) ═══════════════════════════
@@ -183,8 +184,10 @@ export function healWeekCompletion(
 ): Program | null {
   const start = bucketStart(bucketOpenMs, nowMs);
   const thisWeek = history.filter((s) => Date.parse(s.startedAt) >= start);
+  /* `sameDayName`, not `===` (2026-09-28): a workout the WRIST ran standalone carries the name the
+     wrist drew, and the wrist draws the engine's "Upper A" in her language (`i18n/dayTitle`). */
   const matches = (d: ProgramDay, s: Session) =>
-    s.programDayName ? s.programDayName === d.name : s.programDayId === d.id;
+    s.programDayName ? sameDayName(s.programDayName, d.name) : s.programDayId === d.id;
   const days = program.days.map((d) =>
     !d.completed && !d.isRest && thisWeek.some((s) => matches(d, s) && sessionTrained(s, d))
       ? { ...d, completed: true }
@@ -194,6 +197,53 @@ export function healWeekCompletion(
 }
 
 /**
+ * ════ THE ROTATION (founder 2026-09-28: *"מאשר את הכל"* — the Saturday lock replaced) ════
+ *
+ * The week used to be a calendar bucket: finish its N workouts by Wednesday and Today said "week
+ * complete" until Saturday 20:30 — so the lifter this product is FOR, who trains 3–5 times a week,
+ * stood in the gym on his fourth visit with nothing to train. The cycle turns on HER work now: the
+ * moment every workout of the week has a trained session since the cycle opened, the next cycle
+ * opens and workout A is next again. An unfinished cycle is never reset by the calendar — the next
+ * workout stays the next one, whatever day it is.
+ *
+ * Returns the instant the NEXT cycle opens — the start of the session that closed this one, plus a
+ * millisecond, so that session belongs to the cycle it closed and anything after it to the new one —
+ * or null while a workout is still open. Deterministic: two callers racing on the same record write
+ * the same anchor, so a cycle can never roll twice. "Done" here is the same fact every surface
+ * reads: a session carrying the workout's id, since the opening, that was not a non-session.
+ */
+export function cycleClosedAt(
+  workoutIds: readonly string[],
+  history: readonly Pick<Session, 'programDayId' | 'startedAt'>[],
+  openMs: number,
+): number | null {
+  if (workoutIds.length === 0) return null;
+  let closing = -Infinity;
+  for (const id of workoutIds) {
+    let first = Infinity;
+    for (const h of history) {
+      if (h.programDayId !== id || (h as { trained?: boolean }).trained === false) continue;
+      const at = Date.parse(h.startedAt);
+      if (Number.isFinite(at) && at >= openMs && at < first) first = at;
+    }
+    if (first === Infinity) return null;
+    if (first > closing) closing = first;
+  }
+  return closing + 1;
+}
+
+/** The next 09:00 local at least two hours away — when a note about a closed week is worth reading. */
+export function nextMorningAt(nowMs: number): number {
+  const d = new Date(nowMs);
+  let t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0, 0).getTime();
+  if (t - nowMs < 2 * 60 * 60 * 1000) t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 9, 0, 0, 0).getTime();
+  return t;
+}
+
+/**
+ * ⚠️ LEGACY SINCE 2026-09-28 (the rotation): nothing rolls on the calendar any more — see
+ * `cycleClosedAt`. Kept for its pinned arithmetic and the record of the model it replaced.
+ *
  * Whether the weekly bucket must be regenerated NOW (calendar-primary cadence). True when there is
  * no bucket yet, or the calendar week has advanced past the Saturday-20:30 the current bucket was
  * built for. Completion is deliberately irrelevant — the roll is purely the Saturday-20:30 boundary,

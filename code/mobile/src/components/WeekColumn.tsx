@@ -44,6 +44,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Legend } from '@/components/ds';
 import { bidi } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { useCopy } from '@/i18n/useCopy';
 import * as haptics from '@/platform/haptics';
 import { WEEK_ORDER } from '@/domain/trainingDays';
@@ -279,7 +280,7 @@ export function WeekColumn(props: WeekColumnProps) {
           <Pressable
             key={w.id}
             accessibilityRole="button"
-            accessibilityLabel={shape && !done ? `${w.name}. ${shape}` : w.name}
+            accessibilityLabel={shape && !done ? `${dayTitle(w.name)}. ${shape}` : dayTitle(w.name)}
             accessibilityState={{ selected: row.open, disabled: !!props.inert }}
             disabled={!!props.inert}
             onPress={() => {
@@ -304,7 +305,7 @@ export function WeekColumn(props: WeekColumnProps) {
               {/* A finished workout puts its name on the head row: there is nothing else to say. */}
               {done ? (
                 <Text style={[styles.name, styles.nameDone, styles.nameInline]} numberOfLines={1}>
-                  {bidi(w.name)}
+                  {bidi(dayTitle(w.name))}
                 </Text>
               ) : null}
 
@@ -349,7 +350,7 @@ export function WeekColumn(props: WeekColumnProps) {
             {done ? null : (
               <>
                 <Text style={[styles.name, row.open && styles.nameOpen]} numberOfLines={2}>
-                  {bidi(w.name)}
+                  {bidi(dayTitle(w.name))}
                 </Text>
                 {shape ? <Legend size={ramp.body} weight="regular" style={styles.shape}>{shape}</Legend> : null}
                 {/*

@@ -35,8 +35,8 @@ import { sticksAt } from '../curves';
  *  The hand slows to a dwell there and runs on (iron rule 12, 2026-09-07). Endpoints untouched. */
 const STICK = sticksAt(0.6, 0.08);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
-import { ATHLETE } from '../anthro';
-import { bandAnchor, bandStrip, cable, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
+import { ATHLETE, BAR_R } from '../anthro';
+import { bandAnchor, bandStrip, cable, dumbbellSide, floorScene, pulley, sampledPathTicks, stirrupHandle } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, seatedCore, standingCore } from '../bodies';
 
@@ -205,7 +205,18 @@ function pushdown(p: PushdownParams): Rig {
       ];
     } else if (p.implement === 'cable') {
       back.push(...pulley(PULLEY));
-      front = [cable(PULLEY, hand), ...dumbbellSide(hand, dir, p.singleArm ? 3 : 9, 2.5)];
+      /* The attachment is its own word (2026-09-30): the single arm's D-handle hangs off the cable as a
+         stirrup; the bar is the pushdown bar — an 18u stroke through the fists and its end on the fist,
+         the way every bar in the kit ends. Both were `dumbbellSide` at 2.5u, a toy bell on a wire. */
+      front = [
+        cable(PULLEY, hand),
+        ...(p.singleArm
+          ? stirrupHandle(hand, dir, PULLEY)
+          : [
+              { kind: 'line' as const, a: { x: hand.x - dir.x * 9, y: hand.y - dir.y * 9 }, b: { x: hand.x + dir.x * 9, y: hand.y + dir.y * 9 }, w: 3, color: 'ink0' as const, cap: 'round' as const },
+              { kind: 'circle' as const, c: hand, r: BAR_R, fill: 'ink0' as const },
+            ]),
+      ];
     } else {
       /*
        * The MACHINE member is a LEVER, not a rope (equipment QC 2026-08-25: it drew the cable

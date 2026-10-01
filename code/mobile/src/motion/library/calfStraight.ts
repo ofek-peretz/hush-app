@@ -251,7 +251,12 @@ function calfRaise(p: CalfParams): Rig {
     let front: Primitive[] = [];
     const DOWN: Vec2 = { x: 1, y: 0 };
 
-    if (p.implement === 'db') front = [...dumbbellSide(farHand, DOWN), ...dumbbellSide(hand, DOWN)];
+    /** The bell in the far hand, behind the body in the far ink (`kit.dumbbellSide`, plane 'far'). */
+    let farBell: Primitive[] = [];
+    if (p.implement === 'db') {
+      farBell = dumbbellSide(farHand, DOWN, undefined, undefined, 'far');
+      front = dumbbellSide(hand, DOWN);
+    }
     else if (p.implement === 'bar') {
       /*
        * The SMITH member draws its machine (equipment QC 2026-08-25: it drew a floating plate and
@@ -315,7 +320,7 @@ function calfRaise(p: CalfParams): Rig {
         { kind: 'line', a: { x: hand.x - 4, y: hand.y }, b: { x: hand.x + 4, y: hand.y }, w: 3.5, color: 'ink0', cap: 'round' },
       );
     }
-    const back: Primitive[] = [...rails, ...block, ...barPathTicks(BLOCK_X0 - 30, HEEL_LOW, HEEL_HIGH)];
+    const back: Primitive[] = [...rails, ...block, ...farBell, ...barPathTicks(BLOCK_X0 - 30, HEEL_LOW, HEEL_HIGH)];
     return { back, front };
   };
 

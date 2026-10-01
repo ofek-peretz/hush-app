@@ -27,6 +27,28 @@ export function bidi(s: string): string {
   return `${FSI}${s}${PDI}`;
 }
 
+/** Longer than this and a name has to be allowed to break, or it overruns the column. */
+const UNBREAKABLE_NAME = 22;
+
+/**
+ * ⛔ A PERSON'S NAME IS ONE THING (2026-09-18, measured on `MyCoach`).
+ *
+ * `bidi()` stops the BiDi algorithm reordering a Latin name inside a Hebrew sentence. It does
+ * nothing at all about the LINE BREAKER, and the space inside "Dani Azoulay" is a break
+ * opportunity like any other — so the leave note set his name as *"הגישה של Dani"* / *"Azoulay
+ * נסגרת מיד"*, a man's name cut in half across two lines, on the screen that asks her to decide
+ * about him. Every surface of the track interpolates this name, so the fix belongs beside `bidi`
+ * and not in one screen.
+ *
+ * The spaces inside a SHORT name become no-break spaces; the isolate is unchanged. A long one
+ * (the server allows 40 characters) keeps its ordinary spaces, because a name that cannot break
+ * at all is a name that overruns the measure — which is a worse fault than a break.
+ */
+export function bidiName(s: string): string {
+  const name = s.trim();
+  return bidi(name.length <= UNBREAKABLE_NAME ? name.replace(/ /g, ' ') : name);
+}
+
 /**
  * Logical text alignment. THIS FILE USED TO SAY THE OPPOSITE, AND THAT WAS THE BUG
  * (founder device review, 2026-07-12: "every screen is stuck on the left in Hebrew").
@@ -69,4 +91,14 @@ export let rtl = I18nManager.isRTL;
 /** Re-read the direction after `I18nManager.forceRTL` — called by `reloadApp`, nothing else. */
 export function relatchDirection(): void {
   rtl = I18nManager.isRTL;
+}
+
+/**
+ * ⛔ AN LTR ISLAND, THE ONE WAY BOTH PLATFORMS AGREE ON (2026-09-29, after `FigureCells`'s lesson).
+ * `direction: 'ltr'` holds on iOS and is IGNORED by react-native-web, so a brand lockup or a
+ * "94 lb" row came out mirrored in the browser while the phone was right — two products from one
+ * source. `row-reverse` under RTL flows left-to-right on both. Read at render: `rtl` re-latches.
+ */
+export function ltrIsland(): { flexDirection: 'row' | 'row-reverse' } {
+  return { flexDirection: rtl ? 'row-reverse' : 'row' };
 }

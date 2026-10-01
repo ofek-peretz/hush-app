@@ -29,6 +29,7 @@ import { displayWeight, unitLabel } from '@/domain/schedule';
 import { color, font, radius, textScale, directionTone, type LoadDirection } from '@/design/tokens';
 import { MotionThumb } from '@/motion/render/MotionThumb';
 import { ReorderRows } from '@/components/ReorderRows';
+import { CoachNoteLine } from '@/components/CoachNoteLine';
 
 import { exerciseMotion } from '@/motion/registry';
 import type { FigureSex } from '@/motion/types';
@@ -54,6 +55,19 @@ export interface PlanLift {
   changed?: LoadDirection;
   /** The figure has not landed yet — the row stands, the column waits. Never a claim of zero. */
   pending?: boolean;
+  /**
+   * ⛔ THE LOAD ALONE IS UNDECIDED — the PRESCRIPTION STANDS (2026-09-18, the coach track).
+   *
+   * A lift she swapped in for today has no load yet (her first set decides it), and the pre-workout
+   * sheet drew that row as `pending`, which blanks the WHOLE figure block. So the one row on the
+   * card she had just chosen herself was the only row with no sets and no band on it — the screen
+   * breaking its most important element (the prescription) to protect its least (a number nobody
+   * has yet). `swapForToday` keeps the coach's seat on purpose: the sets and the band are still his
+   * prescription and are still true. Only the load cell waits, and it says so with a dash.
+   */
+  loadUndecided?: boolean;
+  /** A linked coach's note on this lift (the coach track, law 7) — drawn only where `coachName` is given. */
+  coachNote?: string;
 }
 
 export interface PlanLiftsProps {
@@ -110,9 +124,16 @@ export interface PlanLiftsProps {
    */
   onReorder?: (from: number, to: number) => void;
   onDragging?: (dragging: boolean) => void;
+  /**
+   * ⛔ THE COACH TRACK (2026-09-17): whose notes these are. Present ⇒ a row carrying `coachNote` draws
+   * it under its prescription, attributed (`CoachNoteLine`); absent ⇒ no note is drawn anywhere.
+   */
+  coachName?: string | null;
+  /** Rows swapped for today (ruling 4): exercise id → the name of the lift it replaced. */
+  insteadOf?: Readonly<Record<string, string>>;
 }
 
-export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReorder, onDragging }: PlanLiftsProps) {
+export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReorder, onDragging, coachName, insteadOf }: PlanLiftsProps) {
   const { t } = useCopy();
   const rows = lifts.map((lift, i) => (grip: React.ReactNode = null, lifted = false) => (
         <Pressable
@@ -196,7 +217,7 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
               {/* 44 → 56 (design review 2026-09-01): the clip floor. Below it a press or a hinge is
                   a smudge, and this thumb is a DOOR to the film — it has to say what is behind it. */}
               {exerciseMotion(lift.exerciseId) ? (
-                <MotionThumb exerciseId={lift.exerciseId} size={56} figure={figure} style={styles.planThumb} />
+                <MotionThumb exerciseId={lift.exerciseId} size={56} figure={figure} tone="stage" style={styles.planThumb} />
               ) : (
                 <Icon name="playCircle" size={17} color={color.textMuted} strokeWidth={1.5} />
               )}
@@ -214,14 +235,19 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
               makes a 37-point target, and a finger that misses this one does not miss nothing — it
               opens the WHY sheet underneath.
             */}
+            {/* ⛔ A 44 BOX, NOT 14 OF SLOP (design audit 2026-09-29). Slop is invisible to the layout,
+                so the grip beside it could take it back — and did (see `ReorderRows.grip`). */}
             {onSwap ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('swap.title')}
-                hitSlop={14}
+                hitSlop={{ top: 8, bottom: 8 }}
+                style={styles.swapHit}
                 onPress={() => onSwap(lift.exerciseId)}
               >
-                <Icon name="swap" size={17} color={color.textMuted} strokeWidth={1.6} />
+                {/* 20 in the secondary ink (design audit 2026-09-29): at 17 in the muted ink the swap
+                    was "barely visible" beside a 56-point still — a door that has to be found. */}
+                <Icon name="swap" size={20} color={color.textSecondary} strokeWidth={1.7} />
               </Pressable>
             ) : null}
             {grip}
@@ -251,6 +277,10 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
               />
             </View>
           )}
+          {insteadOf?.[lift.exerciseId] ? (
+            <Text style={styles.insteadOf}>{t('coachTrack.athlete.swappedInsteadOf', { from: bidi(insteadOf[lift.exerciseId]) })}</Text>
+          ) : null}
+          {coachName && lift.coachNote ? <CoachNoteLine note={lift.coachNote} coachName={coachName} style={styles.coachNote} /> : null}
         </Pressable>
   ));
   if (onReorder) {
@@ -260,7 +290,7 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
         items={lifts.map((l, i) => ({ key: `${l.exerciseId}_${i}`, movable: true }))}
         onMove={onReorder}
         {...(onDragging ? { onDragging } : {})}
-        gripColor={color.textMuted}
+        gripColor={color.textSecondary}
         gripLabel={t('program.reorderGrip')}
         renderItem={(_item, i, grip, lifted) => rows[i](grip, lifted)}
       />
@@ -335,7 +365,13 @@ export function FigureCells({
   return (
     <View style={[cellStyles.row, rowDir]}>
       <View style={[cellStyles.loadCell, toUnit]}>
-        {load ? (
+        {lift.loadUndecided ? (
+          /* An em dash in the load's own face: the column keeps its shape, and "not yet" is said
+             rather than implied by a hole — or, worse, printed as the word for her body. */
+          <Text style={[cellStyles.load, cellStyles.loadWaiting, { fontSize: loadSize }]} numberOfLines={1}>
+            {'—'}
+          </Text>
+        ) : load ? (
           <Text
             style={[cellStyles.load, { fontSize: loadSize }, changedColor ? { color: changedColor, fontFamily: font.monoMedium } : null]} // rtl-ok: alignment lives on the flex cell (see the render note)
             numberOfLines={1}
@@ -350,7 +386,7 @@ export function FigureCells({
       </View>
       <View style={[cellStyles.unitCell, fromUnit]}>
         <Text style={[cellStyles.unit, { fontSize: metaSize }]} numberOfLines={1}>
-          {load ? unitLabel(units) : ''}
+          {load && !lift.loadUndecided ? unitLabel(units) : ''}
         </Text>
       </View>
       {scheme ? (
@@ -378,6 +414,7 @@ const cellStyles = StyleSheet.create({
     color: color.textPrimary,
     textAlign: 'center', // rtl-ok: content-sized inside a flex-aligned cell; alignment lives on the cell
   },
+  loadWaiting: { color: color.textMuted },
   loadWord: {
     fontFamily: font.sans,
     color: color.textMuted,
@@ -448,6 +485,7 @@ const styles = StyleSheet.create({
   },
   /* Line one: the name, bracketed by the two doors that act on it. */
   planHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  swapHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   /* The builder's own still, at the builder's own radius and ground — one treatment for "here is
      the exercise" wherever a plan lists one. */
   planThumb: { borderRadius: radius.md, backgroundColor: color.surface2, overflow: 'hidden' },
@@ -456,6 +494,9 @@ const styles = StyleSheet.create({
      a figure at the other is the "5 ··· 250 points of black ··· min" fault `WellDone.Fact` has a
      docblock about. */
   planFigures: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
+  /* The coach track: the swap-for-today mark and the coach's note, under the prescription. */
+  insteadOf: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, marginTop: 6, textAlign: 'left' },
+  coachNote: { marginTop: 6 },
   planRowLast: { borderBottomWidth: 1, borderBottomColor: 'rgba(241,238,229,0.10)' },
   /* In the air: the row takes a raised ground so it reads as lifted off the table, not slid along it. */
   planRowLifted: { backgroundColor: color.surface2, borderRadius: radius.md, borderTopColor: 'transparent' },

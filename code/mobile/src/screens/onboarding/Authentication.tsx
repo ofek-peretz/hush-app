@@ -55,6 +55,7 @@ import { reloadApp } from '@/app/reload';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { LegalSheet } from '@/components/LegalSheet';
 import { color, space, font, textScale, signal, control, radius, press, motion } from '@/design/tokens';
+import { ltrIsland } from '@/i18n/bidi';
 import { SignInCanceledError, type AuthProvider } from '@/platform/auth';
 import type { OnboardingParamList, MainParamList } from '@/app/navigation';
 import { track } from '@/platform/telemetry';
@@ -74,7 +75,10 @@ export function Authentication({ navigation: nav, route }: Props) {
      `navigate('AboutYou')`); which stack it is actually on is read from the state below. */
   const navigation = nav as NativeStackScreenProps<OnboardingParamList, 'Authentication'>['navigation'];
   /** From `WellDone`, over the tabs — dismissible, and success lands back on the tabs. */
-  const afterWorkout = (route.params as { after?: 'workout' } | undefined)?.after === 'workout';
+  const afterWorkout = (route.params as { after?: 'workout' | 'coach' } | undefined)?.after === 'workout';
+  /** From a coach's invite (the coach track, 2026-09-17) — both exits go BACK to the invite, which
+   *  runs the join itself once the account exists. Popping to the top would lose the invite. */
+  const afterCoach = (route.params as { after?: 'workout' | 'coach' } | undefined)?.after === 'coach';
   /** From the You tab — also over the tabs, also dismissible. */
   const routeNames: string[] = navigation.getState?.()?.routeNames ?? [];
   const overTabs = afterWorkout || !routeNames.includes('AboutYou');
@@ -83,6 +87,10 @@ export function Authentication({ navigation: nav, route }: Props) {
   }, [afterWorkout]);
   function decline() {
     void track(afterWorkout ? 'signin_wall_after_workout_skipped' : 'signin_declined');
+    if (afterCoach && navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
     navigation.popToTop();
   }
   const { t } = useCopy();
@@ -155,6 +163,10 @@ export function Authentication({ navigation: nav, route }: Props) {
        * account on focus and finishes the enrolment itself. The fallback hop survives for the
        * one path that can still land here without a parent (a stale deep link).
        */
+      if (afterCoach && navigation.canGoBack()) {
+        navigation.goBack();
+        return;
+      }
       if (overTabs) {
         // Over the tabs there is no enrolment to finish — the account is simply hers now.
         navigation.popToTop();
@@ -216,7 +228,7 @@ export function Authentication({ navigation: nav, route }: Props) {
           <FerroxMark width={84} />
         </Arrive>
         {/* the wordmark alone — the moss on this screen lives in the mark's dot and its halo. */}
-        <Arrive order={1} style={[styles.brand, styles.brandLockup]}>
+        <Arrive order={1} style={[styles.brand, ltrIsland(), styles.brandLockup]}>
           <FerroxWordmark width={220} />
         </Arrive>
         {/* ONE CLAIM, NOT TWO (2026-07-17).
@@ -237,6 +249,14 @@ export function Authentication({ navigation: nav, route }: Props) {
             {t(failed === 'network' ? 'ob.signinFailedNetwork' : failed === 'apple' ? 'ob.signinFailedProvider' : 'ob.signinFailedGoogle')}
           </Text>
         ) : null}
+        {/*
+          ✦ ONE LINE OF WHY, OVER THE TWO BUTTONS (design audit 2026-09-29; the founder's free hand,
+          2026-09-30). The 09-16 ruling cleared this screen to its promise, and the promise stays the
+          only thing in the hero. But an account asked for with no reason is a form, and the one
+          reason that is true and hers is continuity — her week and her bests are on this phone and
+          nowhere else until she signs in. One quiet line, at the act it explains; no terms, no price.
+        */}
+        <Text style={styles.why}>{t('ob.signinWhy')}</Text>
         {/* v7 1.1: Apple is the cream PRIMARY (dark glyph on paper); Google is the dark
             outline SECONDARY with no logo — the account is the action, not either brand. */}
         <ProviderButton
@@ -430,7 +450,7 @@ const styles = StyleSheet.create({
      invisible on glass, and on this screen the mark IS the personality. */
   halo: { position: 'absolute', width: 118, height: 118, borderRadius: 59, borderWidth: 2, borderColor: signal[0] },
   // Brand lockup stays LTR (FERROX) in every locale rather than mirroring.
-  brand: { flexDirection: 'row', alignItems: 'flex-end', direction: 'ltr' },
+  brand: { flexDirection: 'row', alignItems: 'flex-end' }, // an LTR island via ltrIsland()
   /* ════ TWO LINES, BECAUSE IT IS TWO PROMISES (founder 2026-07-28) ════
      "You train. I carry the rest." is a deal with two halves — what SHE does, and what HUSH does —
      and set as one wrapped paragraph the split fell wherever the width happened to put it. Given a
@@ -447,6 +467,7 @@ const styles = StyleSheet.create({
   },
   actions: { paddingHorizontal: space.gutter, paddingBottom: 30, gap: 12 },
   error: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
+  why: { fontFamily: font.sans, fontSize: 17, lineHeight: 24, color: color.textSecondary, textAlign: 'center', marginBottom: 6 },
 
   // provider buttons — identical geometry (58px pill); Apple is the cream primary,
   // Google the dark outline secondary.

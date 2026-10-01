@@ -170,6 +170,12 @@ struct WireMirror: Codable, Equatable {
   var holdMetres: Int?
   var nextHoldSeconds: Int?
   var nextHoldMetres: Int?
+  /// ⛔ THE VOICE'S LOADING DIALOGUE IS OPEN (2026-09-28): the wrist offers Ready beside Complete set,
+  /// exactly as the phone's stage and the lock card do. Nil (an older phone) draws what it always did.
+  var awaitingReady: Bool?
+  /// ⛔ THE HOLD'S ONE CLOCK (2026-09-28): when the running hold ends (ISO). The wrist counts down to it
+  /// — the instant the phone, the card and the voice count to. Nil until it starts, and while paused.
+  var holdEndsAt: String?
   var completedExerciseName: String?
   var canMarkBusy: Bool
   /// Signed kg load change of the current set: + increase, − decrease, 0 hold.

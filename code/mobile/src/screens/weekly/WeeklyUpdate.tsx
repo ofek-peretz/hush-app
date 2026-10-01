@@ -28,7 +28,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Arrive, Legend } from '@/components/ds';
+import { Arrive, Legend, opticalFigure } from '@/components/ds';
 import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import { changedLiftCase } from '@/domain/changedLiftCase';
 import { currentLocale } from '@/i18n';
@@ -56,7 +56,8 @@ import { askBackMuscle, trainedMuscles } from '@/engine/v5/bodyMap';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import { allTimePeakProgress, standingRecord, type QuarterlyProgressEntry, type StandingRecord } from '@/domain/progressReport';
 import { currentWeekOpen } from '@/domain/weekCadence';
-import { completedWorkouts, sessionEnergyKcal, tonnesFromKg, totalTonnageKg } from '@/domain/sessionMetrics';
+import { completedWorkouts, massFigure, sessionEnergyKcal, tonnesFromKg, totalTonnageKg } from '@/domain/sessionMetrics';
+import { KCAL_SHOWN_FROM } from '@/domain/energy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { bidi } from '@/i18n/bidi';
 import type { Session, Units } from '@/data/local/models';
@@ -78,7 +79,8 @@ const rangeStr = (r: [number, number]): string => `${r[0]}-${r[1]}`;
 // interval week's calories came out at zero in a letter whose whole job is to say what the week was.
 // Workouts, tonnage and calories all come from `domain/sessionMetrics` now — the same three
 // functions Progress, the Log and the share card read.
-type WeekBand = { done: number; planned: number; tonnes: number; kcal: number | null };
+/** `kg` is the unrounded total `massFigure` reads; a band drawn from a fixture may omit it. */
+type WeekBand = { done: number; planned: number; tonnes: number; kg?: number; kcal: number | null };
 
 /** A `muscle.*` word at the head of a sentence. See the note at its call site. */
 const headlineCase = (s: string) => (s ? s[0].toLocaleUpperCase() + s.slice(1) : s);
@@ -244,6 +246,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
    */
   const [evidence, setEvidence] = useState<QuarterlyProgressEntry[] | null>(null);
   const [standing, setStanding] = useState<StandingRecord | null>(null);
+  const [standingKg, setStandingKg] = useState<number | null>(null);
   /*
    * ⛔ "1 CHANGE" ON TODAY, "NOTHING CHANGED" IN HERE — founder, 2026-08-03:
    *
@@ -305,9 +308,14 @@ export function WeeklyUpdate({ navigation, route }: Props) {
         return {
           key: `${c.ex}:${c.kind}`,
           name: exerciseDisplayName(c.ex),
-          from: structural || c.from == null ? '' : String(+c.from.toFixed(2)),
-          to: structural || c.to == null ? '' : String(+c.to.toFixed(2)),
-          suffix: c.kind === 'sets' ? t('weekly.setsUnit') : '',
+          /* ⛔ A COACH'S LOAD IS KG, LIKE EVERY LOAD IN A PLAN (`CoachPlan` — "kg, or null for
+             bodyweight"), and this printed it raw: an athlete in pounds read her coach's 60 kg as
+             "60", beside a set screen saying 132. Loads go through her units like the engine's
+             rows do; a set count is a count. And both now SAY what they count (design audit
+             2026-09-29): "34 → 41" alone was a number with no noun. */
+          from: structural || c.from == null ? '' : c.kind === 'load' ? fmtLoad(c.from, units) : String(+c.from.toFixed(2)),
+          to: structural || c.to == null ? '' : c.kind === 'load' ? fmtLoad(c.to, units) : String(+c.to.toFixed(2)),
+          suffix: c.kind === 'sets' ? t('weekly.setsUnit') : c.kind === 'load' ? unitLabel(units) : '',
           // A lift arriving or leaving has no direction — it did not move, it appeared. It reads in
           // the neutral tone, which is the same three-way law every other surface obeys.
           dir: (c.direction ?? 'hold') as LoadDirection,
@@ -326,7 +334,8 @@ export function WeeklyUpdate({ navigation, route }: Props) {
         name: exerciseDisplayName(l.exerciseId),
         from: fmtLoad(c.loadFrom, units) ?? '',
         to: fmtLoad(c.loadTo, units) ?? '',
-        suffix: '',
+        // The noun the figures count — unless the load is bodyweight, which names itself.
+        suffix: c.loadTo == null ? '' : unitLabel(units),
         /**
          * THE SAME THREE-WAY ANSWER TODAY GIVES (founder 2026-07-29's law).
          *
@@ -417,6 +426,8 @@ export function WeeklyUpdate({ navigation, route }: Props) {
           .slice(0, 3);
         setEvidence(top);
         setStanding(standingRecord(h));
+        // The same evidence-set rule `standingRecord` sums by (see `sessionTonnageKg`), unrounded.
+        setStandingKg(totalTonnageKg(h));
       })
       .catch(() => active && setEvidence([]));
     return () => {
@@ -536,7 +547,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             kcalSeen = true;
           }
         }
-        setBand({ done, planned, tonnes: tonnesFromKg(kg), kcal: kcalSeen ? kcal : null });
+        setBand({ done, planned, tonnes: tonnesFromKg(kg), kg, kcal: kcalSeen ? kcal : null });
         /*
          * ════ THE LETTER WEARS THE WEEK (founder 2026-08-23: the Saturday screen must make her
          * genuinely want to look) ════
@@ -644,8 +655,12 @@ export function WeeklyUpdate({ navigation, route }: Props) {
           <Arrive order={1}>
             <View style={styles.statBand}>
               <LetterFact value={`${band.done}/${band.planned}`} label={t('weekly.statWorkouts')} />
-              <LetterFact value={`${band.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
-              {band.kcal != null ? <LetterFact value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} /> : null}
+              {(() => {
+                // Tonnes from one up, her unit below — `massFigure` (design audit 2026-09-29).
+                const m = massFigure(band.kg ?? band.tonnes * 1000, units, (x) => String(+x.toFixed(1)));
+                return <LetterFact value={`${m.value} ${m.tonnes ? t('weekly.tonneUnit') : unitLabel(units)}`} label={t('weekly.statMoved')} />;
+              })()}
+              {band.kcal != null && band.kcal >= KCAL_SHOWN_FROM ? <LetterFact value={band.kcal.toLocaleString()} label={t('weekly.statKcal')} /> : null}
             </View>
           </Arrive>
         ) : null}
@@ -790,9 +805,12 @@ export function WeeklyUpdate({ navigation, route }: Props) {
                   ) : null}
                   {hasCase ? (
                     <Text style={styles.rowMove} numberOfLines={1}>
-                      <Text style={styles.rowFrom}>{`${row.from} `}</Text>
+                      <Text style={styles.rowFrom}>{opticalFigure(`${row.from} `)}</Text>
                       <Text style={{ color: directionTone(row.dir) }}>
-                        {`→ ${row.to}${row.suffix ? ` ${row.suffix}` : ''}`}
+                        {opticalFigure(`→ ${row.to}`)}
+                        {/* The unit is SPOKEN, in the sans at the reading size — "סטים" cannot be
+                            drawn by the mono at all, and "kg" at 40 points would outshout the load. */}
+                        {row.suffix ? <Text style={styles.rowSuffix}>{` ${row.suffix}`}</Text> : null}
                       </Text>
                     </Text>
                   ) : null}
@@ -811,7 +829,10 @@ export function WeeklyUpdate({ navigation, route }: Props) {
             <Legend size={17} track={0.2}>{t('weekly.standingLegend')}</Legend>
             <View style={styles.statBand}>
               <LetterFact value={String(standing.workouts)} label={t('weekly.statWorkouts')} />
-              <LetterFact value={`${standing.tonnes} ${t('weekly.tonneUnit')}`} label={t('weekly.statMoved')} />
+              {(() => {
+                const m = massFigure(standingKg ?? standing.tonnes * 1000, units, (x) => String(+x.toFixed(1)));
+                return <LetterFact value={`${m.value} ${m.tonnes ? t('weekly.tonneUnit') : unitLabel(units)}`} label={t('weekly.statMoved')} />;
+              })()}
               <LetterFact value={String(standing.sets)} label={t('weekly.statSets')} />
             </View>
           </View>
@@ -937,7 +958,7 @@ interface LetterRow {
 function LetterFact({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.fact}>
-      <Text style={styles.factValue}>{value}</Text>
+      <Text style={styles.factValue}>{opticalFigure(value)}</Text>
       <Legend size={17} track={0.14}>{label}</Legend>
     </View>
   );
@@ -1069,6 +1090,7 @@ const styles = StyleSheet.create({
   // DOWN is drawn in exactly the same moss as one going up. It is the engine matching what she
   // demonstrated, not a setback, and the letter never colours it like one.
   rowFrom: { color: color.textSecondary }, // rtl-ok: nested in rowMove
+  rowSuffix: { fontFamily: font.sansMedium, fontSize: 20, letterSpacing: 0, color: color.textMuted }, // rtl-ok: nested in rowMove
 
   // WHY is a door, so it is drawn as one — a hairline pill, not an underlined word.
   whyPill: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)' },

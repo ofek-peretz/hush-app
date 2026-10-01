@@ -107,8 +107,23 @@ function mountStage() {
       </SafeAreaProvider>,
     );
   });
+  mounted.push(tree);
   return { tree, nav: { replace }, view: () => view };
 }
+
+/*
+ * ⛔ EVERY STAGE THIS FILE MOUNTS IS UNMOUNTED (2026-09-29). None ever was, so the ending's toast
+ * kept its hide timer after the test returned, fired once Jest had torn the environment down
+ * (`Animated` undefined), and took the whole WORKER with it — the suite that happened to run next
+ * in that worker was reported as the failure (`programTab`, in the run that surfaced it). Unmounting
+ * runs the toast's own effect cleanup, which is the path a real screen takes.
+ */
+const mounted = [];
+afterEach(() => {
+  act(() => {
+    while (mounted.length) mounted.pop().unmount();
+  });
+});
 
 beforeAll(async () => {
   await initI18n();

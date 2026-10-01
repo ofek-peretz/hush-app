@@ -60,11 +60,13 @@
       "holdSeconds": 45,
       "holdMetres": null,
       "nextHoldSeconds": null,
-      "nextHoldMetres": null
+      "nextHoldMetres": null,
+      "awaitingReady": true,
+      "holdEndsAt": null
     },
     "lobby": null,
     "plan": null,
-    "authoritySeq": 17,
+    "authoritySeq": 14,
     "authorityEpoch": 1800000000000,
     "sentAt": "2027-01-15T08:02:20.000Z"
   }

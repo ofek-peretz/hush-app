@@ -2,7 +2,7 @@
  * hush-coach — the door and its four walls, driven for real (2026-09-01, audit finding 1).
  *
  * Every test here stops BEFORE the model: the walls exist so that a refused request never costs a
- * Gemini call, so the tests never need to fake one. The ceilings that are exercised are exactly
+ * model call, so the tests never need to fake one. The ceilings that are exercised are exactly
  * the ones `theCoachDoorHasACeiling` pins as source — this file proves they refuse at runtime.
  */
 
@@ -26,7 +26,7 @@ function memKv() {
 const TOKEN = 'shared-token';
 function env(extra: Record<string, unknown> = {}) {
   return {
-    GEMINI_API_KEY: 'k',
+    OPENAI_API_KEY: 'k',
     HUSH_TOKEN: TOKEN,
     COACH_LIMIT: { limit: async () => ({ success: true }) },
     HUSH_KV: memKv(),
@@ -36,8 +36,8 @@ function env(extra: Record<string, unknown> = {}) {
 
 /*
  * NO TEST HERE MAY REACH THE NETWORK. Every wall refuses before the model — so a fetch escaping
- * to Gemini is itself the failure (it happened on this file's first run: an explicit '0' ceiling
- * fell through `|| 2000` and a test call went to production Google with a fake key).
+ * to the provider is itself the failure (it happened on this file's first run: an explicit '0'
+ * ceiling fell through `|| 2000` and a test call went to production Google with a fake key).
  */
 globalThis.fetch = (async () => {
   throw new Error('a coach wall let a request through to the network');

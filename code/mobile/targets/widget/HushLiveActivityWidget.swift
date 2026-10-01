@@ -113,6 +113,14 @@ private func countdownRange(endDate: Date?, isResting: Bool) -> ClosedRange<Date
   return Date()...end
 }
 
+/// ⛔ A RUNNING HOLD counts down like a rest (2026-09-28) — to the one end the phone, the wrist and the
+/// voice count to. Past its end (or not started) the card draws the hold's figure as before; nothing
+/// is written at zero, on any surface — her Done is.
+private func holdRange(_ s: HushSessionAttributes.ContentState) -> ClosedRange<Date>? {
+  guard s.phase == "set", s.holdLabel != nil, let end = s.holdEndDate, end > Date() else { return nil }
+  return Date()...end
+}
+
 /// "32" / "32.5" — whole loads without a trailing ".0".
 private func fmtWeight(_ w: Double) -> String {
   w.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(w)) : String(format: "%.1f", w)
@@ -166,6 +174,12 @@ struct HushStrengthLiveActivity: Widget {
               .monospacedDigit()
               .foregroundColor(HX.ink0)
               .frame(maxWidth: 96)
+          } else if let range = holdRange(s) {
+            Text(timerInterval: range, countsDown: true)
+              .font(.system(size: 30, design: .monospaced))
+              .monospacedDigit()
+              .foregroundColor(HX.ink0)
+              .frame(maxWidth: 96)
           } else if s.phase != "paused" {
             StrengthLoadText(weight: s.targetWeight, reps: s.targetReps, size: 17, unit: s.unitLabel, bw: s.wordBodyweight, hold: s.holdLabel)
           }
@@ -195,6 +209,12 @@ struct HushStrengthLiveActivity: Widget {
             .frame(maxWidth: 48)
         } else if s.phase == "paused" {
           Image(systemName: "pause.fill").foregroundColor(HX.ink2)
+        } else if let range = holdRange(s) {
+          Text(timerInterval: range, countsDown: true)
+            .font(.system(size: 15, design: .monospaced))
+            .monospacedDigit()
+            .foregroundColor(HX.ink0)
+            .frame(maxWidth: 48)
         } else if let hold = s.holdLabel {
           Text(hold)
             .font(.system(size: 15, design: .monospaced))
@@ -408,6 +428,15 @@ private struct StrengthLockView: View {
         } else if state.phase == "set", state.holdLabel == nil {
           // On a set: HER FIGURES, with the two steppers that let her type them from here.
           StrengthSetEntry(state: state)
+        } else if let range = holdRange(state) {
+          // A RUNNING hold: its countdown is the card's one big figure, exactly as a rest's is.
+          Text(timerInterval: range, countsDown: true)
+            .font(.system(size: 34, design: .monospaced))
+            .monospacedDigit()
+            .foregroundColor(HX.ink0)
+            .frame(maxWidth: 130, alignment: .leading)
+          Spacer(minLength: 8)
+          SetDots(index: state.setIndex, count: state.setCount)
         } else {
           // A hold has no figures to type — its duration is the card's one big figure.
           StrengthLoadText(weight: state.targetWeight, reps: state.targetReps, size: 34, unit: state.unitLabel, bw: state.wordBodyweight, hold: state.holdLabel)

@@ -20,11 +20,16 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
-import { Legend } from '@/components/ds';
+import { Legend, opticalFigure } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { bidi } from '@/i18n/bidi';
+import { bidi, ltrIsland } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { exerciseDisplayName } from '@/data/exercises';
 import type { ShareCard as ShareCardData } from '@/domain/shareCard';
+import type { Units } from '@/data/local/models';
+import { massFigure } from '@/domain/sessionMetrics';
+import { KCAL_SHOWN_FROM } from '@/domain/energy';
+import { unitLabel } from '@/domain/schedule';
 import { MiniBody } from '@/components/MiniBody';
 import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import { monoCanDraw } from '@/design/monoVoice';
@@ -40,6 +45,8 @@ interface Props {
   card: ShareCardData;
   /** Card width in px; height follows the 9:16 ratio. Default is the capture size. */
   width?: number;
+  /** The card with no ground of its own, for pasting over a photo (`platform/share.copySticker`). */
+  sticker?: boolean;
 }
 
 /**
@@ -82,13 +89,13 @@ function Figure({ value, unit, size }: { value: string; unit?: string; size: num
       See `tracking.figure`. The em is size-relative, so it survives `px()`'s export scaling.
      */
     <Text style={[styles.figure, { fontSize, lineHeight: Math.round(fontSize * 1.02), letterSpacing: trackingPx(fontSize, tracking.figure) }]}>
-      {value}
+      {opticalFigure(value)}
       {unit ? <Text style={[styles.figureUnit, !monoCanDraw(unit) && styles.figureUnitWord, { fontSize: Math.round(fontSize * 0.29) }]}> {unit}</Text> : null}
     </Text>
   );
 }
 
-export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card, width = 1080 }, ref) {
+export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card, width = 1080, sticker = false }, ref) {
   const { t } = useCopy();
   const height = Math.round(width * SHARE_ASPECT);
   // The card is authored at 296pt wide; everything scales from that so one component
@@ -122,8 +129,15 @@ export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card
   };
 
   return (
-    <View ref={ref} collapsable={false} style={[styles.card, { width, height, padding: px(28), borderRadius: px(28) }]}>
-      {/* lit-from-above dark gradient — the stage, poured into a frame */}
+    <View
+      ref={ref}
+      collapsable={false}
+      style={[styles.card, sticker && styles.cardSticker, { width, height, padding: px(28), borderRadius: px(28) }]}
+    >
+      {/* lit-from-above dark gradient — the stage, poured into a frame. A STICKER has no ground of
+          its own (see `platform/share.copySticker`): a translucent black keeps the words readable over
+          any photo while the photo shows through. */}
+      {sticker ? null : (
       <Svg width={width} height={height} style={StyleSheet.absoluteFill} pointerEvents="none">
         <Defs>
           <LinearGradient id="shareBg" x1="0" y1="0" x2="0" y2="1">
@@ -134,9 +148,10 @@ export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card
         </Defs>
         <Rect x="0" y="0" width={width} height={height} rx={px(28)} fill="url(#shareBg)" />
       </Svg>
+      )}
 
       {/* the brand, carried whole — the FERROX mark and wordmark */}
-      <View style={[styles.head, { gap: px(8) }]}>
+      <View style={[styles.head, ltrIsland(), { gap: px(8) }]}>
         <FerroxMark width={px(24)} color={stage.ink0} />
         <FerroxWordmark width={px(74)} color={stage.ink0} />
       </View>
@@ -162,14 +177,33 @@ export const ShareCard = React.forwardRef<View, Props>(function ShareCard({ card
           for exactly this reason. One faint line, same register as the fact beside it — a signpost,
           not an ad. (A real domain on the card is the founder's upgrade; "App Store" works today.)
         */}
+        {/* "Built on facts" left the card (design audit 2026-09-29): a stranger reading a story in a
+            second could not tell what it meant. The way to find the app is the one line kept. */}
         <View style={styles.footRight}>
-          <Legend size={px(10)} tone="faint">{t('share.builtOnFacts')}</Legend>
           <Legend size={px(10)} tone="faint">{t('share.findLine')}</Legend>
         </View>
       </View>
     </View>
   );
 });
+
+/**
+ * The card's tonnage in TONNES (design audit 2026-09-29). Cards built before the field existed — and
+ * any fixture — carry only `moved` in the display unit, so it is derived from that when absent.
+ */
+function tonnesOf(card: { tonnes?: number; moved: number; unit: string }): number {
+  if (typeof card.tonnes === 'number') return card.tonnes;
+  const kg = /lb/i.test(card.unit) ? card.moved * 0.45359237 : card.moved;
+  return kg / 1000;
+}
+
+/** The card's total as the poster it was made from prints it — tonnes from one up, her unit below
+ *  (`massFigure`). A card must not say "0.3 t" under a finish screen that said "340 kg". */
+function movedCell(card: { tonnes?: number; moved: number; unit: string }, t: (k: string, o?: Record<string, unknown>) => string): { figure: string; label: string } {
+  const units: Units = /lb/i.test(card.unit) ? 'lb' : 'kg';
+  const m = massFigure(tonnesOf(card) * 1000, units);
+  return { figure: m.value, label: m.tonnes ? t('share.tonnesMoved') : t('share.unitMoved', { unit: unitLabel(units) }) };
+}
 
 /** 9.1 — the personal record. */
 function RecordBody({
@@ -226,13 +260,18 @@ function SessionBody({
   t: (k: string, p?: Record<string, unknown>) => string;
   px: (n: number) => number;
 }) {
+  const dense = (card.next?.length ?? 0) > 0;
+  /* The body gives the hero its room (2026-09-30): 148 → 120 on a plain card, and it still stands
+     taller than any other element but the figure it now answers to. */
+  const figureH = !dense ? 120 : card.record ? 86 : 100;
+  const moved = movedCell(card, t);
   return (
     <View style={styles.body}>
       <Legend size={px(11)} tone="accent">
-        {t('share.sessionEyebrow')}
+        {card.partial ? t('share.sessionEyebrowPartial') : t('share.sessionEyebrow')}
       </Legend>
       <Text style={[styles.weekTitle, { fontSize: px(32), lineHeight: px(38), marginTop: px(10) }]} numberOfLines={1}>
-        {bidi(card.dayName)}
+        {bidi(dayTitle(card.dayName))}
       </Text>
 
       {/* Trained together (2026-08-23) — the names, in the serif, right under the workout's own.
@@ -243,16 +282,33 @@ function SessionBody({
         </Text>
       ) : null}
 
-      {/* her week's body, worn — front and back, the session's muscles in moss */}
-      <View style={[styles.sessionFigures, { marginTop: px(20), gap: px(10) }]}>
-        <MiniBody face="front" sex={card.sex} lit={card.muscles} height={px(148)} />
-        <MiniBody face="back" sex={card.sex} lit={card.muscles} height={px(148)} />
+      {/*
+        ✦ ONE NUMBER, BIG (design audit 2026-09-29: "a story is watched for a second and a half — it
+        needs one huge number in the top third"; the founder's free hand, 2026-09-30). What she moved,
+        at the size a thumb scrolling past can read, right under the workout's name. It was a 20-point
+        cell in the band at the foot, beside the calories — the one brag on the card set as small as
+        the two facts that are not one. The body stays the centrepiece (the founder's 2026-08-23
+        ruling); the number is what it wore.
+      */}
+      <View style={[styles.heroRow, { marginTop: px(dense ? 6 : 16), gap: px(6) }]}>
+        <Text style={[styles.heroFigure, { fontSize: px(dense ? 40 : 58), lineHeight: px(dense ? 44 : 62), letterSpacing: trackingPx(px(dense ? 40 : 58), tracking.figure) }]}>
+          {opticalFigure(moved.figure)}
+        </Text>
+        <Text style={[styles.heroLabel, { fontSize: px(13), marginBottom: px(dense ? 6 : 9) }]}>{moved.label}</Text>
       </View>
 
-      <View style={[styles.hair, { marginTop: px(24) }]} />
+      {/* her week's body, worn — front and back, the session's muscles in moss. The frame is a
+          fixed 9:16, so when NEXT TIME rides the card the body gives it the room (2026-09-28) —
+          the name at the top is the one thing that may never be pushed out of the frame. */}
+      <View style={[styles.sessionFigures, { marginTop: px(dense ? 14 : 20), gap: px(10) }]}>
+        <MiniBody face="front" sex={card.sex} lit={card.muscles} height={px(figureH)} />
+        <MiniBody face="back" sex={card.sex} lit={card.muscles} height={px(figureH)} />
+      </View>
+
+      <View style={[styles.hair, { marginTop: px(dense ? 16 : 24) }]} />
       <View style={[styles.band, { paddingVertical: px(16) }]}>
-        <StatCell figure={card.moved.toLocaleString()} label={t('share.weekMoved', { unit: card.unit })} px={px} />
-        {card.kcal != null ? <StatCell figure={card.kcal.toLocaleString()} label={t('share.weekSpent')} px={px} /> : null}
+        {/* The mass is the hero above now — the band keeps the two facts that are not a brag. */}
+        {card.kcal != null && card.kcal >= KCAL_SHOWN_FROM ? <StatCell figure={card.kcal.toLocaleString()} label={t('share.weekSpent')} px={px} /> : null}
         {card.durationMin != null ? (
           <StatCell figure={String(card.durationMin)} label={t('share.sessionMinutes')} px={px} />
         ) : null}
@@ -269,8 +325,24 @@ function SessionBody({
           <Text style={[styles.recordLineText, { fontSize: px(14), lineHeight: px(18) }]} numberOfLines={1}>
             {bidi(exerciseDisplayName(card.record.exerciseId))}
             {'  '}
-            <Text style={styles.recordLineFigure}>{card.record.weight} {card.record.unit}</Text>
+            <Text style={styles.recordLineFigure}>{'\u2066'}{card.record.weight} {card.record.unit}{'\u2069'}</Text>
           </Text>
+        </View>
+      ) : null}
+
+      {/* ✦ NEXT TIME — what her coach already decided (see `ShareSessionCard.next`). */}
+      {card.next && card.next.length > 0 ? (
+        <View style={{ marginTop: px(14), gap: px(6) }}>
+          <Legend size={px(10)} tone="accent">
+            {t('share.nextEyebrow')}
+          </Legend>
+          {card.next.map((n) => (
+            <Text key={n.name} style={[styles.recordLineText, { fontSize: px(14), lineHeight: px(18) }]} numberOfLines={1}>
+              {bidi(n.name)}
+              {'  '}
+              <Text style={styles.recordLineFigure}>{'\u2066'}{n.load} {n.unit}{'\u2069'}</Text>
+            </Text>
+          ))}
         </View>
       ) : null}
     </View>
@@ -310,7 +382,7 @@ function CardioBody({
       </View>
       {card.avgPaceSec != null ? (
         <View style={[styles.cardioPace, { gap: px(6), marginTop: px(4) }]}>
-          <Text style={[styles.cardioPaceNum, { fontSize: px(24), letterSpacing: trackingPx(px(24), tracking.figure) }]}>{fmtPace(card.avgPaceSec)}</Text>
+          <Text style={[styles.cardioPaceNum, { fontSize: px(24), letterSpacing: trackingPx(px(24), tracking.figure) }]}>{opticalFigure(fmtPace(card.avgPaceSec))}</Text>
           <Text style={[styles.cardioPaceUnit, !monoCanDraw(perKm) && styles.figureUnitWord, { fontSize: px(13) }]}>{perKm}</Text>
         </View>
       ) : null}
@@ -378,8 +450,8 @@ function WeekBody({
       {/* the stat band — three cells between two hairlines */}
       <View style={[styles.hair, { marginTop: px(28) }]} />
       <View style={[styles.band, { paddingVertical: px(16) }]}>
-        <StatCell figure={card.moved.toLocaleString()} label={t('share.weekMoved', { unit: card.unit })} px={px} />
-        {card.kcal != null ? (
+        <StatCell {...movedCell(card, t)} px={px} />
+        {card.kcal != null && card.kcal >= KCAL_SHOWN_FROM ? (
           <StatCell figure={card.kcal.toLocaleString()} label={t('share.weekSpent')} px={px} />
         ) : null}
         {card.deltaPct != null ? (
@@ -400,7 +472,7 @@ function WeekBody({
 function StatCell({ figure, label, px, accent }: { figure: string; label: string; px: (n: number) => number; accent?: boolean }) {
   return (
     <View style={styles.cell}>
-      <Text style={[styles.cellFigure, accent && styles.cellFigureUp, { fontSize: px(20), letterSpacing: trackingPx(px(20), tracking.figure) }]}>{figure}</Text>
+      <Text style={[styles.cellFigure, accent && styles.cellFigureUp, { fontSize: px(20), letterSpacing: trackingPx(px(20), tracking.figure) }]}>{opticalFigure(figure)}</Text>
       <Text style={[styles.cellLabel, { fontSize: px(11), marginTop: px(4) }]}>{label}</Text>
     </View>
   );
@@ -408,8 +480,9 @@ function StatCell({ figure, label, px, accent }: { figure: string; label: string
 
 const styles = StyleSheet.create({
   card: { overflow: 'hidden', backgroundColor: stage[0], justifyContent: 'space-between' },
+  cardSticker: { backgroundColor: 'rgba(11,10,9,0.58)' },
 
-  head: { flexDirection: 'row', alignItems: 'center', direction: 'ltr' },
+  head: { flexDirection: 'row', alignItems: 'center' }, // an LTR island via ltrIsland()
 
   body: { flex: 1, justifyContent: 'center' },
   /* Pushes what follows it to the foot of the card — see the note in `CardioBody`. */
@@ -435,6 +508,9 @@ const styles = StyleSheet.create({
   togetherLine: { fontFamily: font.serif, color: stage.ink1, textAlign: 'left' },
   bars: { flexDirection: 'row', alignItems: 'flex-end' },
   sessionFigures: { flexDirection: 'row', justifyContent: 'center' },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end' },
+  heroFigure: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], color: stage.ink0, textAlign: 'left' },
+  heroLabel: { fontFamily: font.sansMedium, color: stage.ink1, textAlign: 'left' },
   barCol: { flex: 1, height: '100%', justifyContent: 'flex-end' },
   bar: { width: '100%' },
   band: { flexDirection: 'row' },

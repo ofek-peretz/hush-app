@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "hush-web-coach",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/ofek3/AppData/Local/Temp/claude/C--Users-ofek3-Desktop-Hush/754446df-f234-4959-b378-a861be09cb02/scratchpad/walk-athlete/webCoach.mjs"],
+      "port": 8084
+    },
+    {
       "name": "v7-design",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5599", "--directory", "C:\\Users\\ofek3\\Downloads\\_hush_redesign\\design_handoff_hush_watch"],
@@ -33,6 +39,14 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["expo", "start", "--web", "--port", "8083"],
       "port": 8083,
+      "cwd": "C:\\Users\\ofek3\\Desktop\\Hush\\code\\mobile"
+    },
+    {
+      "name": "hush-web-coachside",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8086"],
+      "env": { "EXPO_PUBLIC_CIRCLE_URL": "http://127.0.0.1:8788" },
+      "port": 8086,
       "cwd": "C:\\Users\\ofek3\\Desktop\\Hush\\code\\mobile"
     }
   ]

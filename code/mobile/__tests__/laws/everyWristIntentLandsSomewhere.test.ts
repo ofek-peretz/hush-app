@@ -88,6 +88,13 @@ const PHASE_FOR: Record<WatchIntentType, SessionMirror['phase'] | null> = {
   cardio_pause: null,
   cardio_resume: null,
   cardio_finish: null,
+  // The voice's Ready (2026-09-28): a set on stage whose loading dialogue is open (see MIRROR_FOR).
+  set_ready: 'active_set',
+};
+
+/** What the frame must also say for an intent to belong to it — Ready only while the voice waits for it. */
+const MIRROR_FOR: Partial<Record<WatchIntentType, Partial<SessionMirror>>> = {
+  set_ready: { awaitingReady: true },
 };
 
 /** The run each cardio intent belongs to: a pause needs a running run, a resume a paused one. */
@@ -139,7 +146,7 @@ describe('the wrist → phone chain is joined at every link', () => {
       const inPhase = PHASE_FOR[type];
       const d = decideWatchIntent(
         { v: WATCH_PROTOCOL_VERSION, type, intentId: `i_${type}`, issuedAt: new Date(NOW).toISOString(), ...(PAYLOAD[type] ?? {}) },
-        inPhase === null ? null : mirrorIn(inPhase),
+        inPhase === null ? null : { ...mirrorIn(inPhase), ...(MIRROR_FOR[type] ?? {}) },
         NOW,
         new Set<string>(),
         CARDIO_FOR[type] ?? null,

@@ -91,6 +91,13 @@ interface ItemBase {
    * a second author.
    */
   say?: string;
+  /**
+   * ⛔ THE HUMAN COACH'S LINE ON THIS LIFT (the coach track, law 7 — 2026-09-17). Copied from
+   * `Slot.coachNote` by `enginePlan.coachPlanFromProgram` and by nothing else: `parseCoachPlan` never
+   * reads it, so no model answer can claim one. Kept apart from `say` because it is ATTRIBUTED — it
+   * is drawn with the coach's name beside it, and `say` is the app's own AI voice.
+   */
+  coachNote?: string;
 }
 
 /** Reps, optionally at a load. `[8, 12]` is a band; `[5, 5]` is a fixed count. */

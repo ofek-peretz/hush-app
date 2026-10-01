@@ -55,7 +55,8 @@ describe('1 · every UI door gates', () => {
     expect(door).toContain("navigation.navigate('Paywall', { source: 'gate' }");
     // …and it actually starts the session it promises (the broken half of the same button):
     expect(door).toContain('coachSession(plan, workout.id)');
-    expect(door).toContain('session.startCoach(planned, workout.id)');
+    // (2026-09-17: the coach track's swap for today rides as a fourth argument — the door is the same door.)
+    expect(door).toContain('session.startCoach(planned, workout.id');
     expect(door).not.toContain('workoutId: workout.id');
   });
 });

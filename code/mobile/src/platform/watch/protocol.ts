@@ -498,6 +498,9 @@ export type WatchIntentType =
   | 'start_workout'
   | 'swap_exercise'
   | 'add_rest'
+  // "מוכן" (2026-09-28): the voice's loading dialogue is open and she tapped Ready on the wrist —
+  // the set (or the hold) on stage starts now. The same start as the lock screen's `set_ready`.
+  | 'set_ready'
   // The wrist flagged a body area that hurts (WT14 · What's off). A REPORT the phone acts on —
   // never an authoritative session action. Carries `area`.
   | 'report_pain'
@@ -606,6 +609,8 @@ export type WatchPhoneAction =
   | { kind: 'complete_set'; actualReps?: number; actualWeight?: number | null }
   | { kind: 'session_event'; event: SessionEvent }
   | { kind: 'mark_equipment_occupied' }
+  // The set on stage starts now (the voice's Ready, tapped on the wrist).
+  | { kind: 'set_ready' }
   // Lobby proposals — the phone selects/starts the queued workout (it owns the
   // session lifecycle and validates before acting). `workoutId` omitted = the
   // workout the lobby already had queued.
@@ -633,7 +638,7 @@ export interface WatchIntentDecision {
 export const WATCH_INTENT_TYPES: readonly WatchIntentType[] = [
   'complete_set', 'end_rest', 'pause', 'resume', 'finish_early', 'exercise_busy',
   'select_workout', 'start_workout', 'swap_exercise', 'add_rest', 'report_pain',
-  'cardio_pause', 'cardio_resume', 'cardio_finish',
+  'cardio_pause', 'cardio_resume', 'cardio_finish', 'set_ready',
 ];
 const INTENT_TYPES = WATCH_INTENT_TYPES;
 
@@ -795,6 +800,8 @@ function intentToAction(intent: WatchIntent): WatchPhoneAction | null {
       return { kind: 'session_event', event: { type: 'FINISH_EARLY' } };
     case 'exercise_busy':
       return { kind: 'mark_equipment_occupied' };
+    case 'set_ready':
+      return { kind: 'set_ready' };
     case 'select_workout':
       return { kind: 'select_workout', workoutId: intent.workoutId };
     case 'start_workout':
@@ -932,6 +939,14 @@ export function decideWatchIntent(
   }
   if (intent.type === 'end_rest' && !resting) {
     return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+  }
+  // Ready acts on the set on stage, and only while the phone is waiting for it — the same gate the
+  // lock screen's Ready meets (`awaitingReady`), so a late tap can never start a set she already did.
+  if (intent.type === 'set_ready') {
+    if (mirror.phase !== 'active_set' || !mirror.awaitingReady) return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+    if (intent.expectedGlobalIndex != null && intent.expectedGlobalIndex !== mirror.globalIndex) {
+      return { accept: false, reason: 'index_mismatch', action: null, latencyMs };
+    }
   }
   if (intent.type === 'resume' && mirror.phase !== 'paused') {
     return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };

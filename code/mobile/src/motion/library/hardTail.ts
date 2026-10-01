@@ -521,7 +521,7 @@ export const stepUpRig: Rig = (() => {
         ...sampledPathTicks(HIP_PATH.map((p) => ({ x: p.x - 26, y: p.y }))),
         /* The card says dumbbell (audit, 2026-09-03): the hands used to hang empty, so a 2×10 kg
            step-up read as bodyweight. Side-on, handle along x, the far one behind the figure. */
-        ...dumbbellSide(pose.j.farHand, { x: 1, y: 0 }),
+        ...dumbbellSide(pose.j.farHand, { x: 1, y: 0 }, undefined, undefined, 'far'),
       ],
       front: [...dumbbellSide(pose.j.hand, { x: 1, y: 0 })],
     };

@@ -15,8 +15,9 @@ import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { AppState } from 'react-native';
 import { AppContext } from '@/state/stores/appStore';
-import { SessionProvider, useSession, type SessionView } from '@/state/stores/sessionStore';
-import { hebrewDuration } from '@/domain/hebrewNumbers';
+import { SessionProvider, useSession, restAfterStep, type SessionView } from '@/state/stores/sessionStore';
+import { fixedLines, voiceLinesAhead } from '@/domain/voiceLinesAhead';
+import { spokenRest } from '@/domain/voiceScript';
 import { initI18n, setLocale } from '@/i18n';
 import { db } from '@/data/local/db';
 import { voiceAskAfterS } from '@/domain/setDwell';
@@ -70,6 +71,8 @@ let timerId = 0;
 let said: string[] = [];
 let ear: { onSentence: (t: string, c: number | null) => boolean; onEnd: (why: string) => void; ms: number } | null = null;
 let earLog: number[] = [];
+/** What each window told the second ear the question expects (`cloudEar`). */
+let expectLog: string[] = [];
 
 const mouth = {
   say: async (text: string) => {
@@ -81,6 +84,7 @@ const fakeEar = {
   open: (opts) => {
     ear = { onSentence: opts.onSentence, onEnd: opts.onEnd, ms: opts.ms };
     earLog.push(opts.ms);
+    expectLog.push(opts.expect ?? 'none');
     return {
       close: () => {
         if (ear && ear.onEnd === opts.onEnd) {
@@ -89,11 +93,25 @@ const fakeEar = {
           e.onEnd('closed');
         }
       },
+      /*
+       * ⛔ HELD AND EXTENDED, AS THE REAL EAR IS (2026-09-27). Without these the conductor took a
+       * different road here than on the phone (`reopen` closed and reopened instead of holding) — and
+       * the one bug that lived only on the phone's road (the loading window answering "נכון?") passed.
+       */
+      hold: () => {},
+      extend: (ms: number) => {
+        if (ear && ear.onEnd === opts.onEnd) {
+          ear.ms = ms;
+          earLog.push(ms);
+        }
+      },
     };
   },
 };
 const audio = { duck: async () => {}, unduck: async () => {}, playChime: async () => {} };
-const NOT_HEARD = 'לא שמעתי תשובה. הסט נשאר פתוח: תגיד לי כמה חזרות כשתסיים, או תלחץ סיום במסך הנעילה או בשעון.';
+/** The rest line as the voice says it — the store's rest, rounded to the quarter minute (2026-09-27). */
+const restLine = (v: SessionView) => `מנוחה: ${spokenRest(v.restSeconds, { locale: 'he', units: 'kg' })}.`;
+const NOT_HEARD = 'לא שמעתי תשובה. הסט עדיין פתוח, ולא נרשם. תגיד לי כמה חזרות, או תסמן אותו במסך הנעילה או בשעון.';
 
 beforeAll(async () => {
   await initI18n();
@@ -108,6 +126,7 @@ beforeEach(async () => {
   said = [];
   ear = null;
   earLog = [];
+  expectLog = [];
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_type: string, cb: (s: string) => void) => {
     wake = cb;
     return { remove() {} } as never;
@@ -211,9 +230,9 @@ async function silence(c: VoiceConductor, view: () => SessionView) {
   await settle();
 }
 
-async function start(c: VoiceConductor, view: () => SessionView) {
+async function start(c: VoiceConductor, view: () => SessionView, plan: PlannedSession = PLAN) {
   c.enable();
-  await act(async () => view().startCoach(PLAN, 'coach_0'));
+  await act(async () => view().startCoach(plan, 'coach_0'));
   await settle();
   c.observe(view());
   await settle();
@@ -223,8 +242,11 @@ describe('⛔ the coach runs the spec', () => {
   it('§3.1 + §3.2: the opening, then the first-time loading dialogue; "מוכן" is the start', async () => {
     const { view, c } = harness();
     await start(c, view);
-    expect(said[0]).toBe('זה האימון הראשון שלך. המשקלים היום הם הצעה לפי משקל הגוף, לא לפי הכוח שלך. תגיד לי מה באמת עלה על המוט, ומהסט הראשון אני מתאימה.');
-    expect(said[1]).toMatch(/^Upper A\. שני תרגילים, בערך .+ דקות\. מתחילים בלחיצת חזה במוט\.$/);
+    // ⛔ Since 2026-09-28 the first workout's first line INTRODUCES the coach (founder: "משפט שמציג את המאמן הקולי
+    // באימון הראשון… כאשר המשתמש לוחץ START"), and no longer calls the loads a bodyweight guess — B-1 is cancelled.
+    expect(said[0]).toBe('זה האימון הראשון שלנו. אני המאמנת שלך באוזניות: אגיד לך כל משקל, אשאל כמה חזרות עשית, ואתאים את הסט הבא. אם לקחת משקל אחר, פשוט תגיד לי.');
+    // The engine's "Upper A" is a key on disk; she hears it in her language (`i18n/dayTitle`, 2026-09-28).
+    expect(said[1]).toMatch(/^פלג עליון אלף\. שני תרגילים, בערך .+ דקות\. מתחילים בלחיצת חזה במוט\.$/);
     expect(said[2]).toBe(
       'לחיצת חזה במוט. זו הפעם הראשונה שלך בתרגיל הזה, אז המשקל הוא הצעה: שישים קילו: המוט עשרים קילו, ועשרים קילו בכל צד. אם זה נראה לך קל מדי או כבד מדי, תגיד משקל אחר. שמונה עד עשר חזרות. כשהמוט טעון, תגיד: מוכן.',
     );
@@ -239,7 +261,9 @@ describe('⛔ the coach runs the spec', () => {
     expect(view().livePlan[1].target?.recommendedWeight).toBe(50); // carried to the lift's later sets
     // "מוכן": go, the set is under way, no window open, the ask is due at start + reps × rep time + 15.
     await hear('מוכן', c, view);
+    // "קדימה." and nothing after it — no technique line (founder, 2026-09-27).
     expect(said[said.length - 1]).toBe('קדימה.');
+    expect(said.some((l) => l.includes('רגליים נטועות'))).toBe(false);
     expect(view().awaitingReady).toBe(false);
     expect(ear).toBeNull();
     const askAt = timers.find((t) => true)!.at;
@@ -265,12 +289,14 @@ describe('⛔ the coach runs the spec', () => {
     expect(row).toMatchObject({ actualWeight: 60, actualReps: 12 });
     expect(row.presumed).toBeUndefined();
     expect(said[0]).toBe('שישים קילו, שתים עשרה חזרות. נרשם.');
-    expect(said[1]).toMatch(/^יותר מהטווח\. בסט הבא נעלה ל.+ קילו: תוסיף .+ בכל צד\.$/);
-    expect(said[2]).toBe(`מנוחה: ${hebrewDuration(view().restSeconds)}.`);
+    expect(said[1]).toMatch(/^מעולה, יותר מהטווח\. בסט הבא נעלה ל.+ קילו: תוסיף .+ בכל צד\.$/);
     expect(view().displayPhase).toBe('REST_INTER');
-    // The echo's tail is open for a correction (§3.5).
+    // The echo's tail is open for a correction (§3.5) — and the rest line WAITS for it (2026-09-27):
+    // said into the tail, a correction was never heard, and 'מנוחה: שתי דקות' could be heard as 2.
+    expect(said).toHaveLength(2);
     expect(ear?.ms).toBe(WINDOWS.echoTail);
     await silence(c, view);
+    expect(said[2]).toBe(restLine(view()));
     // The next set's load moved; the completed row did not.
     expect(view().livePlan[1].target?.recommendedWeight).toBeGreaterThan(60);
     expect(view().loggedSets[0].actualWeight).toBe(60);
@@ -333,8 +359,9 @@ describe('⛔ the coach runs the spec', () => {
     expect(view().loggedSets[0].presumed).toBeUndefined();
     expect(said[0]).toBe('שישים קילו, עשר חזרות. נרשם.');
     // The rest is whatever the store prescribes for this lift (a learned rest can move it between
-    // runs of this file); the line must name THAT number.
-    expect(said[said.length - 1]).toBe(`מנוחה: ${hebrewDuration(view().restSeconds)}.`);
+    // runs of this file); the line must name THAT number — after the echo's tail has closed.
+    await silence(c, view);
+    expect(said[said.length - 1]).toBe(restLine(view()));
     expect(view().displayPhase).toBe('REST_INTER');
   });
 
@@ -371,7 +398,7 @@ describe('⛔ the coach runs the spec', () => {
     expect(said).toEqual(['בסדר.']);
     await advance(WINDOWS.reask, c, view);
     await hear('לא', c, view);
-    expect(said[said.length - 1]).toBe('תגיד סיימתי כשתסיים.');
+    expect(said[said.length - 1]).toBe('כשתסיים, תגיד: סיימתי. אני מקשיבה עוד דקה.');
     expect(ear?.ms).toBe(WINDOWS.longDone);
     await hear('שמונה', c, view);
     expect(view().loggedSets[0]).toMatchObject({ actualReps: 8 });
@@ -383,7 +410,7 @@ describe('⛔ the coach runs the spec', () => {
     await start(c, view);
     said = [];
     await hear('לא יודע', c, view);
-    expect(said[0]).toBe('אין בעיה, נתחיל קל. ארבעים וחמישה קילו: המוט עשרים קילו, ושתים עשרה וחצי קילו בכל צד — עשרה קילו ושתיים וחצי קילו. תעשה כמה חזרות שיוצא בנוח, ותגיד לי כמה. כשהמוט טעון, תגיד: מוכן.');
+    expect(said[0]).toBe('אין בעיה, נתחיל קל. ארבעים וחמישה קילו: המוט עשרים קילו, ושתים עשרה וחצי קילו בכל צד: עשרה ושתיים וחצי. תעשה כמה חזרות שיוצא בנוח, ותגיד לי כמה. כשהמוט טעון, תגיד: מוכן.');
     expect(view().currentTarget?.recommendedWeight).toBe(45);
     await hear('מוכן', c, view);
     await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
@@ -402,9 +429,45 @@ describe('⛔ the coach runs the spec', () => {
     expect(view().displayPhase).toBe('SET_PRESENTED');
     expect(said[said.length - 1]).toBe('מוכן?'); // the 45 s prompt, once
     await silence(c, view); // the 90 s window runs out
-    expect(said[said.length - 1]).toBe('כשתהיה מוכן, תלחץ על מוכן בשעון או במסך הנעילה.');
-    expect(view().awaitingReady).toBe(true); // the card's Ready button carries the start from here
+    expect(said[said.length - 1]).toBe('לא שמעתי מוכן. אם כבר התחלת, אשאל אותך בסוף הסט.');
+    expect(view().awaitingReady).toBe(true); // the card's Ready button stays until the question comes
     expect(view().loggedSets).toHaveLength(0);
+  });
+
+  it('⛔ a loading window that ran out is never a dead end — the question comes one set later, and her number writes (2026-09-27)', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await silence(c, view); // no "מוכן" heard in 90 s — she started without it
+    said = [];
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    expect(said).toEqual(['סיימת את הסט? כמה חזרות עשית?']);
+    expect(view().awaitingReady).toBe(false); // the question means the set is under way
+    expect(view().loggedSets).toHaveLength(0);
+    await hear('תשע', c, view);
+    expect(view().loggedSets[0]).toMatchObject({ actualWeight: 60, actualReps: 9 });
+  });
+
+  it('⛔ a number that cannot be a load is the set she already did — said back with "נכון?", never a new load (2026-09-27)', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    said = [];
+    await hear('שמונה', c, view); // eight kilos on a sixty-kilo bench? No: eight reps.
+    expect(view().currentTarget?.recommendedWeight).toBe(60);
+    expect(said[said.length - 1]).toBe('שמעתי שישים קילו, שמונה חזרות. נכון? תגיד כן, או את המספר הנכון.');
+    expect(view().loggedSets).toHaveLength(0);
+    expect(view().awaitingReady).toBe(false);
+    // "לא" — it was not a set: back to loading, the load untouched.
+    await hear('לא', c, view);
+    expect(said[said.length - 1]).toBe('מוכן?');
+    expect(view().awaitingReady).toBe(true);
+    expect(view().loggedSets).toHaveLength(0);
+    // A load IS a load: "חמישים" on a sixty-kilo bar moves the bar.
+    await hear('חמישים', c, view);
+    expect(view().currentTarget?.recommendedWeight).toBe(50);
+    // …and "שש" again, then "כן": the set is written, at the bar's load.
+    await hear('שש', c, view);
+    await hear('כן', c, view);
+    expect(view().loggedSets[0]).toMatchObject({ actualWeight: 50, actualReps: 6 });
   });
 
   it('§3.2: "מוכן" from the lock screen is the start signal — Ready goes, the ask is scheduled from the tap', async () => {
@@ -459,6 +522,432 @@ describe('⛔ the coach runs the spec', () => {
     said = [];
     await hear('עשר', c, view);
     expect(view().active).toBe(false);
-    expect(said.some((s) => /^סיימת את האימון\. שני תרגילים, .+ דקות\. הסיכום מחכה בטלפון\.$/.test(s))).toBe(true);
+    expect(said.some((s) => /^כל הכבוד. סיימת את האימון: שני תרגילים, .+ דקות\. הסיכום מחכה בטלפון\.$/.test(s))).toBe(true);
+  });
+});
+
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE 2026-09-27 AUDIT — what four reviewers found in a voice that had never once run on a phone.
+ * Each case below failed before that day's rebuild of the conductor.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+const SS_PLAN: PlannedSession = {
+  name: 'Upper A',
+  blocks: [
+    // A superset: bench, then straight into the row, three rounds, 90 s between rounds.
+    { rounds: 3, restS: 90, items: [{ kind: 'reps', ex: BENCH, load: 60, reps: [8, 10] }, { kind: 'reps', ex: ROW, load: 40, reps: [10, 12] }] },
+  ],
+};
+
+describe('⛔ a superset is ONE round — one loading dialogue, one question, one echo (spec §3.9)', () => {
+  it('the round is loaded as one, asked once after both lifts, and written half by half in order', async () => {
+    const { view, c } = harness();
+    await start(c, view, SS_PLAN);
+    const loading = said[said.length - 1];
+    expect(loading.startsWith('סופר סט. קודם לחיצת חזה במוט: ')).toBe(true);
+    expect(loading.endsWith('כשהכל מוכן, תגיד: מוכן.')).toBe(true);
+    expect(view().awaitingReady).toBe(true);
+    await hear('מוכן', c, view);
+    said = [];
+    // Asked once, after BOTH lifts' own time — never after the first half alone.
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    expect(said).toEqual(['קדימה.'].filter((l) => said.includes(l)));
+    await advance(voiceAskAfterS(ROW, 10) * 1000, c, view);
+    expect(said[said.length - 1]).toMatch(/^סיימת את שני התרגילים\? כמה חזרות בלחיצת חזה במוט, וכמה ב.+\?$/);
+    expect(ear?.ms).toBe(WINDOWS.round);
+    said = [];
+    await hear('עשר ושמונה', c, view);
+    const rows = view().loggedSets;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ exerciseId: BENCH, actualReps: 10 });
+    expect(rows[1]).toMatchObject({ exerciseId: ROW, actualReps: 8 });
+    expect(said[0]).toMatch(/^לחיצת חזה במוט: עשר חזרות\. .+: שמונה חזרות\. נרשם\.$/);
+    // The echo's tail first; the rest line after it.
+    expect(ear?.ms).toBe(WINDOWS.echoTail);
+    await silence(c, view);
+    expect(said[said.length - 1]).toMatch(/^מנוחה: /);
+  });
+
+  it('one number for two lifts: the first\'s — and the second is asked for by name', async () => {
+    const { view, c } = harness();
+    await start(c, view, SS_PLAN);
+    await hear('מוכן', c, view);
+    await advance((voiceAskAfterS(BENCH, 8) + voiceAskAfterS(ROW, 10)) * 1000, c, view);
+    said = [];
+    await hear('עשר', c, view);
+    expect(said[0]).toMatch(/^וכמה ב.+\?$/);
+    expect(view().loggedSets).toHaveLength(0);
+    await hear('שמונה', c, view);
+    expect(view().loggedSets.map((r) => r.actualReps)).toEqual([10, 8]);
+  });
+});
+
+describe('⛔ the 2026-09-27 red lines', () => {
+  it('silence after "נכון?" writes NOTHING — it is the question\'s silence (the last silent write, closed)', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    said = [];
+    await hear('תשע', c, view, 0.3);
+    expect(said[0]).toBe('שמעתי שישים קילו, תשע חזרות. נכון? תגיד כן, או את המספר הנכון.');
+    said = [];
+    await silence(c, view);
+    expect(view().loggedSets).toHaveLength(0);
+    expect(said).toEqual(['אשאל שוב עוד רגע.']);
+  });
+
+  it('a row another channel wrote first is the truth — the voice never says "נרשם" over it', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    said = [];
+    // Done on the lock screen, and "עשר" at the same instant: the lock's write is in flight.
+    await act(async () => {
+      const tap = view().completeSet({ weight: 60, reps: 8 });
+      ear!.onSentence('עשר', 0.9);
+      await tap;
+    });
+    await settle();
+    c.observe(view());
+    await settle();
+    expect(view().loggedSets).toHaveLength(1);
+    expect(view().loggedSets[0].actualReps).toBe(8);
+    expect(said).not.toContain('שישים קילו, עשר חזרות. נרשם.');
+    expect(said).toContain('שישים קילו, שמונה חזרות. נרשם.'); // the row that WAS written, said back
+  });
+
+  it('an ear that cannot hear from here is said ONCE, and the questions become where to mark the set', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    said = [];
+    await act(async () => {
+      const e = ear!;
+      ear = null;
+      e.onEnd('locked');
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await settle();
+    expect(said).toEqual([
+      'אני לא שומעת אותך כרגע, אז את התשובות תסמן במסך הנעילה או בשעון. אני ממשיכה להגיד לך הכל.',
+      'סיימת? את הסט תסמן במסך הנעילה או בשעון.',
+    ]);
+    expect(view().loggedSets).toHaveLength(0);
+    // …and no window is tried again until the ear may listen.
+    expect(ear).toBeNull();
+  });
+
+  it('"כן" in the echo\'s tail is agreement — it never asks "כמה חזרות?" about a logged set', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    await hear('עשר', c, view);
+    said = [];
+    await hear('כן', c, view);
+    expect(said).not.toContain('כמה חזרות?');
+    expect(view().loggedSets).toHaveLength(1);
+    expect(said[said.length - 1]).toMatch(/^מנוחה: /);
+  });
+
+  it('a set she started with a TAP does not reopen the loading dialogue on the next set', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    // Ready from the lock screen, then Done on the stage — the voice never heard "מוכן".
+    await act(async () => view().setAwaitingReady(false));
+    await settle();
+    c.observe(view());
+    await act(async () => void (await view().completeSet({ weight: 60, reps: 10 })));
+    await settle();
+    c.observe(view());
+    await settle();
+    said = [];
+    await advance((view().restSeconds + 1) * 1000, c, view);
+    expect(view().displayPhase).toBe('SET_PRESENTED');
+    expect(view().awaitingReady).toBe(false);
+    expect(said.some((l) => l.includes('כשהמוט טעון'))).toBe(false);
+    expect(said.some((l) => /^סט שתיים מתוך שלוש\. שישים קילו\. שמונה עד עשר חזרות\.$/.test(l))).toBe(true);
+  });
+});
+
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE SECOND 2026-09-27 PASS — a whole workout walked aloud, and a random athlete run at the voice
+ * (`zzVoiceFuzz`, 80 seeds of every door in any order). Each case below is a hole that pass found.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+const HOLD_PLAN: PlannedSession = {
+  name: 'Core',
+  blocks: [
+    { rounds: 2, restS: 45, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] },
+    { rounds: 1, items: [{ kind: 'reps', ex: BENCH, load: 60, reps: [8, 10] }] },
+  ],
+};
+const TRI_PLAN: PlannedSession = {
+  name: 'Tri',
+  blocks: [
+    {
+      rounds: 2,
+      restS: 90,
+      items: [
+        { kind: 'reps', ex: BENCH, load: 60, reps: [8, 10] },
+        { kind: 'reps', ex: ROW, load: 40, reps: [10, 12] },
+        { kind: 'reps', ex: 'lateral_raise', load: 8, reps: [12, 15] },
+      ],
+    },
+  ],
+};
+
+async function tapDone(c: VoiceConductor, view: () => SessionView) {
+  await act(async () => void (await view().completeSet()));
+  await settle();
+  c.observe(view());
+  await settle();
+}
+
+describe('⛔ the second 2026-09-27 pass — the walk and the random athlete', () => {
+  it('a hold is counted aloud: "מוכן" starts it, ten seconds out, "זהו", and HER word ends it — silence writes nothing', async () => {
+    const { view, c } = harness();
+    await start(c, view, HOLD_PLAN);
+    expect(said[said.length - 1]).toBe('פלאנק, ארבעים וחמש שניות. כשאתה במקום, תגיד: מוכן.');
+    expect(ear?.ms).toBe(WINDOWS.loading);
+    // ⛔ SINCE 2026-09-28 A HOLD OFFERS READY ON EVERY SURFACE, and "מוכן" starts its ONE clock —
+    // the store's, the one the stage, the wrist and the card count down to (founder: *"אחידות בצורה
+    // הרמטית"*). It used to be the voice's alone, on a clock of the voice's own.
+    expect(view().awaitingReady).toBe(true);
+    await hear('מוכן', c, view);
+    expect(said[said.length - 1]).toBe('קדימה.');
+    expect(view().awaitingReady).toBe(false);
+    expect(view().holdEndsAtMs).toBe(now + 45_000);
+    said = [];
+    await advance(35_000, c, view);
+    expect(said).toEqual(['עוד עשר שניות.']);
+    await advance(10_000, c, view);
+    expect(said[said.length - 1]).toBe('זהו, ארבעים וחמש שניות. סיימת?');
+    await silence(c, view);
+    expect(said[said.length - 1]).toBe('אשאל שוב עוד רגע.');
+    expect(view().displayPhase).toBe('SET_PRESENTED'); // nothing written by silence
+    await advance(WINDOWS.holdReask, c, view);
+    expect(said[said.length - 1]).toBe('סיימת?');
+    said = [];
+    await hear('כן', c, view);
+    expect(said[0]).toBe('פלאנק, ארבעים וחמש שניות. נרשם.');
+    expect(view().displayPhase).toBe('REST_INTER');
+    // Round two: a number is the seconds she held.
+    await advance((view().restSeconds + 1) * 1000, c, view);
+    await hear('מוכן', c, view);
+    await advance(45_000, c, view);
+    said = [];
+    await hear('שלושים', c, view);
+    expect(said[0]).toBe('פלאנק, שלושים שניות. נרשם.');
+    expect(said[1]).toMatch(/^סיימת עם פלאנק\. התרגיל האחרון: לחיצת חזה במוט, שישים קילו\. מנוחה: /);
+  });
+
+  it('an open set is asked about again after the long window — twice, ninety seconds apart — and never written', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    await silence(c, view);
+    await advance(WINDOWS.reask, c, view);
+    await silence(c, view); // → "לא שמעתי תשובה…", the long window
+    await silence(c, view); // the long window runs out
+    said = [];
+    await advance(WINDOWS.remind, c, view);
+    expect(said).toEqual(['הסט עדיין פתוח. כמה חזרות עשית?']);
+    await silence(c, view);
+    await advance(WINDOWS.remind, c, view);
+    expect(said).toEqual(['הסט עדיין פתוח. כמה חזרות עשית?', 'הסט עדיין פתוח. כמה חזרות עשית?']);
+    await silence(c, view);
+    said = [];
+    await advance(10 * WINDOWS.remind, c, view);
+    expect(said).toEqual([]); // two reminders, then the lock screen and the wrist
+    expect(view().loggedSets).toHaveLength(0);
+    // …and a reminder answered writes the set, like any question.
+  });
+
+  it('a pause freezes the set — "המשך" does not bring "סיימת?" the moment she picks the bar back up', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(20_000, c, view);
+    await act(async () => view().pause());
+    await settle();
+    c.observe(view());
+    await settle();
+    await advance(5 * 60_000, c, view);
+    await act(async () => view().resume());
+    await settle();
+    c.observe(view());
+    await settle();
+    said = [];
+    await advance(5_000, c, view);
+    expect(said.some((l) => l.startsWith('סיימת את הסט'))).toBe(false);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000 - 20_000, c, view);
+    expect(said[said.length - 1]).toBe('סיימת את הסט? כמה חזרות עשית?');
+  });
+
+  it('earbuds back during a pause: "חזרתי", the pause — and no "מוכן?" window into a frozen workout', async () => {
+    const { view, c } = harness();
+    await start(c, view); // the loading dialogue is open
+    await hear('עצור', c, view);
+    expect(view().paused).toBe(true);
+    c.disable();
+    ear = null;
+    said = [];
+    c.enable();
+    await settle();
+    c.observe(view());
+    await settle();
+    c.observe(view());
+    await settle();
+    expect(said).toEqual(['חזרתי.', 'האימון מושהה. כשתרצה להמשיך, תגיד: המשך.']);
+    expect(ear?.ms).toBe(WINDOWS.paused);
+  });
+
+  it('the middle of a tri-set reached by a tap is asked about with the rest of the round — never left silent', async () => {
+    const { view, c } = harness();
+    await start(c, view, TRI_PLAN);
+    await hear('מוכן', c, view);
+    await tapDone(c, view); // bench, pressed on the lock screen
+    expect(view().currentExerciseId).toBe(ROW);
+    said = [];
+    await advance((voiceAskAfterS(ROW, 10) + voiceAskAfterS('lateral_raise', 12)) * 1000, c, view);
+    expect(said[said.length - 1]).toMatch(/^סיימת את שני התרגילים\? כמה חזרות בחתירה בפולי בישיבה, וכמה ב.+\?$/);
+    await hear('עשר ושתים עשרה', c, view);
+    expect(view().loggedSets.map((r) => r.actualReps)).toEqual([8, 10, 12]);
+  });
+
+  it('a warm-up is announced as one, and its echo has no correction tail (a bridge cannot be amended)', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    expect(view().warmupOffered).toBeGreaterThan(0);
+    said = [];
+    await act(async () => view().addWarmup());
+    await settle();
+    c.observe(view());
+    await settle();
+    expect(said[said.length - 1]).toMatch(/^לחיצת חזה במוט\. חימום, אחת מתוך .+\. כשהמוט טעון, תגיד: מוכן\.$/);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    expect(said[said.length - 1]).toBe('סיימת את סט החימום?');
+    said = [];
+    await hear('כן', c, view);
+    expect(said[0]).toMatch(/נרשם\.$/);
+    expect(ear).toBeNull();
+    expect(said[said.length - 1]).toMatch(/^מנוחה: /);
+  });
+
+  it('a record is said at the set that struck it — only where there is a past to beat', async () => {
+    await db.appendCompletedSession({
+      id: 'past', programDayId: 'coach_0', startedAt: new Date(now - 3 * 86_400_000).toISOString(), state: 'SAVED', earlyFinish: false,
+      sets: [{ exerciseId: BENCH, setIndex: 0, recommendedWeight: 57.5, recommendedReps: 8, actualWeight: 57.5, actualReps: 9, edited: false, persistedAt: new Date(now - 3 * 86_400_000).toISOString() }],
+    } as never);
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    said = [];
+    await hear('שמונה', c, view);
+    expect(said.slice(0, 2)).toEqual(['שישים קילו, שמונה חזרות. נרשם.', 'שיא אישי חדש בתרגיל הזה.']);
+  });
+
+  it('…and never on a lift met for the first time: set two heavier than set one is the day finding her weight', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    await hear('שתים עשרה', c, view); // → 62.5 next set
+    await silence(c, view);
+    await advance((view().restSeconds + 1) * 1000, c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    said = [];
+    await hear('עשר', c, view);
+    expect(said.some((l) => l.includes('שיא'))).toBe(false);
+  });
+
+  it('the crossing names the next lift and its load, and "התרגיל האחרון" for the last', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    for (let i = 0; i < 3; i++) {
+      if (view().awaitingReady) await hear('מוכן', c, view);
+      await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+      said = [];
+      await hear('כמו שכתוב', c, view);
+      await silence(c, view);
+      if (i < 2) await advance((view().restSeconds + 1) * 1000, c, view);
+    }
+    expect(said[said.length - 1]).toMatch(/^סיימת עם לחיצת חזה במוט\. התרגיל האחרון: חתירה בפולי בישיבה, ארבעים קילו\. מנוחה: .+\.$/);
+  });
+
+  it('"תשע, לא, עשר" at the question is ten reps — never nine kilos for ten', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    await hear('תשע, לא, עשר', c, view);
+    expect(view().loggedSets[0]).toMatchObject({ actualWeight: 60, actualReps: 10 });
+  });
+
+  it('"קל יותר" moves to a weight that exists, and never below the empty bar', async () => {
+    const { view, c } = harness();
+    await start(c, view, { name: 'DB', blocks: [{ rounds: 2, items: [{ kind: 'reps', ex: 'incline_db_press', load: 22.5, reps: [10, 12] }] }] });
+    await hear('קל יותר', c, view);
+    expect(view().currentTarget?.recommendedWeight).toBe(22); // not the 21.5 no rack holds
+    await hear('כבד יותר', c, view);
+    expect(view().currentTarget?.recommendedWeight).toBe(23);
+  });
+});
+
+describe('⛔ the natural voice has the line before it is said (2026-09-27, `voiceLinesAhead`)', () => {
+  it('every line the script can write in advance is in a list fetched at the start or at a rest before it', async () => {
+    const HEL = { locale: 'he', units: 'kg' } as const;
+    const ahead = new Set<string>(fixedLines());
+    const snapshot = (from: number) => {
+      for (const line of voiceLinesAhead(view().livePlan as never[], from, (st) => restAfterStep(st as never), HEL)) ahead.add(line);
+    };
+    const { view, c } = harness();
+    await start(c, view);
+    snapshot(0);
+    // A whole workout by her word, with the numbers a real set produces — over, inside, and under.
+    const answers = ['שתים עשרה', 'עשר', 'כמו שכתוב', 'שתים עשרה', 'עשר'];
+    for (let i = 0; i < 5 && view().active; i++) {
+      if (view().awaitingReady) await hear('מוכן', c, view);
+      await advance(voiceAskAfterS(view().currentExerciseId!, view().currentTarget!.repBandLo ?? 8) * 1000, c, view);
+      await hear(answers[i], c, view);
+      if (view().active) {
+        await silence(c, view); // the echo's tail
+        snapshot((view().globalProgress?.index ?? 0) + 1); // what the phone fetches at this rest
+        await advance((view().restSeconds + 1) * 1000, c, view);
+      }
+    }
+    // What depends on her answer, or on the clock, is said at its moment and is not in any list.
+    const dynamic = /^(פלג עליון אלף\.|זה האימון הראשון|כל הכבוד|מעולה, יותר מהטווח|פחות מהטווח|סט .+\. (עולים|יורדים) ל|סט אחרון\. (עולים|יורדים) ל|שמעתי)/;
+    const missing = said.filter((l) => !ahead.has(l) && !dynamic.test(l));
+    expect(missing).toEqual([]);
+    expect(said.length).toBeGreaterThan(15);
+  });
+});
+
+describe('⛔ every window tells the second ear what its question expects (2026-09-27)', () => {
+  it('loading → ready, the question and the echo → reps, a pause → resume', async () => {
+    const { view, c } = harness();
+    await start(c, view);
+    expect(expectLog[expectLog.length - 1]).toBe('ready');
+    await hear('עצור', c, view);
+    expect(expectLog[expectLog.length - 1]).toBe('resume');
+    await hear('המשך', c, view);
+    expect(expectLog[expectLog.length - 1]).toBe('ready');
+    await hear('מוכן', c, view);
+    await advance(voiceAskAfterS(BENCH, 8) * 1000, c, view);
+    expect(expectLog[expectLog.length - 1]).toBe('reps');
+    await hear('עשר', c, view);
+    expect(expectLog[expectLog.length - 1]).toBe('reps'); // the echo's tail hears a correction
+    expect(expectLog).not.toContain('none');
   });
 });

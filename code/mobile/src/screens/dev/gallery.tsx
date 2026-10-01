@@ -46,6 +46,7 @@ import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { BuildingProgrammeView } from '@/screens/onboarding/BuildingProgrammeView';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { HomeView, type HomePlanLift } from '@/screens/home/HomeView';
+import { CrewView } from '@/screens/crew/Crew';
 import { WheelPicker } from '@/components/ds';
 import { TimeStage, DistanceStage } from '@/screens/session/ItemStage';
 import { coachFacts } from '@/domain/coachFacts';
@@ -66,6 +67,19 @@ import { WeeklyUpdate } from '@/screens/weekly/WeeklyUpdate';
 import { ProgressLifts } from '@/screens/progress/ProgressLifts';
 import { ProgramTabView } from '@/screens/program/ProgramTab';
 import { PlanBuilderView } from '@/screens/plan/PlanBuilder';
+import { AthletesView } from '@/screens/coach/Athletes';
+import { AthleteDetailView } from '@/screens/coach/AthleteDetail';
+import { CoachEnrollView } from '@/screens/coach/CoachEnroll';
+import { CoachPlansView } from '@/screens/coach/CoachPlans';
+import { CoachTemplatesView } from '@/screens/coach/CoachTemplates';
+import { CoachInviteSheet } from '@/screens/coach/CoachInvite';
+import { CoachJoinView } from '@/screens/trainee/CoachJoin';
+import { MyCoachView } from '@/screens/trainee/MyCoach';
+import { CoachUpdateCard } from '@/components/CoachUpdateCard';
+import { CoachNoteLine } from '@/components/CoachNoteLine';
+import { rosterSections, setLiftNote, setCoachBand, setWeekTitle } from '@/domain/coachDesk';
+import { currentWeekOpen } from '@/domain/weekCadence';
+import type { SessionUpload } from '@/domain/coachTrack';
 import { addLift as builderAddLift, blankDraft as builderBlankDraft, addDay as builderAddDay, builderAdvice as builderAdviceOf } from '@/domain/planBuilder';
 import { LiftDetailView } from '@/screens/progress/LiftDetail';
 import { CardioReady } from '@/screens/cardio/CardioReady';
@@ -697,8 +711,8 @@ function InApp({ children, session = sessionFixture }: { children: React.ReactNo
  * of chrome it always ships with. This puts the REAL `HushTabBar` back under it, with a minimal
  * navigation state, so what the browser draws is what the device draws.
  */
-function UnderTabs({ active, children }: { active: number; children: React.ReactNode }) {
-  const routes = ['Today', 'Program', 'Cardio', 'Progress'].map((name) => ({ key: name, name }));
+function UnderTabs({ active, children, coach }: { active: number; children: React.ReactNode; /** The coach track's fifth tab. */ coach?: boolean }) {
+  const routes = ['Today', 'Program', 'Cardio', 'Progress', ...(coach ? ['Athletes'] : [])].map((name) => ({ key: name, name }));
   const tabProps = {
     state: { index: active, routes },
     navigation: { emit: () => ({ defaultPrevented: false }), navigate: noop },
@@ -1284,6 +1298,8 @@ const sessionCard = {
   // A record set inside the workout rides the card as a LINE — never a rival card (device QA
   // 2026-08-23: the door opened on a deadlift figure instead of the workout).
   record: { exerciseId: 'bb_deadlift', weight: 55, unit: 'kg', reps: 8 },
+  // What her coach already decided for next time (2026-09-28) — the story's product line.
+  next: [{ name: exerciseDisplayName('bb_bench_press'), load: '62.5', unit: 'kg' }, { name: exerciseDisplayName('bb_row'), load: '57.5', unit: 'kg' }],
 } as const;
 
 /* 9.4 — the run's story (founder 2026-08-23): the cardio finish, shared. Longest — the pride line. */
@@ -1554,7 +1570,7 @@ const mount = (Screen: unknown, params?: Record<string, unknown>, session?: Reac
 };
 
 /** 2.1 · TODAY — the handoff's own Tuesday: Upper A, three changes, six lifts, ~55 min. */
-const todayView = () => (
+const todayView = (over: Partial<React.ComponentProps<typeof HomeView>> = {}) => (
   <HomeView
     resting={false}
     name="Erez"
@@ -1656,6 +1672,7 @@ const todayView = () => (
        True, and the right conclusion was the opposite one: **the app never hands it a handler either.**
        Handing the harness a function the product does not have did not restore a missing control, it
        manufactured one — and cost the founder a review note on 2026-08-12 asking what it was. */
+  {...over}
   />
 );
 
@@ -1763,6 +1780,108 @@ function builderDraft() {
   d = builderAddLift(d, 1, 'bb_rdl');
   return d;
 }
+
+/*
+ * ════ THE COACH TRACK, THE COACH'S SIDE (2026-09-17) — the roster and the trainee, as the wire carries them ════
+ *
+ * Every value here is a `SessionUpload` field the server really returns (§3) — sets, swaps, skips,
+ * pain, minutes — dated relative to NOW so the flags (`domain/coachTrack.flags`) fire the way they
+ * would on a real Tuesday: pain four days ago, a week of silence, a bench best beaten this week.
+ */
+const COACH_DAY = 86_400_000;
+const upload = (id: string, daysAgo: number, day: string, sets: SessionUpload['sets'], more: Partial<SessionUpload> = {}): SessionUpload => ({
+  id, at: new Date(Date.now() - daysAgo * COACH_DAY).toISOString(), day, minutes: 52, early: false, sets, ...more,
+});
+const benchDay = (id: string, daysAgo: number, kg: number, more: Partial<SessionUpload> = {}) =>
+  upload(id, daysAgo, 'Upper', [
+    { ex: 'bb_bench_press', load: kg, reps: 8 }, { ex: 'bb_bench_press', load: kg, reps: 8 }, { ex: 'bb_bench_press', load: kg, reps: 7 },
+    { ex: 'cable_row', load: 35, reps: 10 }, { ex: 'cable_row', load: 35, reps: 10 }, { ex: 'cable_row', load: 35, reps: 9 },
+    { ex: 'db_shoulder_press', load: 12, reps: 10 }, { ex: 'db_shoulder_press', load: 12, reps: 9 },
+  ], more);
+/**
+ * ⛔ THE ONLY PLACE IN THE REPO THAT PRINTS A COACH PRICE, AND IT IS A HARNESS FIXTURE.
+ *
+ * `platform/billing` answers `[]` for these products until the founder creates them in App Store
+ * Connect, so the app can only draw `11.C6`. These labels stand in for what the STORE will hand
+ * back (the plan page's opening proposal: $19.99 / $39.99 / $69.99 a month) so the tiers can be
+ * designed and eye-checked now. Nothing here is imported by a shipping screen.
+ */
+function coachPlanFixture() {
+  return [
+    { id: 'hush.coach.10.month' as const, seats: 10, priceLabel: '$19.99' },
+    { id: 'hush.coach.30.month' as const, seats: 30, priceLabel: '$39.99' },
+    { id: 'hush.coach.100.month' as const, seats: 100, priceLabel: '$69.99' },
+  ];
+}
+function coachRoster() {
+  return [
+    { linkId: 'l1', name: 'Noa Levi', sex: 'female' as const, days: 4, since: new Date(Date.now() - 30 * COACH_DAY).toISOString(),
+      recent: [benchDay('n1', 4, 35, { pain: ['Quads'] }), benchDay('n2', 6, 35)] },
+    { linkId: 'l2', name: 'Omer Biton', sex: 'male' as const, days: 3, since: new Date(Date.now() - 40 * COACH_DAY).toISOString(),
+      recent: [benchDay('o1', 7, 60)] },
+    { linkId: 'l3', name: 'Dana Cohen', sex: 'female' as const, days: 4, since: new Date(Date.now() - 15 * COACH_DAY).toISOString(),
+      recent: [benchDay('d1', 1, 42.5, { swaps: [{ from: 'bb_overhead_press', to: 'db_shoulder_press' }] }), benchDay('d2', 2, 40), benchDay('d3', 9, 37.5)] },
+    { linkId: 'l4', name: 'Yoav Shemesh', sex: 'male' as const, days: 3, since: new Date(Date.now() - 20 * COACH_DAY).toISOString(),
+      recent: [benchDay('y1', 1, 90), benchDay('y2', 10, 85)] },
+  ];
+}
+/**
+ * ⛔ THIRTY ATHLETES (2026-09-18). `coachRoster()` is four, which is the roster BEFORE the problem:
+ * the search field and the head's invite both exist for the length this fixture has and that one
+ * cannot show. The four real rows keep their flags; the rest are quiet names, which is what a long
+ * roster mostly is.
+ */
+function coachRosterLong() {
+  const quiet = [
+    'Adi Barak', 'Amit Golan', 'Bar Nissim', 'Daniel Peretz', 'Eden Shani', 'Gal Mizrahi',
+    'Hila Ovadia', 'Itai Regev', 'Lior Hadad', 'Maya Tzur', 'Nadav Elkayam', 'Ori Sasson',
+    'Roni Bardugo', 'Shir Amsalem', 'Tal Ben-Ami', 'Uri Malka', 'Yael Dahan', 'Ziv Harari',
+  ];
+  return [
+    ...coachRoster(),
+    ...quiet.map((name, i) => ({
+      linkId: `q${i}`,
+      name,
+      sex: (i % 2 ? 'male' : 'female') as const,
+      days: 3,
+      since: new Date(Date.now() - (25 + i) * COACH_DAY).toISOString(),
+      weekVersion: 2,
+      recent: [benchDay(`q${i}s`, 1 + (i % 4), 40 + i)],
+    })),
+  ];
+}
+function coachAthleteFixture() {
+  const sessions = [
+    benchDay('d1', 1, 42.5, { swaps: [{ from: 'bb_overhead_press', to: 'db_shoulder_press' }], skipped: ['triceps_pushdown'] }),
+    benchDay('d2', 3, 40, { pain: ['Shoulders'], early: true, minutes: 38 }),
+    benchDay('d3', 8, 40), benchDay('d4', 12, 37.5), benchDay('d5', 16, 37.5), benchDay('d6', 20, 35),
+  ];
+  return {
+    linkId: 'l3', name: 'Dana Cohen', sex: 'female' as const, days: 4, since: new Date(Date.now() - 21 * COACH_DAY).toISOString(),
+    consent: { bodyweight: true, cardio: false }, bodyweightKg: 61,
+    week: { version: 3, sentAt: new Date(Date.now() - 5 * COACH_DAY).toISOString(), coachName: 'Danny', week: {
+      v: 1 as const, title: 'Upper / Lower', days: [
+        { name: 'Upper', lifts: [{ ex: 'bb_bench_press', sets: 3, band: [6, 8] as [number, number] }, { ex: 'cable_row', sets: 3, band: [8, 12] as [number, number] }] },
+        { name: 'Lower', lifts: [{ ex: 'bb_back_squat', sets: 4, band: [5, 8] as [number, number] }] },
+        { name: 'Upper B', lifts: [{ ex: 'bb_overhead_press', sets: 3, band: [8, 10] as [number, number] }] },
+        { name: 'Lower B', lifts: [{ ex: 'bb_rdl', sets: 3, band: [8, 10] as [number, number] }] },
+      ] } },
+    sessions,
+  };
+}
+function coachPenDraft() {
+  let d = builderDraft();
+  d = setWeekTitle(d, 'Upper / Lower');
+  d = setCoachBand(d, 0, 0, [6, 8]);
+  d = setLiftNote(d, 0, 0, 'Shoulder blades back, feet planted.');
+  d = setCoachBand(d, 1, 0, [5, 8]);
+  return d;
+}
+const coachPenProps = {
+  name: 'Dana', facts: 'woman · 61 kg · 4 days', days: 4, onSend: noop, sending: false, problems: [] as string[],
+  onSaveTemplate: noop, onPhoto: noop, photoBusy: false, onStartCoachTemplate: noop,
+  templates: [{ name: 'Beginners · 3 days', days: 3 }, { name: 'Upper / Lower', days: 4 }],
+};
 
 /** Every handler a builder entry needs, so an entry states only what it is ABOUT. */
 const builderProps = {
@@ -1892,6 +2011,9 @@ export const GALLERY: GalleryEntry[] = [
   // learning length (the handoff's own four) rather than reading a programme it does not have.
   { id: '2.0', label: 'First workout — the first four', status: 'live', note: 'shown over 2.2', render: () => mount(SessionFlow, { previewFirstGym: 4 }) },
   { id: '2.1', label: 'Today', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView()}</UnderTabs></InApp> },
+  /* ✦ THE CREW ON THE WEEK ROW (prototype, 2026-09-29) — four faces, two trained today; and the dashed "+" before there is a crew. */
+  { id: '2.1n', label: 'Today — with the crew', of: '2.1', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView({ onCrew: noop, crew: [{ name: 'דני', today: true }, { name: 'יוסי כהן', today: true }, { name: 'רון', today: false }, { name: 'מאיה', today: false }] })}</UnderTabs></InApp> },
+  { id: '2.1o', label: 'Today — no crew yet', of: '2.1', status: 'live', render: () => <InApp><UnderTabs active={0}>{todayView({ onCrew: noop, crew: null })}</UnderTabs></InApp> },
   /* ⛔ WEEK ONE — nothing has been compared to anything, so there is no change pill and no arrow on
      any lift, and the eyebrow reads "0 OF 4". It used to differ from 2.1 by having no earned weekday
      pattern; the pattern is gone from Today entirely (founder 2026-08-12), so what is left is the
@@ -2208,6 +2330,21 @@ export const GALLERY: GalleryEntry[] = [
         formGuideLabel={tg('workout.formGuide')}
         doneLabel={tg('workout.tapAnywhere')}
         exerciseId="bb_bench_press"
+        onDone={noop}
+      />
+    </InApp>
+  ) },
+  /* The same card on a lift with a SECOND CAMERA (2026-09-30, `motion/library/frontViews`): the side /
+     front switch in the clip's bottom corner. */
+  { id: '2.2cf', label: 'Form — two cameras', of: '2.2c', status: 'live', note: 'a lift with an authored front view: the side / front switch and the slow toggle', render: () => (
+    <InApp>
+      <ExerciseDemo
+        title={exerciseDisplayName('bb_deadlift')}
+        cues={exerciseCues('bb_deadlift')}
+        focusLabel={tg('workout.focusOn')}
+        formGuideLabel={tg('workout.formGuide')}
+        doneLabel={tg('workout.tapAnywhere')}
+        exerciseId="bb_deadlift"
         onDone={noop}
       />
     </InApp>
@@ -3040,6 +3177,9 @@ export const GALLERY: GalleryEntry[] = [
       />
     </InApp>
   ) },
+  /* ✦ THE CREW TAB (prototype, 2026-09-29) — a crew mid-week, and the tab before there is one. */
+  { id: '3.7', label: 'The crew', status: 'live', render: () => <InApp><CrewView members={[{ name: 'אופק', done: 1, planned: 3, lastDays: 0, me: true }, { name: 'דני', done: 3, planned: 4, lastDays: 0, id: 'a' }, { name: 'יוסי', done: 4, planned: 4, lastDays: 0, id: 'b', cheered: true }, { name: 'רון', done: 1, planned: 3, lastDays: 4, id: 'c' }]} streakWeeks={12} cheer="כל הכבוד מיוסי" code="K7M2QX" onCheer={noop} onNudge={noop} onInvite={noop} onJoin={async () => false} onLeave={noop} onShareSession={noop} onShareWeek={noop} onSendPlan={noop} /></InApp> },
+  { id: '3.7b', label: 'The crew — none yet', of: '3.7', status: 'live', render: () => <InApp><CrewView members={null} streakWeeks={0} onCheer={noop} onNudge={noop} onInvite={noop} onJoin={async () => false} onShareSession={noop} onShareWeek={noop} onSendPlan={noop} /></InApp> },
   { id: '3.5', label: 'The week is done', status: 'live', render: () => <InApp><UnderTabs active={0}>{weekDoneView}</UnderTabs></InApp> },
   { id: '3.6b', label: 'day one', of: '3.2', status: 'live', render: () => <InApp><UnderTabs active={2}>{progressDayOne}</UnderTabs></InApp> },
 
@@ -3327,6 +3467,211 @@ export const GALLERY: GalleryEntry[] = [
         onBack={noop}
       />
     </InApp>
+  ) },
+
+  /* ── THE COACH TRACK, THE COACH'S SIDE (2026-09-17) — ids `11.C*`, the trainee's side is its own ── */
+  { id: '11.C1', label: 'Coach · the roster', status: 'live', note: 'the fifth tab (Athletes): who needs him first — pain, silence, swaps — then this week by name; seats by the title', render: () => (
+    <InApp><UnderTabs active={4} coach>
+      <AthletesView sections={rosterSections(coachRoster(), Date.now(), currentWeekOpen(Date.now()))} query="" onQuery={noop} seats={{ used: 4, seats: 10 }} refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </UnderTabs></InApp>
+  ) },
+  { id: '11.C1a', label: 'the empty roster is the invite', of: '11.C1', status: 'live', note: 'a new coach has nobody — the empty state IS the WhatsApp door', render: () => (
+    <InApp><UnderTabs active={4} coach>
+      <AthletesView sections={{ attention: [], week: [] }} query="" onQuery={noop} seats={{ used: 0, seats: 2 }} refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </UnderTabs></InApp>
+  ) },
+  { id: '11.C1d', label: 'the list did not load', of: '11.C1', status: 'live', note: 'a failed read is NOT an empty roster — it says what is not known and gives him the way to ask again', render: () => (
+    <InApp>
+      <AthletesView sections={null} query="" onQuery={noop} seats={{ used: 12, seats: 12 }} error="network" refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </InApp>
+  ) },
+  { id: '11.C1e', label: 'every seat taken, on the roster itself', of: '11.C1', status: 'live', note: 'the seats figure goes clay and becomes the door — a full roster is news where the number already lives', render: () => (
+    <InApp>
+      <AthletesView sections={rosterSections(coachRoster(), Date.now(), currentWeekOpen(Date.now()))} query="" onQuery={noop} seats={{ used: 2, seats: 2 }} refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </InApp>
+  ) },
+  /* ⛔ THE LENGTH THE SCREEN WAS NOT BUILT FOR, UNTIL 2026-09-18. */
+  { id: '11.C1f', label: 'thirty athletes, and a name to find', of: '11.C1', status: 'live', note: 'past a dozen the roster is a corpus, not a page: the search field appears, the flagged section stays pinned above it, and the invite moves into the head where it is reachable at any scroll', render: () => (
+    <InApp><UnderTabs active={4} coach>
+      <AthletesView sections={rosterSections(coachRosterLong(), Date.now(), currentWeekOpen(Date.now()))} query="" onQuery={noop} seats={{ used: 22, seats: 30 }} refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </UnderTabs></InApp>
+  ) },
+  { id: '11.C1g', label: 'a query, with the flagged section still on top', of: '11.C1', status: 'live', note: 'the search narrows each section IN PLACE — it never merges the two into one ranked list, and a lift she is in pain over is still the first thing he reads', render: () => (
+    <InApp><UnderTabs active={4} coach>
+      <AthletesView sections={rosterSections(coachRosterLong(), Date.now(), currentWeekOpen(Date.now()))} query="a" onQuery={noop} seats={{ used: 22, seats: 30 }} refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </UnderTabs></InApp>
+  ) },
+  /* ⛔ THE PLAN LAPSED UNDER PEOPLE WHO ARE STILL THERE (`plan.state === 'over_limit'`, 2026-09-18). */
+  { id: '11.C1h', label: 'his plan ended, and his athletes did not', of: '11.C1', status: 'live', note: 'over_limit: the clay seats figure is not a sentence — `22 / 10` on a roster of twenty-two must never read as "twelve were taken off you". Nobody is ever removed; only a new invite is closed, and the line is the door that fixes it', render: () => (
+    <InApp><UnderTabs active={4} coach>
+      <AthletesView sections={rosterSections(coachRosterLong(), Date.now(), currentWeekOpen(Date.now()))} query="" onQuery={noop} seats={{ used: 22, seats: 10 }} overLimit refreshing={false} onRefresh={noop} onAthlete={noop} onInvite={noop} inviteBusy={false} onTemplates={noop} onSeats={noop} />
+    </UnderTabs></InApp>
+  ) },
+  { id: '11.C1i', label: 'the invite he cannot send yet', of: '11.C1', status: 'live', note: 'never a silently disabled button: the press still answers, and the sheet says WHICH of the two ways he is out of seats — a full roster, or a plan that shrank under it', render: () => (
+    <InApp><CoachInviteSheet state={{ kind: 'full', used: 22, seats: 10, overLimit: true }} onWhatsApp={noop} onCopy={noop} copyLabel="Copy the code" onSeats={noop} onClose={noop} /></InApp>
+  ) },
+  { id: '11.C1b', label: 'the invite, sent', of: '11.C1', status: 'live', note: 'WhatsApp already opened with the link; the code stays on the glass to type at install', render: () => (
+    <InApp><CoachInviteSheet state={{ kind: 'invite', code: 'HKM4Q7', url: 'https://getferrox.com/c/HKM4Q7' }} onWhatsApp={noop} onCopy={noop} copyLabel="Copy the code" onSeats={noop} onClose={noop} /></InApp>
+  ) },
+  { id: '11.C1c', label: 'every seat is taken', of: '11.C1', status: 'live', note: 'free is two, removing frees one — and the one door out, onto the plans', render: () => (
+    <InApp><CoachInviteSheet state={{ kind: 'full', used: 2, seats: 2 }} onWhatsApp={noop} onCopy={noop} copyLabel="Copy the code" onSeats={noop} onClose={noop} /></InApp>
+  ) },
+  { id: '11.C2', label: 'Coach · one trainee', status: 'live', note: 'the week he sent and how much is done, an e1RM line per main lift, the last workouts set by set — a swap said as a fact', render: () => (
+    <InApp><AthleteDetailView name="Dana Cohen" data={coachAthleteFixture()} nowMs={Date.now()} onBack={noop} onEditWeek={noop} onRemove={noop} removing={false} /></InApp>
+  ) },
+  { id: '11.C2a', label: 'the week just sent', of: '11.C2', status: 'live', note: 'back from the pen — it lands on her next day not yet started', render: () => (
+    <InApp><AthleteDetailView name="Dana Cohen" data={coachAthleteFixture()} sentVersion={4} nowMs={Date.now()} onBack={noop} onEditWeek={noop} onRemove={noop} removing={false} /></InApp>
+  ) },
+  { id: '11.C3', label: 'Coach · a week for her — the doors', status: 'live', note: 'CoachWeekBuilder: the builder in for-mode — write it, a sentence to the AI from HER facts, a photo, a template', render: () => (
+    <InApp><PlanBuilderView {...builderProps} draft={null} offerDoors advice={[]} onLetHushBuild={noop} forAthlete={coachPenProps} /></InApp>
+  ) },
+  { id: '11.C3a', label: 'the pen, mid-week', of: '11.C3', status: 'live', note: 'every lift carries sets × band and a note ≤140; Send replaces Save', render: () => {
+    const draft = coachPenDraft();
+    return <InApp><PlanBuilderView {...builderProps} draft={draft} offerDoors={false} advice={builderAdviceOf(draft)} forAthlete={coachPenProps} /></InApp>;
+  } },
+  { id: '11.C3b', label: 'refused, with words', of: '11.C3', status: 'live', note: 'a bound the server would refuse is said before the send, naming the day', render: () => {
+    const draft = coachPenDraft();
+    return <InApp><PlanBuilderView {...builderProps} draft={draft} offerDoors={false} advice={[]} forAthlete={{ ...coachPenProps, problems: ['“Workout C” has no lifts. Add one or remove the day.'] }} /></InApp>;
+  } },
+  { id: '11.C4', label: 'Coach · become a coach', status: 'live', note: 'what the account is, free for two, and the one field: the name his athletes read', render: () => (
+    <InApp><CoachEnrollView name="Danny Azoulay" onName={noop} enrolled={false} seats={2} busy={false} onEnroll={noop} onSignIn={noop} onPlans={noop} onBack={noop} /></InApp>
+  ) },
+  /* ── THE COACH TRACK, THE TRAINEE'S SIDE (2026-09-17) ── */
+  { id: '11.T1', label: 'Trainee · the invite and the consent', status: 'live', note: 'what crosses and what never does, both switches OFF; nothing is fetched until Join', render: () => (
+    <InApp><CoachJoinView code="HKM4Q7" onCode={noop} bodyweight={false} onBodyweight={noop} cardio={false} onCardio={noop} busy={false} errorKey={null} needsAccount={false} onJoin={noop} onBack={noop} intake={false} /></InApp>
+  ) },
+  { id: '11.T1a', label: 'refused, in words — the coach is full', of: '11.T1', status: 'live', note: 'seats_full, bad_code, already_linked, self, the server, offline: each its own sentence, and each says the next step', render: () => (
+    <InApp><CoachJoinView code="HKM4Q7" onCode={noop} bodyweight onBodyweight={noop} cardio={false} onCardio={noop} busy={false} errorKey="coachTrack.athlete.errSeatsFull" needsAccount={false} onJoin={noop} onBack={noop} intake /></InApp>
+  ) },
+  /* ⛔ THE STATE THAT HAD NO ENTRY AND NO WORDS UNTIL 2026-09-18 — an athlete who already trains. */
+  { id: '11.T1b', label: 'she already has a week of her own', of: '11.T1', status: 'live', note: 'joining REPLACES it (adoptCoachWeek writes over the stored one) — the cost is above the button, before the press; the empty field is mono, centred, and teaches the shape', render: () => (
+    <InApp><CoachJoinView code="" onCode={noop} bodyweight={false} onBodyweight={noop} cardio={false} onCardio={noop} busy={false} errorKey={null} needsAccount={false} replacesWeek onJoin={noop} onBack={noop} intake={false} /></InApp>
+  ) },
+  { id: '11.T1c', label: 'the press reached the server', of: '11.T1', status: 'live', note: 'busy: the label says so — a disabled button wearing its old word reads broken', render: () => (
+    <InApp><CoachJoinView code="HKM4Q7" onCode={noop} bodyweight onBodyweight={noop} cardio onCardio={noop} busy errorKey={null} needsAccount={false} replacesWeek={false} onJoin={noop} onBack={noop} intake /></InApp>
+  ) },
+  { id: '11.T2', label: 'Trainee · a new week from her coach', status: 'live', note: 'the paper card on Today: how many changes, from which day, and the changes under the DAY each one happened on', render: () => (
+    <InApp><View style={{ padding: 26 }}><CoachUpdateCard coachName="Dani Azoulay" count={2} dayLabel="יום חמישי" groups={[{ day: 'דחיפה A', lines: [{ sign: '−', name: 'Military press' }, { sign: '+', name: 'Dumbbell shoulder press' }] }]} onDismiss={noop} /></View></InApp>
+  ) },
+  { id: '11.T2a', label: 'twelve changes, and two lifts we do not stock', of: '11.T2', status: 'live', note: 'the count carries what the four lines cannot; `~` prints the FIGURES that moved; a dropped lift is the one line with something to do, in clay', render: () => (
+    <InApp><View style={{ padding: 26 }}><CoachUpdateCard
+      coachName="Dani Azoulay"
+      count={12}
+      dayLabel="היום"
+      groups={[
+        { day: 'דחיפה A', lines: [
+          { sign: '−', name: 'Military press' },
+          { sign: '+', name: 'Dumbbell shoulder press' },
+        ] },
+        { day: 'רגליים', lines: [
+          { sign: '~', name: 'Barbell back squat', detail: '3×6–8→4×8–10' },
+          { sign: '~', name: 'Cable row', detail: '8–12→10–15' },
+        ] },
+      ]}
+      dropped={2}
+      askLabel="בקש מדני להחליף"
+      onAskCoach={noop}
+      onDismiss={noop}
+    /></View></InApp>
+  ) },
+  /* ⛔ ORDER IS A CHANGE (2026-09-18) — a reorder used to produce diffCount 0 and NO CARD. */
+  { id: '11.T2d', label: 'he only changed the order', of: '11.T2', status: 'live', note: 'a pure reorder (the lifts inside a day,  and the day itself moving up the week) landed silently until the `moved` kind — the card now says it in words, under the day it happened on', render: () => (
+    <InApp><View style={{ padding: 26 }}><CoachUpdateCard
+      coachName="Dani Azoulay"
+      count={2}
+      dayLabel="יום שלישי"
+      groups={[
+        { day: 'דחיפה A', lines: [{ sign: '⇅', name: 'סדר התרגילים שונה.' }] },
+        { day: 'רגליים', lines: [{ sign: '⇅', name: 'היום עבר למקום 1 בשבוע.' }] },
+      ]}
+      onDismiss={noop}
+    /></View></InApp>
+  ) },
+  /*
+   * ⛔ THIS ENTRY USED TO SAY THE SILENCE WAS CORRECT (2026-09-18). Its note read *"a landing whose
+   * diff is empty draws NO card at all"* about a week the coach had RE-ORDERED — which was true, and
+   * was the defect: `diffWeeks` could not see order, so a reorder produced `diffCount === 0`. It has
+   * a `moved` kind now, and Today draws the card the reorder always deserved.
+   */
+  { id: '11.T2b', label: 'her coach re-ordered the week, and nothing else', of: '11.T2', status: 'live', note: 'order IS a change: a reorder used to land silently (diffCount 0, no card) — now it is said in words, under the day it happened on, over the same week', render: () => (
+    <InApp>{React.cloneElement(todayView(), {
+      coachSignature: 'Dani Azoulay',
+      coachWaiting: null,
+      coachUpdate: {
+        coachName: 'Dani Azoulay',
+        count: 2,
+        dayLabel: 'היום',
+        groups: [
+          { day: 'דחיפה A', lines: [{ sign: '⇅', name: 'סדר התרגילים שונה.' }] },
+          { day: 'רגליים', lines: [{ sign: '⇅', name: 'היום עבר למקום 1 בשבוע.' }] },
+        ],
+        onDismiss: noop,
+      },
+    })}</InApp>
+  ) },
+  { id: '11.T2c', label: 'waiting for the first week', of: '11.T2', status: 'live', note: 'linked, nothing sent yet: the week below is the engine’s and it says so. NEVER drawn beside the update card — the two contradicted each other on the 09-17 walk', render: () => (
+    <InApp>{React.cloneElement(todayView(), { coachWaiting: 'Dani Azoulay', coachSignature: null, coachUpdate: null })}</InApp>
+  ) },
+  { id: '11.T3', label: 'Trainee · my coach', status: 'live', note: 'who, since when, what crosses, the Pro line, and a way out that takes nothing', render: () => (
+    <InApp><MyCoachView coachName="Dani Azoulay" since="02.09" weekNumber={3} consent={{ bodyweight: false, cardio: false }} saving={false} errorKey={null} confirming={false} leaving={false} onConsent={noop} onLeave={noop} onConfirmLeave={noop} onCancelLeave={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.T3a', label: 'leaving — the cost, said first', of: '11.T3', status: 'live', note: 'a RECEIPT, one fact per line: her week, his access, her data, her Pro — never the footnote she just read, re-read', render: () => (
+    <InApp><MyCoachView coachName="Dani Azoulay" since="02.09" weekNumber={3} consent={{ bodyweight: true, cardio: false }} saving={false} errorKey={null} confirming leaving={false} onConsent={noop} onLeave={noop} onConfirmLeave={noop} onCancelLeave={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.T3b', label: 'after leaving — and the way back in', of: '11.T3', status: 'live', note: 'after she leaves, this screen becomes its own empty state and carries the typed code — and since 2026-09-18 You carries a קוד מאמן row of its own, so the code is reachable from a cold start too', render: () => (
+    <InApp><MyCoachView coachName={null} since={null} weekNumber={null} consent={{ bodyweight: false, cardio: false }} saving={false} errorKey={null} confirming={false} leaving={false} onConsent={noop} onLeave={noop} onConfirmLeave={noop} onCancelLeave={noop} onBack={noop} onJoinAnother={noop} /></InApp>
+  ) },
+  { id: '11.T3c', label: 'a coach whose name is forty characters', of: '11.T3', status: 'live', note: 'the server’s own bound (names are 1..40); the identity line, the Pro line and the leave note all carry it', render: () => (
+    <InApp><MyCoachView coachName="אלכסנדרה בן-שמעון-רוזנבלט" since="02.09" weekNumber={12} consent={{ bodyweight: true, cardio: true }} saving={false} errorKey={null} confirming={false} leaving={false} onConsent={noop} onLeave={noop} onConfirmLeave={noop} onCancelLeave={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.T4', label: 'Trainee · the coach’s line about a lift', status: 'live', note: 'law 7 — one note of ≤140 characters per lift and no chat; attributed, moss, and sans because it is WORDS', render: () => (
+    <InApp><View style={{ padding: 26, gap: 18 }}>
+      <CoachNoteLine note="שכמות אחורה, רגליים נטועות" coachName="Dani Azoulay" />
+      <CoachNoteLine
+        note="שורה של מאה וארבעים תווים בדיוק, כי זה הגבול שהשרת אוכף ואת המשפט הזה היא תקרא מול המוט: כתפיים למטה, מרפקים פנימה, ולא לרדת מתחת לקו."
+        coachName="Dani Azoulay"
+      />
+      {/* THE SET STAGE'S CAP — the note takes two lines, the attribution keeps its own and is
+          never truncated away (a 140-character note used to eat the coach's name entirely). */}
+      <CoachNoteLine
+        note="שורה של מאה וארבעים תווים בדיוק, כי זה הגבול שהשרת אוכף ואת המשפט הזה היא תקרא מול המוט: כתפיים למטה, מרפקים פנימה, ולא לרדת מתחת לקו."
+        coachName="אלכסנדרה בן-שמעון-רוזנבלט"
+        lines={2}
+      />
+      <CoachNoteLine note="Keep the bar over mid-foot" coachName="Dani Azoulay" lines={2} />
+    </View></InApp>
+  ) },
+  { id: '11.C5', label: 'Coach · templates', status: 'live', note: 'saved weeks, read and deleted here; applied from the pen', render: () => (
+    <InApp><CoachTemplatesView templates={[{ id: 't1', name: 'Upper / Lower', week: coachAthleteFixture().week.week, updatedAt: new Date().toISOString() }]} onDelete={noop} onBack={noop} /></InApp>
+  ) },
+
+  /*
+   * ── WHAT A SEAT COSTS (2026-09-18) ───────────────────────────────────────────────────────────
+   * ⛔ `11.C6` IS THE STATE THE APP ACTUALLY SHIPS TODAY — the three products do not exist in App
+   * Store Connect, so the store answers nothing and the screen says so. `11.C6a` and `11.C6b` are
+   * the priced states, drawn here from FIXTURES so the design can be judged before Apple has a
+   * product; the app itself still never invents a price (`platform/billing` answers `[]`).
+   */
+  { id: '11.C6', label: 'Coach · what a seat costs', status: 'live', note: 'the state that ships today: the plans are not on sale yet, said in words, with no control that cannot be pressed', render: () => (
+    <InApp><CoachPlansView plan={null} plans={[]} seats={{ used: 2, seats: 2 }} activeId={null} selected={null} onSelect={noop} busy={false} needsAccount={false} onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.C6e', label: 'the plan ended, the roster did not', of: '11.C6', status: 'live', note: 'the news he arrived with, above the pitch: what is still his (everyone, every week) and the one thing that is closed (a new invite) — never a word that reads as a removal', render: () => (
+    <InApp><CoachPlansView plan={{ productId: 'hush.coach.10.month', seats: 10, renewsAt: null, state: 'over_limit' }} plans={[]} seats={{ used: 22, seats: 10 }} activeId={null} selected={null} onSelect={noop} busy={false} needsAccount={false} onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.C6f', label: 'the card is being retried', of: '11.C6', status: 'live', note: 'Apple status 4 — grace: the seats STAY, and a coach told nothing here reads a retry as a cancellation', render: () => (
+    <InApp><CoachPlansView plan={{ productId: 'hush.coach.30.month', seats: 30, renewsAt: '2026-10-18T00:00:00.000Z', state: 'grace' }} plans={coachPlanFixture()} seats={{ used: 11, seats: 30 }} activeId={'hush.coach.30.month'} selected={'hush.coach.30.month'} onSelect={noop} busy={false} needsAccount={false} onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.C6a', label: 'the three tiers', of: '11.C6', status: 'live', note: 'once the products exist: every price is the store’s own localized label, the seat count leads, the chosen edge lights', render: () => (
+    <InApp><CoachPlansView plan={null} plans={coachPlanFixture()} seats={{ used: 2, seats: 2 }} activeId={null} selected={'hush.coach.30.month'} onSelect={noop} busy={false} needsAccount={false} onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.C6b', label: 'the tier he is on', of: '11.C6', status: 'live', note: 'his own plan is stated, never sold to him again; the act becomes "change plan"', render: () => (
+    <InApp><CoachPlansView plan={null} plans={coachPlanFixture()} seats={{ used: 11, seats: 30 }} activeId={'hush.coach.30.month'} selected={'hush.coach.100.month'} onSelect={noop} busy={false} needsAccount={false} onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.C6c', label: 'the purchase the server has not caught up with', of: '11.C6', status: 'live', note: 'Apple has the money, the seats have not opened — nothing is lost, and asking again is one press', render: () => (
+    <InApp><CoachPlansView plan={null} plans={coachPlanFixture()} seats={{ used: 2, seats: 2 }} activeId={'hush.coach.10.month'} selected={'hush.coach.10.month'} onSelect={noop} busy={false} fault="claim" needsAccount={false} onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
+  ) },
+  { id: '11.C6d', label: 'a reader who is not a coach yet', of: '11.C6', status: 'live', note: 'arriving from the athlete paywall’s quiet line — seats belong to a coach account, so the act opens one', render: () => (
+    <InApp><CoachPlansView plan={null} plans={coachPlanFixture()} seats={null} activeId={null} selected={'hush.coach.10.month'} onSelect={noop} busy={false} needsAccount onAct={noop} onRetryClaim={noop} onBack={noop} /></InApp>
   ) },
 
   /*

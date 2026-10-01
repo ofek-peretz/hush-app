@@ -70,7 +70,10 @@ export type ColorToken =
   // take it off"), and they are gone from the TYPE rather than merely unused, so a future clip
   // cannot reach for them: the accent hue is now a compile error here, not a convention. The range
   // statement they used to draw is ink + a dash — see `kit.barPathTicks` for the full reasoning.
-  | 'up';
+  | 'up'
+  /* THE KIT SHE TRAINS IN (2026-09-30) — see `skin.ts`. Still the duotone: warm neutrals only, one
+     step apart, near side lit and far side dim. No hue; the no-ochre ruling stands for cloth too. */
+  | 'cloth' | 'clothFar' | 'shoe' | 'hair';
 
 /** One cubic-bezier segment of a `path` primitive. */
 export interface CubicSeg {

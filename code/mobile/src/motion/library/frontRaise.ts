@@ -21,7 +21,7 @@ import { sticksAt } from '../curves';
 const STICK = sticksAt(0.85, 0.06);
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE } from '../anthro';
-import { cable, dumbbellEnd, dumbbellSide, floorScene, pulley, sampledPathTicks } from '../kit';
+import { cable, dumbbellEnd, floorScene, pulley, sampledPathTicks, stirrupHandle } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, standingCore } from '../bodies';
 
@@ -98,7 +98,7 @@ function frontRaise(p: FrontRaiseParams): Rig {
     if (p.implement === 'db') {
       /* A front raise is PRONATED (palms down): from the side that is a plate end-on, and one —
          the far bell hides behind the near one. dumbbellSide was the hammer grip (2026-09-07). */
-      front = [...dumbbellEnd(pose.j.hand, 6)];
+      front = [...dumbbellEnd(pose.j.hand, 6, dir)];
     } else {
       const risen = (armAt(THETA_BOTTOM).hand.y - pose.j.hand.y) * 0.5;
       const tower = stackTower({ x0: PULLEY.x - 34, x1: PULLEY.x - 8, capY: FLOOR_Y - 98, stackTopY: FLOOR_Y - 34 }, risen);
@@ -106,7 +106,7 @@ function frontRaise(p: FrontRaiseParams): Rig {
       /* The cable runs BEHIND the near leg from a low pulley behind her — so it draws in back and
          disappears into the fist, instead of lying across the thigh in front (2026-09-07). */
       back.push(cable(PULLEY, pose.j.hand));
-      front = [...dumbbellSide(pose.j.hand, dir, 3, 2.5)];
+      front = [...stirrupHandle(pose.j.hand, dir, PULLEY)];
     }
     return { back, front };
   };

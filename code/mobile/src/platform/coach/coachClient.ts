@@ -180,6 +180,12 @@ export async function askCoach(
    * instead. Everything else — a review, a chat — is refused without a bearer. Absent = `chat`.
    */
   kind: 'build' | 'import' | 'review' | 'chat' = 'chat',
+  /**
+   * How long the caller will wait for this answer, in ms (2026-09-27). The Worker gives the week to
+   * its strongest model only when this leaves room for it and a fast model after it; absent, the
+   * fast model answers alone. Only `requestPlanBuild` sends it.
+   */
+  wait?: number,
 ): Promise<CoachReply> {
   if (!coachIsReachable()) return { ok: false, reason: 'not_configured' };
 
@@ -222,6 +228,7 @@ export async function askCoach(
         ...(think ? { think } : {}),
         ...(images?.length ? { images } : {}),
         kind,
+        ...(wait && wait > 0 ? { wait: Math.round(wait) } : {}),
       }),
       signal: controller.signal,
     });

@@ -35,7 +35,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { Arrive, Button, Legend, Stage, FooterFade } from '@/components/ds';
+import { Arrive, Button, Legend, Stage, FooterFade, opticalFigure } from '@/components/ds';
 import { PlanLifts, type PlanLift } from '@/components/PlanLifts';
 import type { FigureSex } from '@/motion/types';
 // ⚠️ `muscleOf` went with the per-muscle allocation block (see the note below `Figure`) — an import
@@ -106,6 +106,14 @@ export interface PreWorkoutProps {
   done?: boolean;
   /** Gated by the trial: the plan is still hers to read, the act is not. */
   locked?: boolean;
+  /**
+   * ⛔ THE COACH TRACK (2026-09-17). `coachName` — a linked coach's week: each lift's note is drawn
+   * under it, attributed. `insteadOf` — lifts swapped FOR TODAY (ruling 4), by the name they replace;
+   * present and non-empty ⇒ the sheet says the swap is for today only, and offers to undo it.
+   */
+  coachName?: string | null;
+  insteadOf?: Readonly<Record<string, string>>;
+  onUndoSwaps?: () => void;
 }
 
 /*
@@ -124,7 +132,7 @@ export interface PreWorkoutProps {
 function Figure({ value, label }: { value: string; label: string }) {
   return (
     <View style={styles.figure} accessible accessibilityLabel={`${value} ${label}`}>
-      <Text style={styles.figureValue}>{value}</Text>
+      <Text style={styles.figureValue}>{opticalFigure(value)}</Text>
       <Legend size={17} track={0.2}>{label}</Legend>
     </View>
   );
@@ -273,8 +281,32 @@ export function PreWorkoutView(props: PreWorkoutProps) {
               onWhy={props.onWhy}
               onSwap={props.onSwap}
               {...(props.onReorder ? { onReorder: props.onReorder, onDragging: setDragging } : {})}
+              {...(props.coachName ? { coachName: props.coachName } : {})}
+              {...(props.insteadOf ? { insteadOf: props.insteadOf } : {})}
             />
           </Arrive>
+          {/* Ruling 4 — said once, under the table it changed: today only, the week untouched, the coach told. */}
+          {props.insteadOf && Object.keys(props.insteadOf).length > 0 ? (
+            <View style={styles.todaySwap}>
+              <Text style={styles.todaySwapText}>{t('coachTrack.athlete.swapTodayNote')}</Text>
+              {props.onUndoSwaps ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('coachTrack.athlete.swapUndo')}
+                  onPress={props.onUndoSwaps}
+                  hitSlop={10}
+                  style={({ pressed }) => [styles.todaySwapUndo, pressed && styles.dim]}
+                >
+                  {/* ⛔ AN UNDERLINE, BECAUSE IT WAS A CAPTION (2026-09-18). "ביטול" set in the
+                      same size and colour as the paragraph above it, flush under it, is not read as
+                      a control — and the word alone ("Cancel") did not say WHAT it cancels, on a
+                      sheet whose other button starts a workout. Now it is `swapUndo` = "undo the
+                      swap", underlined, in the ink the stage reserves for something to press. */}
+                  <Text style={styles.todaySwapUndoText}>{t('coachTrack.athlete.swapUndo')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={styles.footer}>
@@ -413,6 +445,12 @@ const styles = StyleSheet.create({
   doneText: { fontFamily: font.sansMedium, fontSize: 17, color: stage.ink1, textAlign: 'left' },
   /* A.13 — a wash under the control, never a fade of it. */
   dim: { backgroundColor: 'rgba(241,238,229,0.10)' },
+
+  /* The coach track's swap-for-today line — the reading voice, one quiet undo beside it. */
+  todaySwap: { marginTop: 14, gap: 4, alignItems: 'flex-start' },
+  todaySwapText: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: stage.ink1, textAlign: 'left' },
+  todaySwapUndo: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8, marginStart: -8, borderRadius: 10 },
+  todaySwapUndoText: { fontFamily: font.sansMedium, fontSize: 17, color: stage.ink0, textDecorationLine: 'underline', textAlign: 'left' },
 
   /* The "it has moved" state — the sheet's own gutter, and nothing else on it. */
   moved: { flex: 1, justifyContent: 'center', paddingHorizontal: space.gutter, gap: 10, paddingBottom: 60 },

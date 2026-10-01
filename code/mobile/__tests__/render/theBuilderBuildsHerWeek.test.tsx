@@ -103,16 +103,25 @@ function textOf(r: ReactTestRenderer): string {
 }
 
 describe('the two doors, before a draft exists', () => {
-  it('an engine week opens on the choice: take the draft, or start blank', () => {
+  /* ⛔ ONE DOOR FOR HER (founder 2026-09-28: *"הבינה צריכה לבנות תוכנית אימון בלבד בלי אימונים מוכנים
+     מראש"*, and *"כן תוריד גם את התחל מדף ריק"*). The model writes her week; she edits the draft it
+     wrote. The blank page and the proven shelves are the coach's doors now, not hers. */
+  it('an engine week opens on one door: take the draft — no blank page, no shelves (2026-09-28)', () => {
     const { r } = draw({ draft: null, offerDoors: true });
     const said = textOf(r);
     expect(said).toContain(tg('builder.fromEngine'));
-    expect(said).toContain(tg('builder.fromBlank'));
+    expect(said).not.toContain(tg('builder.fromBlank'));
+    expect(said.toUpperCase()).not.toContain(tg('builder.templates.legend').toUpperCase());
+    for (const tpl of PLAN_TEMPLATES) expect(said).not.toContain(tg(`builder.templates.${tpl.id}.name`));
   });
 
-  it('…and under them, the proven shelves — each priced, each a door (2026-08-26)', () => {
+  it('…the proven shelves stay on the coach wall — each priced, each a door (2026-08-26)', () => {
     const picked = [];
-    const { r } = draw({ draft: null, offerDoors: true, onStartTemplate: (id) => picked.push(id) });
+    const forAthlete = {
+      name: 'Dana', facts: '', onSend: noop, sending: false, problems: [], onSaveTemplate: noop,
+      onPhoto: noop, photoBusy: false, templates: [], onStartCoachTemplate: noop,
+    };
+    const { r } = draw({ draft: null, offerDoors: true, forAthlete, onStartTemplate: (id) => picked.push(id) });
     const said = textOf(r);
     expect(said.toUpperCase()).toContain(tg('builder.templates.legend').toUpperCase()); // Legend uppercases
     // Every shelf is on the wall, with its honest clock beside it.

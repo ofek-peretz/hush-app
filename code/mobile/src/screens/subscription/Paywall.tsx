@@ -37,12 +37,13 @@
 // 
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Icon } from '@/components/Icon';
+import { Icon, type IconName } from '@/components/Icon';
 import { FerroxMark } from '@/components/FerroxLogo';
-import { Arrive, Button, Legend } from '@/components/ds';
+import { Arrive, Button, Legend, opticalFigure } from '@/components/ds';
+import { PRIVACY_URL, TERMS_URL } from '@/platform/legal';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { track } from '@/platform/telemetry';
@@ -138,6 +139,12 @@ export function Paywall({ navigation, route }: Props) {
     navigation.goBack();
   }
 
+  /** The coach track's one door out of this screen — see the line at the foot of the footer. */
+  function onCoachPlans() {
+    void track(BILLING_EVENTS.paywallDismissed, { source: `${source}_coach` });
+    navigation.navigate('CoachPlans');
+  }
+
   async function onSubscribe() {
     if (busy || products.length === 0) return;
     setBusy(true);
@@ -192,7 +199,11 @@ export function Paywall({ navigation, route }: Props) {
   return (
     <SafeAreaView style={styles.canvas} edges={['top', 'bottom']}>
       {/* the way out — Apple requires it, and it is a circle on the stage, not a bare glyph */}
+      {/* The mark rides the header row beside the way out (design audit 2026-09-29): on its own row it
+          cost 70 points, and the trial timeline — the promise that makes the trial safe — was the
+          part pushed under the act. */}
       <View style={styles.header}>
+        <FerroxMark width={34} />
         <Pressable
           onPress={dismiss}
           hitSlop={HIT}
@@ -229,17 +240,24 @@ export function Paywall({ navigation, route }: Props) {
           ════════════════════════════════════════════════════════════════════════════════════════
         */}
         <Arrive order={0}>
-          <FerroxMark width={56} />
-        </Arrive>
-        <Arrive order={0}>
         <Legend tone="accent" track={0.16} style={styles.eyebrow}>
+          {/* Before her first workout there is nothing spent to count — "session 0 of 3" read as a
+              debt on the profile's door into this screen (design audit 2026-09-29). */}
           {trialSpent
-            ? t('paywall.trialDone', { n: FREE_SESSION_LIMIT })
-            : t('paywall.trialLeft', { done: sessionsDone, n: FREE_SESSION_LIMIT })}
+            ? t('paywall.trialDone', { count: FREE_SESSION_LIMIT })
+            : sessionsDone === 0
+              ? t('paywall.trialFirst', { count: FREE_SESSION_LIMIT })
+              : t('paywall.trialLeft', { done: sessionsDone, n: FREE_SESSION_LIMIT })}
         </Legend>
         </Arrive>
         <Arrive order={1}>
-          <Text style={styles.title} accessibilityRole="header">{t('paywall.title')}</Text>
+          {/* ⛔ THE HEADLINE LOOKS FORWARD (design audit 2026-09-29). "It was a pleasure training with
+              you" read as a goodbye on the screen that asks her to stay — and over "session 0 of 3"
+              it thanked her for workouts that never happened. Spent trial: what the next weeks do
+              with what she did. Otherwise: what the membership is. */}
+          <Text style={styles.title} accessibilityRole="header">
+            {trialSpent ? t('paywall.titleSpent', { count: FREE_SESSION_LIMIT }) : t('paywall.title')}
+          </Text>
         </Arrive>
 
         {/* the measured close — see `personalCase` above. The serif, because the coach is speaking. */}
@@ -317,6 +335,18 @@ export function Paywall({ navigation, route }: Props) {
           <Text style={styles.case}>{t('paywall.file', { count: fileFacts })}</Text>
         ) : null}
 
+        {/*
+          ✦ WHAT THE PRICE BUYS — three lines, no more (design audit 2026-09-29, approved by the
+          founder with the report). Apple asks a subscription screen to say what she gets for the
+          price (3.1.2), and the 2026-08-13 ruling stands in spirit: no paragraphs, no promises she
+          has to verify — three things the membership does, each one a line with its mark.
+        */}
+        <Arrive order={1} style={styles.gets}>
+          <Get icon="calendar" text={t('paywall.getsWeek')} />
+          <Get icon="speech" text={t('paywall.getsVoice')} />
+          <Get icon="watch" text={t('paywall.getsEverywhere')} />
+        </Arrive>
+
         {/* ⛔ THE PRICES ARE THE SCREEN. With the pitch gone they take the whole middle of the page
             rather than trailing a list of claims. */}
         <Arrive order={2} style={styles.plansWrap}>
@@ -343,6 +373,7 @@ export function Paywall({ navigation, route }: Props) {
             </View>
           )}
 
+
           {failed ? (
             <Text style={failed === 'pending' ? styles.pendingNote : styles.error}>
               {failed === 'restore'
@@ -356,6 +387,13 @@ export function Paywall({ navigation, route }: Props) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {/* ✦ THE TRIAL, AS A TIMELINE (founder 2026-09-28, the pricing model): what happens today,
+            the day she is reminded, the day the charge begins. It is the promise that makes a
+            card-committed trial safe to start — and the reminder is real (`armTrialEnding`).
+            ⛔ IN THE FOOTER, RIGHT ABOVE THE ACT (design audit 2026-09-29): in the scroll it was the
+            first thing a phone's safe areas pushed under the fold — the promise belongs beside the
+            button it makes safe to press, where no screen height can hide it. */}
+        {selectedProduct?.introTrialDays ? <TrialTimeline days={selectedProduct.introTrialDays} /> : null}
         {/*
           CREAM, LIKE EVERY OTHER ACT IN HUSH (design audit, 2026-08-24).
 
@@ -377,7 +415,13 @@ export function Paywall({ navigation, route }: Props) {
           variant="primary"
           size="act"
           block
-          label={busy ? t('paywall.working') : t('paywall.keepTraining')}
+          label={
+            busy
+              ? t('paywall.working')
+              : selectedProduct?.introTrialLabel
+                ? t('paywall.startTrial', { period: selectedProduct.introTrialLabel })
+                : t('paywall.keepTraining')
+          }
           disabled={busy || loading || products.length === 0}
           onPress={onSubscribe}
         />
@@ -390,6 +434,20 @@ export function Paywall({ navigation, route }: Props) {
           <Pressable onPress={dismiss} hitSlop={HIT} accessibilityRole="button">
             <Text style={styles.quiet}>{t('paywall.later')}</Text>
           </Pressable>
+          {/* ⛔ THE TERMS AND THE POLICY, ON THE SCREEN THAT SELLS (Apple 3.1.2, design audit
+              2026-09-29): an auto-renewing subscription must link both from inside the purchase
+              flow — the documents of record, on getferrox.com. On the quiet row, so they cost no
+              line of their own on a screen where every line pushes the trial timeline down. */}
+          {TERMS_URL ? (
+            <Pressable onPress={() => void Linking.openURL(TERMS_URL!).catch(() => {})} hitSlop={HIT} accessibilityRole="link">
+              <Text style={styles.legalLink}>{t('paywall.terms')}</Text>
+            </Pressable>
+          ) : null}
+          {PRIVACY_URL ? (
+            <Pressable onPress={() => void Linking.openURL(PRIVACY_URL!).catch(() => {})} hitSlop={HIT} accessibilityRole="link">
+              <Text style={styles.legalLink}>{t('paywall.privacy')}</Text>
+            </Pressable>
+          ) : null}
         </View>
         {/*
           ⛔ HER RECORD IS NEVER HELD HOSTAGE (founder, 2026-08-23: the Spotify mandate — trust is
@@ -398,8 +456,29 @@ export function Paywall({ navigation, route }: Props) {
           she decides whether to trust us says so in words.
         */}
         <Text style={styles.recordYours}>{t('paywall.recordYours')}</Text>
+        {/*
+          ⛔ ONE QUIET LINE, AND IT MAY NOT COMPETE WITH PRO (the coach track, ruling 1).
+          *
+          * Some readers of this screen are not athletes deciding about themselves — they coach other
+          * people, and for them the answer is a different product with a different price. That fact
+          * has to be reachable from somewhere, and the intake is not it (the founder deleted the
+          * build-or-bring fork on 2026-09-16; a "who are you" question at the front door is exactly
+          * what he removed). So it is HERE, as the smallest thing on the page: muted, underneath the
+          * sentence about her record, above the legal line — after the argument has been made and
+          * before the fine print. It is a question, not an offer: nothing about seats, nothing about
+          * a coach price, and no second act on a screen that has one.
+        */}
+        <Pressable onPress={onCoachPlans} hitSlop={HIT} accessibilityRole="button">
+          <Text style={styles.coachLine}>{t('coachTrack.coach.plans.paywallLink')}</Text>
+        </Pressable>
         <Text style={styles.legal}>
-          {selectedProduct
+          {selectedProduct?.introTrialLabel
+            ? t('paywall.legalTrial', {
+                period: selectedProduct.introTrialLabel,
+                price: selectedProduct.priceLabel,
+                cadence: selectedProduct.period === 'annual' ? t('paywall.perYear') : t('paywall.perMonth'),
+              })
+            : selectedProduct
             ? t('paywall.legalDynamic', {
                 plan: selectedName,
                 price: selectedProduct.priceLabel,
@@ -412,6 +491,47 @@ export function Paywall({ navigation, route }: Props) {
   );
 }
 
+/** One thing the membership does — its mark, and one line. */
+function Get({ icon, text }: { icon: IconName; text: string }) {
+  return (
+    <View style={styles.get}>
+      <Icon name={icon} size={20} color={color.accent} strokeWidth={1.8} />
+      <Text style={styles.getText} numberOfLines={3}>{text}</Text>
+    </View>
+  );
+}
+
+/**
+ * THE TRIAL'S THREE DAYS — today, the reminder, the charge. Counted from the store's own trial
+ * length, so a change in App Store Connect moves the days with it.
+ */
+function TrialTimeline({ days }: { days: number }) {
+  const { t } = useCopy();
+  const remind = Math.max(1, days - 2);
+  const rows = [
+    { key: 'today', title: t('paywall.timelineToday'), sub: t('paywall.timelineTodaySub') },
+    { key: 'remind', title: t('paywall.timelineDay', { day: remind }), sub: t('paywall.timelineRemindSub') },
+    { key: 'charge', title: t('paywall.timelineDay', { day: days }), sub: t('paywall.timelineChargeSub') },
+  ];
+  /* ⚠️ ACROSS, NOT DOWN (walked 2026-09-28 at 375 × 812): a vertical rail put days 12 and 14 under
+     the fold, behind the act — the one promise that makes the trial safe to start was the part she
+     had to scroll for. Three columns on one rule fit above the button on every phone. */
+  return (
+    <View style={styles.timeline} accessibilityRole="summary">
+      <View style={styles.tlRule} />
+      <View style={styles.tlRow}>
+        {rows.map((r, i) => (
+          <View key={r.key} style={styles.tlStep}>
+            <View style={[styles.tlDot, i === 0 && styles.tlDotNow]} />
+            <Text style={styles.tlTitle}>{r.title}</Text>
+            <Text style={styles.tlSub}>{r.sub}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /**
  * ONE PLAN.
  *
@@ -419,8 +539,9 @@ export function Paywall({ navigation, route }: Props) {
  * units and language and Progress's Lifts/Log now wear: equal fields, a hairline that LIGHTS to
  * cream on the answer, a wash on press and never a fade (A.13). Two cards teaching one gesture.
  *
- * Both plans state their price per MONTH — the two are only comparable in the same unit — with the
- * year's real total beneath the annual, so the divided figure never has to be taken on trust.
+ * Each plan states the price it CHARGES, for its own period (2026-09-29, Apple 3.1.2); the annual's
+ * per-month equivalent sits in the line beneath, so the two stay comparable without the divided
+ * figure ever outshouting the real charge.
  */
 function PlanCard({
   product,
@@ -437,16 +558,26 @@ function PlanCard({
   const annual = product.period === 'annual';
   const name = annual ? t('paywall.annual') : t('paywall.monthly');
 
-  // The annual card leads with its per-month equivalent; if the label will not divide honestly it
-  // leads with the price the store gave us instead, and the cadence says which unit that is.
+  /*
+   * ⛔ THE AMOUNT SHE IS CHARGED IS THE HERO (design audit 2026-09-29, Apple 3.1.2).
+   *
+   * The annual card used to lead with its per-month equivalent ("$6.67 /month") in hero type, with
+   * the yearly charge ($79.99) only in the legal line at the foot. That is the layout Apple rejects:
+   * the billed amount must be the most prominent price on the screen. So each card's figure is the
+   * store's own price for its own period, and the annual's per-month equivalent — still the honest
+   * way to compare the two — moves into the line beneath it.
+   */
   const perMonth = annual ? monthlyEquivalentLabel(product.priceLabel) : null;
-  const figure = perMonth ?? product.priceLabel;
-  const cadence = perMonth || !annual ? t('paywall.perMonthShort') : t('paywall.perYearShort');
-  const sub = product.introTrialLabel
+  const figure = product.priceLabel;
+  const cadence = annual ? t('paywall.perYearShort') : t('paywall.perMonthShort');
+  const trialOrBilling = product.introTrialLabel
     ? t('paywall.freeTrial', { period: product.introTrialLabel })
     : annual
-      ? t('paywall.billedOnce', { price: product.priceLabel })
+      ? perMonth
+        ? ''
+        : t('paywall.billedOnce', { price: product.priceLabel })
       : t('paywall.billedMonthly');
+  const sub = [perMonth ? t('paywall.equivMonth', { price: perMonth }) : '', trialOrBilling].filter(Boolean).join(' · ');
 
   return (
     <Pressable
@@ -488,7 +619,7 @@ function PlanCard({
           adjustsFontSizeToFit
           minimumFontScale={0.55}
         >
-          {figure}
+          {opticalFigure(figure)}
         </Text>
         <Text style={styles.cadence} numberOfLines={1}>{cadence}</Text>
       </View>
@@ -498,12 +629,12 @@ function PlanCard({
 
 const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: color.bg },
-  header: { paddingHorizontal: 26, paddingTop: space[2], paddingBottom: space[1], alignItems: 'flex-end' },
+  header: { paddingHorizontal: 26, paddingTop: space[2], paddingBottom: space[1], flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(241,238,229,0.08)', alignItems: 'center', justifyContent: 'center' },
   closePressed: { backgroundColor: color.fillSubtleStrong },
   // `flexGrow` so the plans can take the space the copy left rather than stacking under the title.
   scroll: { flexGrow: 1, paddingHorizontal: 30, paddingTop: 8, paddingBottom: space[4] },
-  eyebrow: { marginTop: 14, marginBottom: 12 },
+  eyebrow: { marginTop: 4, marginBottom: 10 },
   // v7 4.3: the close of the trial is the coach speaking — the serif at 36, not UI chrome.
   title: {
     color: color.textPrimary,
@@ -525,12 +656,14 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   recordYours: { color: color.textMuted, fontFamily: font.sans, fontSize: 17, lineHeight: 22, textAlign: 'center' },
+  /* The coach's line — muted, underlined, and the quietest thing on the screen (see the render note). */
+  coachLine: { color: color.textMuted, fontFamily: font.sans, fontSize: 17, lineHeight: 22, textAlign: 'center', textDecorationLine: 'underline' },
   loader: { marginVertical: space[8] },
   unavailable: { color: color.textMuted, fontFamily: font.sans, fontSize: textScale.base, textAlign: 'center', marginVertical: space[8] },
 
   /* ⛔ CENTRED IN WHAT THE COPY LEFT — the prices are the only object between the headline and the
      act, so they sit in the middle of the page rather than at the top of the leftovers. */
-  plansWrap: { flex: 1, justifyContent: 'center', paddingVertical: 24 },
+  plansWrap: { flex: 1, justifyContent: 'center', paddingVertical: 10 },
   /*
    * ⛔ HORIZONTAL, ANNUAL FIRST, EACH WITH ITS OWN SPACE (founder, 2026-08-13). Two narrow columns
    * made both plans compete for the same 159 points and squeezed the price into a shrinking figure.
@@ -543,8 +676,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 14,
-    minHeight: 128,
-    paddingVertical: 26,
+    /* 128 → 120 (2026-09-28): the trial timeline now shares the middle of the page with the two
+       plans, and at 375 × 812 its captions met the footer. 120 is the floor the founder's "tall"
+       ruling holds (`thePriceWearsTheAppsOwnCard`); the air comes out of the padding instead. */
+    minHeight: 120,
+    paddingVertical: 20,
     paddingHorizontal: 26,
     borderRadius: 20,
     borderWidth: 1,
@@ -599,12 +735,23 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
 
+  /* The trial timeline — a rail of three dots under the plans; the first is lit (today). */
+  timeline: { marginBottom: 6 },
+  /* The rule runs through the dots' centres; the steps sit on it. */
+  tlRule: { position: 'absolute', top: 6, start: '16%', end: '16%', height: 1.5, backgroundColor: 'rgba(241,238,229,0.18)' },
+  tlRow: { flexDirection: 'row' },
+  tlStep: { flex: 1, alignItems: 'center', gap: 4 },
+  tlDot: { width: 13, height: 13, borderRadius: 7, borderWidth: 1.5, borderColor: 'rgba(241,238,229,0.5)', backgroundColor: color.bg },
+  tlDotNow: { backgroundColor: color.accent, borderColor: color.accent },
+  tlTitle: { marginTop: 4, color: color.textPrimary, fontFamily: font.sansMedium, fontSize: 17, lineHeight: 22, textAlign: 'center' },
+  tlSub: { color: color.textMuted, fontFamily: font.sans, fontSize: 17, lineHeight: 21, textAlign: 'center' },
+
   error: { color: color.alert, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center', marginTop: space[5] },
   // Ask-to-Buy is news, not an error — same slot, the text's own colour, no red (audit finding 5).
   pendingNote: { color: color.textSecondary, fontFamily: font.sans, fontSize: textScale.sm, textAlign: 'center', marginTop: space[5] },
 
-  footer: { paddingHorizontal: 26, paddingTop: space[3], gap: 12 },
-  quietRow: { flexDirection: 'row', justifyContent: 'center', gap: 26 },
+  footer: { paddingHorizontal: 26, paddingTop: space[3], gap: 8 },
+  quietRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 18, rowGap: 6 },
   quiet: { color: color.textSecondary, fontFamily: font.sansMedium, fontSize: 17, textAlign: 'center' },
   legal: {
     color: color.textMuted,
@@ -614,4 +761,12 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
   },
+  legalLink: { color: color.textSecondary, fontFamily: font.sans, fontSize: 17, lineHeight: 22, textAlign: 'center', textDecorationLine: 'underline' },
+
+  /* What the price buys — three quiet lines between the headline and the prices. */
+  /* Three columns, a mark over two lines each: the list said the same three things in a third
+     more height, and height is what this screen does not have. */
+  gets: { marginTop: 16, flexDirection: 'row', gap: 10 },
+  get: { flex: 1, alignItems: 'center', gap: 6 },
+  getText: { color: color.textSecondary, fontFamily: font.sans, fontSize: 17, lineHeight: 21, textAlign: 'center' },
 });

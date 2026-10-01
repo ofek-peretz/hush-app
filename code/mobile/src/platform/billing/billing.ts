@@ -26,14 +26,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { track } from '@/platform/telemetry';
 import { BILLING_EVENTS } from '@/platform/events';
+import { tg } from '@/i18n';
 import {
   PRODUCT_IDS,
   PRODUCT_ORDER,
   PRODUCT_PERIOD,
+  PRO_TRIAL_DAYS,
+  type CoachPlanProduct,
+  type CoachProductId,
   type ProductId,
   type SubscriptionProduct,
 } from './products';
-import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
+import { NO_COACH_PLAN, NO_ENTITLEMENT, type CoachPlan, type Entitlement } from '@/domain/entitlement';
 // storekit.ts imports only TYPES from this module, so the cycle is erased at runtime.
 import { billingStoreKit, storeKitAvailable } from './storekit';
 
@@ -43,6 +47,16 @@ export interface PurchaseResult {
   status: PurchaseStatus;
   /** The entitlement AFTER the attempt (unchanged on cancel/fail). */
   entitlement: Entitlement;
+}
+
+/** The outcome of a COACH tier purchase — the coach plan after the attempt (the coach track). */
+export interface CoachPurchaseResult {
+  status: PurchaseStatus;
+  plan: CoachPlan;
+  /** Apple's `originalTransactionId` for the purchase, when StoreKit reported one. This is the
+   *  ONLY thing that can raise a seat limit, and it raises it on the WORKER after the worker has
+   *  checked it with Apple — see `coachTrackClient.coachClaimPlan`. Null off-device. */
+  transactionId: string | null;
 }
 
 export interface Billing {
@@ -58,6 +72,20 @@ export interface Billing {
   /** Restore prior purchases (re-reads the Apple ID's entitlements). Resolves
    *  `restored` when an active entitlement is found, else `failed`. */
   restore(): Promise<PurchaseResult>;
+
+  /* ── the coach track's tiers (ruling 1 — the coach pays) ──────────────────────────────────────
+   * Deliberately three METHODS OF THEIR OWN rather than a widened `ProductId`: a coach tier is not
+   * an athlete's plan, and the moment the two share a call the Pro entitlement can be set by a
+   * coach transaction. `withCoachPlan` (domain/entitlement) is the ONE place a coach's plan becomes
+   * his own Pro, and it is an overlay a law can read. */
+
+  /** The purchasable coach tiers, with the store's localized prices. `[]` when the products are
+   *  not configured in App Store Connect — which is TODAY (see ./products). */
+  getCoachPlans(): Promise<CoachPlanProduct[]>;
+  /** The coach subscription this Apple ID holds, or `NO_COACH_PLAN`. Never throws. */
+  getCoachPlan(): Promise<CoachPlan>;
+  /** Begin the purchase flow for a coach tier. Never throws; same status vocabulary as `purchase`. */
+  purchaseCoachPlan(productId: CoachProductId): Promise<CoachPurchaseResult>;
 }
 
 /* ============================================================================
@@ -70,8 +98,9 @@ const STUB_KEY = 'hush.billing.stub.entitlement';
  *  store's localized strings. Marked clearly so they are never mistaken for live
  *  pricing (which lives in App Store Connect). */
 const STUB_PRICE: Record<ProductId, string> = {
-  [PRODUCT_IDS.monthly]: '$9.99',
-  [PRODUCT_IDS.annual]: '$59.99',
+  /* The ratified tiers (founder 2026-09-28): $14.99 / $79.99 — ₪49.90 / ₪249.90 in Israel. */
+  [PRODUCT_IDS.monthly]: '$14.99',
+  [PRODUCT_IDS.annual]: '$79.99',
 };
 
 async function readStubEntitlement(): Promise<Entitlement> {
@@ -99,7 +128,9 @@ export const billingStub: Billing = {
       id,
       period: PRODUCT_PERIOD[id],
       priceLabel: STUB_PRICE[id],
-      introTrialLabel: null,
+      // The store's 14-day free trial, simulated — App Store Connect carries it on both plans.
+      introTrialLabel: tg('paywall.trialPeriod.day', { count: PRO_TRIAL_DAYS }),
+      introTrialDays: PRO_TRIAL_DAYS,
     }));
   },
 
@@ -109,11 +140,12 @@ export const billingStub: Billing = {
 
   async purchase(productId) {
     // Simulate a successful StoreKit purchase so QA can exercise the unlock path.
+    // The stub starts the store's free trial, as a first purchase in App Store Connect would.
     const entitlement: Entitlement = {
       active: true,
       productId,
-      source: 'subscription',
-      expiresAt: null, // unknown in the stub; the real impl carries the period end
+      source: 'trial',
+      expiresAt: new Date(Date.now() + PRO_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
     };
     await writeStubEntitlement(entitlement);
     return { status: 'purchased', entitlement };
@@ -124,6 +156,29 @@ export const billingStub: Billing = {
     return entitlement.active
       ? { status: 'restored', entitlement }
       : { status: 'failed', entitlement: NO_ENTITLEMENT };
+  },
+
+  /*
+   * ⛔ THE STUB SIMULATES APP STORE CONNECT, AND APP STORE CONNECT HAS NO COACH PRODUCTS.
+   *
+   * The Pro stub above prints placeholder prices because `hush.pro.month` and `hush.pro.annual` are
+   * REAL — the stub is standing in for a store that would answer. The three coach ids are not
+   * created yet, so a stub that answered them with `$19.99` would be the one thing this product
+   * never does: invent a price. `[]` here is what an honest store answer looks like today, on
+   * every surface the stub serves (jest, web, Expo Go) — and it is what the screen draws its
+   * "not open yet" line from. The day the founder creates them, this becomes a real fetch and
+   * NOTHING ELSE in the app changes.
+   */
+  async getCoachPlans() {
+    return [];
+  },
+
+  async getCoachPlan() {
+    return NO_COACH_PLAN;
+  },
+
+  async purchaseCoachPlan() {
+    return { status: 'failed' as const, plan: NO_COACH_PLAN, transactionId: null };
   },
 };
 
@@ -154,6 +209,15 @@ const billingGuard: Billing = {
   },
   async restore() {
     return { status: 'failed' as const, entitlement: NO_ENTITLEMENT };
+  },
+  async getCoachPlans() {
+    return [];
+  },
+  async getCoachPlan() {
+    return NO_COACH_PLAN;
+  },
+  async purchaseCoachPlan() {
+    return { status: 'failed' as const, plan: NO_COACH_PLAN, transactionId: null };
   },
 };
 

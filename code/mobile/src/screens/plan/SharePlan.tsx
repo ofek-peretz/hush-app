@@ -21,7 +21,8 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Arrive, Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { bidi } from '@/i18n/bidi';
+import { bidi, ltrIsland } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { muscleGroupsLabel } from '@/data/exercises';
 import { planLiftCount, type SharedPlan } from '@/domain/planShare';
 import { color, font, radius, signal, stage, press } from '@/design/tokens';
@@ -117,7 +118,7 @@ export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: Sh
           </View>
 
           {/* the brand, carried whole — exactly as the record poster carries it */}
-          <View style={styles.brand}>
+          <View style={[styles.brand, ltrIsland()]}>
             <FerroxMark width={22} color={stage.ink0} />
             <FerroxWordmark width={68} color={stage.ink0} />
           </View>
@@ -141,7 +142,7 @@ export function SharePlanView({ plan, splitName, onSend, onPreview, onBack }: Sh
             {plan.days.map((d) => (
               <View key={d.name} style={styles.dayRow}>
                 <View style={styles.dayText}>
-                  <Text style={styles.dayName} numberOfLines={1}>{d.name}</Text>
+                  <Text style={styles.dayName} numberOfLines={1}>{dayTitle(d.name)}</Text>
                   {/* ⛔ `.join(' · ')` PUT ENGINE IDS ON THE CARD. `muscleGroups` holds canonical names — `Chest`,
                       `Quads` — and `muscleGroupsLabel` is the one door that turns them into her language.
                       Joined raw, a Hebrew athlete read "Chest · Triceps" on a card about her own week. */}
@@ -212,7 +213,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   // the brand, at the head of the card — the record poster's own arrangement
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 8, direction: 'ltr' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8 }, // an LTR island via ltrIsland()
 
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   // The split is the card's SUBJECT, so it is set in the coach's serif — the record poster names

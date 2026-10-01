@@ -23,16 +23,18 @@ import { circlePublishWeek, circleSignedIn } from '@/platform/circleClient';
 export async function armCirclePublish(nowMs: number = Date.now()): Promise<void> {
   try {
     if (!(await circleSignedIn())) return;
-    const [history, weekOpen, profile] = await Promise.all([
+    const [history, profile] = await Promise.all([
       db.loadHistory().catch(() => []),
-      db.loadWeekOpen().catch(() => null),
       db.loadProfile().catch(() => null),
     ]);
+    /* ⛔ THE CALENDAR WEEK, NOT HER CYCLE (the rotation, 2026-09-28). Her cycle closes when she
+       finishes it — counted from its anchor, her friends would watch her drop to zero at the very
+       moment she finished her week. What friends compare is the week on the calendar. */
     const payload = circleWeekPayload({
       name: profile?.name,
       sessions: history,
       plannedPerWeek: profile?.daysPerWeek ?? 0,
-      weekOpenMs: weekOpen ?? currentWeekOpen(nowMs),
+      weekOpenMs: currentWeekOpen(nowMs),
     });
     if (payload) await circlePublishWeek(payload);
   } catch {

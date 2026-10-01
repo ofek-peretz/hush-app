@@ -25,7 +25,7 @@
         "NSHealthShareUsageDescription": "FERROX reads your heart rate, calories and distance from Apple Health to record your runs and walks.",
         "NSHealthUpdateUsageDescription": "FERROX saves your completed strength workouts to Apple Health.",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSMicrophoneUsageDescription": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+        "NSMicrophoneUsageDescription": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected. Your short spoken answers may be sent through our server to a speech-recognition provider to be recognised more accurately; FERROX does not store the audio.",
         "NSSpeechRecognitionUsageDescription": "FERROX turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised.",
         "NSMotionUsageDescription": "FERROX counts your steps with the phone's motion sensor to measure distance and pace on the treadmill.",
         "UIBackgroundModes": [
@@ -159,7 +159,7 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected.",
+          "microphonePermission": "FERROX listens for your answer after it asks a question during a workout — a word like ready, or the number of reps you did. It listens only in short windows, only with earbuds connected. Your short spoken answers may be sent through our server to a speech-recognition provider to be recognised more accurately; FERROX does not store the audio.",
           "speechRecognitionPermission": "FERROX turns your spoken answers — a word, a number — into the set it logs. Nothing else is recognised."
         }
       ]

@@ -542,6 +542,10 @@ final class LocalWorkoutEngine {
     m.holdMetres = nil
     m.nextHoldSeconds = nil
     m.nextHoldMetres = nil
+    // Nor a voice (2026-09-28): the wrist alone has no loading dialogue to offer Ready for, and no
+    // hold whose one clock could run — both said explicitly, for the parity contract.
+    m.awaitingReady = false
+    m.holdEndsAt = nil
     // THE SET THAT IS COMING (parity with the phone's projector, 2026-07-12). The presented step
     // during a rest is the one just FINISHED — so a rest screen that renders `setLabel` counts the
     // set behind the athlete. This engine had the `next` step in its hand and never published its

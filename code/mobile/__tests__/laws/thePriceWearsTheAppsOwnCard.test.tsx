@@ -30,6 +30,11 @@ import { color } from '@/design/tokens';
  * Three ruled promises and a renewal sentence stood between the headline and the prices. She has
  * spent fourteen sessions verifying those promises; the renewal terms are the legal line at the
  * foot, said twice. What is left is the headline, the two prices, and the act.
+ *
+ * ⚠️ AMENDED 2026-09-29 (the design audit, approved by the founder): three ONE-LINE marks of what the
+ * membership does now sit under the headline (`paywall.gets*`) — Apple asks a subscription screen to
+ * say what the price buys (3.1.2) — and each card's hero is the amount it CHARGES, the annual's
+ * per-month figure moving into its sub-line. The deleted promises stay deleted (below).
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
@@ -95,13 +100,21 @@ afterEach(() => {
 const flat = (s: unknown): Record<string, unknown> =>
   Object.assign({}, ...[s].flat(Infinity).filter((x) => x && typeof x === 'object'));
 
+/*
+ * The words as the glass shows them. A figure's separators are their own nested `<Text>` since
+ * 2026-09-29 (`ds/Figure` — the "$6 . 67" fix), so a line is read as the whole of its tree, once,
+ * from the outermost `Text`, rather than as the string children of each node.
+ */
+const insideText = (n: any): boolean => {
+  for (let p = n.parent; p; p = p.parent) if (p.type === Text) return true;
+  return false;
+};
+const flatText = (n: any): string => n.children.map((c: any) => (typeof c === 'string' ? c : flatText(c))).join('');
 const words = (r: ReactTestRenderer): string =>
   r.root
     .findAllByType(Text)
-    .map((n) => {
-      const c = n.props.children;
-      return Array.isArray(c) ? c.filter((x) => typeof x === 'string').join('') : String(c ?? '');
-    })
+    .filter((n) => !insideText(n))
+    .map(flatText)
     .join(' | ');
 
 /**

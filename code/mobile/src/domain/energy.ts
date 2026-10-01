@@ -16,6 +16,13 @@
 
 export const STRENGTH_MET = 4.5;
 
+/**
+ * ⛔ A TINY NUMBER IS NOT A FACT WORTH A ROW (design audit 2026-09-29): "2 calories burned" after a
+ * one-minute partial, "1 calories" on Today's week band — weaker than no number at all, and a plural
+ * word under a one. Below this a calorie figure is not drawn; the energy itself is still recorded.
+ */
+export const KCAL_SHOWN_FROM = 20;
+
 /** Estimated kcal for a strength session; null when it cannot be estimated honestly. */
 export function strengthSessionKcal(durationMs: number, weightKg: number | null | undefined): number | null {
   if (!weightKg || weightKg <= 0 || !Number.isFinite(durationMs) || durationMs <= 0) return null;

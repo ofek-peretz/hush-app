@@ -17,7 +17,7 @@
 
 // 
 
-import { Platform, Share as RNShare } from 'react-native';
+import { Linking, Platform, Share as RNShare } from 'react-native';
 import type { RefObject } from 'react';
 import type { View } from 'react-native';
 
@@ -51,9 +51,37 @@ interface SharingModule {
   shareAsync(url: string, options?: Record<string, unknown>): Promise<void>;
 }
 
+interface ClipboardModule {
+  setImageAsync(base64Image: string): Promise<void>;
+}
+
 // Resolved once. On web there is no native capture; elsewhere it depends on the build.
 const viewShot = Platform.OS === 'web' ? null : optionalRequire<ViewShotModule>(() => require('react-native-view-shot'));
 const sharing = Platform.OS === 'web' ? null : optionalRequire<SharingModule>(() => require('expo-sharing'));
+const clipboard = Platform.OS === 'web' ? null : optionalRequire<ClipboardModule>(() => require('expo-clipboard'));
+
+/**
+ * ════ ✦ THE CARD AS A STICKER (design audit 2026-09-29; the founder's free hand, 2026-09-30) ════
+ *
+ * *"A transparent background over a photo from the camera — that is what people actually post."* The
+ * card shared through the sheet is a full 9:16 picture: Stories takes it as the background, and her
+ * gym selfie is gone. A STICKER is the card with no ground of its own, laid by her over her photo.
+ *
+ * The honest road to that on iOS needs no partner app id and no private URL scheme: a PNG with an
+ * alpha channel on the CLIPBOARD, pasted into the story editor, arrives as a sticker she can move and
+ * scale. So this captures the sticker face of the card (`ShareCard sticker`) with its transparency
+ * intact and puts it there. Nothing is posted; she pastes it herself (founder: Hush never posts).
+ */
+export async function copySticker(ref: RefObject<View | null>): Promise<'copied' | 'unavailable' | 'error'> {
+  if (!viewShot || !clipboard || !ref.current) return 'unavailable';
+  try {
+    const base64 = await viewShot.captureRef(ref, { format: 'png', quality: 1, result: 'base64' });
+    await clipboard.setImageAsync(base64);
+    return 'copied';
+  } catch {
+    return 'error';
+  }
+}
 
 export const shareStub: ShareHost = {
   available: () => false,
@@ -97,3 +125,27 @@ export async function shareText(message: string): Promise<'shared' | 'unavailabl
     return 'error';
   }
 }
+
+/**
+ * ⛔ ONE PATTERN FOR "SEND THIS SENTENCE TO A PERSON" (2026-09-18).
+ *
+ * Straight into WhatsApp with the message ready and no recipient chosen — the person picks the
+ * contact in WhatsApp's own UI, so nothing is ever sent on anybody's behalf (the ruling at the top
+ * of this file). Falls back to the OS share sheet when nothing on the phone answers `whatsapp:`,
+ * and on the web to `wa.me`, which is the only spelling a browser can open.
+ *
+ * It was the coach invite's private helper; the trainee's "ask my coach to replace this lift"
+ * (law 7 leaves her no other channel) is the second caller, and a second copy of a deep link is
+ * how two surfaces drift.
+ */
+export async function shareViaWhatsApp(message: string): Promise<'whatsapp' | 'share' | 'error'> {
+  const text = encodeURIComponent(message);
+  try {
+    await Linking.openURL(Platform.OS === 'web' ? `https://wa.me/?text=${text}` : `whatsapp://send?text=${text}`);
+    return 'whatsapp';
+  } catch {
+    const r = await shareText(message).catch((): 'error' => 'error');
+    return r === 'shared' ? 'share' : 'error';
+  }
+}
+

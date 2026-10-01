@@ -27,6 +27,16 @@ import type { CardioActivity, Experience, OnboardingInputs, Session, SessionSumm
 import type { ShareCard } from '@/domain/shareCard';
 import type { WeeklyPlanView } from '@/engine/weeklyView';
 import type { WristOffer } from '@/platform/watch/watchPresence';
+import type { CoachWeekWire } from '@/domain/coachTrack';
+
+/** Who a coach is writing a week FOR — what the wire told him, and nothing it did not (the coach track). */
+export interface CoachAthleteParams {
+  linkId: string;
+  name: string;
+  sex?: 'male' | 'female';
+  days?: number;
+  bodyweightKg?: number;
+}
 
 /** The Saturday letter's fact band — workouts done of planned, tonnes moved, calories. */
 export interface WeeklyBand {
@@ -81,6 +91,12 @@ export type OnboardingParamList = {
    * this one, so the answer is made here and leaves here. The relay starts one step later.
    */
   AboutYou: undefined;
+  /**
+   * ⛔ THE COACH TRACK'S INVITE, INSIDE THE INTAKE (2026-09-17). Reached from About you's "I have a
+   * coach code" line, or from an invite link on a phone with no profile yet. Carries what About you
+   * answered, because a coach's trainee skips the plan-build step — the coach writes the week.
+   */
+  CoachJoin: { code?: string; sex?: 'male' | 'female'; weightKg?: number } | undefined;
   /*
    * ⛔ RESHUFFLED 2026-08-05 (founder): *"make one screen of 3 rulers — DAYS A WEEK together with
    * BODYWEIGHT and AGE — and then move the years of experience to the screen with the name and the
@@ -165,6 +181,8 @@ export type OnboardingParamList = {
     goal?: string;
     limits?: string;
     previewWrist?: WristOffer;
+    /** Linked to a coach at `CoachJoin` — the builder step is skipped; the coach writes the week. */
+    coach?: true;
   } | undefined;
   /*
    * ════ THE BODY MAP LEFT ONBOARDING — THE SECOND TIME, AND FOR GOOD (founder 2026-08-29) ════
@@ -245,6 +263,8 @@ export type HomeTabsParamList = {
   // PROGRAM — the whole week, managed (founder 2026-08-23): every day opens the pre-workout card,
   // the library one row away. The map of the week; every edit verb routes to the surface owning it.
   Program: undefined;
+  // THE CREW (prototype, 2026-09-29) — the social home, in the slot the hidden Cardio tab left.
+  Crew: undefined;
   // CARDIO — a launcher tab. Open training is a full-screen STAGE (no tab bar during a live run),
   // so this tab intercepts its own press and pushes the Main-stack Cardio screen instead of
   // rendering anything itself (Root.tsx). The working run/walk flow is untouched.
@@ -253,6 +273,12 @@ export type HomeTabsParamList = {
   // `window: 'quarter'` = the last-12-weeks view the every-12-weeks notification opens (the former
   // QuarterlyReport screen, merged in here 2026-07-15). History folds into this surface in v7.
   Progress: { window?: 'all' | 'quarter' } | undefined;
+  /*
+   * ⛔ THE FIFTH TAB IS A COACH'S, AND ONLY A COACH'S (the coach track, ruling 2 — 2026-09-17).
+   * Registered by `Root.HomeTabs` only while `/coach/me` says this account is a coach; an athlete who
+   * never enrolled never sees it, and the four training tabs are untouched.
+   */
+  Athletes: undefined;
   /*
    * ⛔ `You` LEFT THE BAR ON 2026-09-16 (founder: *"נעביר את הפקד של 'אני' לשם"*). The four tabs are
    * TRAINING — the day, the week, the run, the record — and the person is reached from the corner
@@ -271,6 +297,9 @@ export type MainParamList = {
    * place you go and come back from — the same grammar as History and Lift detail.
    */
   You: undefined;
+  /** The coach track, trainee side (2026-09-17): an invite opened by link or code, and her coach. */
+  CoachJoin: { code?: string } | undefined;
+  MyCoach: undefined;
   /**
    * THE COACH — the conversation, reached from the corner of Today rather than the tab bar.
    *
@@ -338,7 +367,8 @@ export type MainParamList = {
    * arm). `after: 'workout'` is the one way in from `WellDone`; from the You tab it opens bare.
    * Both are dismissible — an account is offered here, never demanded.
    */
-  Authentication: { after?: 'workout' } | undefined;
+  /* `after: 'coach'` — from `CoachJoin`: success and decline both return to the invite. */
+  Authentication: { after?: 'workout' | 'coach' } | undefined;
   // WHEN SOMETHING HURTS (v7 §13). `exerciseId` = the lift the session was on, so the response can
   // offer the ordinary swap for it; absent when the report is made outside a session.
   /*
@@ -361,7 +391,8 @@ export type MainParamList = {
   WeeklyUpdate: { previewAskBack?: string; previewPlan?: { plan: WeeklyPlanView; band: WeeklyBand; history?: Session[] } } | undefined;
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
   // also opened from Profile → Membership. `source` records what surfaced it.
-  Paywall: { source: 'gate' | 'profile' } | undefined;
+  /** `trial_end` (2026-09-28): pushed by Well Done on the workout that spent the free ones. */
+  Paywall: { source: 'gate' | 'profile' | 'trial_end' } | undefined;
   // §11.4 / 11.5 — a plan travels as an opaque link and nothing else leaves the phone
   // (domain/planShare is an allow-list). `SharePlan` is opened from You; `PlanReceived` is opened
   // by the link itself, and carries the encoded token rather than a decoded plan so the screen
@@ -405,5 +436,25 @@ export type MainParamList = {
   // Share card (§9) — the poster, previewed, then handed to the OS share sheet. A transparent
   // modal over whatever surfaced it (a completed workout, the week's close). `card` carries the
   // already-derived facts (domain/shareCard); the screen renders and captures, deriving nothing.
-  ShareCardModal: { card: ShareCard };
+  /** `alternates` (2026-09-29): the other stories she may post instead — see the modal's switch. */
+  ShareCardModal: { card: ShareCard; alternates?: ShareCard[] };
+  /* ── THE COACH TRACK, THE COACH'S SIDE (2026-09-17) ─────────────────────────────────────────── */
+  /** What a coach account is, and the one field it needs — opened from You. */
+  CoachEnroll: undefined;
+  /** One trainee: the week sent, what was done, the trends, the log. `sentVersion` = the send just landed. */
+  AthleteDetail: { linkId: string; name?: string; sentVersion?: number };
+  /**
+   * ⛔ THE PEN IN FOR-MODE — `PlanBuilderView` writing somebody else's week. `week` is the version
+   * already sent (the draft opens on it); absent, the four doors. Nothing here reads or writes the
+   * programme on this phone.
+   */
+  CoachWeekBuilder: CoachAthleteParams & { week?: CoachWeekWire };
+  /** The coach's saved weeks — read and delete. Applying one is the pen's own template door. */
+  CoachTemplates: undefined;
+  /**
+   * ⛔ WHAT A SEAT COSTS (ruling 1 — the coach pays). The one surface in the product that sells to
+   * somebody other than the athlete. Reached from a full roster, from You → coach account, and from
+   * the athlete Paywall's single quiet line at the foot — never from the intake, which has no fork.
+   */
+  CoachPlans: undefined;
 };

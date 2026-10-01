@@ -19,7 +19,7 @@ import { View, type ViewStyle } from 'react-native';
 import Svg, { G } from 'react-native-svg';
 import type { FigureSex } from '../types';
 import type { MotionTone } from '../palette';
-import { buildFrame, VIEWBOX } from '../frame';
+import { buildFrame, stageFrame } from '../frame';
 import { exerciseMotion } from '../registry';
 import { renderPrimitive } from './MotionFigure';
 
@@ -40,9 +40,14 @@ export function MotionThumb({ exerciseId, size, figure, tone, style }: Props) {
   const rig = exerciseMotion(exerciseId);
   if (!rig) return null;
   const prims = buildFrame(rig, THUMB_ROM, figure ?? 'male');
+  /* The stage's fitted frame, not the shared 16:10 crop (design audit 2026-09-29: "the figures in
+     the small stills are too small to tell what they are"). `stageFrame` keeps ONE scale for the
+     whole catalogue — so a column of stills still reads as a set — and centres each on its own
+     drawing, which is 13 % more athlete in the same square and no empty band above a lying press. */
+  const box = stageFrame(rig);
   return (
     <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]} pointerEvents="none">
-      <Svg width={size} height={(size * VIEWBOX.h) / VIEWBOX.w} viewBox={`${VIEWBOX.x} ${VIEWBOX.y} ${VIEWBOX.w} ${VIEWBOX.h}`}>
+      <Svg width={size} height={(size * box.h) / box.w} viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}>
         <G>{prims.map((p, i) => renderPrimitive(p, i, tone))}</G>
       </Svg>
     </View>

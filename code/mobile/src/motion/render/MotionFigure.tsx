@@ -61,11 +61,33 @@ interface Props {
    * letter-boxing straight back.
    */
   fit?: boolean;
+  /**
+   * ════ SLOW MOTION (design audit, 2026-09-29) ════
+   *
+   * A rate on the rig's own tempo — 1 is the movement as authored, 0.5 is half speed. Absent = 1,
+   * so every existing caller is unchanged.
+   *
+   * ⚠️ IT BENDS A VIRTUAL CLOCK, NOT THE WALL CLOCK. The pose is read at an accumulated time that
+   * advances by `elapsed × speed` each frame, so switching speed mid-rep carries on from the pose on
+   * screen. Multiplying the wall-clock age instead would jump the athlete to wherever half (or
+   * double) her whole age lands — a squat snapping to the top of a press.
+   */
+  speed?: number;
+  /**
+   * The pose held when motion is off (Reduce Motion). Absent = 0, the start of the rep — right for a
+   * lift. A celebration is its TOP: arms down is not a celebration held still, it is a person standing.
+   */
+  stillRom?: number;
 }
 
-function useMotionRom(rig: Rig, fps?: number): number {
+function useMotionRom(rig: Rig, fps?: number, speed?: number, stillRom = 0): number {
   const [rom, setRom] = useState(0);
   const start = useRef<number>(Date.now());
+  /* The virtual clock `speed` bends — see the prop. */
+  const virt = useRef(0);
+  const lastTick = useRef<number | null>(null);
+  const rate = useRef(1);
+  rate.current = speed != null && speed > 0 ? speed : 1;
   const reduce = useRef(false);
   const raf = useRef<number | null>(null);
   /* Read through refs so the clock's effect keeps its `[rig]` dependency — a cap that changed
@@ -78,16 +100,23 @@ function useMotionRom(rig: Rig, fps?: number): number {
     let alive = true;
     AccessibilityInfo.isReduceMotionEnabled().then((on) => {
       reduce.current = on;
-      if (on) setRom(0);
+      if (on) setRom(stillRom);
     });
     const loop = loopDurationMs(rig.formspec.tempo);
+    /* ⚠️ THE VIRTUAL CLOCK IS NOT RESET WHEN THE RIG CHANGES — it is anchored at MOUNT, exactly as the
+       wall clock it replaced was (`start`). `SessionFlow.RestingAthlete` swaps the breathing and the
+       drinking rigs on a timer and relies on one shared timeline for the cut to be invisible
+       (`life.test`); a reset here would restart each at rom 0 on its own schedule. The loop's
+       `lastTick` carries across the swap, so no frame is lost or doubled either. */
     const tick = () => {
       if (!alive) return;
       const now = Date.now();
+      virt.current += lastTick.current == null ? 0 : (now - lastTick.current) * rate.current;
+      lastTick.current = now;
       // Uncapped (the default) draws every frame; capped draws only when the gap has elapsed.
       if (!reduce.current && (minGapMs.current === 0 || now - lastDrawn.current >= minGapMs.current)) {
         lastDrawn.current = now;
-        setRom(romAt(now - start.current, rig.formspec.tempo));
+        setRom(romAt(virt.current, rig.formspec.tempo));
       }
       raf.current = requestAnimationFrame(tick);
     };
@@ -225,8 +254,8 @@ export function frameOf(rig: Rig, fit?: boolean) {
  */
 export const DEFAULT_MOTION_FPS = 30;
 
-export function MotionFigure({ rig, figure, style, fps, tone, fit }: Props) {
-  const rom = useMotionRom(rig, fps ?? DEFAULT_MOTION_FPS);
+export function MotionFigure({ rig, figure, style, fps, tone, fit, speed, stillRom }: Props) {
+  const rom = useMotionRom(rig, fps ?? DEFAULT_MOTION_FPS, speed, stillRom);
   const prims = buildFrame(rig, rom, figure ?? 'male');
   const box = frameOf(rig, fit);
   return (

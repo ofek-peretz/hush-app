@@ -14,6 +14,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import { ProgressReportView } from '@/screens/progress/ProgressReportView';
 import { ProgressLifts } from '@/screens/progress/ProgressLifts';
+import { History } from '@/screens/history/History';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
@@ -38,6 +39,13 @@ export function Progress({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
   const units = app.profile?.units ?? 'kg';
+  /*
+   * ⛔ THE LOG IS A LENS OF THIS TAB, NOT A PLACE YOU ARE SENT (design audit 2026-09-29). The
+   * Lifts / Log control looks like a switch inside the page, and pressing "Log" pushed a whole screen
+   * that took the tab bar away with it — a switch that teleports. The ledger now draws HERE, under
+   * the same bar, and the switch switches. (`History` stays a route for Today's own door into it.)
+   */
+  const [lens, setLens] = useState<'lifts' | 'log'>('lifts');
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [cardio, setCardio] = useState<CardioActivity[]>([]);
   const quarter = route.params?.window === 'quarter';
@@ -70,6 +78,9 @@ export function Progress({ navigation, route }: Props) {
   // graph, and the aggregate milestone badges — which REPLACE the old emblem gallery (the handoff is
   // the source of truth). "Log" opens the history ledger. The every-12-weeks notification still opens
   // the legacy peak-comparison report in its quarterly window.
+  if (!quarter && lens === 'log') {
+    return <History navigation={navigation as never} route={route as never} onLifts={() => setLens('lifts')} />;
+  }
   if (!quarter) {
     // §9.2 — the week's share card, from THIS training week's logged work (null when the week is
     // still empty, so the affordance simply doesn't appear). Derived here where the raw sessions
@@ -113,7 +124,7 @@ export function Progress({ navigation, route }: Props) {
         loaded={sessions != null}
         units={units}
         marks={{ earned: earnedSeals, next: nextSeal }}
-        onLog={() => navigation.navigate('History')}
+        onLog={() => setLens('log')}
         onLift={(exerciseId) => navigation.navigate('LiftDetail', { exerciseId })}
         onShareWeek={weekCard ? () => navigation.navigate('ShareCardModal', { card: weekCard }) : undefined}
       />

@@ -14,7 +14,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
-import { Arrive, Legend, Badge, LoadDelta, Sparkline } from '@/components/ds';
+import { Arrive, Legend, Badge, LoadDelta, Sparkline, opticalFigure } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
 import { displayWeight, unitLabel } from '@/domain/schedule';
@@ -118,7 +118,7 @@ export function ProgressReportView({ title, legend, entries, loaded, units, onBa
                 <>
                   <Legend>{t('report.totalAdded')}</Legend>
                   <View style={styles.totalRow}>
-                    <Text style={styles.totalValue}>+{totalGain}</Text>
+                    <Text style={styles.totalValue}>{opticalFigure(`+${totalGain}`)}</Text>
                     <Text style={styles.totalUnit}>{unitLabel(units)}</Text>
                     <View style={styles.totalBadge}>
                       <Badge tone="up">{t('report.acrossLifts', { count: loadEntries.length })}</Badge>

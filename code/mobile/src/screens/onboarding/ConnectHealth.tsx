@@ -55,6 +55,8 @@ import * as haptics from '@/platform/haptics';
 import { color, font, textScale, radius } from '@/design/tokens';
 import type { OnboardingInputs } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
+import { AppContext } from '@/state/stores/appStore';
+import { db } from '@/data/local/db';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'ConnectHealth'>;
 
@@ -89,6 +91,10 @@ export function ConnectHealth({ navigation, route }: Props) {
    * round trip that either returns instantly or is covered by a system sheet anyway.
    */
   const asking = useRef(false);
+  /* The coach track's finish (see `proceed`) — one `completeOnboarding`, however many presses. */
+  const finishing = useRef(false);
+  /* Read optionally: this step is mounted bare by its render suites, and only the coach path needs the store. */
+  const app = React.useContext(AppContext);
 
   /**
    * The wrist, if there is one. Read ONCE — a watch is not paired during the four seconds this
@@ -172,7 +178,28 @@ export function ConnectHealth({ navigation, route }: Props) {
       healthConnected: withHealth,
       sex: route.params?.sex,
       ...(route.params?.weightKg != null ? { weightKg: route.params.weightKg } : {}),
+      // How long she has trained (AboutYou's one tap, 2026-09-28) — for the model and the opening loads.
+      ...(route.params?.experience ? { experience: route.params.experience } : {}),
     };
+    /*
+     * ⛔ THE COACH TRACK — A COACH'S TRAINEE SKIPS THE BUILDER (2026-09-17). She joined at `CoachJoin`,
+     * so the week is her coach's: already on disk when the coach had sent one (and the builder's save
+     * is refused for a locked coach week anyway), or on its way — in which case `completeOnboarding`
+     * gives her an engine week to train meanwhile and Today says the coach's week is coming. Her days
+     * are read off the coach's week rather than asked; three when there is none yet.
+     */
+    if (route.params?.coach && app) {
+      if (finishing.current) return;
+      finishing.current = true;
+      void (async () => {
+        const week = await db.loadProgram().catch(() => null);
+        const days = week?.authored === 'coach' ? week.days.filter((d) => !d.isRest && d.slots.length > 0).length : 0;
+        await app.completeOnboarding({ ...inputs, daysPerWeek: days > 0 ? days : 3, ...(app.pendingName() ? { name: app.pendingName() ?? undefined } : {}) });
+      })().finally(() => {
+        finishing.current = false;
+      });
+      return;
+    }
     navigation.navigate('PlanBuilder', { inputs });
   }
 

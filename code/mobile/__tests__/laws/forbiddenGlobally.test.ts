@@ -11,7 +11,9 @@
 import en from '@/i18n/locales/en.json';
 
 const DENYLIST: { re: RegExp; why: string }[] = [
-  { re: /\bstreaks?\b/i, why: 'no streaks (§8.9, Law 10)' },
+  /* ⛔ "NO STREAKS" IS REPEALED (founder 2026-09-29: *"אפשר לבטל את חוק ה'בלי רצף'. תשאיר את זה כך
+     שיהיה רצף."*) — for the circle's shared streak of weeks everyone closed. What stays banned is the
+     GUILT a streak can be written in: "don't break" below, and no copy that shames a missed week. */
   { re: /\bxp\b/i, why: 'no XP (§8.9)' },
   { re: /\bbadges?\b/i, why: 'no badges (§8.9)' },
   { re: /\bcalor/i, why: 'no calories (§4.1)' },

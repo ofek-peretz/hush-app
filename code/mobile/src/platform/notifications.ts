@@ -77,7 +77,10 @@ export type NotificationKind =
   | 'gap_catch'
   /* One free workout left (see Notifier.syncTrialLast). Routes nowhere for the same reason:
    * Home's own counter and the paywall carry the conversation the moment she opens. */
-  | 'trial_last';
+  | 'trial_last'
+  /* Two days before Apple's free trial charges (see Notifier.syncTrialEnding). Routes nowhere: the
+   * decision it is about lives in Apple's subscription settings, which the note names. */
+  | 'trial_ending';
 
 export type NotificationIntent =
   | { kind: 'weekly_program_ready' } // -> Program / Weekly Update
@@ -139,6 +142,15 @@ export interface Notifier {
    * otherwise stay silent.
    */
   scheduleWeeklyUpdate(ask?: boolean): Promise<void>;
+  /**
+   * ════ THE WEEK-CLOSED NOTE (the rotation, founder 2026-09-28) ════
+   *
+   * The Saturday 20:30 repeating note announced a letter the calendar wrote. Her week closes when
+   * she finishes it now, so the note is ONE-SHOT: armed when a cycle closes with something in its
+   * letter, delivered the next morning (she is standing on Well Done when it closes — the app has
+   * already said it). One stable id; a second close before it fires replaces it.
+   */
+  scheduleWeekClosed(fireAtMs: number): Promise<void>;
   /** Remove the weekly note (sign-out, or an install that had the old 20:00 one). Idempotent. */
   cancelWeeklyProgramReady(): Promise<void>;
   /**
@@ -201,6 +213,16 @@ export interface Notifier {
    * cancels (she subscribed, or the wall already stands — Home owns that conversation).
    */
   syncTrialLast(arg: { fireAtMs: number } | null): Promise<void>;
+  /**
+   * ════ THE REMINDER THE PAYWALL PROMISED (founder 2026-09-28, the pricing model) ════
+   *
+   * The paywall's timeline says "day 12 — I remind you; day 14 — the charge begins". This is day
+   * 12: one note, two days before Apple's free trial turns into a charge, naming the date. The
+   * promise is what makes a card-committed trial feel safe to start (Blinkist: +23% trial starts,
+   * complaints halved), and a promise the app does not keep is worse than none — so it is armed the
+   * moment the trial opens, on one stable id, and `null` cancels.
+   */
+  syncTrialEnding(arg: { fireAtMs: number; chargeDate: string } | null): Promise<void>;
   /** Cancel everything (e.g. on sign-out). */
   cancelAll(): Promise<void>;
 }
@@ -210,6 +232,8 @@ const WEEKLY_ID = 'hush.weekly_program_ready';
 const GAP_CATCH_ID = 'hush.gap_catch';
 const GAP_LATER_ID = 'hush.gap_catch_later';
 const TRIAL_LAST_ID = 'hush.trial_last';
+const TRIAL_ENDING_ID = 'hush.trial_ending';
+const WEEK_CLOSED_ID = 'hush.week_closed';
 /** Ids this build no longer schedules — swept on boot (see `cancelRetiredNotes`). */
 const RETIRED_IDS = ['hush.quarterly_report'] as const;
 
@@ -348,27 +372,41 @@ export async function hasNotificationPermission(): Promise<boolean> {
 /** Real, on-device notifier (active in dev/preview/production builds). */
 export const notifierExpo: Notifier = {
   async scheduleWeeklyUpdate(ask = false) {
+    /*
+     * ⛔ THE SATURDAY NOTE IS RETIRED (the rotation, founder 2026-09-28). Her week closes when she
+     * finishes it, not on Saturday evening, so a repeating Saturday trigger would announce a letter
+     * that does not exist. What stays: the one permission ask this call carried (`ask`), and the
+     * sweep of the repeating note every install from before the rotation still has armed. The note
+     * itself is `scheduleWeekClosed`, armed by the roll.
+     */
     try {
-      const granted = ask ? await ensureNotificationPermission() : await hasNotificationPermission();
-      if (!granted) return;
-      // Idempotent: coalesce onto a stable id so re-scheduling (every boot) never stacks.
+      if (ask) await ensureNotificationPermission();
       await Notifications.cancelScheduledNotificationAsync(WEEKLY_ID).catch(() => {});
-      void track(NOTIFICATION_EVENTS.coalesced, { kind: 'weekly_program_ready' });
+      void track(NOTIFICATION_EVENTS.canceled, { kind: 'weekly_program_ready' });
+    } catch {
+      // never throw — a notification failure must not break boot
+    }
+  },
+
+  async scheduleWeekClosed(fireAtMs) {
+    try {
+      if (!(await hasNotificationPermission())) return; // never a prompt from a roll
+      await Notifications.cancelScheduledNotificationAsync(WEEK_CLOSED_ID).catch(() => {});
+      void track(NOTIFICATION_EVENTS.coalesced, { kind: 'week_closed' });
+      const seconds = Math.floor((fireAtMs - Date.now()) / 1000);
+      if (seconds <= 60) return;
       await Notifications.scheduleNotificationAsync({
-        identifier: WEEKLY_ID,
+        identifier: WEEK_CLOSED_ID,
         content: {
           title: tg('notifications.weeklyReadyTitle'),
           body: tg('notifications.weeklyReadyBody'),
           data: buildPayload('weekly_program_ready'),
         },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-          ...weeklyTrigger(),
-        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
       });
-      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'weekly_program_ready', ...weeklyTrigger() });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'week_closed', seconds });
     } catch {
-      // never throw — a notification failure must not break boot
+      /* best-effort — the letter waits on Today's unread dot either way */
     }
   },
 
@@ -545,6 +583,28 @@ export const notifierExpo: Notifier = {
     }
   },
 
+  async syncTrialEnding(arg) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(TRIAL_ENDING_ID).catch(() => {});
+      if (!arg) return;
+      if (!(await hasNotificationPermission())) return;
+      const seconds = Math.floor((arg.fireAtMs - Date.now()) / 1000);
+      if (seconds <= 60) return;
+      await Notifications.scheduleNotificationAsync({
+        identifier: TRIAL_ENDING_ID,
+        content: {
+          title: tg('notifications.trialEndingTitle'),
+          body: tg('notifications.trialEndingBody', { date: arg.chargeDate }),
+          data: buildPayload('trial_ending'),
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
+      });
+      void track(NOTIFICATION_EVENTS.scheduled, { kind: 'trial_ending', seconds });
+    } catch {
+      /* best-effort — but the paywall promised it, so the arm runs again at every boot */
+    }
+  },
+
   async cancelAll() {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
@@ -558,10 +618,12 @@ export const notifierExpo: Notifier = {
 /** v1 no-op stub — the swap point for tests and any non-native environment. */
 export const notifierStub: Notifier = {
   async scheduleWeeklyUpdate() {},
+  async scheduleWeekClosed() {},
   async cancelWeeklyProgramReady() {},
   async syncTrainingReminders() {},
   async syncGapCatch() {},
   async syncTrialLast() {},
+  async syncTrialEnding() {},
   async kilometre() {},
   // A no-op like its siblings (code review 2026-09-09): this carried a verbatim copy of the real
   // scheduler, so the "stub" the tests and web swap in actually posted a banner.

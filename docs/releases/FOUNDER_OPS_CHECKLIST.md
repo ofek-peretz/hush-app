@@ -42,10 +42,12 @@ Console → Billing → Budgets: $50/month, alerts at 50 / 90 / 100 %. Proof: th
 - **Billing Grace Period:** App → Subscriptions → enable (16 days). An expired card is otherwise an
   immediate churn.
 - **Small Business Program:** enrol at developer.apple.com → 15 % commission under $1M.
-- **Intro offer symmetry:** either remove the free week from `hush.pro.annual` or add one to
-  `hush.pro.month`. Today the trial is the 14 workouts; a second free week inside it confuses the
-  promise. Recommendation: remove it from the annual.
-- **Regional prices:** set ₪29.90 / ₪199 for Israel; use Apple's equalisation for the rest for now.
+- **Intro offer (2026-09-28, the pricing model):** a **14-day free trial** introductory offer on BOTH
+  `hush.pro.annual` and `hush.pro.month` (the app shows the timeline and arms the day-12 reminder
+  from it). Three workouts are free in the app before it.
+- **Prices (2026-09-28):** annual **$79.99** (≈ ₪249.90), monthly **$14.99** (≈ ₪49.90). Confirm the
+  Israeli figures in App Store Connect → Pricing; Apple's 2026-09-14 Israel change did not reprice
+  subscriptions.
 - **App Privacy:** add *Audio Data → App Functionality* (speech recognition goes to Apple's servers
   for Hebrew). See `APP_REVIEW_NOTES.md`.
 - **Notes for the reviewer:** paste the block from `APP_REVIEW_NOTES.md`.

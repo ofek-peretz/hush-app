@@ -27,8 +27,14 @@
  *     validates a frame field-by-field and hands it to the other socket. See the class header for
  *     why it never touches `state.storage`, and `domain/sharedSession` for what a frame may hold.
  *
+ * 4 · THE COACH TRACK (2026-09-17) — `./coach.ts`, its own D1 database. Since 2026-09-18 it also
+ *     carries MONEY: `POST /coach/plan` turns a purchase into seats, and `/appstore/notifications`
+ *     keeps them honest through renewal and loss. Apple's word, and only Apple's word, moves that
+ *     number — `./appleBilling.ts` walks every JWS's certificate chain to Apple Root CA - G3.
+ *
  * ── WHAT IT REFUSES TO DO ───────────────────────────────────────────────────────────────────────
  * · Trust a client-claimed identity. The Apple token is verified cryptographically, every time.
+ * · Believe a phone about money. A body that says "one hundred seats" moves nothing at all.
  * · Store anything the allow-list did not name. The week payload is rebuilt field-by-field here;
  *   unknown keys are dropped on the floor, whatever the client sent.
  * · Let a circle grow into a feed. MAX_MEMBERS is 6 — partners, not an audience.
@@ -36,7 +42,31 @@
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
-export interface Env {
+/*
+ * ⛔ THE ONE IMPORT, AND IT IS A SIBLING. The coach track (2026-09-17) lives in `./coach.ts` — its
+ * own storage (D1), its own routes, its own readers. The `.ts` extension is spelled out because
+ * `server/tests` runs this file under Node's type-stripping, which resolves nothing implicitly;
+ * wrangler's bundler reads it the same way.
+ */
+import { coachAccountDeleted, coachApplePlanEvent, handleCoach, purgeCoach, type BillingGate, type D1Database } from './coach.ts';
+/*
+ * ⛔ AND THE SECOND SIBLING (2026-09-18) — Apple's own word about a purchase. `coach.ts` imports no
+ * VALUE from here either; this file builds the gate below and hands it in, the same way it hands in
+ * the invite alphabet. One file to audit for "how do we know Apple said yes".
+ */
+import {
+  COACH_TIER_SEATS,
+  appleBillingConfigured,
+  appleSubscription,
+  notificationToPlan,
+  readTestPlan,
+  testGateOpen,
+  testSignatureOk,
+  verifyAppleJws,
+  type AppleBillingEnv,
+} from './appleBilling.ts';
+
+export interface Env extends AppleBillingEnv {
   /** KV namespace — users, sessions, circles, week states. */
   HUSH_KV: KVNamespace;
   /** Optional Cloudflare rate limiter (same shape as the coach's). Absent = unlimited. */
@@ -64,6 +94,14 @@ export interface Env {
    */
   EVENTS_URL?: string;
   EVENTS_KEY?: string;
+  /**
+   * THE COACH TRACK'S DATABASE (2026-09-17) — D1 `ferrox-coach`, see `./coach.ts`. OPTIONAL on
+   * purpose: absent, every `/coach/…` route answers 503 `coach_not_configured` and nothing else in
+   * this worker notices.
+   */
+  COACH_DB?: D1Database;
+  /** Linked trainees a coach gets free (founder ruling 1). `wrangler.toml` [vars]; absent = 2. */
+  COACH_FREE_SEATS?: string;
 }
 
 /**
@@ -106,6 +144,21 @@ const BUNDLE_ID = 'com.hushfitness.app';
 const SESSION_TTL_S = 90 * 24 * 60 * 60; // sessions renew on use; a quiet quarter signs out
 const WEEK_TTL_S = 14 * 24 * 60 * 60; // a stale member simply fades from the circle's week
 const MAX_MEMBERS = 6;
+/*
+ * ⛔ THE CIRCLE TAB (founder 2026-09-29: the shared streak — *"תשאיר את זה כך שיהיה רצף"* — and a
+ * cheer for the friend who trained). A member's week-by-week record lives long enough to carry a
+ * streak through a season and no longer; a cheer is seen for three days, and one friend cheers
+ * another at most once in twenty hours — a word, not a stream.
+ */
+const HIST_TTL_S = 180 * 24 * 60 * 60;
+const HIST_WEEKS = 60;
+const CHEER_TTL_S = 3 * 24 * 60 * 60;
+const CHEER_GAP_MS = 20 * 60 * 60 * 1000;
+const CHEERS_KEPT = 10;
+/** Her last workout is told to the hour at most, and only while it is recent enough to mean anything. */
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const LAST_WINDOW_MS = 60 * DAY_MS;
 /**
  * ⛔ A PAIR CODE OUTLIVES ONE WORKOUT AND NOTHING MORE. Four hours: long enough for the longest
  * session anyone trains, plus the walk to the gym and a phone that needed charging on the way.
@@ -293,26 +346,45 @@ interface WeekState {
   done: number;
   planned: number;
   at: number;
+  /** When her last workout started, floored to the hour — "trained today", "last on Friday". */
+  last?: number;
+  /** Her calendar week, as the local date it opened on (`YYYY-MM-DD`) — the streak's key. */
+  week?: string;
+}
+
+/** A week key is a date, and a date near now: a phone cannot write a streak into last year. */
+function weekKeyOk(k: string, now: number): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return false;
+  const t = Date.parse(`${k}T00:00:00Z`);
+  return Number.isFinite(t) && t >= now - 9 * DAY_MS && t <= now + 2 * DAY_MS;
 }
 
 /** Rebuild the week payload FIELD BY FIELD — anything the allow-list does not name is dropped,
  *  whatever the client sent. The same discipline `domain/circle` keeps on the way out. */
-function readWeekState(raw: unknown): WeekState | null {
+function readWeekState(raw: unknown, now: number = Date.now()): WeekState | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const r = raw as Record<string, unknown>;
   const name = typeof r.name === 'string' ? r.name.slice(0, 40) : '';
   const done = typeof r.done === 'number' && Number.isFinite(r.done) ? Math.max(0, Math.min(14, Math.round(r.done))) : null;
   const planned = typeof r.planned === 'number' && Number.isFinite(r.planned) ? Math.max(0, Math.min(14, Math.round(r.planned))) : null;
   if (!name || done == null || planned == null) return null;
-  return { name, done, planned, at: Date.now() };
+  const lastRaw = typeof r.last === 'number' && Number.isFinite(r.last) ? r.last : null;
+  const last =
+    lastRaw != null && lastRaw <= now + 60_000 && lastRaw >= now - LAST_WINDOW_MS
+      ? Math.floor(Math.min(lastRaw, now) / HOUR_MS) * HOUR_MS
+      : null;
+  const week = typeof r.week === 'string' && weekKeyOk(r.week, now) ? r.week : null;
+  return { name, done, planned, at: now, ...(last != null ? { last } : {}), ...(week ? { week } : {}) };
 }
 
 // ───────────────────────────── KV shapes ─────────────────────────────
 //
-//   session:<token>  → sub                       (TTL 90 d, renewed on use)
-//   user:<sub>       → { circle?: string }
-//   circle:<code>    → { members: string[] }
-//   week:<code>:<sub>→ WeekState                 (TTL 14 d)
+//   session:<token>     → sub                    (TTL 90 d, renewed on use)
+//   user:<sub>          → { circle?: string }
+//   circle:<code>       → { members: string[] }
+//   week:<code>:<sub>   → WeekState              (TTL 14 d)
+//   hist:<code>:<sub>   → HistRec                (TTL 180 d — the streak's memory, 2026-09-29)
+//   cheers:<code>:<sub> → CheerRec[] she received (TTL 3 d)
 
 interface UserRec {
   circle?: string;
@@ -320,9 +392,90 @@ interface UserRec {
 interface CircleRec {
   members: string[];
 }
+/** One member's weeks in one circle: `[done, planned]` by week key, and the week she arrived. */
+interface HistRec {
+  name: string;
+  since: string;
+  last?: number;
+  weeks: Record<string, [number, number]>;
+}
+interface CheerRec {
+  fromId: string;
+  from: string;
+  at: number;
+}
+
+/**
+ * A member as the OTHER members may address her — a stable handle inside this circle, derived from
+ * the circle code and her account, that says nothing about the account itself and differs in every
+ * circle she is ever in. The client needs a handle to cheer somebody; it never needs the sub.
+ */
+async function memberId(code: string, sub: string): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${code}:${sub}`));
+  return [...new Uint8Array(d)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const weekShift = (k: string, days: number): string =>
+  new Date(Date.parse(`${k}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+
+/**
+ * ⛔ THE SHARED STREAK (founder 2026-09-29, repealing the brief's "no streaks"): weeks in a row in
+ * which EVERY member who belonged that week closed it — planned > 0 and done ≥ planned. One number
+ * for the whole circle, never a ranking; one friend's open week holds it for everyone, which is the
+ * accountability.
+ *
+ * · The week still running never breaks it: when it is not closed by all yet, the count starts
+ *   from the week before.
+ * · A week only counts with two or more members due in it — a circle of one has no shared streak.
+ * · A member is due from the first week she reported (`since`), so a friend who joins today does not
+ *   retroactively break the weeks before her.
+ */
+export function circleStreak(hists: readonly HistRec[]): number {
+  let latest = '';
+  for (const h of hists) for (const k of Object.keys(h.weeks)) if (k > latest) latest = k;
+  if (!latest) return 0;
+  const closedByAll = (k: string): boolean => {
+    const due = hists.filter((h) => h.since <= k);
+    if (due.length < 2) return false;
+    return due.every((h) => {
+      const w = h.weeks[k];
+      return !!w && w[1] > 0 && w[0] >= w[1];
+    });
+  };
+  let k = closedByAll(latest) ? latest : weekShift(latest, -7);
+  let n = 0;
+  for (let i = 0; i < HIST_WEEKS && closedByAll(k); i++, k = weekShift(k, -7)) n++;
+  return n;
+}
+
+/** Her circle records, gone — on leaving and on account deletion alike. */
+async function forgetCircleMember(env: Env, code: string, sub: string): Promise<void> {
+  await env.HUSH_KV.delete(`week:${code}:${sub}`);
+  await env.HUSH_KV.delete(`hist:${code}:${sub}`);
+  await env.HUSH_KV.delete(`cheers:${code}:${sub}`);
+}
 
 async function userOf(env: Env, sub: string): Promise<UserRec> {
   return ((await env.HUSH_KV.get(`user:${sub}`, 'json')) as UserRec | null) ?? {};
+}
+
+/**
+ * ⛔ APPLE'S HALF, BOUND TO ONE REQUEST — handed to `handleCoach` so `coach.ts` never reaches for a
+ * verifier of its own. The `test` method is the local driver's door and it is CLOSED in every
+ * deployment: `testGateOpen` wants a var no wrangler.toml declares AND a loopback hostname, and the
+ * injected plan must still be HMAC-signed with that var. See `appleBilling.ts`'s header.
+ */
+function billingGate(env: Env, url: URL): BillingGate {
+  return {
+    seats: (productId) => COACH_TIER_SEATS[productId] ?? null,
+    configured: () => appleBillingConfigured(env),
+    verify: (transactionId) => appleSubscription(env, transactionId, Date.now()),
+    test: async (raw, message, signature) => {
+      if (!testGateOpen(env, url)) return null;
+      if (!(await testSignatureOk(env, message, signature))) return null;
+      return readTestPlan(raw, Date.now());
+    },
+  };
 }
 
 // ───────────────────────────── the worker ─────────────────────────────
@@ -344,7 +497,17 @@ export default {
       return new Response(
         JSON.stringify({
           applinks: {
-            details: [{ appIDs: [`${APPLE_TEAM_ID}.${BUNDLE_ID}`], components: [{ '/': '/pair*' }, { '/': '/plan*' }] }],
+            /*
+             * ⚠️ `/c/*` AND `/c`, NEVER `/c*` (2026-09-17, the coach invite). A bare prefix would
+             * hand the app `/circle`, `/config` and every `/coach/…` API path on this origin — the
+             * exact mistake the scope above exists to avoid.
+             */
+            details: [
+              {
+                appIDs: [`${APPLE_TEAM_ID}.${BUNDLE_ID}`],
+                components: [{ '/': '/pair*' }, { '/': '/plan*' }, { '/': '/c/*' }, { '/': '/c' }],
+              },
+            ],
           },
         }),
         // ⚠️ `application/json`, and Apple is strict about it. The file has no extension by design.
@@ -385,6 +548,26 @@ export default {
  <a class="ghost" href="${APP_STORE_URL}">Get the app</a>
 </main></body></html>`;
       return new Response(body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    }
+
+    /*
+     * ════ /c/CODE — THE COACH INVITE'S LANDING (2026-09-17, COACH_TRACK_V1 §4) ════
+     *
+     * The same signpost as `/pair`, for the link a coach sends a trainee: open the app if it is
+     * there, install it if it is not, and the code printed large, because the code is what she can
+     * still type when nothing clever works. Both spellings — `/c/CODE` is what the server mints,
+     * `/c?c=CODE` is what a hand-typed link looks like. Hebrew when her browser asks for it.
+     *
+     * ⛔ THE CODE GOES THROUGH `safeCode` BEFORE IT GOES ANYWHERE NEAR THE PAGE. No KV, no D1: a
+     * landing page that looked the code up would be an oracle for which codes are live.
+     */
+    if (req.method === 'GET' && (path === '/c' || path.startsWith('/c/'))) {
+      const code = safeCode(path.length > 3 ? path.slice(3) : (url.searchParams.get('c') ?? ''));
+      const he = /^he|,\s*he/i.test(req.headers.get('accept-language') ?? '');
+      return new Response(coachInvitePage(code, he ? 'he' : 'en'), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+      });
     }
 
     /*
@@ -541,68 +724,105 @@ export default {
      * dataset could see a purchase (client-side event) and then nothing, forever. Churn — the
      * number a subscription business lives or dies by — was not measurable at all.
      *
-     * ⚠️ MEASUREMENT-GRADE, NOT ENTITLEMENT-GRADE, and the difference is the design:
-     * nothing is granted, stored, or revoked from what arrives here. It is decoded, reduced to an
-     * allow-list, and forwarded to the analytics store — the same trust level as `/events` one
-     * block up, which is also unauthenticated by explicit decision. A forged POST can pollute a
-     * chart; it cannot touch an athlete's access, because the entitlement authority stays where it
-     * always was (StoreKit, on the device). The day this worker starts ANSWERING entitlement
-     * questions, the x5c chain must be verified to Apple's root first — that line is the boundary
-     * between the two grades, and it is load-bearing.
+     * ⛔ IT WAS MEASUREMENT-GRADE UNTIL 2026-09-18, AND THAT LINE HAS NOW BEEN CASHED. The header
+     * here used to say: *"The day this worker starts ANSWERING entitlement questions, the x5c chain
+     * must be verified to Apple's root first — that line is the boundary between the two grades,
+     * and it is load-bearing."* The coach track's seats are that day. So every notification is now
+     * verified to Apple Root CA - G3 before ANYTHING is read out of it — the outer JWS and the
+     * transaction JWS inside it, both (`appleBilling.verifyAppleJws`), and a payload that does not
+     * verify answers 401 and is neither acted on nor charted.
+     *
+     * What it may change, and the only thing: `coaches.seat_limit` and the plan columns beside it.
+     * ⛔ NOT ONE LINK, NOT ONE WEEK, NOT ONE UPLOAD — see `coachApplePlanEvent`'s header. A coach
+     * whose card expired keeps his whole roster and loses the invite button.
      *
      * The URL for App Store Connect (per environment): https://<worker>/appstore/notifications
      */
     if (req.method === 'POST' && path === '/appstore/notifications') {
-      let signed: string;
+      const raw = await req.text().catch(() => '');
+      if (!raw || raw.length > 262_144) return json(400, { error: 'bad_request' });
+      let body: { signedPayload?: string; test?: unknown };
       try {
-        const body = (await req.json()) as { signedPayload?: string };
-        signed = String(body.signedPayload ?? '');
+        body = JSON.parse(raw) as { signedPayload?: string; test?: unknown };
       } catch {
         return json(400, { error: 'bad_request' });
       }
-      // A JWS is three dot-joined base64url parts; a payload past 64 KB is not one of Apple's.
-      const parts = signed.split('.');
-      if (parts.length !== 3 || signed.length > 65_536) return json(400, { error: 'bad_request' });
-      try {
-        const outer = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1]))) as {
-          notificationType?: string; subtype?: string; data?: {
-            bundleId?: string; environment?: string; signedTransactionInfo?: string; signedRenewalInfo?: string;
-          };
-        };
-        // Not our app → not our chart. (Also the cheapest possible forgery filter.)
-        if (outer.data?.bundleId !== 'com.hushfitness.app') return json(400, { error: 'bad_request' });
-        // The transaction JWS inside carries the ids that make the event joinable.
-        let originalTransactionId = '';
-        let productId = '';
-        const txJws = String(outer.data?.signedTransactionInfo ?? '');
-        const txParts = txJws.split('.');
-        if (txParts.length === 3) {
-          const tx = JSON.parse(new TextDecoder().decode(b64urlToBytes(txParts[1]))) as {
-            originalTransactionId?: string; productId?: string;
-          };
-          originalTransactionId = String(tx.originalTransactionId ?? '').slice(0, 64);
-          productId = String(tx.productId ?? '').slice(0, 64);
+      const now = Date.now();
+
+      /*
+       * ⛔ THE LOCAL DRIVER'S DOOR, AND IT IS CLOSED IN EVERY DEPLOYMENT. Same two locks as
+       * `/coach/plan`: a var no wrangler.toml declares, plus a loopback hostname — and the body
+       * itself must be HMAC-signed with that var. `driveCoach.mjs` walks renewal and loss with it,
+       * because nothing else can produce a JWS that Apple's root will vouch for.
+       */
+      let outer: Record<string, unknown> | null = null;
+      let tx: Record<string, unknown> | null = null;
+      const injected = testGateOpen(env, url) && (await testSignatureOk(env, raw, req.headers.get('x-hush-billing-test')));
+      if (injected && typeof body.test === 'object' && body.test !== null) {
+        const t = body.test as Record<string, unknown>;
+        outer = { notificationType: t.notificationType, subtype: t.subtype, signedDate: t.signedDate, data: { bundleId: BUNDLE_ID } };
+        tx = { ...t, bundleId: BUNDLE_ID };
+      } else {
+        const signed = String(body.signedPayload ?? '');
+        // ⛔ APPLE'S SIGNATURE, OR NOTHING AT ALL.
+        outer = await verifyAppleJws(signed, now);
+        if (!outer) return json(401, { error: 'bad_signature' });
+        const data = (outer.data ?? {}) as Record<string, unknown>;
+        if (String(data.bundleId ?? '') !== BUNDLE_ID) return json(400, { error: 'bad_request' });
+        tx = await verifyAppleJws(String(data.signedTransactionInfo ?? ''), now);
+        if (tx && String(tx.bundleId ?? '') !== BUNDLE_ID) return json(400, { error: 'bad_request' });
+      }
+
+      const notificationType = String(outer.notificationType ?? 'UNKNOWN').slice(0, 48);
+      const subtype = String(outer.subtype ?? '').slice(0, 48);
+      const originalTransactionId = String(tx?.originalTransactionId ?? '').slice(0, 64);
+      const productId = String(tx?.productId ?? '').slice(0, 64);
+
+      /*
+       * 1 · RENEWAL AND LOSS. `signedDate` is the event's own clock, so Apple's three days of
+       * retries cannot replay a DID_RENEW over an EXPIRED that already landed. A D1 failure answers
+       * 503 — Apple re-sends, and the seats are honest a minute later instead of never.
+       */
+      let applied = 'none';
+      if (tx) {
+        const plan = notificationToPlan(notificationType, subtype, tx, now);
+        if (plan) {
+          const at = typeof outer.signedDate === 'number' && Number.isFinite(outer.signedDate) ? Math.floor(outer.signedDate) : now;
+          try {
+            applied = await coachApplePlanEvent(env, { plan, seats: COACH_TIER_SEATS[plan.productId] ?? 0, at });
+          } catch {
+            return json(503, { error: 'unavailable' });
+          }
         }
-        // Rebuilt field-by-field like every other inbound body in this worker. Apple's own retry
-        // policy handles a 5xx from us, so an unarmed sink answers 503 here too — Apple re-sends.
-        if (!env.EVENTS_URL || !env.EVENTS_KEY) return json(503, { error: 'sink_unarmed' });
-        const event = {
-          event: `appstore_${String(outer.notificationType ?? 'UNKNOWN').toLowerCase().slice(0, 48)}`,
-          distinct_id: originalTransactionId || 'unknown',
-          properties: {
-            subtype: String(outer.subtype ?? '').slice(0, 48),
-            product_id: productId,
-            environment: String(outer.data?.environment ?? '').slice(0, 16),
-          },
-        };
+      }
+      /*
+       * 2 · CHURN, AS IT ALWAYS WAS. Rebuilt field-by-field; an unarmed sink still answers 503 so
+       * Apple re-sends it — the seat write above is idempotent under exactly that retry.
+       *
+       * The driver's own door takes the SAME path and only the answer differs: it is told what it
+       * moved (`{applied}`) instead of Apple's 204, because a local run has no sink and a
+       * `sink_unarmed` 503 would say nothing at all about the seats.
+       */
+      if (!env.EVENTS_URL || !env.EVENTS_KEY) return injected ? json(200, { applied }) : json(503, { error: 'sink_unarmed' });
+      const event = {
+        event: `appstore_${notificationType.toLowerCase()}`,
+        distinct_id: originalTransactionId || 'unknown',
+        properties: {
+          subtype,
+          product_id: productId,
+          environment: String((outer.data as Record<string, unknown> | undefined)?.environment ?? '').slice(0, 16),
+        },
+      };
+      try {
         const res = await fetch(env.EVENTS_URL, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ api_key: env.EVENTS_KEY, batch: [event] }),
         });
+        if (injected) return json(200, { applied, charted: res.ok });
         return res.ok ? new Response(null, { status: 204 }) : json(502, { error: 'sink_unavailable' });
       } catch {
-        return json(400, { error: 'bad_request' });
+        return injected ? json(200, { applied, charted: false }) : json(502, { error: 'sink_unavailable' });
       }
     }
 
@@ -700,6 +920,11 @@ export default {
     // floating when the response returns, and a silently dropped renewal is a slow sign-out.
     await env.HUSH_KV.put(`session:${bearer}`, sub, { expirationTtl: SESSION_TTL_S });
 
+    // The coach track — its own file, its own database. See `./coach.ts`.
+    if (path.startsWith('/coach/') || path.startsWith('/me/coach/')) {
+      return handleCoach(req, env, url, sub, { random: randomCode, safe: safeCode, length: CODE_LENGTH }, billingGate(env, url));
+    }
+
     /*
      * ════ THE DELETION THAT FINALLY DELETES (2026-09-01, audit finding 4) ════
      *
@@ -715,6 +940,17 @@ export default {
      * every authenticated route resolves the sub to an empty record.
      */
     if (req.method === 'POST' && path === '/account/delete') {
+      /*
+       * ⛔ LAW 8 — THE COACH TRACK GOES FIRST (2026-09-17). As a coach: every link ended, invites and
+       * templates deleted. As a trainee: every upload deleted, the link ended. If D1 fails, NOTHING
+       * below runs and she is told to retry — a deletion that signed her out but left her workouts
+       * on a coach's roster is the one outcome worse than a retry.
+       */
+      try {
+        await coachAccountDeleted(env, sub);
+      } catch {
+        return json(503, { error: 'unavailable' });
+      }
       const user = await userOf(env, sub);
       if (user.circle) {
         const circle = (await env.HUSH_KV.get(`circle:${user.circle}`, 'json')) as CircleRec | null;
@@ -723,7 +959,7 @@ export default {
           if (members.length === 0) await env.HUSH_KV.delete(`circle:${user.circle}`);
           else await env.HUSH_KV.put(`circle:${user.circle}`, JSON.stringify({ members }));
         }
-        await env.HUSH_KV.delete(`week:${user.circle}:${sub}`);
+        await forgetCircleMember(env, user.circle, sub);
       }
       await env.HUSH_KV.delete(`user:${sub}`);
       await env.HUSH_KV.delete(`session:${bearer}`);
@@ -771,7 +1007,7 @@ export default {
           if (members.length === 0) await env.HUSH_KV.delete(`circle:${user.circle}`);
           else await env.HUSH_KV.put(`circle:${user.circle}`, JSON.stringify({ members }));
         }
-        await env.HUSH_KV.delete(`week:${user.circle}:${sub}`);
+        await forgetCircleMember(env, user.circle, sub);
       }
       await env.HUSH_KV.put(`user:${sub}`, JSON.stringify({}));
       return json(200, { ok: true });
@@ -789,20 +1025,108 @@ export default {
       const state = readWeekState(raw);
       if (!state) return json(400, { error: 'bad_request' });
       await env.HUSH_KV.put(`week:${user.circle}:${sub}`, JSON.stringify(state), { expirationTtl: WEEK_TTL_S });
+      /* The streak's memory: this week's `[done, planned]` under its key, the latest HIST_WEEKS kept.
+         A build that sends no `week` (≤ the 2026-09-29 circle) simply leaves no history behind. */
+      if (state.week) {
+        const hk = `hist:${user.circle}:${sub}`;
+        const prev = (await env.HUSH_KV.get(hk, 'json')) as HistRec | null;
+        const weeks: Record<string, [number, number]> = { ...(prev?.weeks ?? {}), [state.week]: [state.done, state.planned] };
+        const keys = Object.keys(weeks).sort();
+        for (const k of keys.slice(0, Math.max(0, keys.length - HIST_WEEKS))) delete weeks[k];
+        const last = state.last ?? prev?.last;
+        const hist: HistRec = {
+          name: state.name,
+          since: prev?.since && prev.since < state.week ? prev.since : state.week,
+          weeks,
+          ...(last != null ? { last } : {}),
+        };
+        await env.HUSH_KV.put(hk, JSON.stringify(hist), { expirationTtl: HIST_TTL_S });
+      }
       return json(200, { ok: true });
     }
 
+    /*
+     * ════ THE CIRCLE, READ (2026-09-29 — the circle tab) ════
+     *
+     * Every member's week, now with the handle a cheer is addressed to (`id`), which row is hers
+     * (`me`), when each last trained (`last`), whether she already cheered that friend today
+     * (`cheered`) — plus the circle's ONE shared streak and the cheers she received. A member whose
+     * week record faded (no report in 14 days) still appears, from her history, at zero this week:
+     * the friend who drifted is exactly the one the circle should still see. Additive: a build that
+     * reads only name/done/planned/at is untouched.
+     */
     if (req.method === 'GET' && path === '/circle') {
       const user = await userOf(env, sub);
       if (!user.circle) return json(200, { circle: null });
-      const circle = (await env.HUSH_KV.get(`circle:${user.circle}`, 'json')) as CircleRec | null;
+      const code = user.circle;
+      const circle = (await env.HUSH_KV.get(`circle:${code}`, 'json')) as CircleRec | null;
       if (!circle) return json(200, { circle: null });
-      const members: WeekState[] = [];
+      const now = Date.now();
+      const myId = await memberId(code, sub);
+      const members: (WeekState & { id: string; me?: true; cheered?: true })[] = [];
+      const hists: HistRec[] = [];
+      let cheers: { from: string; at: number }[] = [];
       for (const m of circle.members) {
-        const w = (await env.HUSH_KV.get(`week:${user.circle}:${m}`, 'json')) as WeekState | null;
-        if (w) members.push(w);
+        const [w, h, c] = await Promise.all([
+          env.HUSH_KV.get(`week:${code}:${m}`, 'json') as Promise<WeekState | null>,
+          env.HUSH_KV.get(`hist:${code}:${m}`, 'json') as Promise<HistRec | null>,
+          env.HUSH_KV.get(`cheers:${code}:${m}`, 'json') as Promise<CheerRec[] | null>,
+        ]);
+        if (h) hists.push(h);
+        const fresh = (c ?? []).filter((x) => now - x.at < CHEER_TTL_S * 1000);
+        if (m === sub) cheers = fresh.map((x) => ({ from: x.from, at: x.at }));
+        let row: WeekState | null = w;
+        if (!row && h) {
+          const latest = Object.keys(h.weeks).sort().pop();
+          row = { name: h.name, done: 0, planned: latest ? h.weeks[latest][1] : 0, at: 0 };
+        }
+        if (!row) continue;
+        const last = row.last ?? h?.last;
+        members.push({
+          ...row,
+          ...(last != null ? { last } : {}),
+          id: await memberId(code, m),
+          ...(m === sub ? { me: true as const } : {}),
+          ...(m !== sub && fresh.some((x) => x.fromId === myId && now - x.at < CHEER_GAP_MS) ? { cheered: true as const } : {}),
+        });
       }
-      return json(200, { circle: { code: user.circle, members } });
+      return json(200, { circle: { code, members, streak: circleStreak(hists), cheers } });
+    }
+
+    /*
+     * ════ A CHEER — ONE WORD FROM ONE FRIEND TO ANOTHER (2026-09-29) ════
+     *
+     * Addressed by the circle handle (`id`), never the account; only between members of the same
+     * circle; once per sender per friend in twenty hours (a repeat is a quiet `already`, not an
+     * error). What is kept is the sender's first name and the moment — nothing about the workout.
+     */
+    if (req.method === 'POST' && path === '/circle/cheer') {
+      const user = await userOf(env, sub);
+      if (!user.circle) return json(404, { error: 'no_circle' });
+      const code = user.circle;
+      let body: { to?: unknown };
+      try {
+        body = (await req.json()) as { to?: unknown };
+      } catch {
+        return json(400, { error: 'bad_request' });
+      }
+      const to = typeof body.to === 'string' ? body.to.slice(0, 32) : '';
+      const circle = (await env.HUSH_KV.get(`circle:${code}`, 'json')) as CircleRec | null;
+      if (!circle || !to) return json(400, { error: 'bad_request' });
+      let target: string | null = null;
+      for (const m of circle.members) if ((await memberId(code, m)) === to) target = m;
+      if (!target || target === sub) return json(400, { error: 'bad_request' });
+      const mine = (await env.HUSH_KV.get(`week:${code}:${sub}`, 'json')) as WeekState | null;
+      const from = mine?.name ?? ((await env.HUSH_KV.get(`hist:${code}:${sub}`, 'json')) as HistRec | null)?.name ?? '';
+      if (!from) return json(409, { error: 'no_name' });
+      const now = Date.now();
+      const myId = await memberId(code, sub);
+      const key = `cheers:${code}:${target}`;
+      const list = (((await env.HUSH_KV.get(key, 'json')) as CheerRec[] | null) ?? []).filter((x) => now - x.at < CHEER_TTL_S * 1000);
+      if (list.some((x) => x.fromId === myId && now - x.at < CHEER_GAP_MS)) return json(200, { ok: true, already: true });
+      list.push({ fromId: myId, from, at: now });
+      await env.HUSH_KV.put(key, JSON.stringify(list.slice(-CHEERS_KEPT)), { expirationTtl: CHEER_TTL_S });
+      return json(200, { ok: true });
     }
 
     /*
@@ -844,7 +1168,62 @@ export default {
 
     return json(404, { error: 'not_found' });
   },
+
+  /*
+   * ⛔ THE DAILY PURGE (cron `17 3 * * *`, wrangler.toml) — law 6's last clause. A link ended more
+   * than thirty days ago takes its weeks, workouts and runs with it; expired invites go too. A
+   * deployment without `COACH_DB` has nothing to purge and returns at once.
+   */
+  async scheduled(_event: unknown, env: Env): Promise<void> {
+    await purgeCoach(env);
+  },
 };
+
+/** The coach invite's landing, in her language. `code` has already been through `safeCode`. */
+function coachInvitePage(code: string, lang: 'he' | 'en'): string {
+  const c =
+    lang === 'he'
+      ? {
+          dir: 'rtl',
+          title: 'המאמן שלך הזמין אותך ל־FERROX',
+          lead: 'המאמן כותב את השבוע. FERROX מנהלת את המשקלים.',
+          open: 'לפתוח ב־FERROX',
+          get: 'להוריד את FERROX',
+          label: 'או להקליד באפליקציה את הקוד',
+        }
+      : {
+          dir: 'ltr',
+          title: 'Your coach invited you to FERROX',
+          lead: 'Your coach writes the week. FERROX runs the loads.',
+          open: 'Open in FERROX',
+          get: 'Get FERROX',
+          label: 'Or enter this code in the app',
+        };
+  return `<!doctype html><html lang="${lang}" dir="${c.dir}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${c.title}</title>
+<meta property="og:title" content="${c.title}">
+<meta property="og:description" content="${c.lead}">
+<meta name="apple-itunes-app" content="app-id=6780763348">
+<style>
+ body{margin:0;background:#131210;color:#f1eee5;font:400 17px/1.5 -apple-system,system-ui,sans-serif;
+      display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+ main{max-width:22rem;width:100%}
+ h1{font:400 28px/1.2 Georgia,serif;margin:0 0 8px}
+ p{color:#a8a290;margin:0 0 28px}
+ a{display:block;text-align:center;text-decoration:none;border-radius:19px;padding:18px;margin-bottom:12px;font-weight:600}
+ .primary{background:#f1eee5;color:#131210}
+ .ghost{color:#a8a290}
+ .label{margin:28px 0 6px;color:#8b8474;font-size:15px}
+ .code{font:600 40px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;direction:ltr}
+</style></head><body><main>
+ <h1>${c.title}</h1>
+ <p>${c.lead}</p>
+ <a class="primary" href="hush://coach?c=${code}">${c.open}</a>
+ <a class="ghost" href="${APP_STORE_URL}">${c.get}</a>
+ ${code ? `<div class="label">${c.label}</div><div class="code">${code}</div>` : ''}
+</main></body></html>`;
+}
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════

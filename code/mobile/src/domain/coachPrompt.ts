@@ -65,7 +65,7 @@ import { REST_UNSTATED_S } from './restPrescription';
  * language plainly is what a model actually acts on. Falls back to the tag itself for anything not
  * listed, which is honest — an unnamed tag is still better than a wrong name.
  */
-function languageName(tag: string): string {
+export function languageName(tag: string): string {
   const base = tag.toLowerCase().split('-')[0];
   const named: Record<string, string> = {
     he: 'HEBREW', en: 'ENGLISH', ar: 'ARABIC', ru: 'RUSSIAN', fr: 'FRENCH',
@@ -514,22 +514,12 @@ export type CoachAsk =
    */
   | { kind: 'first_shape' }
   /** The second call: fill a shape this athlete has already been given. `shape` is call one's answer. */
-  | { kind: 'first_fill'; shape: string }
-  /**
-   * ════ HER OWN BUILT WEEK, REVIEWED (founder, 2026-08-25) ════
-   * She wrote the programme herself in the plan builder and asked for an opinion. The coach READS
-   * — the plan is on the sheet as `programme` — and answers with a sentence plus atomic
-   * suggestions she applies one at a time (`PLAN_REVIEW_SCHEMA`, `domain/planReview`). It never
-   * authors: there is no `sessions` in this reply, by schema, which is what keeps this surface
-   * inside the 2026-08-08 ruling — the model reads a programme she already has.
-   */
-  /**
-   * ⛔ AND SINCE 2026-09-16 IT MAY CARRY WHAT SHE ASKED FOR, IN HER WORDS (founder: *"כל שינוי שרוצים
-   * לבצע פשוט כותבים שם לבינה"*). Absent, it is the open question it has always been — *what do you
-   * make of this week*. Present, the review becomes a REQUEST: the same schema, the same atomic
-   * suggestions she approves one at a time, aimed at the thing she actually asked for.
-   */
-  | { kind: 'plan_review'; ask?: string };
+  | { kind: 'first_fill'; shape: string };
+/*
+ * ⛔ `plan_review` LEFT THIS UNION ON 2026-09-28. The review has its own prompt (`domain/reviewPrompt`,
+ * founder: *"תכתוב לסקירה פרומפט ייעודי"*): this preamble was written for a coach that ran her whole
+ * training, and read as the reviewer reads it, it contradicted itself and the review's own schema.
+ */
 
 
 /**
@@ -660,36 +650,6 @@ ${JSON.stringify(hersAlone(facts))}
           'the whole programme even where nothing changed — an unchanged week still has to be sent, ' +
           'because there is nothing else that says what she does. Say what changed and why in "say", ' +
           'and put every reason worth remembering in "notes".',
-      });
-      break;
-    case 'plan_review':
-      if (ask.ask) {
-        /*
-         * Her sentence LAST and labelled as hers — the same discipline `buildPrompt` keeps: a line
-         * dropped among our facts reads as one more of our constraints, and it is the opposite.
-         */
-        blocks.push({
-          text:
-            'She BUILT the programme in "programme" and is asking you to CHANGE it. Reply with ' +
-            '"say" — what you are doing and why, in her language, two to four sentences — and ' +
-            '"suggestions": the edits that carry out what she asked, each one verb on one lift on ' +
-            'one day (1-based), each with its own one-line reason in "say". Exercise ids must come ' +
-            'from the catalogue above. Change nothing she did not ask about. If what she asks for ' +
-            'is not possible with the verbs you have, say so in "say" and suggest nothing.' +
-            `\n\nWHAT SHE ASKED FOR, in her own words:\n${ask.ask}`,
-        });
-        break;
-      }
-      blocks.push({
-        text:
-          'She BUILT the programme in "programme" herself, by hand, and asked for your opinion on ' +
-          'it. Review it against her record: coverage per muscle, weekly dose, balance, session ' +
-          'length, exercise choice and order. Reply with "say" — your honest verdict in her ' +
-          'language, two to four sentences — and "suggestions": the smallest set of concrete edits ' +
-          'that would most improve HER plan, each one verb on one lift on one day (1-based), each ' +
-          'with its own one-line reason in "say". Respect her intent: if she trains a muscle once ' +
-          'a week on purpose, price it, do not fight it. Exercise ids must come from the catalogue ' +
-          'above. An empty "suggestions" list with an approving "say" is a perfectly good answer.',
       });
       break;
     case 'revise':

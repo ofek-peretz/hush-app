@@ -44,7 +44,7 @@
 //
 
 import { snapDown } from '@/engine/v5/grid';
-import { BAR_KG } from '@/engine/v5/constants';
+import { emptyBarKg } from '@/engine/loadMath';
 import type { Exercise } from '@/data/exercises';
 
 export interface WarmupSet {
@@ -118,7 +118,7 @@ export function warmupRamp(
     const kg = snapDown(workingKg * step.fraction, exercise.equipment);
     if (kg <= 0) continue;
     if (kg >= workingKg - 1e-9) continue; // no distinct bridge exists below this working load
-    if (exercise.equipment === 'barbell' && workingKg <= BAR_KG + 1e-9) continue; // empty-bar work
+    if (exercise.equipment === 'barbell' && workingKg <= emptyBarKg('barbell') + 1e-9) continue; // empty-bar work (her room's bar)
     if (out.length > 0 && Math.abs(out[out.length - 1].weightKg - kg) < 1e-9) continue; // collapsed rungs
     out.push({ weightKg: kg, reps: step.reps });
   }

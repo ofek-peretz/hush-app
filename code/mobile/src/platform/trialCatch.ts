@@ -14,8 +14,9 @@
 //
 
 import { db } from '@/data/local/db';
-import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
-import { notifier } from '@/platform/notifications';
+import { FREE_SESSION_LIMIT, type Entitlement } from '@/domain/entitlement';
+import { currentLocale } from '@/i18n';
+import { ensureNotificationPermission, notifier } from '@/platform/notifications';
 
 /**
  * A day, not an hour: she just finished the second-to-last free workout and the app already told
@@ -44,5 +45,36 @@ export async function armTrialLast(nowMs: number = Date.now()): Promise<void> {
     await notifier.syncTrialLast({ fireAtMs: nowMs + FIRE_AFTER_MS });
   } catch {
     /* best-effort — a missed note costs a note */
+  }
+}
+
+/**
+ * ════ THE TRIAL-ENDING REMINDER — the derivation half (founder 2026-09-28, the pricing model) ════
+ *
+ * The paywall promised it ("day 12 — I remind you"), so it is armed three ways: the moment a purchase
+ * opens Apple's free trial (`opened`, which also asks for notification permission — the one moment
+ * the ask is self-evidently for her), and at every boot and purchase re-read after it, from the
+ * stamped trial end. No trial on record, a trial already over, or no live entitlement → cancelled.
+ */
+const REMIND_BEFORE_MS = 2 * 24 * 60 * 60 * 1000;
+
+export async function armTrialEnding(opened?: Entitlement): Promise<void> {
+  try {
+    if (opened?.active && opened.source === 'trial' && opened.expiresAt) {
+      const ends = Date.parse(opened.expiresAt);
+      if (Number.isFinite(ends)) {
+        await db.saveTrialEnds(ends);
+        await ensureNotificationPermission();
+      }
+    }
+    const [ends, entitlement] = await Promise.all([db.loadTrialEnds(), db.loadEntitlement()]);
+    if (ends == null || entitlement?.active !== true || ends - REMIND_BEFORE_MS <= Date.now()) {
+      await notifier.syncTrialEnding(null);
+      return;
+    }
+    const chargeDate = new Date(ends).toLocaleDateString(currentLocale() === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'long' });
+    await notifier.syncTrialEnding({ fireAtMs: ends - REMIND_BEFORE_MS, chargeDate });
+  } catch {
+    /* best-effort — the next boot re-derives it */
   }
 }

@@ -37,9 +37,10 @@
 
 //
 
-import type { Session, SetLog } from '@/data/local/models';
+import type { Session, SetLog, Units } from '@/data/local/models';
 import { isEvidenceSet } from '@/domain/setEvidence';
 import { sessionKcal } from '@/domain/energy';
+import { displayWeight } from '@/domain/schedule';
 
 /** A parsed instant, or null when the stamp is missing or unparseable. Never NaN downstream. */
 function at(iso: unknown): number | null {
@@ -115,6 +116,32 @@ export function totalTonnageKg(sessions: readonly Session[] | null | undefined):
 /** Tonnes from kilograms, to one decimal — the app's tonnage reading. Display rounding on top. */
 export function tonnesFromKg(kg: number): number {
   return Number.isFinite(kg) ? +(kg / 1000).toFixed(1) : 0;
+}
+
+/**
+ * ════ ⛔ A MASS UNDER A TONNE IS WRITTEN IN HER OWN UNIT (design audit 2026-09-29) ════
+ *
+ * "0.3 t" was the biggest figure on the finish poster after a short session, and the first figure
+ * on Today after a light first one. A number that small, in a unit that big, reads as nothing — the
+ * rule the audit set is that a tiny number is never a hero. The same fact in her unit reads as what
+ * it is: 340 kg. From a tonne up the tonne is the honest unit, and it stays.
+ *
+ * ⚠️ ONE RULE FOR EVERY SURFACE THAT PRINTS A TOTAL — the poster, the card made from it, Today,
+ * the letter, the board, the Log. Decided here, from KILOGRAMS (never from tonnes already rounded
+ * to a tenth: 0.3 t would come back as "300 kg" for 340), so one session can never read "0.3 t" on
+ * one screen and "340 kg" on the next.
+ *
+ * `tonne` formats the tonne branch, because the surfaces already disagree on purpose about that:
+ * a lifetime board drops the decimal past ten, a session keeps it.
+ */
+export function massFigure(
+  kg: number,
+  units: Units,
+  tonne: (tonnes: number) => string = (t) => t.toFixed(1),
+): { value: string; tonnes: boolean } {
+  const safe = Number.isFinite(kg) && kg > 0 ? kg : 0;
+  if (Math.round(safe) >= 1000) return { value: tonne(safe / 1000), tonnes: true };
+  return { value: String(Math.round(displayWeight(safe, units) ?? 0)), tonnes: false };
 }
 
 /**

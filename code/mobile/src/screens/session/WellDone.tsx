@@ -50,15 +50,20 @@ import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Arrive, ARRIVE_STAGGER, Button, Legend, FooterFade } from '@/components/ds';
+import { Arrive, ARRIVE_STAGGER, Button, Legend, FooterFade, opticalFigure, CountUp } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
 import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import { sessionPoster } from '@/domain/sessionPoster';
 import { useCopy } from '@/i18n/useCopy';
-import { sessionCardFromHistory } from '@/domain/shareCard';
-import { bidi } from '@/i18n/bidi';
+import { sessionCardFromHistory, weekCardFromHistory } from '@/domain/shareCard';
+import { bidi, ltrIsland } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { legendVoice, monoCanDraw } from '@/design/monoVoice';
 import { useApp } from '@/state/stores/appStore';
+import { isTrainingGated } from '@/domain/entitlement';
+import { circleTabShown, refreshCircle, useCircle, type CircleSnapshot } from '@/state/stores/circleStore';
+import { circleMembersView } from '@/domain/circle';
+import { currentWeekOpen } from '@/domain/weekCadence';
 import { db } from '@/data/local/db';
 import { coachIsDeciding, onCoachUpdate, type CoachUpdate } from '@/platform/coach/afterSession';
 import { coachVerdict } from '@/domain/coachEarned';
@@ -69,10 +74,11 @@ import { wellDone as wellDoneHaptic, tick as tickHaptic } from '@/platform/hapti
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { exerciseDisplayName, muscleOf } from '@/data/exercises';
-import { displayWeight } from '@/domain/schedule';
+import { displayWeight, unitLabel } from '@/domain/schedule';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy } from '@/domain/milestoneCopy';
-import { sessionKcal } from '@/domain/energy';
+import { KCAL_SHOWN_FROM, sessionKcal } from '@/domain/energy';
+import { massFigure } from '@/domain/sessionMetrics';
 import { durationMinutes, posterDate} from '@/domain/duration';
 import { milestone as milestoneHaptic } from '@/platform/haptics';
 import { maybeAskForReview } from '@/platform/review';
@@ -95,6 +101,8 @@ type Props = NativeStackScreenProps<MainParamList, 'WellDone'>;
  * read as a sequence — the body arrives, and THEN it lights up — rather than as one smear.
  */
 const BLOOM_AFTER = 2 * ARRIVE_STAGGER + motion.dur[4];
+/** Below this a calorie row is not drawn — see `domain/energy.KCAL_SHOWN_FROM`. */
+const KCAL_FLOOR = KCAL_SHOWN_FROM;
 
 /** The beats of this screen, in the only order they may be walked. */
 export type WellDonePhase = 'saved' | 'result' | 'milestone';
@@ -326,6 +334,11 @@ export function groupDecisions(lines: readonly EarnedLine[]): DecisionGroup[] {
 export function WellDone({ navigation, route }: Props) {
   const { t } = useCopy();
   const app = useApp();
+  /* The circle, read again now that her workout is saved — publish first, so her own row counts it. */
+  const circleSnap = useCircle();
+  useEffect(() => {
+    if (circleTabShown()) void refreshCircle();
+  }, []);
   const units = app.profile?.units ?? 'kg';
   const summary = route.params?.summary;
   const notStarted = route.params?.notStarted ?? false;
@@ -655,12 +668,32 @@ export function WellDone({ navigation, route }: Props) {
      * "an account keeps it yours" is about something she can lose. The closer is pushed OVER the
      * tabs, dismissible, and never again from here: the You tab keeps the door after that.
      */
+    /*
+     * ⛔ ONCE MEANT ONCE ONLY IN THE COMMENT (founder 2026-09-28, the screen review: "הרשמה אחרי אימון —
+     * לטפל בזה"). Nothing remembered the ask, so an athlete who said "not now" met the same wall at the
+     * end of EVERY workout. It is asked after her FIRST workout and never again from here — the You
+     * screen keeps the door (`ProfileSheet`'s sign-in row).
+     */
+    const firstWorkout = (app.modeState?.completedSessions ?? 0) <= 1;
+    /*
+     * ⛔ THE PAYWALL LANDS HERE, ON THE WORKOUT THAT SPENT THE FREE ONES (founder 2026-09-28, the
+     * pricing model). It used to wait for her to press Begin on the NEXT visit — a wall met cold,
+     * days later, with the reason for paying already cooled. The moment the free workouts run out is
+     * the end of this screen: she has just seen what the app did for her, and the offer is Apple's
+     * free trial rather than a price. Dismissible, as Apple requires; Begin stays gated behind it.
+     */
+    const trialJustSpent =
+      !notStarted &&
+      !app.entitlement.active &&
+      isTrainingGated(app.modeState?.completedSessions ?? 0, false, app.profile?.memberSince);
     void app.isSignedIn().then((signed) => {
-      if (signed || notStarted) {
-        navigation.reset({ index: 0, routes: [{ name: 'HomeTabs' }] });
-      } else {
-        navigation.reset({ index: 1, routes: [{ name: 'HomeTabs' }, { name: 'Authentication', params: { after: 'workout' } }] });
-      }
+      const askAccount = !signed && !notStarted && firstWorkout;
+      const routes = [
+        { name: 'HomeTabs' },
+        ...(askAccount ? [{ name: 'Authentication', params: { after: 'workout' } }] : []),
+        ...(trialJustSpent ? [{ name: 'Paywall', params: { source: 'trial_end' } }] : []),
+      ];
+      navigation.reset({ index: routes.length - 1, routes } as never);
     });
   }
   function goRecord() {
@@ -935,6 +968,11 @@ export function WellDone({ navigation, route }: Props) {
          actually answered. `earnedFailed` is a read that never will; see its note. */
       decisionsKnown={!earnedFailed && (earned !== null || coachLines.length > 0)}
       volume={volume}
+      /* ✦ THE WORKOUT THAT CLOSED HER WEEK (the rotation, 2026-09-28): the roll stamps the next
+         cycle's opening one millisecond after the session that closed it, so this is a fact read
+         off the anchor — never a count that could disagree with Today. */
+      weekClosed={(summary?.startedAtMs != null && app.weekOpenMs === summary.startedAtMs + 1) || devCrewClosed()}
+      weekClosedLine={circleWeekLine(t, circleSnap, app.profile?.name)}
       onDone={() => leave(goHome)}
       onRecord={() => leave(goRecord)}
       /*
@@ -963,7 +1001,25 @@ export function WellDone({ navigation, route }: Props) {
                 app.profile?.weightKg,
                 app.profile?.sex === 'male' ? 'male' : 'female',
               );
-              if (card) navigation.navigate('ShareCardModal', { card });
+              if (!card) return;
+              /* ✦ The raises the engine decided ride the story (2026-09-28) — the same rule the
+                 poster's NEXT TIME list draws by, two at most. */
+              const next = (coachLines.length ? coachLines : decisions)
+                .filter((d) => d.to != null && d.from != null && !d.held && Number(d.to) > Number(d.from))
+                .slice(0, 2)
+                .map((d) => ({ name: d.name, load: String(d.to), unit: unitLabel(app.profile?.units ?? 'kg') }));
+              // The week this workout belongs to, as the one alternative story (see `ShareCardModal`).
+              const week = weekCardFromHistory(
+                history,
+                currentWeekOpen(Date.now()),
+                app.profile?.weightKg,
+                app.profile?.units ?? 'kg',
+                app.profile?.memberSince,
+              );
+              navigation.navigate('ShareCardModal', {
+                card: next.length > 0 ? { ...card, next } : card,
+                ...(week ? { alternates: [week] } : {}),
+              });
             }
           : undefined
       }
@@ -994,6 +1050,8 @@ export function SessionEarned({
   decisions,
   decisionsKnown = true,
   volume,
+  weekClosed = false,
+  weekClosedLine = null,
   onDone,
   onRecord,
   onShareStory,
@@ -1037,6 +1095,10 @@ export function SessionEarned({
    */
   decisionsKnown?: boolean;
   volume: VolumeMove[];
+  /** This workout closed her week — the rotation opened the next one (2026-09-28). */
+  weekClosed?: boolean;
+  /** …and what her crew makes of it, worded, no names (prototype 2026-09-29). */
+  weekClosedLine?: string | null;
   onDone: () => void;
   onRecord: () => void;
   /** The story door — absent when there is nothing true to put on a card (see the container). */
@@ -1060,16 +1122,29 @@ export function SessionEarned({
   const holdsWord = t('complete.holds');
   const nothingDecided = decisions.length === 0 && volume.length === 0;
   /*
+   * ⛔ A PARTIAL IS NOT "EXACTLY HOW A WORKOUT SHOULD LOOK" (design audit 2026-09-29). One set of
+   * twenty-two, ended after a minute, drew the whole-session verdict — true of the set she did, false
+   * of the workout. A partial says the true half: every set she DID landed where it was asked.
+   */
+  const heldLine = partial ? t('complete.partialHeld') : t('complete.everythingHeld');
+  /** The raises the engine has already decided for next time — see the block on the poster. */
+  const nextTime = decisions
+    .filter((d) => d.to != null && d.from != null && !d.held && Number(d.to) > Number(d.from))
+    .slice(0, 3);
+  /*
    * ⛔ THE HERO IS ONE MEASUREMENT, AND VoiceOver HEARD TWO. `heroNum` and its unit are sibling
    * `Text`s, so the reader stopped on "60", moved on, and stopped again on "kg" — the biggest
    * figure in the product, delivered as two unrelated fragments. The group speaks once now.
    */
+  /** The session's total, in tonnes from one up and in her unit below — see `massFigure`. */
+  const moved = poster ? massFigure(poster.movedKg ?? poster.tonnes * 1000, units ?? 'kg') : null;
+  const movedUnit = moved?.tonnes ? t('weekly.tonneUnit') : unitLabel(units ?? 'kg');
   const heroA11y = !poster
     ? ''
     : poster.hero.kind === 'record'
       ? `${poster.hero.value} ${poster.hero.unit}`
       : poster.hero.kind === 'tonnes'
-        ? `${poster.hero.value.toFixed(1)} ${t('weekly.tonneUnit')} ${t('complete.movedShort')}`
+        ? `${moved?.value ?? ''} ${movedUnit} ${t('complete.movedShort')}`
         : `${poster.hero.value} ${t('complete.setsLabel')}`;
 
   return (
@@ -1138,12 +1213,20 @@ export function SessionEarned({
               */}
               <Arrive order={0} style={styles.posterHead}>
                 {/* The mark, so a screenshot carries the product without a word of advertising. */}
-                <View style={styles.posterMark}>
+                <View style={[styles.posterMark, ltrIsland()]}>
                   <FerroxMark width={26} />
                   <FerroxWordmark width={76} />
                 </View>
 
                 <Legend size={17} track={0.2} align="center" style={styles.posterLegend}>{savedLegend}</Legend>
+                {weekClosed ? (
+                  /* ✦ THE CREW, ON THE ONE LINE THAT WAS ALREADY THERE (prototype 2026-09-29): the
+                     week closing is the crew's moment too — counts only, never a friend's NAME, because
+                     this poster is the screen people photograph for their story. */
+                  <Legend size={17} track={0.2} align="center" tone="accent" style={styles.posterLegend}>
+                    {weekClosedLine ?? t('complete.weekClosed')}
+                  </Legend>
+                ) : null}
 
                 {/*
                   ⚠️ THE IDENTITY IS ONE GROUP WHATEVER THE HERO IS. A record names the LIFT, an
@@ -1162,7 +1245,7 @@ export function SessionEarned({
                     </Text>
                   </>
                 ) : workoutName ? (
-                  <Text style={styles.posterName} numberOfLines={2}>{bidi(workoutName)}</Text>
+                  <Text style={styles.posterName} numberOfLines={2}>{bidi(dayTitle(workoutName))}</Text>
                 ) : null}
                 {/* Trained together — the sentence the poster is proudest of (2026-08-23). */}
                 {partners && partners.length > 0 ? (
@@ -1184,20 +1267,29 @@ export function SessionEarned({
                    * number is a record, and nobody photographs an argument.
                    */
                   <View style={styles.heroRow}>
-                    <Text style={styles.heroNum}>{poster.hero.value}</Text>
+                    {/* ✦ IT COUNTS UP (design audit 2026-09-29) — see `ds/CountUp`. 600 ms, so it lands
+                        with the heavy beat of the close (`haptics.wellDone`, 620 ms), not after it. */}
+                    <CountUp style={styles.heroNum} value={poster.hero.value} durationMs={600} />
                     <Text style={styles.heroUnit}>{poster.hero.unit}</Text>
                   </View>
                 ) : (
                   <>
                     <View style={styles.heroRow}>
-                      <Text style={styles.heroNum}>
-                        {poster.hero.kind === 'tonnes' ? poster.hero.value.toFixed(1) : String(poster.hero.value)}
-                      </Text>
+                      <CountUp
+                        style={styles.heroNum}
+                        value={poster.hero.kind === 'tonnes' && moved ? moved.value : String(poster.hero.value)}
+                        durationMs={600}
+                      />
                       {/* ⚠️ SANS. "t" is a translated WORD ("טון"), and mono cannot draw Hebrew at
                           all — the same two-voice split the set stage makes between a unit that is a
-                          symbol (kg/lb, mono) and one that is a word. `monoCarriesNoWords` caught it. */}
+                          symbol (kg/lb, mono) and one that is a word. `monoCarriesNoWords` caught it.
+                          Under a tonne the unit IS the symbol (`massFigure`), and wears the record's. */}
                       {poster.hero.kind === 'tonnes' ? (
-                        <Text style={styles.heroUnitWord}>{t('weekly.tonneUnit')}</Text>
+                        moved?.tonnes ? (
+                          <Text style={styles.heroUnitWord}>{t('weekly.tonneUnit')}</Text>
+                        ) : (
+                          <Text style={styles.heroUnit}>{unitLabel(units ?? 'kg')}</Text>
+                        )
                       ) : null}
                     </View>
                     <Legend size={ramp.body} align="center" style={styles.heroLabel}>
@@ -1252,9 +1344,9 @@ export function SessionEarned({
               <Arrive order={3} style={styles.posterStats}>
                 <Fact value={durationLabel} unit={t('common.minShort')} name={t('progress.badgeTrained')} />
                 {poster?.hero.kind === 'record' && poster.tonnes > 0 ? (
-                  <Fact value={poster.tonnes.toFixed(1)} unit={t('weekly.tonneUnit')} name={t('progress.badgeLifted')} />
+                  <Fact value={moved?.value ?? poster.tonnes.toFixed(1)} unit={movedUnit} name={t('progress.badgeLifted')} />
                 ) : null}
-                {kcal != null ? <Fact value={String(kcal)} unit={t('complete.kcal')} name={t('progress.badgeBurned')} /> : null}
+                {kcal != null && kcal >= KCAL_FLOOR ? <Fact value={String(kcal)} unit={t('complete.kcal')} name={t('progress.badgeBurned')} /> : null}
               </Arrive>
 
               {/*
@@ -1275,6 +1367,37 @@ export function SessionEarned({
                   cannot know what a caller's legend string carries, and a partial session must
                   say so on every path (`sessionEarned` pins it). */}
               {partial ? <Text style={styles.posterPartial}>{t('complete.partialTitle')}</Text> : null}
+
+              {/*
+                ✦ NEXT TIME (founder 2026-09-28, approving the review: *"'בפעם הבאה' ו'מאז שהתחלת' —
+                מאשר"*). The payoff he trains for, on the poster itself: the weights the engine has
+                ALREADY decided for his next visit, from→to. It is the engine's own record of this
+                session (`sessionForward`, the same numbers Today will print), never the last set
+                repeated — the voice once promised "next time we start at X" from the last set, and
+                that was false (2026-09-27). Raises only, three at most; the full ledger stays one
+                press below.
+              */}
+              {nextTime.length > 0 ? (
+                <Arrive order={4} style={styles.nextBlock}>
+                  <Legend size={17} track={0.2} tone="accent">{t('complete.nextTime')}</Legend>
+                  {/* ⛔ THE PROMISE IS THE STAR (design audit 2026-09-29). These rows were 17-point
+                      text under the facts — the one thing on the poster that is about TOMORROW, set
+                      as small as a caption. The raise is the figure now, at the facts' own weight,
+                      in moss; where it lands rides under the lift's name. */}
+                  {nextTime.map((d) => (
+                    <View key={d.key} style={styles.nextRow}>
+                      <View style={styles.nextNameCol}>
+                        <Text style={styles.nextName} numberOfLines={1}>{bidi(d.name)}</Text>
+                        <Text style={styles.nextTo}>{opticalFigure(`\u2066${d.from} \u2192 ${d.to}\u2069`)}</Text>
+                      </View>
+                      <Text style={styles.nextFigure}>
+                        {opticalFigure(`+${+(Number(d.to) - Number(d.from)).toFixed(2)}`)}
+                        <Text style={styles.nextUnit}>{` ${unitLabel(units ?? 'kg')}`}</Text>
+                      </Text>
+                    </View>
+                  ))}
+                </Arrive>
+              ) : null}
 
           {/*
             ⛔ THE DECISIONS GO BEHIND A DOOR (founder 2026-08-05):
@@ -1316,7 +1439,7 @@ export function SessionEarned({
               accessibilityRole="button"
               accessibilityLabel={
                 nothingDecided
-                  ? t('complete.everythingHeld')
+                  ? heldLine
                   : t('complete.decisionsCount', { count: decisions.length + volume.length })
               }
               disabled={nothingDecided}
@@ -1336,7 +1459,7 @@ export function SessionEarned({
                   this product asks of her**, and the one week it happens the screen told her nothing
                   happened. The sentence stays inside what was measured; only the tone changed.
                 */
-                <Text style={styles.decisionHeld}>{t('complete.everythingHeld')}</Text>
+                <Text style={styles.decisionHeld}>{heldLine}</Text>
               ) : (
                 <>
                   <View style={styles.decisionLead}>
@@ -1416,12 +1539,12 @@ export function SessionEarned({
                       {d.held ? (
                         <>
                           <Text style={styles.earnedHold}>{`${holdsWord} `}</Text>
-                          <Text style={styles.earnedHoldNum}>{d.from ?? d.to ?? ''}</Text>
+                          <Text style={styles.earnedHoldNum}>{opticalFigure(d.from ?? d.to ?? '')}</Text>
                         </>
                       ) : (
                         <>
-                          <Text style={styles.earnedFrom}>{d.from ?? ''}</Text>
-                          <Text style={styles.earnedTo}>{`${d.from ? ' → ' : ''}${d.to}`}</Text>
+                          <Text style={styles.earnedFrom}>{opticalFigure(d.from ?? '')}</Text>
+                          <Text style={styles.earnedTo}>{opticalFigure(`${d.from ? ' → ' : ''}${d.to}`)}</Text>
                         </>
                       )}
                     </Text>
@@ -1664,7 +1787,7 @@ function Fact({ value, unit, name }: { value: string; unit: string; name: string
     /* One node, one sentence: "Trained 5 min" — not "5", stop, "min". */
     <View style={styles.factRow} accessible accessibilityLabel={`${name} ${value} ${unit}`}>
       <View style={styles.factMeasure}>
-        <Text style={styles.factValue}>{value}</Text>
+        <Text style={styles.factValue}>{opticalFigure(value)}</Text>
         <Text style={styles.factUnit}>{unit}</Text>
       </View>
       <Legend size={17} tone="muted">{name}</Legend>
@@ -1757,7 +1880,7 @@ const styles = StyleSheet.create({
   poster: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
   posterHead: { alignSelf: 'stretch', alignItems: 'center', gap: 10 },
   posterHero: { alignItems: 'center', gap: 6 },
-  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 10, direction: 'ltr' },
+  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 10 }, // an LTR island via ltrIsland()
   posterLegend: { color: stage.ink2 },
   posterName: {
     fontFamily: font.serif,
@@ -1855,6 +1978,22 @@ const styles = StyleSheet.create({
   /* The figure and its unit, tighter than the gap to the name — so the row reads as one
      measurement and then what it is OF, rather than three equal words. */
   factMeasure: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
+  /* ✦ Next time (2026-09-28) — the engine's raises for her next visit, as a small ruled list. */
+  nextBlock: { alignSelf: 'stretch', marginTop: 22, gap: 2 },
+  nextRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(241,238,229,0.12)',
+  },
+  nextNameCol: { flex: 1, minWidth: 0, gap: 2 },
+  nextName: { fontFamily: font.sansMedium, fontSize: 20, lineHeight: 25, color: stage.ink1, textAlign: 'left' },
+  nextTo: { fontFamily: font.mono, fontSize: 17, lineHeight: 22, color: stage.ink2, textAlign: 'left' },
+  nextFigure: { fontFamily: font.monoMedium, fontSize: 30, lineHeight: 34, letterSpacing: -0.6, color: signal[0], textAlign: 'right' },
+  nextUnit: { fontFamily: font.sansMedium, fontSize: 17, letterSpacing: 0, color: signal[0] }, // rtl-ok: nested in nextFigure
   posterPartial: {
     marginTop: 20,
     fontFamily: font.serif,
@@ -1979,3 +2118,30 @@ const styles = StyleSheet.create({
   togetherSub: { fontFamily: font.sans, fontSize: textScale.base, lineHeight: 23, color: color.textSecondary, marginTop: 8, marginBottom: 16, textAlign: 'left' },
   togetherSave: { marginTop: 16 },
 });
+
+/**
+ * The circle's line on the week-closed legend (2026-09-29) — COUNTS ONLY, never a name: this poster
+ * is photographed for stories, and a friend's week is not hers to publish. She counts as closed —
+ * this line is only drawn on the workout that closed her week.
+ */
+function circleWeekLine(
+  t: (k: string, p?: Record<string, unknown>) => string,
+  snap: CircleSnapshot,
+  myName: string | null | undefined,
+): string | null {
+  if (!snap.circle || snap.circle.members.length < 2) return null;
+  const now = Date.now();
+  const members = circleMembersView(snap.circle, { nowMs: now, weekOpenMs: currentWeekOpen(now), myName });
+  const closed = members.filter((m) => m.me || (m.planned > 0 && m.done >= m.planned)).length;
+  return closed >= members.length
+    ? t('complete.weekClosedCrewAll', { count: Math.max(1, snap.circle.streak ?? 0) })
+    : t('complete.weekClosedCrew', { closed, total: members.length });
+}
+/** PROTOTYPE: `localStorage['hush.dev.crewClosed']` forces the week-close beat, to look at it on web. */
+function devCrewClosed(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('hush.dev.crewClosed') === '1';
+  } catch {
+    return false;
+  }
+}

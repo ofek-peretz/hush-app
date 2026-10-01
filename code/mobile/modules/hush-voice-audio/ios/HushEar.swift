@@ -51,6 +51,18 @@ final class HushEar {
   private(set) var running = false
   private(set) var source: Source = .headset
 
+  // ── The window's own audio, for the second ear (2026-09-27) ─────────────────────────────────────
+  // While a window listens, what the microphone hears is also kept as 16 kHz mono 16-bit PCM — the
+  // shape a cloud recognizer takes — so an answer the on-device model missed or mis-heard can be
+  // heard again by a stronger one. Capped at the last `clipMaxSeconds`; cleared when the next
+  // window opens; read by `clip(token:)` after the window ends. Never written anywhere but memory.
+  static let clipRate: Double = 16_000
+  static let clipMaxSeconds: Double = 20
+  private let clipFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: HushEar.clipRate, channels: 1, interleaved: true)
+  private var clipConverter: AVAudioConverter?
+  private var clipData = Data()
+  private var clipToken: Int = -1
+
   /// A final sentence heard inside a window, with the window's token.
   var onResult: ((String, Int) -> Void)?
   /// The engine stopped or failed to restart — the JS side falls back to the screen-on ear.
@@ -140,6 +152,8 @@ final class HushEar {
     let b = builder
     builder = nil
     target = nil
+    clipData = Data()
+    clipToken = -1
     lock.unlock()
     b?.finish()
     if let a = analyzer {
@@ -193,7 +207,71 @@ final class HushEar {
     self.token = token
     self.target = format
     self.builder = continuation
+    // A new window, a new clip: nothing of the last answer is ever sent as this one's.
+    self.clipData = Data()
+    self.clipToken = token
     lock.unlock()
+  }
+
+  /// The audio this window heard (the last `maxSeconds` of it) as a 16 kHz mono WAV, base64 — and how
+  /// loud the loudest and the quietest tenth of a second IN THAT STRETCH were, so the phone can skip
+  /// sending a stretch of room noise. Nil when `token` is not the window the clip belongs to.
+  func clip(token: Int, maxSeconds: Double) -> [String: Any]? {
+    lock.lock()
+    guard token == clipToken, !clipData.isEmpty else {
+      lock.unlock()
+      return nil
+    }
+    let maxBytes = Int(HushEar.clipRate * max(0.5, maxSeconds)) * 2
+    let pcm = clipData.count > maxBytes ? Data(clipData.suffix(maxBytes)) : Data(clipData)
+    lock.unlock()
+    let (peak, floor) = HushEar.loudness(pcm)
+    return [
+      "wav": HushEar.wav(pcm: pcm, rate: Int(HushEar.clipRate)).base64EncodedString(),
+      "seconds": Double(pcm.count) / 2 / HushEar.clipRate,
+      "peakDb": HushEar.decibels(peak),
+      "floorDb": HushEar.decibels(floor),
+    ]
+  }
+
+  /// The loudest and the quietest tenth of a second in 16-bit mono PCM, as RMS (0…1).
+  private static func loudness(_ pcm: Data) -> (Float, Float) {
+    let frame = Int(HushEar.clipRate / 10)
+    var peak: Float = 0
+    var floor: Float = 1
+    pcm.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+      let samples = raw.bindMemory(to: Int16.self)
+      var i = 0
+      while i + frame <= samples.count {
+        var sum: Float = 0
+        for j in i..<(i + frame) {
+          let v = Float(samples[j]) / 32768
+          sum += v * v
+        }
+        let rms = (sum / Float(frame)).squareRoot()
+        if rms > peak { peak = rms }
+        if rms < floor { floor = rms }
+        i += frame
+      }
+    }
+    return (peak, floor)
+  }
+
+  private static func decibels(_ v: Float) -> Double {
+    return Double(20 * log10(max(v, 0.000_001)))
+  }
+
+  /// 16-bit mono PCM in a RIFF header.
+  static func wav(pcm: Data, rate: Int) -> Data {
+    var data = Data()
+    func put(_ s: String) { data.append(contentsOf: Array(s.utf8)) }
+    func put32(_ v: UInt32) { var x = v.littleEndian; data.append(Data(bytes: &x, count: 4)) }
+    func put16(_ v: UInt16) { var x = v.littleEndian; data.append(Data(bytes: &x, count: 2)) }
+    put("RIFF"); put32(UInt32(36 + pcm.count)); put("WAVE")
+    put("fmt "); put32(16); put16(1); put16(1); put32(UInt32(rate)); put32(UInt32(rate * 2)); put16(2); put16(16)
+    put("data"); put32(UInt32(pcm.count))
+    data.append(pcm)
+    return data
   }
 
   /// Stop handing audio over; what she was mid-way through saying is finalized and still reported.
@@ -221,8 +299,45 @@ final class HushEar {
     let b = builder
     let t = target
     lock.unlock()
-    guard let b, let t, let converted = convert(buffer, to: t) else { return }
+    guard let b, let t else { return }
+    appendClip(buffer)
+    guard let converted = convert(buffer, to: t) else { return }
     b.yield(AnalyzerInput(buffer: converted))
+  }
+
+  /// The window's audio, kept for the second ear: 16 kHz mono 16-bit, the last `clipMaxSeconds`.
+  private func appendClip(_ buffer: AVAudioPCMBuffer) {
+    guard let format = clipFormat, let out = convertClip(buffer, to: format), let channels = out.int16ChannelData else { return }
+    let frames = Int(out.frameLength)
+    guard frames > 0 else { return }
+    let bytes = Data(bytes: channels[0], count: frames * 2)
+    let cap = Int(HushEar.clipRate * HushEar.clipMaxSeconds) * 2
+    lock.lock()
+    clipData.append(bytes)
+    // Trimmed a second at a time (a copy per buffer would be a copy twelve times a second).
+    if clipData.count > cap + Int(HushEar.clipRate) * 2 { clipData = Data(clipData.suffix(cap)) }
+    lock.unlock()
+  }
+
+  /// The clip's own converter — kept apart from the analyzer's, whose target format differs.
+  private func convertClip(_ buffer: AVAudioPCMBuffer, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
+    let inputFormat = buffer.format
+    if clipConverter == nil || clipConverter?.inputFormat != inputFormat || clipConverter?.outputFormat != format {
+      clipConverter = AVAudioConverter(from: inputFormat, to: format)
+      clipConverter?.primeMethod = .none
+    }
+    guard let converter = clipConverter else { return nil }
+    let ratio = converter.outputFormat.sampleRate / converter.inputFormat.sampleRate
+    let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 16
+    guard let output = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: capacity) else { return nil }
+    var nsError: NSError?
+    let once = OneShotInput(buffer)
+    let status = converter.convert(to: output, error: &nsError) { _, statusPtr in
+      let next = once.take()
+      statusPtr.pointee = next == nil ? .noDataNow : .haveData
+      return next
+    }
+    return status == .error ? nil : output
   }
 
   /// The microphone's format is the hardware's; the analyzer's is its own. Converted — or copied,

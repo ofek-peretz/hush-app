@@ -400,7 +400,10 @@ describe('2 · it cannot prescribe, and it cannot commit', () => {
      * the shape of the exception so it cannot widen into a load or a rest by accident.
      */
     const json = JSON.stringify(BUILD_WEEK_SCHEMA);
-    for (const forbidden of ['load', 'weight', 'kg', 'rest', 'rir', 'tempo']) {
+    /* ⛔ AND THE OPENING LOAD LEFT IT ON 2026-09-28 — B-1 cancelled by the founder (*"אין בעיה לבטל את
+       B1 … כולל משקל, חזרות וסטים"*): `load` seeds a lift she has never lifted, and her first set
+       replaces it (`theOpeningLoadIsHers`). REST stays the engine's alone, and so do RIR and tempo. */
+    for (const forbidden of ['rest', 'rir', 'tempo']) {
       expect({ forbidden, present: json.includes(forbidden) }).toEqual({ forbidden, present: false });
     }
     const reps = (BUILD_WEEK_SCHEMA.properties.days.items.properties.lifts.items.properties as { reps: Record<string, unknown> }).reps;
@@ -598,8 +601,10 @@ describe('4 · it can never strand her — and it can never fail her in silence'
     // attempts; the old 18.5 s was the placeholder walk's length, which no longer bounds anything.
     expect(PLAN_BUILD_SAID_MS).toBeGreaterThanOrEqual(40_000);
     expect(PLAN_BUILD_SAID_MS).toBeLessThanOrEqual(60_000);
-    // …and the words are still what buy it — an empty ask keeps the short budget
+    // ⛔ 2026-09-27, founder: *"תשים את OPUS גם למי שלא כתב כלום"* — the words no longer buy a longer
+    // wait; every build waits long enough for the strong model. Never longer than a sentence's.
     expect(PLAN_BUILD_BUDGET_MS).toBeLessThanOrEqual(PLAN_BUILD_SAID_MS);
+    expect(PLAN_BUILD_BUDGET_MS).toBeGreaterThanOrEqual(30_000);
     expect(read('src/platform/coach/planBuild.ts'))
       .toContain("const budget = her.ask?.trim() ? PLAN_BUILD_SAID_MS : PLAN_BUILD_BUDGET_MS;");
   });

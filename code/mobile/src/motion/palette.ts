@@ -42,6 +42,11 @@ export const MOTION_PALETTE: Record<ColorToken, string> = {
   line1: '#bdb7a8',
   line2: '#afa899',
   up: '#3e573f', // app up[0] — moss on paper
+  // the kit (2026-09-30): shorts/tights, the far side's cloth, the shoe upper, the hair — warm neutrals
+  cloth: '#6e685c',
+  clothFar: '#b0a996',
+  shoe: '#57524a',
+  hair: '#3f3b34',
 };
 
 export const hex = (c: ColorToken): string => MOTION_PALETTE[c];
@@ -99,6 +104,17 @@ export const MOTION_PALETTE_STAGE: Record<ColorToken, string> = {
   line1: '#332f27',
   line2: '#413c32',
   up: '#7ea886', // lifted off the paper moss, which reads as mud on black
+  /*
+   * THE KIT, ON BLACK (2026-09-30). One more step down the same warm ladder for each garment, so the
+   * figure reads skin (ink0) → tee (ink1) → shorts (cloth) in three honest tones, and the far side
+   * keeps its place behind everything (clothFar sits under ink4, the far skin). The shoe is the
+   * darkest thing on the near side, with a sole in skin's cream under it; the hair is the head's own
+   * shadow.
+   */
+  cloth: '#948e7d',
+  clothFar: '#4e4a42',
+  shoe: '#6a655a',
+  hair: '#5d584e',
 };
 
 /** Which ground the drawing is standing on. `'paper'` is every pre-existing caller. */

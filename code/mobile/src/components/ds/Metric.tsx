@@ -24,6 +24,7 @@ import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { color, font, textScale, tracking, trackingPx, stage as stageC } from '@/design/tokens';
 import { Legend } from './Legend';
+import { opticalFigure } from './Figure';
 
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -71,7 +72,7 @@ export function Metric({ value, unit, label, size = 'md', center, onStage, label
             onStage && { color: stageC.ink0 },
           ]}
         >
-          {value}
+          {typeof value === 'string' || typeof value === 'number' ? opticalFigure(value) : value}
         </Text>
         {/* ⛔ THE UNIT OBEYS THE FLOOR TOO. `0.42em` of a `sm` value is 8.4pt — half the floor —
             and it is a computed local, so `typeHasAFloor` cannot see it any more than it could see

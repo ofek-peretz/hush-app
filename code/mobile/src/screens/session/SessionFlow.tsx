@@ -23,7 +23,7 @@ import Svg, { Circle, Defs, G, LinearGradient as SvgGradient, Path, Rect, Stop }
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Icon, type IconName } from '@/components/Icon';
-import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, useToast, type ToastAction } from '@/components/ds';
+import { Arrive, Button, IconButton, RestRing, Card, LoadDelta, Legend, NumberPad, useToast, type ToastAction, opticalFigure } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ReorderRows } from '@/components/ReorderRows';
@@ -39,7 +39,8 @@ import { MotionThumb } from '@/motion/render/MotionThumb';
 import { MotionFigure } from '@/motion/render/MotionFigure';
 import { STAGE_FRAME_ASPECT } from '@/motion/frame';
 import { exerciseMotion } from '@/motion/registry';
-import { drinkingRig, restingRig } from '@/motion/library/life';
+import { celebratingRig, drinkingRig, restingRig } from '@/motion/library/life';
+import { measureFlightTarget, useFlightHold } from '@/components/FigureFlight';
 import { useApp } from '@/state/stores/appStore';
 import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, filmSubject, type CompleteResult } from '@/state/stores/sessionStore';
@@ -81,6 +82,9 @@ import { bandOf } from '@/domain/setRow';
 import { isRecordSet } from '@/domain/setRecord';
 import { loadNews } from '@/domain/loadNews';
 import type { MainParamList } from '@/app/navigation';
+import { CoachNoteLine } from '@/components/CoachNoteLine';
+import { CoachTrackContext } from '@/state/stores/coachStore';
+import { useCoachWeekOwner } from '@/state/useCoachWeekOwner';
 
 type Props = NativeStackScreenProps<MainParamList, 'SessionFlow'>;
 /*
@@ -369,18 +373,22 @@ export function SessionFlow({ navigation, route }: Props) {
       voiceNoticeRef.current = true;
       voiceNoticeShownFor.add(workoutKey);
       notify(t('workout.voiceSilentNoEngine'));
-    } else if (voice.silentBecause === 'no_headset') {
+    } else if (voice.silentBecause === 'no_headset' && (app.modeState?.completedSessions ?? 0) === 0) {
       /*
        * ⛔ REVERSING SPEC §0.1 (2026-09-09, the formula report): silence for want of earbuds WAS the
        * design, and it is also the exact experience of a reviewer testing "the voice coach" on a
        * speaker — a feature that does nothing and says nothing. One line, once, that names the
        * condition; the moment earbuds connect the conductor starts and the line is history.
+       *
+       * ⛔ AND ONLY IN HER FIRST WORKOUT (founder 2026-09-28, approving the review: *"למי שאין
+       * אוזניות, שורה קטנה פעם אחת באימון הראשון"*). Every workout was once per workout, which for
+       * the lifter who trains on the speaker is the same line forty times a year. She has been told.
        */
       voiceNoticeRef.current = true;
       voiceNoticeShownFor.add(workoutKey);
       notify(t('workout.voiceSilentNoHeadset'));
     }
-  }, [voice.silentBecause, notify, t, session.startedAtMs, session.loggedSets]);
+  }, [voice.silentBecause, notify, t, session.startedAtMs, session.loggedSets, app.modeState?.completedSessions]);
   const confirmRunning = useRef(false);
   // Equipment-learning toast: the engine's pristine load for the active set (captured before any
   // Edit Result), and whether the athlete corrected the load to a different available weight.
@@ -421,14 +429,35 @@ export function SessionFlow({ navigation, route }: Props) {
    * onboarding ("I learn for N sessions") would have been repeated on the gym floor as zero, which
    * is the exact drift the comment above exists to prevent.
    */
+  /*
+   * ⛔ IT ASKS THE DISK ONLY FOR AN ATHLETE WHO HAS A COACH (2026-09-18).
+   *
+   * `app.program` already answers for everyone else, and this read existed ONLY to cover the one
+   * athlete it cannot answer for — so firing it on every workout in the product was a disk read
+   * per session whose result was thrown away, and, in a render suite that mounts this screen with
+   * no `CoachTrackProvider`, a `setState` that landed after the test had finished (the un-acted
+   * update that made `anOrdinarySetGetsNoCeremony` flaky under load).
+   *
+   * The raw context, never `useCoachTrack()`: a tree without the provider — a law, the harness —
+   * must simply get null rather than throw for want of a coach.
+   */
+  const coachLinked = !!React.useContext(CoachTrackContext)?.link;
   const [coachPlan, setCoachPlan] = useState<CoachPlan | null>(null);
   useEffect(() => {
+    if (!coachLinked) {
+      setCoachPlan(null);
+      return;
+    }
     let alive = true;
-    void loadWeekPlan().then((p) => alive && setCoachPlan(p));
+    void loadWeekPlan()
+      .catch(() => null)
+      .then((p) => {
+        if (alive) setCoachPlan(p);
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [coachLinked]);
   const learnCount = useMemo(() => {
     if (previewFirstGym != null) return previewFirstGym;
     if (coachPlan) {
@@ -1433,7 +1462,8 @@ export function SessionFlow({ navigation, route }: Props) {
 
       {overlay === 'map' ? (
         <BottomSheet onClose={() => setOverlay('none')}>
-          <Legend style={styles.mapLegend}>{t('workout.sessionMap')}</Legend>
+          {/* The sheet's name is its header, not a caption (design audit 2026-09-29). */}
+          <Text style={styles.mapTitle} accessibilityRole="header">{t('workout.sessionMap')}</Text>
           {/*
             ════ ⛔ THE MAP IS WHERE SHE REORDERS THE REST OF THE SESSION (founder, 2026-09-07) ════
 
@@ -1508,9 +1538,10 @@ export function SessionFlow({ navigation, route }: Props) {
                   <Icon name="check" size={15} color={up.stage} strokeWidth={2.2} />
                 ) : state === 'now' ? (
                   <Legend size={17} track={0.12} tone="accent">{t('workout.mapNow')}</Legend>
-                ) : startable ? (
-                  <Legend size={17} track={0.12} tone="onStage">{t('workout.startNow')}</Legend>
                 ) : (
+                  /* ⛔ NO VERB ON EVERY ROW (design audit 2026-09-29). "להתחיל עכשיו" on six rows cut
+                     six lift names short ("פשיטת מרפקים בפ…"); the hint above says once that a row
+                     ahead starts on a press, and a row says what it holds — its sets. */
                   <Text style={styles.mapSets}>{sets > 0 ? `${sets}×` : ''}</Text>
                 )}
                 {grip}
@@ -1593,7 +1624,19 @@ function ItemBeat({
 
   switch (item.kind) {
     case 'time':
-      return <TimeStage item={item} name={name} onDone={(seconds) => finish({ seconds })} />;
+      // The hold's one clock is the store's (2026-09-28): Start here is the same start as Ready on
+      // the wrist or the card, or "מוכן" — and every surface counts to the one end it sets.
+      return (
+        <TimeStage
+          item={item}
+          name={name}
+          started={session.holdStartedAtMs != null}
+          endsAtMs={session.holdEndsAtMs}
+          frozenRemainingS={session.holdFrozenRemainingS}
+          onStart={() => session.markSetStarted()}
+          onDone={(seconds) => finish({ seconds })}
+        />
+      );
     case 'distance': {
       /**
        * ════ A RUN IS NOT A THING SHE CONFIRMS ════
@@ -1858,6 +1901,22 @@ const STAGE_FPS = 24;
 /** The workouts (by start instant) whose silent-voice notice has been shown — once per workout, not per mount. */
 const voiceNoticeShownFor = new Set<number>();
 
+/** The record's own pose — arms up — at the stage's size and ladder; held up under Reduce Motion. */
+function CelebratingAthlete() {
+  const app = useApp();
+  return (
+    <MotionFigure
+      rig={celebratingRig}
+      tone="stage"
+      fps={STAGE_FPS}
+      fit
+      stillRom={1}
+      figure={app.profile?.sex === 'female' ? 'female' : 'male'}
+      style={styles.celebrateFigure}
+    />
+  );
+}
+
 function StageAthlete({ exerciseId }: { exerciseId: string | null | undefined }) {
   const app = useApp();
   const session = useSession();
@@ -1870,16 +1929,27 @@ function StageAthlete({ exerciseId }: { exerciseId: string | null | undefined })
      it read as nothing at all. The stage keeps showing the lift she is doing; the line above the act
      (`SetRunningLong`) is what asks. */
   const rig = lift;
+  /* ✦ If she has just pressed Begin, the athlete is still in the air from Today's card (`FigureFlight`):
+     this one waits, invisible, in the exact box the traveller is landing on, and appears as it lands. */
+  const inFlight = useFlightHold(exerciseId);
+  const box = useRef<View>(null);
   if (!rig) return null;
   return (
-    <MotionFigure
-      rig={rig}
-      tone="stage"
-      fps={STAGE_FPS}
-      fit
-      figure={app.profile?.sex === 'female' ? 'female' : 'male'}
-      style={styles.athleteFigure}
-    />
+    <View
+      ref={box}
+      collapsable={false}
+      style={[styles.athleteFigure, inFlight && styles.athleteHeld]}
+      onLayout={() => measureFlightTarget(box.current, exerciseId)}
+    >
+      <MotionFigure
+        rig={rig}
+        tone="stage"
+        fps={STAGE_FPS}
+        fit
+        figure={app.profile?.sex === 'female' ? 'female' : 'male'}
+        style={StyleSheet.absoluteFill as object}
+      />
+    </View>
   );
 }
 
@@ -2333,6 +2403,8 @@ function ActiveSet({
   const { t } = useCopy();
   const session = useSession();
   const pair = usePair();
+  /* The coach track (law 7): whose note the stage draws under the lift — a linked coach's week only. */
+  const coachName = useCoachWeekOwner().coachName;
   /* She is at the shared station, the bar is hers, and her partner is answering — the one state in
      which "Complete set" is also "your turn is over". Every other state leaves the label alone. */
   const passingTheBar =
@@ -2754,7 +2826,11 @@ function ActiveSet({
     if (slot === 'weight') {
       const v = next === '' || next === '.' ? null : Number(next);
       const total = v == null ? null : totalFromEquipment(session.currentExerciseId, v, units);
-      if (total != null) session.editCurrentSet({ weight: total, reps: repsNow });
+      /* ⛔ THE PAD TYPES IN HER UNITS AND THE RECORD IS KILOGRAMS (found 2026-09-30). `total` is in the
+         units she typed in, and it went into the set as it stood — so 25 lb a side, a 95 lb bar, was
+         written as NINETY-FIVE KILOGRAMS and came back on the stage as 209 lb. Every other road into
+         a set converts (`kgFromDisplay`); this one does now too. */
+      if (total != null) session.editCurrentSet({ weight: kgFromDisplay(total, units), reps: repsNow });
     } else if (slot === 'reps') {
       setRepsTyped(next);
       const v = Number(next);
@@ -2913,6 +2989,9 @@ function ActiveSet({
             so two is headroom, not truncation.
           */}
           <SayLine say={session.currentItem?.say} lines={2} />
+          {/* ⛔ THE COACH TRACK, LAW 7 — her coach's line about THIS lift, attributed, on the stage she
+              reads it on (2026-09-17). A swap for today drops it: it was written about the other lift. */}
+          <CoachNoteLine note={session.currentItem?.coachNote} coachName={coachName} lines={2} style={styles.coachNote} />
 
         </Arrive>
 
@@ -3275,6 +3354,24 @@ function ActiveSet({
           </Text>
         ) : null}
 
+        {/*
+          ⛔ READY, WHILE THE VOICE WAITS FOR IT (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב
+          בזמן אמת. אחידות בצורה הרמטית"*). "Load the bar and say ready": the lock card offered Ready
+          beside Done, and this stage — the screen in her hand — offered Done alone. The same fact
+          (`awaitingReady`) now draws the same control here, on the wrist and on the card; a tap on
+          any of them, or her word, starts the set on every surface. Done stays below, unchanged:
+          she may lift without the word, and the set is hers to log either way.
+        */}
+        {session.awaitingReady ? (
+          <Button
+            variant="onstageGhost"
+            size="act"
+            block
+            label={t('notifications.lockActReady')}
+            onPress={() => session.markSetStarted()}
+            style={styles.readyAct}
+          />
+        ) : null}
         <Button
           variant="onstage"
           size="stage"
@@ -3355,7 +3452,15 @@ export function Logged({
    */
   const recordLine = confirm.record ? (
     <View style={styles.recordRow}>
-      <Legend tone="accent" size={28} track={0.24} align="center">{t('workout.recordStruck')}</Legend>
+      {/* ✦ SHE RAISES HER ARMS (2026-09-30) — the athlete who has mimed every set of this session,
+          at the one moment the session exists for (`life.celebratingRig`). */}
+      <CelebratingAthlete />
+      <View style={styles.recordWords}>
+        {/* ✦ THE CROWN (design audit 2026-09-29) — the mark this product gives a thing EARNED (`star`,
+            the milestones' own glyph), in the moss the words wear. */}
+        <Icon name="star" size={26} color={signal[0]} strokeWidth={2} />
+        <Legend tone="accent" size={28} track={0.24} align="center">{t('workout.recordStruck')}</Legend>
+      </View>
     </View>
   ) : null;
   // 2.3b — THE LAST SET OF A LIFT IS NOT AN ORDINARY LOG. Finishing a lift is a thing that
@@ -3585,8 +3690,10 @@ function CheckDraw({ size }: { size: number }) {
 function LoggedCapture({ units, confirm, w }: { units: 'kg' | 'lb'; confirm: Confirm; w: number | null }) {
   const { t } = useCopy();
   useEffect(() => {
-    haptics.success();
-  }, []);
+    // A best replaces the soft double with its own strike — see `haptics.record`.
+    if (confirm.record) haptics.record();
+    else haptics.success();
+  }, [confirm.record]);
   return (
     <View style={styles.capWrap}>
       <Arrive order={0} style={styles.capBlock}>
@@ -3614,7 +3721,8 @@ function LoggedCapture({ units, confirm, w }: { units: 'kg' | 'lb'; confirm: Con
           stage above. The DECLARED size is untouched, which is what `theBeatIsNotAFootnote` reads.
         */}
         <Text
-          style={styles.capFigures}
+          /* A best is written in full moss — the figure IS the record (design audit 2026-09-29). */
+          style={[styles.capFigures, confirm.record && { color: signal[0] }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.7}
@@ -3622,7 +3730,7 @@ function LoggedCapture({ units, confirm, w }: { units: 'kg' | 'lb'; confirm: Con
         >
           {w != null ? (
             <>
-              {w}
+              {opticalFigure(w)}
               <Text style={styles.capUnit}> {unitLabel(units)}</Text>
               <Text style={styles.capTimes}>{' × '}</Text>
             </>
@@ -3643,10 +3751,12 @@ function LoggedCapture({ units, confirm, w }: { units: 'kg' | 'lb'; confirm: Con
 
 function ExerciseDone({ confirm }: { confirm: Confirm }) {
   const { t } = useCopy();
-  /* The lift-close carries its own soft pulse too — a boundary the hand should feel. */
+  /* The lift-close carries its own soft pulse too — a boundary the hand should feel. A best that
+     closes the lift strikes instead (`haptics.record`). */
   useEffect(() => {
-    haptics.success();
-  }, []);
+    if (confirm.record) haptics.record();
+    else haptics.success();
+  }, [confirm.record]);
   /* ⛔ THE PIP ROW IS GONE, AND THE RING IS WHY (founder, 2026-08-26 — see `SetRing`). Four green
      dots that appear only when a lift ends are a summary; the ring the athlete has been filling one
      set at a time is a CONCLUSION. Same fact, said by the instrument that earned it.
@@ -3740,7 +3850,7 @@ function RestLearned({ took, was, now }: { took: number; was: number; now: numbe
       <Breathe>
         <View style={styles.paceRing}>
           <View style={styles.paceRingInner}>
-            <Text style={styles.paceValue}>{clock(next)}</Text>
+            <Text style={styles.paceValue}>{opticalFigure(clock(next))}</Text>
             <Legend size={17} track={0.22} align="center" tone="onStage">{t('workout.nextTime')}</Legend>
           </View>
         </View>
@@ -4261,7 +4371,7 @@ function Rest({
                 nextFigure ? (
                   <View style={styles.upRight}>
                     <Text style={styles.upWeight}>
-                      {nextFigure.figure}
+                      {opticalFigure(nextFigure.figure)}
                       {nextFigure.unit ? <Text style={styles.upWeightUnit}> {nextFigure.unit}</Text> : null}
                     </Text>
                   </View>
@@ -4273,7 +4383,7 @@ function Rest({
                       CREAM, not moss: on a new lift the number is an instruction to go and set up,
                       not a decision the engine just made. Moss on this card means "I changed this". */}
                   <Text style={[styles.upWeight, nextWeight == null && styles.upWeightWord]}>
-                    {nextWeight != null ? nextWeight : t(noLoadIsBand(session.nextExercise?.id) ? 'workout.bandWord' : 'workout.bodyweight')}
+                    {nextWeight != null ? opticalFigure(nextWeight) : t(noLoadIsBand(session.nextExercise?.id) ? 'workout.bandWord' : 'workout.bodyweight')}
                     {nextWeight != null ? <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text> : null}
                   </Text>
                 </View>
@@ -4283,7 +4393,7 @@ function Rest({
                 // in cream, an instruction to go and build, exactly like a crossing's figure.
                 <View style={styles.upRight}>
                   <Text style={styles.upWeight}>
-                    {nextWeight}
+                    {opticalFigure(nextWeight)}
                     <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text>
                   </Text>
                 </View>
@@ -4292,7 +4402,7 @@ function Rest({
                 // with the step it took — she reads it here, at the bar, and changes the plates now.
                 <View style={styles.upRight}>
                   <Text style={[styles.upWeight, { color: directionTone(movedBy > 0 ? 'up' : 'down') }]}>
-                    {movedTo}
+                    {opticalFigure(movedTo)}
                     <Text style={styles.upWeightUnit}> {unitLabel(units)}</Text>
                   </Text>
                   <LoadDelta value={movedBy} unit={unitLabel(units)} />
@@ -4558,7 +4668,7 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
             <Icon name="chevronRight" size={16} color={color.textTertiary} strokeWidth={2} />
           </>
         ) : null}
-        <Text style={[styles.whyTo, { color: toneColor }]}>{to}</Text>
+        <Text style={[styles.whyTo, { color: toneColor }]}>{opticalFigure(to)}</Text>
         <Text style={styles.whyKg}>{unit}</Text>
       </View>
       <Text style={styles.whyLine}>{line}</Text>
@@ -4583,6 +4693,8 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
  */
 
 const styles = StyleSheet.create({
+  /* The coach's note on the stage: centred under the lift, like the line above it. */
+  coachNote: { textAlign: 'center', maxWidth: 320, alignSelf: 'center', marginTop: 6 },
   root: { flex: 1, backgroundColor: stage[0] },
   safe: { flex: 1 },
   // The watch-logged beat: the stage's own black, edge to edge, over a rest that keeps running.
@@ -4784,9 +4896,11 @@ const styles = StyleSheet.create({
    * paddingBottom, so the act also holds one position ACROSS beats (set → rest → crossing).
    */
   footerBand: { height: 52, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  /* The voice's Ready, directly above the act it precedes (2026-09-28). */
+  readyAct: { marginBottom: 10 },
 
   /* ── the session map (the rail's own sheet, 2026-08-26) ── */
-  mapLegend: { marginBottom: 6 },
+  mapTitle: { fontFamily: font.sansSemibold, fontSize: 24, lineHeight: 31, color: color.textPrimary, textAlign: 'left', marginBottom: 4 },
   mapHint: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left', marginBottom: 8 },
 
   /* The lift she is on: a faint well, so "now" is a place on the list and not only a word. */
@@ -5144,6 +5258,7 @@ const styles = StyleSheet.create({
    */
   /* 88%, same reason as `restFigure`: the rig's floor must not run edge-to-edge. */
   athleteFigure: { width: '88%', aspectRatio: STAGE_FRAME_ASPECT },
+  athleteHeld: { opacity: 0 },
   /*
    * ⚠️ THE HEIGHT IS THE FRAME'S OWN RATIO AND NOTHING ELSE — see `athleteFigure` for why any
    * literal height here is dead air rather than size. The seated body fills 115 of the authoring
@@ -5343,7 +5458,10 @@ const styles = StyleSheet.create({
   loggedRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   /* The record, said at the bar — one accent word, breathing room below. Its figure is DELETED; see
      the note at `recordLine` for why saying the number here was saying it twice. */
-  recordRow: { alignItems: 'center', marginBottom: 22 },
+  recordRow: { alignItems: 'center', gap: 6, marginBottom: 18 },
+  recordWords: { alignItems: 'center', gap: 6 },
+  /* The fitted frame's own aspect, so the celebration never letter-boxes (`frame.STAGE_FRAME_ASPECT`). */
+  celebrateFigure: { width: 250, aspectRatio: STAGE_FRAME_ASPECT },
   // LIT moss on the dark stage (v7 shows #A9C49F). `up[0]` is the PAPER moss — near-invisible here;
   // this screen was never part of the READOUT ladder inversion, so it silently held the wrong rung.
   // Up next card

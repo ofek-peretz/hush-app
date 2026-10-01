@@ -50,10 +50,16 @@ type Json = { type: string; props: Record<string, unknown>; children: Json[] | n
 
 function joined(r: ReactTestRenderer): string {
   const out: string[] = [];
+  // One <Text> is one string, however it is built inside: since 2026-09-29 a figure's separator
+  // is a nested <Text> in the sans (`ds/Figure`), so "0.4" arrives as "0", ".", "4" — and a
+  // reader sees one number, which is what this has to assert about.
+  const flat = (n: Json | Json[] | string): string =>
+    n == null ? '' : typeof n === 'string' ? n : Array.isArray(n) ? n.map(flat).join('') : (n.children ?? []).map(flat).join('');
   const walk = (n: Json | Json[]): void => {
     if (n == null) return;
     if (typeof n === 'string') return void out.push(n);
     if (Array.isArray(n)) return void n.forEach(walk);
+    if ((n as { type?: string }).type === 'Text') return void out.push(flat(n));
     if (n.children) n.children.forEach(walk);
   };
   walk(r.toJSON() as unknown as Json);

@@ -26,6 +26,7 @@ import { MilestoneGlyph, type MilestoneGlyphName } from '@/components/MilestoneG
 import { Icon } from '@/components/Icon';
 import { stage, signal, font, motion } from '@/design/tokens';
 import { legendVoice } from '@/design/monoVoice';
+import { opticalFigure } from '@/components/ds/Figure';
 import { useReducedMotion } from '@/platform/reducedMotion';
 
 export interface MilestoneEmblemProps {
@@ -167,7 +168,7 @@ export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, c
                 },
               ]}
             >
-              {value}
+              {opticalFigure(value)}
             </Text>
           ) : null}
           {/*
@@ -194,17 +195,23 @@ export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, c
             The same call `Legend` makes.
             ════════════════════════════════════════════════════════════════════════════════════
           */}
+          {/* ⛔ A UNIT IS A SYMBOL, NOT A LEGEND (design audit 2026-09-29). The club seal's caption is
+              `kg` / `lb`, and it went through the legend voice like "WORKOUTS" does: uppercased and
+              tracked .22em, so two letters stood a letter-width apart and the ring read `88 L B`.
+              `kg` is the SI symbol in lower case; a two-letter symbol is set tight, as written. */}
           {caption ? (
             <Text
               numberOfLines={1}
               style={[
                 styles.caption,
-                {
-                  // rtl-ok: merged onto styles.caption, which sets textAlign: 'center'
-                  fontFamily: legendVoice(caption, captionSize, 0.22).latin ? font.monoMedium : font.sansMedium,
-                  fontSize: captionSize,
-                  letterSpacing: legendVoice(caption, captionSize, 0.22).letterSpacing,
-                },
+                UNIT_SYMBOL.test(caption)
+                  ? { fontFamily: font.monoMedium, fontSize: captionSize, letterSpacing: 0, textTransform: 'none', textAlign: 'center' }
+                  : {
+                      // rtl-ok: merged onto styles.caption, which sets textAlign: 'center'
+                      fontFamily: legendVoice(caption, captionSize, 0.22).latin ? font.monoMedium : font.sansMedium,
+                      fontSize: captionSize,
+                      letterSpacing: legendVoice(caption, captionSize, 0.22).letterSpacing,
+                    },
               ]}
             >
               {caption}
@@ -230,6 +237,9 @@ export function MilestoneEmblem({ size, tone = 'foil', onStage = false, value, c
     </View>
   );
 }
+
+/** The weight units the club seal names — set as written, never tracked or uppercased. */
+const UNIT_SYMBOL = /^(kg|lb)$/i;
 
 const styles = StyleSheet.create({
   pulseRing: { ...StyleSheet.absoluteFillObject, margin: -14, borderWidth: 1.5, borderColor: 'rgba(169,196,159,0.35)' },

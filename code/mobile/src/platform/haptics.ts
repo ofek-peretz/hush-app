@@ -82,6 +82,19 @@ export function wellDone(): void {
   beat(620, I.Heavy);
 }
 
+/**
+ * A personal best, written at the bar (design audit 2026-09-29: "when there is a record it needs more
+ * than the words — a crown, full moss, and a double pulse"). It REPLACES the capture's soft double
+ * (`success`) on that one set rather than joining it, so a record is still ONE event after the press:
+ * a heavy strike and a firmer second — the texture this file already licenses for a thing earned
+ * (`milestone`), because a best is exactly that, and it stays out of the rest-over double's soft
+ * ascending rhythm, which a hand has to read wrist-down.
+ */
+export function record(): void {
+  void Haptics.impactAsync(I.Heavy);
+  beat(160, I.Heavy);
+}
+
 /** A milestone lands (founder 2026-07-10 — the one licensed loud moment): a plate locking onto
  *  the bar. One heavy strike as the emblem stamps in, then a short rigid settle. Rare by
  *  construction (the rarity law), so its weight stays meaningful. */

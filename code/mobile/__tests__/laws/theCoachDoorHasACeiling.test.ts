@@ -53,7 +53,8 @@ describe('the coach door has a ceiling', () => {
   });
 
   it('⚠️ spends the day\'s budget BEFORE the model is called', () => {
-    const upstream = worker.indexOf('generativelanguage.googleapis.com');
+    // The first paid call in the coach's path — the strong week, then the fast lane (OpenAI, 2026-09-28).
+    const upstream = Math.min(worker.indexOf('await askStrongModel('), worker.indexOf('await askOpenAI('));
     expect(upstream).toBeGreaterThan(0);
     const globalSpend = worker.indexOf('quota:g:');
     const accountSpend = worker.indexOf('quota:c:');

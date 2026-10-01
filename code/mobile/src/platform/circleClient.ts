@@ -54,6 +54,57 @@ export async function identityCall<T>(path: string, init: { method: 'GET' | 'POS
   return call<T>(path, init);
 }
 
+/** What `identityRequest` answers: the body on success, the HTTP status and body on a refusal,
+ *  and `0` when the phone never reached the worker (offline, timed out, no URL, signed out). */
+export type IdentityAnswer<T> =
+  | { ok: true; status: number; body: T }
+  | { ok: false; status: number; body: Record<string, unknown> | null; signedOut?: true };
+
+/**
+ * ════ THE SAME DOOR, WITH THE STATUS KEPT (the coach track, 2026-09-17) ════
+ *
+ * `identityCall` answers `null` for every refusal, which is right for the circle (nothing it can do
+ * differs between a 404 and a 409) and wrong for the coach track, whose screens must say *which*
+ * refusal it was — a wrong code, a full roster, a trainee already linked. So this keeps the status
+ * and the error body, and it keeps the ONE 401 rule of this file: a lapsed session is cleared here,
+ * in the same function family, never in a second copy.
+ *
+ * ⚠️ BOUNDED. A request that has not answered in `timeoutMs` is abandoned and answers status 0 —
+ * the coach track runs at app foreground and after a save, and neither may hang on a dead network.
+ */
+export async function identityRequest<T>(
+  path: string,
+  init: { method: 'GET' | 'POST' | 'PUT'; body?: unknown; timeoutMs?: number },
+): Promise<IdentityAnswer<T>> {
+  if (!circleAvailable()) return { ok: false, status: 0, body: null };
+  const token = await storedToken();
+  if (!token) return { ok: false, status: 0, body: null, signedOut: true };
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(() => controller?.abort(), init.timeoutMs ?? 12_000);
+  try {
+    const res = await fetch(`${CIRCLE_URL}${path}`, {
+      method: init.method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    if (res.status === 401) {
+      await SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {});
+      return { ok: false, status: 401, body: null, signedOut: true };
+    }
+    const body = (await res.json().catch(() => null)) as unknown;
+    if (!res.ok) return { ok: false, status: res.status, body: (body && typeof body === 'object' ? body : null) as Record<string, unknown> | null };
+    return { ok: true, status: res.status, body: body as T };
+  } catch {
+    return { ok: false, status: 0, body: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function storedToken(): Promise<string | null> {
   try {
     return await SecureStore.getItemAsync(TOKEN_KEY);
@@ -171,6 +222,13 @@ export async function circleLeave(): Promise<void> {
 
 export async function circlePublishWeek(payload: CircleWeekPayload): Promise<void> {
   await call('/circle/week', { method: 'POST', body: payload });
+}
+
+/** A cheer for one friend, by the circle's handle for them. True once the worker took it (a repeat
+ *  inside the day is taken quietly too — the button already says so). */
+export async function circleCheer(id: string): Promise<boolean> {
+  const res = await call<{ ok: boolean }>('/circle/cheer', { method: 'POST', body: { to: id } });
+  return res?.ok === true;
 }
 
 export async function circleFetch(): Promise<CircleState | null> {

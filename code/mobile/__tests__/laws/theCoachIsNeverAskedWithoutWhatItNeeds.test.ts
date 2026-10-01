@@ -232,7 +232,7 @@ describe('onboarding asks for every one of them', () => {
      */
     const about = read('src/screens/onboarding/AboutYou.tsx');
     expect(about.match(/<WheelPicker/g)).toHaveLength(1);
-    expect(about).toContain("navigation.navigate('ConnectHealth', { sex, weightKg: kg })");
+    expect(about).toContain("navigation.navigate('ConnectHealth', { sex, weightKg: kg, ...(experience ? { experience } : {}) })");
     const builderSrc = read('src/screens/plan/PlanBuilder.tsx');
     // the door that cannot derive it asks for it, and hands on exactly what it was told
     /* ⛔ A FULL STEP SINCE 2026-08-29, not the bottom sheet it was for a day — the founder chose it

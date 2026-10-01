@@ -137,7 +137,8 @@ describe('the model may WRITE one', () => {
     const json = JSON.stringify(BUILD_WEEK_SCHEMA);
     // `reps` left this list on 2026-09-07 — the rep RANGE is the one prescription the model may
     // make, by founder ruling; `theModelWritesAWeekSheCanEdit` pins its exact shape.
-    for (const forbidden of ['load', 'rest']) {
+    // The opening `load` joined on 2026-09-28 (B-1 cancelled — `theOpeningLoadIsHers`); rest stays refused.
+    for (const forbidden of ['rest']) {
 
       expect({ forbidden, present: json.includes(forbidden) }).toEqual({ forbidden, present: false });
     }

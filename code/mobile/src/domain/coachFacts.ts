@@ -56,6 +56,7 @@ import { MOVEMENTS } from '@/data/movements';
 import { recentDecisions, type CoachDecision } from './coachLog';
 import type { CoachPlan } from './coachPlan';
 import { STARTING_INCREMENT } from '@/engine/v5/constants';
+import { incrementOf } from '@/engine/v5/loadGrid';
 import { emptyBarKg } from '@/engine/loadMath';
 // The one filter that decides whether an ease is still standing — shared with every other consumer.
 import { activeEases } from './painReport';
@@ -742,8 +743,10 @@ export function coachMovements(): FactMovement[] {
 /** The grain of every equipment class, from the engine's own constants — never a second copy. */
 export function coachEquipment(): Record<string, FactEquipment> {
   const out: Record<string, FactEquipment> = {};
-  for (const [equipment, step] of Object.entries(STARTING_INCREMENT)) {
-    out[equipment] = { step, floor: emptyBarKg(equipment as Parameters<typeof emptyBarKg>[0]) };
+  for (const equipment of Object.keys(STARTING_INCREMENT)) {
+    // Her room's rungs, so the loads the coach writes land where her plates are (`loadGrid`).
+    const eq = equipment as Parameters<typeof emptyBarKg>[0];
+    out[equipment] = { step: incrementOf(eq), floor: emptyBarKg(eq) };
   }
   return out;
 }

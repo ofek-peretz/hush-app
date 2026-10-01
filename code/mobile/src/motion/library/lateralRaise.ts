@@ -142,7 +142,9 @@ function lateralRaise(p: LateralParams): Rig {
        * to each side of an already wide silhouette. The press family keeps `spin: 1`; it is right
        * there and wrong here.
        */
-      front = [...dumbbellFront(handL, 0), ...dumbbellFront(handR, 0)];
+      /* the hex face turns with the forearm, a quarter turn about the handle from the hang to the top */
+      const fore = (h: Vec2, e: Vec2): Vec2 => ({ x: h.x - e.x, y: h.y - e.y });
+      front = [...dumbbellFront(handL, 0, 9, 8, fore(handL, pose.j.elbowL)), ...dumbbellFront(handR, 0, 9, 8, fore(handR, pose.j.elbowR))];
     } else if (p.implement === 'cable') {
       /*
        * A CROSSOVER, WHICH IS HOW THE LIFT IS ACTUALLY SET UP: the left hand takes the RIGHT-hand

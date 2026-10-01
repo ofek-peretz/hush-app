@@ -411,3 +411,118 @@ export const loggingRig: Rig = {
   decorAt: (): Decor => ({ back: [], front: phoneSlab() }),
   scene: floorScene(FLOOR_Y, CX, 34),
 };
+
+/* ─────────────────────────────────────────────────── the best she has ever done, front-on */
+
+/**
+ * ════ ✦ THE ARMS GO UP (design audit 2026-09-29; the founder's free hand, 2026-09-30) ════
+ *
+ * *"Record and finish are the moments that sell the app: a number rising from 0, a double pulse, and
+ * the figure raising its arms."* The athlete mimes the whole session — repping, logging, resting with
+ * a bottle — and had no pose for the one moment the session exists for. This is it: standing
+ * front-on, like every posture in this file, the arms rising from her sides into a V.
+ *
+ * ⛔ THE ARM IS DRIVEN FORWARD, NOT SOLVED BACKWARD. A lateral raise to overhead sweeps the hand
+ * through a half circle, and two-bone IK answers a half circle with TWO elbows — the solver has to be
+ * told a side, and the side that is outward at the hip is inward over the head, so the elbow snaps
+ * across the arm on the way up (the IK-branch defect class, `the-world-class-clip-audit`). Here the
+ * upper arm is rotated by an angle and the forearm follows 14° further round: the elbow keeps the
+ * same side of the arm for the whole sweep, a soft bend by the thigh and a soft bend in the V.
+ *
+ * ⚠️ AND THE FIGURE STANDS 19 UNITS LOWER, the overhead press's own frame budget
+ * (`overheadPressStanding.ts`): a hand overhead reaches above the shared crop's top edge from the
+ * canonical standing height. The floor moves with her; `noDemonstrationIsDrawnOutsideItsFrame`'s
+ * crown clearance is asserted for this rig in `life.test`.
+ */
+const WIN_DROP = 19;
+const WIN = (() => {
+  const s = standingFrontCore(CX);
+  const out = {} as Record<keyof typeof s, Vec2>;
+  for (const k of Object.keys(s) as (keyof typeof s)[]) out[k] = { x: s[k].x, y: s[k].y + WIN_DROP };
+  return out;
+})();
+/** From the side (8° off the thigh) to the V (145°, the hand a hand-width outside the head). */
+const ARM_DOWN_DEG = 8;
+const ARM_UP_DEG = 145;
+/** The forearm's lead on the upper arm — the soft, constant bend. */
+const FOREARM_LEAD_DEG = 14;
+
+function armAt(shoulder: Vec2, side: 1 | -1, deg: number): { elbow: Vec2; hand: Vec2 } {
+  const u = (deg * Math.PI) / 180;
+  const f = ((deg + FOREARM_LEAD_DEG) * Math.PI) / 180;
+  // Angles are measured from straight DOWN, swinging OUTWARD (y grows downward on this page).
+  const elbow = { x: shoulder.x + side * Math.sin(u) * ATHLETE.upperArm, y: shoulder.y + Math.cos(u) * ATHLETE.upperArm };
+  const hand = { x: elbow.x + side * Math.sin(f) * ATHLETE.foreArm, y: elbow.y + Math.cos(f) * ATHLETE.foreArm };
+  return { elbow, hand };
+}
+
+/** Up fast, held high, down unhurried — a celebration is the top of the movement, not the travel. */
+const WIN_TEMPO: Tempo = { topHoldMs: 900, eccentricMs: 560, bottomHoldMs: 380, concentricMs: 460, reps: 1, startAt: 'bottom' };
+
+function celebratingPose(rom: number): Pose {
+  const deg = lerp(ARM_DOWN_DEG, ARM_UP_DEG, rom);
+  const r = armAt(WIN.shoulderR, 1, deg);
+  const l = armAt(WIN.shoulderL, -1, deg);
+  return {
+    headR: ATHLETE.headR,
+    j: {
+      hipC: WIN.hipC,
+      neckBase: WIN.neckBase,
+      head: WIN.head,
+      shoulderR: WIN.shoulderR,
+      shoulderL: WIN.shoulderL,
+      elbowR: r.elbow,
+      elbowL: l.elbow,
+      handR: r.hand,
+      handL: l.hand,
+      hipR: WIN.hipR,
+      hipL: WIN.hipL,
+      kneeR: WIN.kneeR,
+      kneeL: WIN.kneeL,
+      ankleR: WIN.ankleR,
+      ankleL: WIN.ankleL,
+      heelR: WIN.heelR,
+      toeR: WIN.toeR,
+      heelL: WIN.heelL,
+      toeL: WIN.toeL,
+    },
+  };
+}
+
+const HAND_DOWN_Y = armAt(WIN.shoulderR, 1, ARM_DOWN_DEG).hand.y;
+const HAND_UP_Y = armAt(WIN.shoulderR, 1, ARM_UP_DEG).hand.y;
+
+const celebratingFormspec: FormSpec = {
+  tempo: WIN_TEMPO,
+  start: [{ kind: 'contactY', a: 'handR', y: HAND_DOWN_Y, tol: 0.4, label: 'arms by her sides' }],
+  end: [{ kind: 'contactY', a: 'handR', y: HAND_UP_Y, tol: 0.4, label: 'and up, in a V' }],
+  /* An arc about the shoulder — the pivot is the invariant, as the declaration says it must be. */
+  path: { track: 'handR', kind: 'arc', tol: 1 },
+  invariants: [
+    { kind: 'pointFixed', point: 'shoulderR', tol: 0.01, label: 'the shoulder is the pivot' },
+    { kind: 'pointFixed', point: 'hipC', tol: 0.01, label: 'standing still' },
+    { kind: 'pointFixed', point: 'head', tol: 0.01, label: 'the head stays up' },
+    { kind: 'angleNever', joint: 'elbowR', neighbors: ['shoulderR', 'handR'], aboveDeg: 179, label: 'no locked elbow' },
+  ],
+};
+
+/** She has just done the best set of her life. */
+export const celebratingRig: Rig = {
+  id: 'life_celebrating',
+  chains: {
+    torso: ['hipC', 'neckBase'],
+    neck: ['neckBase', 'head'],
+    head: 'head',
+    view: 'front',
+    nearArm: ['shoulderR', 'elbowR', 'handR'],
+    farArm: ['shoulderL', 'elbowL', 'handL'],
+    nearLeg: ['hipR', 'kneeR', 'ankleR'],
+    farLeg: ['hipL', 'kneeL', 'ankleL'],
+    nearFoot: ['heelR', 'toeR'],
+    farFoot: ['heelL', 'toeL'],
+  },
+  formspec: celebratingFormspec,
+  poseAt: celebratingPose,
+  decorAt: (): Decor => ({ back: [], front: [] }),
+  scene: floorScene(FLOOR_Y + WIN_DROP, CX, 34),
+};

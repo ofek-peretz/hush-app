@@ -1,20 +1,21 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
- * THE COACH WORKER — the only thing between the app and Gemini.
+ * THE COACH WORKER — the only thing between the app and the models (OpenAI's, since 2026-09-28;
+ * Gemini's before that).
  *
  * Deploy target: Cloudflare Workers. Copy this file over the generated `src/index.ts` in the
  * `hush-coach` project and run `npx wrangler deploy`.
  *
  * IT EXISTS FOR EXACTLY ONE REASON: **an API key cannot ship inside a phone app.** Anything in the
- * bundle is readable by anyone who downloads it, and a leaked Gemini key is someone else's bill on
- * your card. So the key lives in Cloudflare's secret store, the app never sees it, and this file is
- * the only code that does.
+ * bundle is readable by anyone who downloads it, and a leaked key is someone else's bill on your
+ * card. So the key lives in Cloudflare's secret store, the app never sees it, and this file is the
+ * only code that does.
  *
  * It is deliberately thin. It holds no opinion about training, never edits a prompt, and never
  * inspects a plan — `coachPrompt` builds the call, `coachPlan` reads the answer, and both live in
- * the app where they are tested. Everything Gemini-specific is here and nowhere else: the URL, the
- * model name, the request shape, the schema dialect. That is what keeps "swap the provider" a
- * change to one file.
+ * the app where they are tested. Everything provider-specific is here and nowhere else: the model
+ * names (`JOB_MODEL`), the request shape (`openaiModel.ts`, `voice.ts`). That is what made "swap the
+ * provider" (2026-09-28) a change to the server alone.
  *
  * ── WHAT IT REFUSES TO DO ───────────────────────────────────────────────────────────────────────
  * · It will not answer a caller that does not present the shared token. Without that, the URL is a
@@ -22,15 +23,35 @@
  *   within days.
  * · It will not accept a `model` from the caller. A request that picks its own model is a request
  *   that can pick the most expensive one.
- * · It will not accept an unbounded output. `maxOutputTokens` is set here, not by the app.
- * · It will not pass Google's error text back verbatim. An upstream error can quote the request,
+ * · It will not accept an unbounded output. `max_output_tokens` is set here, not by the app.
+ * · It will not pass the provider's error text back verbatim. An upstream error can quote the request,
  *   and the request contains an athlete's record.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
+import { callProbeProvider, isProbeProvider } from './probeProviders.ts';
+import { askStrongModel, type StrongEffort } from './strongModel.ts';
+import { askOpenAI, type OpenAIEffort } from './openaiModel.ts';
+import { hear, say, toBase64, DEFAULT_EAR, DEFAULT_VOICE, MAX_HEAR_BASE64, MAX_SAY_CHARS, VOICES } from './voice.ts';
+
 export interface Env {
-  /** Set with `npx wrangler secret put GEMINI_API_KEY`. Never in a file, never in the repo. */
-  GEMINI_API_KEY: string;
+  /**
+   * ⛔ THE MODEL BAKE-OFF SWITCH (2026-09-17) — '1' ONLY on a `wrangler versions upload --preview-alias`
+   * probe version, NEVER in `[vars]`. With it, `x-probe-model` / `x-probe-think` choose the model and
+   * thinking level for one call, so candidates are compared on this exact Worker code. Unset in
+   * production, the headers are ignored.
+   */
+  PROBE?: string;
+  /** The bake-off's Claude arms only (`probeProviders.ts`, PROBE). Unused by production since 2026-09-28. */
+  ANTHROPIC_API_KEY?: string;
+  /**
+   * ⛔ THE ONE PROVIDER (founder, 2026-09-28: *"בוא נשתמש רק ב-OPEN AI עבור כל המטרות שלנו"*). Every
+   * model call — the week, reading a routine, a review, the voice's ear and mouth — is OpenAI's. Set
+   * with `npx wrangler secret put OPENAI_API_KEY`. Never in a file, never in the repo.
+   */
+  OPENAI_API_KEY: string;
+  /** Unused by production since 2026-09-28 (the coach and the voice are OpenAI's). */
+  GEMINI_API_KEY?: string;
   /**
    * Shared token the app sends in `x-hush-token`. Set with `npx wrangler secret put HUSH_TOKEN`.
    *
@@ -88,6 +109,18 @@ export interface Env {
    * MAX_OUTPUT_TOKENS pricing, that is a ceiling the founder chose instead of one Google chose.
    */
   DAILY_GLOBAL_CALLS?: string;
+  /**
+   * ════ THE VOICE'S OWN LIMITER AND BUDGETS (2026-09-27, `voice.ts`) ════
+   * A workout asks the ear a few times a minute and fetches the coach's lines ahead of time — a
+   * burst the coach's 30/60 s limiter was never sized for, and a spend that must never starve the
+   * week's build. So the voice counts apart: its own limiter, its own per-account day, its own
+   * global ceiling. Defaults: 3000 hears (the strong ear hears every answer, and listens inside the
+   * long windows), 2000 lines, 60 000 calls for everyone together.
+   */
+  VOICE_LIMIT?: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  DAILY_VOICE_HEAR?: string;
+  DAILY_VOICE_SAY?: string;
+  DAILY_VOICE_GLOBAL?: string;
 }
 
 /**
@@ -224,7 +257,52 @@ export interface Env {
  * thing this door is judged by — doing what she wrote — and the misses were an injury constraint
  * and a superset request, both twice out of two. Re-probe after any prompt change that targets them.
  */
-const MODEL = 'gemini-3.6-flash';
+/*
+ * ════ ⛔ ONE PROVIDER, A MODEL PER JOB (founder, 2026-09-28) ════════════════════════════════════
+ *
+ *   > *"בוא נשתמש רק ב-OPEN AI עבור כל המטרות שלנו וזהו הכי פשוט … תחליט אתה רק באיזה מודל ובאיזה
+ *   > עוצמה נשתמש בכל אחת מהמטרות … מה יתן לנו מקסימום איכות וחווית משתמש בכל משימה."*
+ *
+ * Everything above this block is the history of the Gemini years (and it is why the hedges, the
+ * ceilings and the race below look the way they do); from today every call is OpenAI's, chosen by
+ * the models' own strength and speed as OpenAI states them (September 2026), not by our old probes:
+ *
+ *   job                          model          reasoning   why
+ *   the week (`build`)           gpt-6-sol      high        the one decision we sell, thought through —
+ *                                                           the founder's call over Astra (below)
+ *     …its fallback              gpt-6-sol      low         a week ALWAYS lands inside her wait
+ *   reading her routine          gpt-6-sol      medium      a photo of a handwritten routine is a hard
+ *     (`import`, photos too)                                read; every set, rep and weight must survive
+ *   reviewing her week           gpt-6-sol      medium      the safety read: a lift that hurts her injury
+ *     (`review`)                                            must not survive it — worth a few seconds
+ *   a chat turn                  gpt-6-sol      low         short, and she is waiting
+ *   the voice: hearing           gpt-transcribe             `voice.ts` — OpenAI's recommended STT (07/2026)
+ *   the voice: speaking          gpt-4o-mini-tts, marin     `voice.ts` — its only TTS model; marin is the
+ *                                                           most natural of its voices
+ *
+ * Sol ($2 / $10 per million) is OpenAI's "complex work" tier. I first gave the week Astra ($10 / $50)
+ * @ medium; the founder, the same day: *"שים את sol בחשיבה גבוהה במקום astra 6 אני מעריך שזה יעשה
+ * את העבודה לא פחות טוב"* — a fifth of the price per week (~$0.14 against ~$0.45). Measure after the
+ * first credit: `server/voiceBakeoff.cjs` for the ear and the voice, and the probe (`x-probe-model`,
+ * `x-probe-think`) for the week — Sol @ high must finish inside the strong deadline (wait − reserve).
+ */
+const MODEL = 'gpt-6-sol';
+/** Each job's model and reasoning, by `kind` — the fast lane every call runs on (the week's fallback included). */
+const JOB_MODEL: Record<string, { model: string; effort: OpenAIEffort }> = {
+  build: { model: MODEL, effort: 'low' },
+  import: { model: MODEL, effort: 'medium' },
+  review: { model: MODEL, effort: 'medium' },
+  chat: { model: MODEL, effort: 'low' },
+};
+/** The week's own model, when her wait leaves room for it (`askStrongModel`): the same Sol, thinking hard. */
+const BUILD_STRONG_MODEL = MODEL;
+const BUILD_STRONG_EFFORT: StrongEffort = 'high';
+/** Below this much declared wait there is no room for the strong model AND the fast one after it. */
+const BUILD_STRONG_MIN_WAIT_MS = 30_000;
+/** Kept back from the declared wait for the fast model, should the strong one miss (Gemini 3.8's p90 was ~11 s; re-measure Sol's). */
+const BUILD_FALLBACK_RESERVE_MS = 13_000;
+/** A client may say it waits longer than it does; the strong model is never given more than this. */
+const BUILD_WAIT_CAP_MS = 60_000;
 /**
  * ⛔ THIS CAP INCLUDES THINKING, AND AT 8192 IT WAS CUTTING PROGRAMMES IN HALF.
  *
@@ -288,6 +366,12 @@ interface CoachCall {
   /** `COACH_PLAN_SCHEMA`, in JSON Schema. Absent for a plain chat turn, where prose is the answer. */
   schema?: Record<string, unknown>;
   /**
+   * How long the app will wait for this answer, in ms — sent on `build` since 2026-09-27. The
+   * Worker picks the strongest model that fits inside it (`BUILD_STRONG_MODEL`); absent — every
+   * app before that date — means the fast model alone, because nothing said there was time.
+   */
+  wait?: number;
+  /**
    * ════ WHAT SHE SHOWED IT ════
    *
    * Base64, and the mime type it was encoded as. A photographed programme from a previous coach, the
@@ -326,63 +410,6 @@ const MAX_BLOCKS = 32;
 const MAX_TEXT_CHARS = 240_000;
 /** Everything together, pre-parse: all four images at ceiling, all the text, and JSON overhead. */
 const MAX_BODY_BYTES = 8_000_000;
-
-/* ─────────────────────────────────────────────────────────── the schema dialect (see geminiSchema) */
-
-const TYPE: Record<string, string> = {
-  object: 'OBJECT', array: 'ARRAY', string: 'STRING',
-  number: 'NUMBER', integer: 'INTEGER', boolean: 'BOOLEAN',
-};
-
-/**
- * JSON Schema → Gemini's `responseSchema` (a subset of OpenAPI 3.0).
- *
- * A verbatim copy of `src/domain/geminiSchema.ts` in the app, where it is covered by
- * `__tests__/domain/geminiSchema.test.ts`. It is duplicated rather than imported because a Worker
- * is a separate deployable with its own bundle; the app's copy is the one under test, and this one
- * must be changed with it. Three things do not survive untranslated: `additionalProperties` (not in
- * the subset — dropped, since `parseCoachPlan` enforces what it was buying), union types like
- * `["number","null"]` (Gemini spells it `nullable`), and lowercase type names.
- */
-function geminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
-  const rawType = schema.type;
-  const out: Record<string, unknown> = {};
-
-  if (typeof rawType === 'string') {
-    if (TYPE[rawType]) out.type = TYPE[rawType];
-  } else if (Array.isArray(rawType)) {
-    const real = rawType.find((t) => typeof t === 'string' && t !== 'null') as string | undefined;
-    if (real && TYPE[real]) out.type = TYPE[real];
-    if (rawType.includes('null')) out.nullable = true;
-  }
-
-  if (typeof schema.description === 'string') out.description = schema.description;
-
-  if (Array.isArray(schema.enum)) {
-    out.enum = [...schema.enum];
-    // Without `format: "enum"` the constraint is silently ignored and any string is allowed.
-    if (out.type === 'STRING') out.format = 'enum';
-  }
-
-  if (schema.items && typeof schema.items === 'object') {
-    out.items = geminiSchema(schema.items as Record<string, unknown>);
-  }
-  if (typeof schema.minItems === 'number') out.minItems = schema.minItems;
-  if (typeof schema.maxItems === 'number') out.maxItems = schema.maxItems;
-
-  if (schema.properties && typeof schema.properties === 'object') {
-    const props = schema.properties as Record<string, Record<string, unknown>>;
-    const keys = Object.keys(props);
-    out.properties = Object.fromEntries(keys.map((k) => [k, geminiSchema(props[k])]));
-    out.propertyOrdering = keys;
-  }
-  if (Array.isArray(schema.required) && schema.required.length > 0) {
-    out.required = [...schema.required];
-  }
-  return out;
-}
-
-/* ──────────────────────────────────────────────────────────────────────────────────── the worker */
 
 /**
  * The headers that let a browser talk to this at all.
@@ -451,6 +478,75 @@ function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * ════ /voice/hear AND /voice/say (2026-09-27) ════
+ *
+ * Reached only past the shared token and the session lookup above. A workout is signed in by
+ * construction (sign-in is a wall at onboarding), so a call with no session is refused — except on
+ * a PROBE preview, where the bake-off drives it from a script. Never throws: every failure is a
+ * small JSON the phone reads as "use the on-device ear / Carmit".
+ */
+async function voiceRoute(request: Request, env: Env, path: string, sub: string | null): Promise<Response> {
+  const probing = env.PROBE === '1';
+  if (!sub && !probing) return json({ error: 'unauthorized' }, 401);
+  const declared = Number(request.headers.get('content-length') ?? '0');
+  if (declared > 1_500_000) return json({ error: 'too_large' }, 413);
+  const limiter = env.VOICE_LIMIT ?? env.COACH_LIMIT;
+  if (limiter && !probing) {
+    const { success } = await limiter.limit({ key: `v:${sub}` }).catch(() => ({ success: true }));
+    if (!success) return json({ error: 'rate_limited' }, 429);
+  }
+  let body: { audio?: string; text?: string; expect?: string; lang?: string; voice?: string };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: 'bad_request' }, 400);
+  }
+  const lang = String(body.lang ?? 'he').startsWith('he') ? 'he' : 'en';
+  const hearing = path === '/voice/hear';
+  if (hearing) {
+    if (typeof body.audio !== 'string' || body.audio.length < 100) return json({ error: 'bad_request' }, 400);
+    if (body.audio.length > MAX_HEAR_BASE64) return json({ error: 'too_large' }, 413);
+  } else {
+    const text = String(body.text ?? '').trim();
+    if (text.length === 0) return json({ error: 'bad_request' }, 400);
+    if (text.length > MAX_SAY_CHARS) return json({ error: 'too_large' }, 413);
+  }
+  if (env.HUSH_KV && !probing) {
+    const day = new Date().toISOString().slice(0, 10);
+    const n = (raw: string | undefined, fallback: number) => {
+      const x = Number(raw);
+      return raw != null && raw !== '' && Number.isFinite(x) && x >= 0 ? x : fallback;
+    };
+    const spend = async (key: string, ceiling: number): Promise<boolean> => {
+      const c = Number((await env.HUSH_KV!.get(key).catch(() => null)) ?? '0');
+      if (c >= ceiling) return false;
+      await env.HUSH_KV!.put(key, String(c + 1), { expirationTtl: 172_800 }).catch(() => {});
+      return true;
+    };
+    if (!(await spend(`quota:vg:${day}`, n(env.DAILY_VOICE_GLOBAL, 60_000)))) return json({ error: 'budget' }, 503);
+    const mine = hearing ? `quota:vh:${sub}:${day}` : `quota:vs:${sub}:${day}`;
+    const ceiling = hearing ? n(env.DAILY_VOICE_HEAR, 3000) : n(env.DAILY_VOICE_SAY, 2000);
+    if (!(await spend(mine, ceiling))) return json({ error: 'rate_limited' }, 429);
+  }
+  const keys = { OPENAI_API_KEY: env.OPENAI_API_KEY };
+  if (hearing) {
+    const probeEar = probing ? (request.headers.get('x-probe-ear') ?? '').trim() : '';
+    const r = await hear(keys, body.audio!, { expect: String(body.expect ?? 'any'), lang }, probeEar || DEFAULT_EAR);
+    // Upstream text never goes back verbatim on a failure — only a short reason the phone logs.
+    if (r.ok === true) return json({ text: r.text, model: r.model, ms: r.ms });
+    const why = (r as { why: string }).why;
+    return json({ error: 'upstream', why: probing ? why : why.slice(0, 24), ms: r.ms }, 502);
+  }
+  const probeVoice = probing ? (request.headers.get('x-probe-voice') ?? '').trim() : '';
+  // Her choice, if it is one of ours; otherwise the default. A probe may try any voice.
+  const asked = String(body.voice ?? '');
+  const r = await say(keys, String(body.text).trim(), lang, probeVoice || (VOICES.includes(asked) ? asked : DEFAULT_VOICE));
+  if (r.ok === true) return json({ audio: toBase64(r.wav), voice: `${r.model}:${r.voice}`, ms: r.ms });
+  const why = (r as { why: string }).why;
+  return json({ error: 'upstream', why: probing ? why : why.slice(0, 24), ms: r.ms }, 502);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     /*
@@ -472,7 +568,7 @@ export default {
     if (request.method === 'GET') return json({ ok: true });
     if (request.method !== 'POST') return json({ error: 'method' }, 405);
 
-    if (!env.GEMINI_API_KEY || !env.HUSH_TOKEN) {
+    if (!env.OPENAI_API_KEY || !env.HUSH_TOKEN) {
       // Misconfigured rather than unauthorised — and said without naming which secret is missing.
       return json({ error: 'unconfigured' }, 500);
     }
@@ -515,6 +611,10 @@ export default {
      * signed-in job is the same 401 as a bad shared token.
      */
     const authRequired = env.REQUIRE_AUTH === '1';
+
+    // The voice's two doors (`voice.ts`): a signed-in athlete only, counted apart from the coach.
+    const path = new URL(request.url).pathname;
+    if (path === '/voice/hear' || path === '/voice/say') return voiceRoute(request, env, path, sub);
 
     /*
      * A body too large to be honest is refused before it is read. Content-length can be absent on a
@@ -654,41 +754,25 @@ export default {
       if (img.data.length > MAX_IMAGE_BYTES) return json({ error: 'image_too_large' }, 413);
     }
 
-    const contents = [{
-      role: 'user',
-      parts: [
-        ...call.blocks.map((b) => ({ text: String(b.text ?? '') })),
-        ...images.map((img) => ({ inlineData: { mimeType: img.mime, data: img.data } })),
-      ],
-    }];
-
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        // Nested, not beside: a bare `thinkingLevel` in `generationConfig` is a 400, in 0.3s.
-        ...(call.think ? { thinkingConfig: { thinkingLevel: call.think } } : {}),
-        ...(call.schema
-          ? {
-              // Structured output: the reply is JSON of this shape or it is an error. It is what
-              // keeps the app from being handed prose where it expects a programme.
-              responseMimeType: 'application/json',
-              responseSchema: geminiSchema(call.schema),
-            }
-          : {}),
-      },
-    };
+    const probing = env.PROBE === '1';
+    const probeModel = probing ? (request.headers.get('x-probe-model') ?? '').trim() : '';
+    const isBuild = call.kind === 'build';
+    const job = JOB_MODEL[String(call.kind ?? 'chat')] ?? JOB_MODEL.chat;
+    const model = /^gpt-[\w.-]+$/.test(probeModel) ? probeModel : job.model;
+    const probeThink = probing ? (request.headers.get('x-probe-think') ?? '').trim() : '';
+    const effort: OpenAIEffort = (['none', 'low', 'medium', 'high', 'xhigh', 'max'] as const).includes(probeThink as never)
+      ? (probeThink as OpenAIEffort)
+      : job.effort;
+    // What the app asked for — it still decides only the lane (a conversational turn is timed apart).
+    const think = call.think;
+    const promptText = call.blocks.map((b) => String(b.text ?? '')).join('\n\n');
 
     /*
-     * A 404 HERE IS NOT ALWAYS A WRONG MODEL ID — and an hour went into learning that.
-     *
-     * On a freshly enabled project, `GET /v1beta/models` answers immediately while
-     * `:generateContent` still 404s: Google enables the read path and the billed path on different
-     * clocks. The first live call failed this way against TWO different model ids, both of which the
-     * key's own model list contained. The fix was neither id. It was waiting.
-     *
-     * So if this 404s right after a new key: change nothing, wait, call again. Guessing a third id
-     * costs a deploy and proves nothing.
+     * A 404 HERE IS NOT ALWAYS A WRONG MODEL ID — and an hour went into learning that (on Gemini,
+     * 2026-08-02: a freshly enabled project listed the model and still 404'd calling it, for a while).
+     * A new OpenAI key may do the same until its project has a model enabled and credit behind it.
+     * So if this 404s right after a new key: change nothing, wait, call again. Guessing another id
+     * costs a deploy and proves nothing — the reply names the model it asked for.
      */
     /*
      * ⛔ THERE IS A 125-SECOND CEILING ON THIS CALL AND IT IS NOT OURS TO RAISE.
@@ -703,9 +787,9 @@ export default {
      * failed at 125.14s, identically. The model emits nothing while it thinks, so a stream is just
      * as idle as a plain request until the first token, and idle is what gets cut.
      *
-     * The streaming endpoint is kept anyway: it costs nothing, it removes any ceiling on how long
-     * the ANSWER may take once it has started, and it is the honest shape for a long generation. The
-     * app cannot tell — we join the chunks and reply with exactly the same JSON as before.
+     * Since 2026-09-28 the call is OpenAI's, read whole (`openaiModel`) — and every deadline here
+     * stays under the ceiling: 45s on the fast lane, 110s otherwise, and the strong week at most
+     * `BUILD_WAIT_CAP_MS` less its reserve. The app cannot tell; the reply's JSON is the same.
      *
      * ── WHAT ACTUALLY FIXED IT ──────────────────────────────────────────────────────────────────
      * Thinking is the dead air, so the fix was to give the model less to think about. Prompt v15
@@ -718,13 +802,50 @@ export default {
      * margin that keeps her week arriving.
      */
     /*
-     * ⛔ THE MODEL ID IS IN THE URL, AND ON 2026-09-09 IT WAS NOT. The working tree carried
-     * `models/:streamGenerateContent` — an uncommitted edit that had never been deployed — and the
+     * ⛔ THE MODEL ID ONCE WENT MISSING FROM THE CALL (2026-09-09): the working tree carried an
+     * empty model in the Gemini URL — an uncommitted edit that had never been deployed — and the
      * quota deploy shipped it: every call answered 502 (`upstream 404`) until the redeploy minutes
-     * later. The name is interpolated here and stamped on the reply from the same constant, so the
+     * later. The model is asked for and stamped on the reply from the same `model` constant, so the
      * two cannot drift again.
      */
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?alt=sse`;
+    // ⛔ BAKE-OFF ONLY: a Claude id, on a PROBE version, answers the same call instead of OpenAI.
+    if (probing && probeModel.startsWith('claude-') && isProbeProvider(probeModel) && call.schema) {
+      try {
+        const r = await callProbeProvider(
+          { model: probeModel, effort: probeThink || 'default', text: call.blocks.map((b) => String(b.text ?? '')).join('\n\n'), schema: call.schema, images },
+          env,
+        );
+        return json({ text: r.text, finishReason: r.finishReason, usage: r.usage, model: r.model });
+      } catch (e) {
+        return json({ error: 'upstream_error', why: String((e as Error)?.message ?? e).slice(0, 300) }, 502);
+      }
+    }
+
+    /*
+     * ⛔ THE WEEK IS WRITTEN BY THE STRONGEST MODEL THAT FITS HER WAIT (2026-09-27). Spent after the
+     * day's budget like every model call, and bounded so the fast model still has its reserve: a
+     * miss of any kind — no key, no credit, a refusal, a cut or unreadable answer, the deadline —
+     * falls through to the fast model below, and the reply says which model answered.
+     */
+    const wait = typeof call.wait === 'number' && Number.isFinite(call.wait) ? Math.min(call.wait, BUILD_WAIT_CAP_MS) : 0;
+    let strongMiss: string | undefined;
+    if (isBuild && call.schema && !probing && wait >= BUILD_STRONG_MIN_WAIT_MS) {
+      const strong = await askStrongModel(
+        {
+          model: BUILD_STRONG_MODEL,
+          effort: BUILD_STRONG_EFFORT,
+          text: promptText,
+          schema: call.schema,
+          deadlineMs: wait - BUILD_FALLBACK_RESERVE_MS,
+        },
+        env.OPENAI_API_KEY,
+      );
+      // The app reads `STOP` as "finished" — a completed OpenAI response, already required above.
+      // `effort` says which call wrote it: the model is the same Sol on both lanes.
+      if (strong.ok) return json({ text: strong.text, finishReason: 'STOP', usage: strong.usage, model: strong.model, effort: BUILD_STRONG_EFFORT });
+      strongMiss = strong.why;
+    }
+
     /*
      * HOW LONG ONE ATTEMPT MAY TAKE, and how many attempts there are.
      *
@@ -743,7 +864,7 @@ export default {
      * prompt tokens — about three quarters of a cent in the worst case, and nothing at all in the
      * usual one, because a healthy call never comes near the deadline.
      */
-    const conversational = call.think === 'low' || call.think === 'minimal';
+    const conversational = think === 'low' || think === 'minimal';
     /*
      * ⛔ AND THE DEADLINES ARE STAGED, BECAUSE A FLAT ONE MAKES HER PAY THE WORST CASE EVERY TIME.
      *
@@ -822,8 +943,11 @@ export default {
      */
     const BUILD_HEDGE_MS = 9_000;
     const CHAT_HEDGE_MS = 3_000;
-    const HEDGE_MS = conversational ? (call.schema ? BUILD_HEDGE_MS : CHAT_HEDGE_MS) : 20_000;
-    const OVERALL_MS = conversational ? 45_000 : 110_000;
+    /* The plan build keeps the fast lane's clocks: it is the fallback inside her wait (`JOB_MODEL`,
+       `gpt-6-sol` @ `low` since 2026-09-28), and its hedge is re-measured with the probe after credit. */
+    const fastLane = conversational || isBuild;
+    const HEDGE_MS = fastLane ? (call.schema ? BUILD_HEDGE_MS : CHAT_HEDGE_MS) : 20_000;
+    const OVERALL_MS = fastLane ? 45_000 : 110_000;
     const MAX_IN_FLIGHT = 3;
 
     /*
@@ -856,60 +980,7 @@ export default {
      * replacement while she is still watching the muscles light.
      * ════════════════════════════════════════════════════════════════════════════════════════════
      */
-    type Answer = { text: string; finishReason: string | null; usage: Record<string, number> | null };
-    type Chunk = {
-      candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-      usageMetadata?: Record<string, number>;
-    };
-
-    /*
-     * READING THE STREAM.
-     *
-     * Server-sent events: `data: {…}` lines, one GenerateContentResponse each. The text arrives in
-     * pieces and is joined; `finishReason` and `usageMetadata` turn up on the last chunks and simply
-     * overwrite, so what we answer with is the final word on both.
-     *
-     * `AbortSignal.timeout` covers the headers, not the body — a stream that stalled mid-way would
-     * hang here for ever without the deadline, which is the one failure mode streaming introduces
-     * that a plain request could not have.
-     */
-    const readStream = async (res: Response, deadline: number): Promise<Answer> => {
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let text = '';
-      let finishReason: string | null = null;
-      let usage: Record<string, number> | null = null;
-
-      const take = (line: string) => {
-        if (!line.startsWith('data:')) return;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === '[DONE]') return;
-        let chunk: Chunk;
-        try {
-          chunk = JSON.parse(payload) as Chunk;
-        } catch {
-          return;
-        }
-        const candidate = chunk.candidates?.[0];
-        text += candidate?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-        if (candidate?.finishReason) finishReason = candidate.finishReason;
-        if (chunk.usageMetadata) usage = chunk.usageMetadata;
-      };
-
-      while (reader) {
-        if (Date.now() > deadline) throw new Error('stream_stalled');
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        // The tail may be half a line; it waits for the next read.
-        buffer = lines.pop() ?? '';
-        for (const line of lines) take(line.trim());
-      }
-      take(buffer.trim());
-      return { text, finishReason, usage };
-    };
+    type Answer = { text: string; finishReason: string | null; usage: Record<string, unknown> | null };
 
     const stopAt = Date.now() + OVERALL_MS;
     const controllers: AbortController[] = [];
@@ -972,46 +1043,20 @@ export default {
       const controller = new AbortController();
       controllers.push(controller);
       void (async (): Promise<void> => {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            // The key rides in a header, never in the URL — a URL ends up in logs and referrers.
-            'x-goog-api-key': env.GEMINI_API_KEY,
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          // A non-ok status is a real answer about our request and every attempt will get the same
-          // one — so it is remembered, not raced.
-          lastStatus = res.status;
-          /*
-           * ⚠️ THE BODY GOES TO THE TAIL, NEVER TO THE CALLER. An upstream 400 commonly quotes the
-           * offending request back, and the request is an athlete's record — relaying it would put
-           * her training history into whatever log the app's error path happens to write to.
-           * `npx wrangler tail` is the owner's own console.
-           */
-          const detail = await res.text();
-          console.log(`gemini ${res.status} :: ${detail.slice(0, 800)}`);
-          /*
-           * ONE NARROW EXCEPTION, AND ONLY FOR 404 — a 404 is the one status whose message is about
-           * the URL rather than the payload ("models/X is not found for API version v1beta"), so it
-           * names our own configuration and nothing of hers. It turns a deploy-per-guess into a
-           * single answer, and it cost an hour to learn that the fix is usually to WAIT: Google
-           * enables the read path and the billed path on different clocks, so a fresh key 404s on
-           * `:generateContent` while `GET /models` already works.
-           */
-          if (res.status === 404) {
-            try {
-              lastWhy = String((JSON.parse(detail) as { error?: { message?: string } })?.error?.message ?? '');
-            } catch {
-              lastWhy = '';
-            }
-          }
+        // One attempt owns its whole life: the call, read to the end, inside the race's own deadline.
+        const r = await askOpenAI(
+          { model, effort, text: promptText, schema: call.schema, images, deadlineMs: stopAt - Date.now(), maxOutputTokens: MAX_OUTPUT_TOKENS, signal: controller.signal },
+          env.OPENAI_API_KEY,
+        );
+        if (!r.ok) {
+          // A status is a real answer about our request and every attempt will get the same one — so
+          // it is remembered, not raced. Its text went to `wrangler tail` (`openaiModel`), never here.
+          if (r.status !== undefined) lastStatus = r.status;
+          if (r.status === 404 || probing) lastWhy = r.why;
+          if (r.status === undefined) throw new Error(r.why);
           return;
         }
-        const answer = await readStream(res, stopAt);
+        const answer: Answer = { text: r.text, finishReason: r.finishReason, usage: r.usage };
         if (answer.finishReason === 'STOP') {
           if (!race.winner) {
             race.winner = answer;
@@ -1078,9 +1123,9 @@ export default {
       // Nothing usable from any attempt. If one of them was told something specific, relay THAT
       // rather than a generic unreachable — a 401 must not be reported as a bad connection.
       if (lastStatus === 404) {
-        return json({ error: 'upstream_error', status: 404, why: (lastWhy ?? '').slice(0, 300), url }, 502);
+        return json({ error: 'upstream_error', status: 404, why: (lastWhy ?? '').slice(0, 300), model }, 502);
       }
-      if (lastStatus !== undefined) return json({ error: 'upstream_error', status: lastStatus }, 502);
+      if (lastStatus !== undefined) return json({ error: 'upstream_error', status: lastStatus, ...(probing ? { why: (lastWhy ?? '').slice(0, 300) } : {}) }, 502);
       // Nothing was decided, and the app knows what to do: nothing is written, the update waits.
       return json({ error: 'upstream_unreachable' }, 502);
     }
@@ -1091,7 +1136,10 @@ export default {
       // Passed through so the app can count what a call actually cost, per model, on real data —
       // the only honest way to compare a cheap model with an expensive one.
       usage: answer.usage,
-      model: MODEL,
+      model,
+      effort,
+      // Why the strong model did not write this week, when it was asked to — the one trace of a miss.
+      ...(strongMiss ? { strongMiss: strongMiss.slice(0, 160) } : {}),
     });
   },
 };

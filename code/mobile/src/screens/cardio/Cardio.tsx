@@ -29,7 +29,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
 import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
-import { Arrive, Legend, Button } from '@/components/ds';
+import { Arrive, Legend, Button, opticalFigure } from '@/components/ds';
 import { PausedStage } from '@/components/PausedStage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { MIN_ROUTE_POINTS, simplifyRoute } from '@/components/RouteTrace';
@@ -56,6 +56,7 @@ import { SayLine } from '@/screens/session/ItemStage';
 import type { CardioActivity, CardioGait, CardioPoint, CardioSplit } from '@/data/local/models';
 import * as haptics from '@/platform/haptics';
 import { color, font, textScale, ramp, radius, stage as stageC, signal, tracking, trackingPx } from '@/design/tokens';
+import { ltrIsland } from '@/i18n/bidi';
 import type { MainParamList } from '@/app/navigation';
 // The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
 import { currentLocale } from '@/i18n';
@@ -657,7 +658,7 @@ export function CardioLiveView(props: {
         */}
         <View style={styles.liveBody}>
           {/* the elapsed clock — the hero. Pure figures + ":" — mono. */}
-          <Text style={styles.clock}>{fmtClock(elapsedSec)}</Text>
+          <Text style={styles.clock}>{opticalFigure(fmtClock(elapsedSec))}</Text>
 
           {/*
             ════ ⛔ THE LIST IS THE INSTRUMENT (founder, build-58 device QA 2026-08-24) ════
@@ -767,7 +768,7 @@ export function CardioLiveView(props: {
               </View>
               {/* ⛔ THE TIME IT TOOK — not a pace (founder 2026-08-23: "להראות כמה זמן זה ארך").
                   Here, still taking: this kilometre's own running clock. */}
-              <Text style={styles.kmRowTime}>{fmtPace(currentKmSec)}</Text>
+              <Text style={styles.kmRowTime}>{opticalFigure(fmtPace(currentKmSec))}</Text>
             </View>
             {/* the hairline under the live row — the stride-by-stride motion the ring used to carry */}
             <View style={styles.kmLiveRail}>
@@ -805,7 +806,7 @@ export function CardioLiveView(props: {
                   (a grade term would) will want it. This deletes the DRAWING, not the record.
                   ════════════════════════════════════════════════════════════════════════════════
                 */}
-                <Text style={styles.kmRowTime}>{fmtPace(sp.durationSec)}</Text>
+                <Text style={styles.kmRowTime}>{opticalFigure(fmtPace(sp.durationSec))}</Text>
               </View>
             ))}
           </View>
@@ -912,7 +913,7 @@ export function CardioLiveView(props: {
             onPain={props.confirmEnd ? undefined : props.onPain}
           >
             <View style={styles.pausedFacts}>
-              <Text style={styles.pausedClock}>{fmtClock(elapsedSec)}</Text>
+              <Text style={styles.pausedClock}>{opticalFigure(fmtClock(elapsedSec))}</Text>
               <View style={styles.pausedStats}>
                 {/* ⛔ No live pace here either (founder 2026-08-23) — a paused run's "average so
                     far" is still a per-kilometre rate drawn mid-run. The clock and the distance
@@ -1031,7 +1032,7 @@ export function KmMoment({ split, splits }: { split: CardioSplit; splits: Cardio
             קילומטר להראות כמה זמן זה ארך"). The `/km` unit went with the pace framing — the
             rail above already names the kilometre, so the figure under it can only be its time. */}
         <View style={styles.kmSplit}>
-          <Text style={styles.kmSplitNum}>{fmtPace(split.durationSec)}</Text>
+          <Text style={styles.kmSplitNum}>{opticalFigure(fmtPace(split.durationSec))}</Text>
         </View>
 
         {quickest ? (
@@ -1176,7 +1177,7 @@ export function CardioComplete(props: {
             Everything above the act is screenshot-safe: no back arrow, no title bar, the mark
             carried whole. A phone screen is 9:16, and this is what goes on a story.
           */}
-          <View style={styles.posterMark}>
+          <View style={[styles.posterMark, ltrIsland()]}>
             <FerroxMark width={26} />
             <FerroxWordmark width={76} />
           </View>
@@ -1255,7 +1256,7 @@ export function CardioComplete(props: {
             never leads with a zero it did not measure.
           */}
           <Arrive order={1} style={styles.doneHero} accessible accessibilityLabel={`${heroFigure} ${heroUnit}`}>
-            <Text style={styles.doneHeroNum}>{heroFigure}</Text>
+            <Text style={styles.doneHeroNum}>{opticalFigure(heroFigure)}</Text>
             <Text style={[styles.doneHeroUnit, !monoCanDraw(heroUnit) && styles.unitWord]}>{heroUnit}</Text>
           </Arrive>
 
@@ -1269,7 +1270,7 @@ export function CardioComplete(props: {
           */}
           {avgPace > 0 ? (
             <View style={styles.posterPace} accessible accessibilityLabel={`${fmtPace(avgPace)} ${perKmLabel}`}>
-              <Text style={styles.posterPaceNum}>{fmtPace(avgPace)}</Text>
+              <Text style={styles.posterPaceNum}>{opticalFigure(fmtPace(avgPace))}</Text>
               <Text style={[styles.posterPaceUnit, !monoCanDraw(perKmLabel) && styles.unitWord]}>{perKmLabel}</Text>
             </View>
           ) : null}
@@ -1393,7 +1394,7 @@ function LiveStat({ value, label, icon }: { value: string | number; label: strin
     <View style={styles.liveStat} accessible accessibilityLabel={`${label} ${value}`}>
       <View style={styles.liveStatRow}>
         {icon ? <Icon name={icon} size={18} color={signal[0]} strokeWidth={2} /> : null}
-        <Text style={styles.liveStatVal}>{value}</Text>
+        <Text style={styles.liveStatVal}>{opticalFigure(value)}</Text>
       </View>
       <Legend size={READOUT_LABEL_PT} track={0.14} tone="onStage">{label}</Legend>
     </View>
@@ -1405,7 +1406,7 @@ function DoneStat({ value, label, icon }: { value: string | number; label: strin
     <View style={styles.doneStat} accessible accessibilityLabel={`${label} ${value}`}>
       <View style={styles.liveStatRow}>
         {icon ? <Icon name={icon} size={16} color={signal[0]} strokeWidth={2} /> : null}
-        <Text style={styles.doneStatVal}>{value}</Text>
+        <Text style={styles.doneStatVal}>{opticalFigure(value)}</Text>
       </View>
       <Legend size={READOUT_LABEL_PT} track={0.14} tone="onStage">{label}</Legend>
     </View>
@@ -1620,7 +1621,7 @@ const styles = StyleSheet.create({
    */
   doneBody: { flex: 1, alignItems: 'center', gap: 20, paddingHorizontal: 34 },
   posterFill: { flex: 1 },
-  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 10, direction: 'ltr', marginTop: 18 },
+  posterMark: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }, // an LTR island via ltrIsland()
   /* ⛔ A hand-rolled `Legend` that opened its Hebrew by 1.9pt — one of ten found 2026-08-27 once the
      type lint learned to read a style BLOCK instead of a line. See `WellDone.heroLabel`. The
      `.toUpperCase()` went with it: `Legend` already does it, and it is a no-op on Hebrew anyway. */

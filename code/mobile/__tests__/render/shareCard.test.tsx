@@ -39,13 +39,27 @@ afterEach(() => {
 
 const MONO = [font.mono, font.monoMedium, font.monoSemibold];
 
-/** Every rendered <Text> string, paired with whether its resolved fontFamily is a mono face. */
+/** A <Text>'s whole string, nested <Text> included — a figure's separator is its own nested run
+ *  in the sans since 2026-09-29 (`ds/Figure`), and "62.5" is still one figure to a reader. */
+function flatText(children): string {
+  if (children == null || typeof children === 'boolean') return '';
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(flatText).join('');
+  return children.props ? flatText(children.props.children) : '';
+}
+
+/** Every rendered OUTERMOST <Text> string, paired with whether its resolved fontFamily is a mono face. */
 function texts(r: ReactTestRenderer): { text: string; mono: boolean }[] {
+  const RNText = require('react-native').Text;
+  const insideText = (node): boolean => {
+    for (let p = node.parent; p; p = p.parent) if (p.type === RNText) return true;
+    return false;
+  };
   return r.root
-    .findAllByType(require('react-native').Text)
+    .findAllByType(RNText)
+    .filter((node) => !insideText(node))
     .map((node) => {
-      const children = node.props.children;
-      const str = Array.isArray(children) ? children.filter((c) => typeof c === 'string').join('') : String(children ?? '');
+      const str = flatText(node.props.children);
       const flat = require('react-native').StyleSheet.flatten(node.props.style) ?? {};
       return { text: str, mono: MONO.includes(flat.fontFamily) };
     })
@@ -98,7 +112,9 @@ describe('ShareCard · week', () => {
   it('draws the tonnage and calories', () => {
     const r = mount(<ShareCard card={week} width={296} />);
     const all = texts(r).map((t) => t.text);
-    expect(all.some((s) => s.includes('4,200') || s.includes('4200'))).toBe(true);
+    // In TONNES since 2026-09-29 (design audit): Well Done and the letter say "4.2 t" for this
+    // fact, and the card posted from them said "4,200 kg" — one fact, one unit now.
+    expect(all.some((s) => s.includes('4.2'))).toBe(true);
     expect(all.some((s) => s.includes('1,980') || s.includes('1980'))).toBe(true);
   });
 });

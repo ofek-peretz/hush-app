@@ -105,7 +105,7 @@ export function ExercisePickerSheet({ legend, taken, takenLabel, figure, onPick,
             >
               {/* The still of the movement itself (founder 2026-08-25): every row says what it IS at
                   a glance — our own athlete, not a stock clip. */}
-              <MotionThumb exerciseId={e.id} size={44} figure={figure} style={styles.pickThumb} />
+              <MotionThumb exerciseId={e.id} size={44} figure={figure} tone="stage" style={styles.pickThumb} />
               <View style={styles.pickText}>
                 <Text style={styles.pickName} numberOfLines={1}>{bidi(exerciseDisplayName(e.id))}</Text>
                 <Legend size={17} track={0.1}>{`${t(`muscle.${e.muscle}`)} · ${t(`equipment.${e.equipment}`, { defaultValue: e.equipment })}`}</Legend>

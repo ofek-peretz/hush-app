@@ -49,6 +49,7 @@ import { DayInMotion } from '@/components/DayInMotion';
 import { exerciseMotion } from '@/motion/registry';
 import type { FigureSex } from '@/motion/types';
 import { bidi } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import type { MainParamList, HomeTabsParamList } from '@/app/navigation';
 import { engineReceipt, type EngineReceipt } from '@/domain/engineReceipt';
 import { displayWeight, unitLabel } from '@/domain/schedule';
@@ -335,24 +336,29 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
           <Pressable
             key={w.id}
             accessibilityRole="button"
-            accessibilityLabel={w.name}
+            accessibilityLabel={dayTitle(w.name)}
             onPress={() => onDay(w.id)}
             onLayout={(e) => onCardLayout(w.id, e)}
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           >
             <View style={styles.cardHead}>
               <View style={styles.cardHeadText}>
-                <Text style={styles.dayName}>{bidi(w.name)}</Text>
-                <Text style={styles.dayMeta}>{t('program.dayMeta', { exercises: w.lifts, min: plannedMinutes(w.minutes) })}</Text>
+                <Text style={styles.dayName}>{bidi(dayTitle(w.name))}</Text>
+                <Text style={styles.dayMeta}>
+                  {t('program.dayMeta', { count: w.lifts, min: plannedMinutes(w.minutes) })}
+                  {dominantScheme(w.rows) ? ` · ⁦${dominantScheme(w.rows)}⁩` : ''}
+                </Text>
               </View>
+              {/* ⛔ NO CHEVRON (design audit 2026-09-29). An 18-point arrow pressed against the
+                  day's last letter read as part of the name ("A›") and was nearly invisible, and it
+                  told her nothing the card does not: the WHOLE card is the button, and it answers a
+                  press with its own wash. Only a fact earns this corner — the day is done. */}
               {w.done ? (
                 <View style={styles.doneChip}>
                   <Icon name="check" size={13} color={color.bg} />
                   <Text style={styles.doneChipText}>{t('program.doneChip')}</Text>
                 </View>
-              ) : (
-                <Icon name="chevronRight" size={18} color={color.textMuted} />
-              )}
+              ) : null}
             </View>
             {/*
               THE DAY, PERFORMED — the same hero Today carries, one per card (founder 2026-09-02).
@@ -377,9 +383,14 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
                 {/* Columns, not a string — see `FigureCells` (design review 2026-09-01): a row
                     with no load kept its scheme in the scheme column instead of drifting it a
                     whole column sideways. */}
+                {/* ⛔ THE DAY'S OWN SCHEME IS SAID ONCE (design audit 2026-09-29). "3×8–12" printed on
+                    six rows of seven was a third column of the same words, and it is what squeezed
+                    the lift names onto two lines. The day's header carries it; a row prints a scheme
+                    only when it is the exception. */}
                 <FigureCells
                   lift={{ load: r.load, sets: r.sets, band: r.band, ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift}
                   units={units}
+                  scheme={r.detail != null || schemeOf(r) !== dominantScheme(w.rows)}
                   bodyweightWord={t('workout.bodyweightShort')}
                   bandWord={t('workout.bandWord')}
                 />
@@ -391,6 +402,22 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
       </ScrollView>
     </View>
   );
+}
+
+/** A row's scheme as the table prints it — `3×8–12`, or `3×8` for a fixed count. */
+function schemeOf(r: { sets: number; band: [number, number]; detail?: string | null }): string {
+  const [lo, hi] = r.band;
+  return `${r.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
+}
+
+/** The scheme most of a day's rows share, when at least two do — said once, in the day's header. */
+function dominantScheme(rows: readonly { sets: number; band: [number, number]; detail?: string | null }[]): string | null {
+  const counts = new Map<string, number>();
+  for (const r of rows) if (r.detail == null) counts.set(schemeOf(r), (counts.get(schemeOf(r)) ?? 0) + 1);
+  let best: string | null = null;
+  let n = 1;
+  for (const [k, c] of counts) if (c > n) { best = k; n = c; }
+  return best;
 }
 
 export function ProgramTab({ navigation }: Props) {
@@ -467,8 +494,10 @@ export function ProgramTab({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   /* ════ THE COACH BOX (founder 2026-09-16) — a sheet of paper she writes on, and one act under it. */
+  /* 20, the day cards' own inset (design audit 2026-09-29): at 30 the box stood ten points inside
+     the cards under it, and a column of cards with one narrower reads as a misalignment. */
   coachBox: {
-    marginHorizontal: 30,
+    marginHorizontal: 20,
     marginTop: 12,
     marginBottom: 6,
     padding: 14,

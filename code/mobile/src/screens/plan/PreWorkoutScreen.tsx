@@ -21,6 +21,7 @@ import { PreWorkoutView, PreWorkoutMovedView } from '@/screens/plan/PreWorkout';
 import type { PlanLift } from '@/components/PlanLifts';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
+import { voiceCapture } from '@/platform/voice/voiceCapture';
 import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachWeek, coachRows, coachPlanRows, coachLoadDirections, coachChangedCase, coachChanges } from '@/domain/coachWeek';
@@ -34,6 +35,7 @@ import { exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import type { Program } from '@/data/local/models';
 import type { ChangedLiftCase } from '@/domain/changedLiftCase';
 import { currentLocale } from '@/i18n';
+import { dayTitle } from '@/i18n/dayTitle';
 import { View, StyleSheet } from 'react-native';
 import { daysAfterStarting } from '@/domain/weekBoard';
 import { coachSession } from '@/domain/coachWeek';
@@ -43,6 +45,9 @@ import { WEEK_ORDER } from '@/domain/trainingDays';
 import type { CoachPlan, Weekday } from '@/domain/coachPlan';
 import type { LoadDirection } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+import { weekIsLockedToCoach } from '@/domain/coachTrack';
+import { appliedSwaps, swapForToday, type TodaySwap } from '@/domain/coachTrackAthlete';
+import { loadCoachLink } from '@/state/coachOutbox';
 
 type Props = NativeStackScreenProps<MainParamList, 'PreWorkout'>;
 
@@ -102,6 +107,18 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   const [formFor, setFormFor] = useState<string | null>(null);
   /** The week on disk — the drag edits it by day id (`app.reorderExercise`). */
   const [program, setProgram] = useState<Program | null>(null);
+  /*
+   * ════ ⛔ THE COACH TRACK, RULING 4 — A SWAP FOR TODAY, NEVER A REWRITE (2026-09-17) ════
+   *
+   * On a linked coach's week the week's two edit verbs on this card — the declared swap and the drag
+   * — are refused by the store (`appStore.lockedToCoach`), and until today they simply did nothing:
+   * she picked a replacement, the sheet closed, and the row stood as it was. The swap now says what
+   * it is — FOR TODAY — and lives here, in this card's state: the rows show it, Begin starts the
+   * session with it (`swapForToday`), the session records it (`Session.todaySwaps`) so the upload
+   * tells her coach, and the programme on disk is never touched. The drag is not offered at all.
+   */
+  const [coachLocked, setCoachLocked] = useState(false);
+  const [todaySwaps, setTodaySwaps] = useState<TodaySwap[]>([]);
   /** The engine's own days, by name — read only for the two verdicts it stamps on them. */
   const [engineDays, setEngineDays] = useState<Record<string, { overBudget?: boolean; shortOfBudget?: boolean }>>({});
 
@@ -116,7 +133,9 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
         db.loadCoachLog().catch(() => null),
         db.loadProgram().catch(() => null),
       ]);
+      const link = program?.authored === 'coach' ? await loadCoachLink().catch(() => null) : null;
       if (!alive) return;
+      setCoachLocked(weekIsLockedToCoach(program, !!link));
       /*
        * Built for every lift the engine's week holds rather than for the row she pressed, because
        * the alternative is a read on every tap — and this is the screen she stands in front of
@@ -173,10 +192,41 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   const workouts = React.useMemo(() => coachWeek(plan), [plan]);
   const workout = workouts.find((w) => w.id === route.params.workoutId) ?? null;
 
+  /* The day as she will train it: the coach's session with today's swaps applied, and nothing else. */
+  const shownPlan = React.useMemo<CoachPlan | null>(() => {
+    if (!plan || !workout || todaySwaps.length === 0) return plan;
+    const i = workouts.indexOf(workout);
+    const session = plan.sessions[i];
+    if (!session) return plan;
+    return { ...plan, sessions: plan.sessions.map((x, k) => (k === i ? swapForToday(session, todaySwaps) : x)) };
+  }, [plan, workout, workouts, todaySwaps]);
+  const insteadOf = React.useMemo(
+    () => Object.fromEntries(todaySwaps.map((x) => [x.to, exerciseDisplayName(x.from)])) as Record<string, string>,
+    [todaySwaps],
+  );
+  /** She picked a replacement on a coach's week: today's list changes, the week does not. */
+  const swapToday = (from: string, to: string) => {
+    setTodaySwaps((prev) => {
+      // Swapping a lift she already swapped re-aims THAT swap; swapping back to the original undoes it.
+      const earlier = prev.find((x) => x.to === from);
+      const origin = earlier ? earlier.from : from;
+      const rest = prev.filter((x) => x.from !== origin);
+      return origin === to ? rest : [...rest, { from: origin, to }];
+    });
+  };
+
   const lifts = React.useMemo<PlanLift[]>(() => {
-    const rows = coachPlanRows(workout ? coachRows(plan, workout.id) : null, units) ?? [];
-    return rows.map((r) => ({ ...r, ...(directions[r.exerciseId] ? { changed: directions[r.exerciseId] } : {}) }));
-  }, [plan, workout, units, directions]);
+    const rows = coachPlanRows(workout ? coachRows(shownPlan, workout.id) : null, units) ?? [];
+    return rows.map((r) => ({
+      ...r,
+      ...(directions[r.exerciseId] ? { changed: directions[r.exerciseId] } : {}),
+      /* ⛔ ONLY THE LOAD WAITS (2026-09-18). This said `pending: true`, which blanks the whole
+         figure block — so the row she had just chosen was the only row on the sheet with no sets
+         and no band, and she walked to the rack without her prescription. The coach's SEAT (sets,
+         band, supersets) survives a swap by design; only the load is undecided, and it says so. */
+      ...(insteadOf[r.exerciseId] ? { loadUndecided: true } : {}),
+    }));
+  }, [shownPlan, workout, units, directions, insteadOf]);
 
   /**
    * How many of THESE lifts the coach changed — this workout, not the week.
@@ -210,7 +260,7 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <PreWorkoutView
-      name={workout.name}
+      name={dayTitle(workout.name)}
       /*
        * ⛔ THIS ASKED FOR THE GRID'S ABBREVIATION (2026-08-27). `weekday.*` is what the seven-column
        * week board draws — `א'`, `ב'`, `ג'` — where a single letter per column is exactly right and a
@@ -269,7 +319,8 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
        * days and empty ones), so the same filter finds the `ProgramDay` the drag edits.
        */
       onReorder={
-        doneIds.includes(workout.id) || !program
+        /* ⛔ Ruling 4: on a linked coach's week the order is the coach's — no grip is drawn at all. */
+        doneIds.includes(workout.id) || !program || coachLocked
           ? undefined
           : (from, to) => {
               const i = Number(workout.id.replace('coach_', ''));
@@ -279,6 +330,8 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
             }
       }
       done={doneIds.includes(workout.id)}
+      coachName={program?.authored === 'coach' ? program.coachName ?? null : null}
+      {...(todaySwaps.length ? { insteadOf, onUndoSwaps: () => setTodaySwaps([]) } : {})}
       onClose={() => navigation.goBack()}
       onStart={async () => {
         /*
@@ -313,9 +366,14 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
         const today = WEEK_ORDER[new Date().getDay()] as Weekday;
         const moved = daysAfterStarting(workouts, workout.id, today);
         if (moved) void db.saveCoachPlanDays(moved).catch(() => {});
-        const planned = coachSession(plan, workout.id);
-        if (!planned) return; // the plan vanished under the card — nothing honest to start
-        await session.startCoach(planned, workout.id);
+        const written = coachSession(plan, workout.id);
+        if (!written) return; // the plan vanished under the card — nothing honest to start
+        // Ruling 4: today's swaps ride the session and its record — never the programme.
+        const planned = todaySwaps.length ? swapForToday(written, todaySwaps) : written;
+        const swapped = appliedSwaps(written, planned, todaySwaps);
+        // Her first Start is where Apple's microphone dialog belongs — not the first set (2026-09-28).
+        await voiceCapture.askAtStart(app.profile?.voiceSpec !== false);
+        await session.startCoach(planned, workout.id, undefined, swapped.length ? { todaySwaps: swapped } : undefined);
         navigation.replace('SessionFlow');
       }}
       />
@@ -348,10 +406,15 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
             /* …and out of the pool entirely: the whole catalogue (founder 2026-09-16). */
             onAll={() => { setAllFor(swapFor); setSwapFor(null); }}
             onClose={() => setSwapFor(null)}
+            {...(coachLocked ? { legend: t('coachTrack.athlete.swapTodayTitle'), body: t('coachTrack.athlete.swapTodayNote') } : {})}
             onPick={(toId) => {
               const from = swapFor;
               setSwapFor(null);
               if (!from) return;
+              if (coachLocked) {
+                swapToday(from, toId);
+                return;
+              }
               /*
                * ⛔ A DECLARATION, NOT A COUNT. It is written to `declaredSubs` and never to the
                * learned `substitutes` map — the K=2 fold owns that one and CLEARS entries it stops
@@ -373,7 +436,7 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
       {allFor ? (
         <View style={StyleSheet.absoluteFill}>
           <ExercisePickerSheet
-            legend={t('swap.replaceWith')}
+            legend={coachLocked ? t('coachTrack.athlete.swapTodayTitle') : t('swap.replaceWith')}
             takenLabel={t('builder.inDay')}
             figure={app.profile?.sex === 'female' ? 'female' : 'male'}
             taken={new Set(lifts.map((l) => l.exerciseId))}
@@ -382,6 +445,10 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
               const from = allFor;
               setAllFor(null);
               if (!from) return;
+              if (coachLocked) {
+                swapToday(from, toId);
+                return;
+              }
               /* The same declaration the pool's own rows make — see `onPick` above. A lift chosen
                  from the catalogue is her word about this seat exactly as a synonym is. */
               void app

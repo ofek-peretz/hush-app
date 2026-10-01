@@ -155,11 +155,20 @@ function draw(session: React.ContextType<typeof SessionContext>): ReactTestRende
 /** Every string the athlete actually reads. */
 function textOf(r: ReactTestRenderer): string {
   const out: string[] = [];
+  // One <Text> is one string however it is built inside: since 2026-09-29 a figure's separator is a
+  // nested <Text> in the sans (`ds/Figure`), and "31.5" is still one number to a reader.
+  const flat = (n: unknown): string => {
+    if (n == null) return '';
+    if (typeof n === 'string') return n;
+    if (Array.isArray(n)) return n.map(flat).join('');
+    return flat((n as { children?: unknown }).children);
+  };
   const walk = (n: unknown): void => {
     if (n == null) return;
     if (typeof n === 'string') return void out.push(n);
     if (Array.isArray(n)) return void n.forEach(walk);
-    const node = n as { children?: unknown };
+    const node = n as { type?: string; children?: unknown };
+    if (node.type === 'Text') return void out.push(flat(node));
     if (node.children) walk(node.children);
   };
   walk(r.toJSON());

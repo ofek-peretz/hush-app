@@ -33,7 +33,7 @@
 
 import type { Session } from '@/data/local/models';
 import { exerciseMeta } from '@/engine/catalog';
-import { STARTING_INCREMENT } from '@/engine/v5/constants';
+import { incrementOf } from '@/engine/v5/loadGrid';
 
 export interface EngineReceipt {
   /** Decisions told: occurrences beyond the first, per lift, summed. */
@@ -95,7 +95,7 @@ export function engineReceipt(history: readonly Session[]): EngineReceipt {
       else holds += 1;
     }
     if (run.length < MIN_OCCURRENCES) continue;
-    const grain = STARTING_INCREMENT[exerciseMeta(exerciseId).equipment] || 2.5;
+    const grain = incrementOf(exerciseMeta(exerciseId).equipment) || 2.5; // her room's rung
     const fixedKg = run[0] + (run.length - 1) * grain;
     const engineKg = run[run.length - 1];
     const gap = Math.abs(fixedKg - engineKg);

@@ -65,7 +65,12 @@ describe('the phone — every route has a door', () => {
      * and the five tabs. Everything else has to be navigated to by something, or it is a screen
      * that can only be reached by editing the code.
      */
-    const entries = new Set(['HomeTabs', 'Authentication', 'Today', 'Program', 'Cardio', 'Progress']);
+    /* `Athletes` (the coach track, 2026-09-17) is a tab like the four: reached by its bar item, and
+       from `CoachEnroll` through `navigate('HomeTabs', { screen: 'Athletes' })`, which this scan's
+       call patterns cannot read. */
+    /* `Crew` (prototype 2026-09-29) is a tab too — its bar item is the door, and Today's week row
+       reaches it through `navigate('HomeTabs', { screen: 'Crew' })`, which this scan cannot read. */
+    const entries = new Set(['HomeTabs', 'Authentication', 'Today', 'Program', 'Cardio', 'Progress', 'Athletes', 'Crew']);
     const called = everyNavCall();
     const orphans = [...new Set(routes)].filter((r) => !called.has(r) && !entries.has(r));
     expect(orphans).toEqual([]);

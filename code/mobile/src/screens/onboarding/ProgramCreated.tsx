@@ -77,12 +77,17 @@ import { programmeName } from '@/domain/programmeName';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import type { Program, Profile } from '@/data/local/models';
-import { learnPhaseLength } from '@/domain/schedule';
+import { previewWeekPlan } from '@/data/local/weekPlan';
+import { coachPlanRows, coachRows, coachWeek } from '@/domain/coachWeek';
+import { plannedMinutes } from '@/domain/duration';
+import { FigureCells, type PlanLift } from '@/components/PlanLifts';
+import { DayInMotion } from '@/components/DayInMotion';
+import { dayTitle } from '@/i18n/dayTitle';
 import type { OnboardingInputs } from '@/data/local/models';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
-import { FREE_SESSION_LIMIT, TRIAL_MAX_DAYS, TRIAL_MAX_DAYS_DEFAULT } from '@/domain/entitlement';
-import { billing, PRODUCT_IDS } from '@/platform/billing';
+import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { PRO_TRIAL_DAYS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, space, font, textScale, tracking, trackingPx, radius, motion } from '@/design/tokens';
@@ -169,7 +174,27 @@ export function ProgramCreated({ route, navigation }: Props) {
       alive = false;
     };
   }, [profileForPreview]);
-  const learnTicks = useMemo(() => learnCount(program), [program]);
+  /*
+   * ════ HER WEEK, WITH ITS WEIGHTS (founder 2026-09-28: *"מסך התוכנית מוכנה — מאשר, שיהיה יפה
+   * ומרשים"*) ════
+   *
+   * The 2026-08-10 deletion of the week list was right about WHERE it sat — under the seal, below
+   * the fold, where nobody scrolled. It was never right that the screen which says "your programme
+   * is built" should not show the programme. It is the object she came for: every day, every lift,
+   * and the weight she will put on the bar — the loads she TOLD the model, when she told it.
+   *
+   * ⛔ THE SAME WEEK TODAY WILL DRAW, BY CONSTRUCTION. The profile is not on disk yet, so the loads
+   * come from `previewWeekPlan` — the engine's first-meeting seeds through the one conversion Today
+   * runs — and the rows from the same `coachRows` → `coachPlanRows`. Pinned by
+   * `theReadyScreenShowsTheLoadsSheTrains`: every row, band and set equal to `loadWeekPlan`.
+   */
+  const units = inputs.units ?? 'kg';
+  const week = useMemo(() => {
+    if (!program) return null;
+    const plan = previewWeekPlan(program, { ...profileForPreview, ...(inputs.experience ? { experience: inputs.experience } : {}) });
+    if (!plan) return null;
+    return coachWeek(plan).map((w) => ({ ...w, rows: coachPlanRows(coachRows(plan, w.id), units) ?? [] }));
+  }, [program, profileForPreview, inputs.experience, units]);
   /* Her week's name, in her language — the same descriptor `BuildingProgramme` renders. */
   const named = useMemo(() => {
     if (!program) return null;
@@ -214,24 +239,13 @@ export function ProgramCreated({ route, navigation }: Props) {
    */
 
   /*
-   * ⛔ A TRIAL SCREEN STATES ITS PRICE (design review 2026-09-01). "חינם עד ש-14 מאחוריך" with
-   * no number after it fails the athlete's first question and App Review's guideline alike.
-   * The figure is the STORE'S localized price — never hardcoded — and until the store answers
-   * (or off-store builds), the line still tells the truth without a number.
+   * ⛔ THE PRICE LEFT THIS SCREEN (founder 2026-09-28, the pricing model: price AFTER value). The
+   * 2026-09-01 review put the store's monthly price here because the deal ended in a charge nobody
+   * had named. The deal now ends in APPLE'S FREE TRIAL, offered after her free workouts on a screen
+   * that states the price, the trial, the renewal and the reminder together (`Paywall`) — which is
+   * where App Review and the Israeli auto-renewal rules want them. Here she is told what is true
+   * today: the first workouts are free, no card, and a free trial follows them.
    */
-  const [monthlyPrice, setMonthlyPrice] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    void billing
-      .getProducts()
-      .then((list) => {
-        if (!alive) return;
-        const m = list.find((p) => p.id === PRODUCT_IDS.monthly);
-        if (m?.priceLabel) setMonthlyPrice(m.priceLabel);
-      })
-      .catch(() => { /* the fallback line stands */ });
-    return () => { alive = false; };
-  }, []);
 
   const seal = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -295,7 +309,15 @@ export function ProgramCreated({ route, navigation }: Props) {
         }
       }
       // Builds the program and writes the profile → Root swaps to Home.
-      await app.completeOnboarding(inputs);
+      /*
+       * ⛔ HER SENTENCE IS KEPT (2026-09-28, the OpenAI prompt review). What she wrote at the ask
+       * step — "a shoulder that hurts, only dumbbells at home" — wrote her first week and was then
+       * thrown away: no screen sets `goalText` any more, so the plan review (the one call that
+       * checks her week for what hurts) never heard it unless she typed it again. Kept as her own
+       * words, it reaches every later review as `trainingFor` (`coachFacts`).
+       */
+      const said = coachAsk?.trim().slice(0, 400);
+      await app.completeOnboarding(said && !inputs.goalText ? { ...inputs, goalText: said } : inputs);
     } catch {
       // A storage failure here used to reject into the void, leaving `busy` true forever —
       // the CTA disabled, and the athlete unable to finish onboarding AT ALL. It is the last
@@ -349,11 +371,13 @@ export function ProgramCreated({ route, navigation }: Props) {
                 <Text style={styles.programTitle}>{bidi(named)}</Text>
               </View>
             ) : null}
-            {/* THE HEADLINE FACT (founder 2026-07-24): the fourteen stand huge, FREE beside them. */}
+            {/* THE DEAL (founder 2026-09-28): the first workouts stand huge, FREE beside them — and
+                the line under them says what follows, because a free that hides its sequel is not
+                free, it is a hook. */}
             <View style={styles.freeRow}>
               <Text style={styles.bigNum}>{FREE_SESSION_LIMIT}</Text>
               <View style={styles.freeCol}>
-                <Legend size={17} track={0.22}>{t('ob.readyWorkouts')}</Legend>
+                <Legend size={17} track={0.22}>{t('ob.readyWorkouts', { count: FREE_SESSION_LIMIT })}</Legend>
                 <View style={styles.freePill}>
                   <Legend size={textScale.md} track={0.18} weight="semibold" align="center" style={styles.freePillText}>
                     {t('ob.readyFree')}
@@ -361,39 +385,46 @@ export function ProgramCreated({ route, navigation }: Props) {
                 </View>
               </View>
             </View>
-            {/* ════ THE LINE THAT HAS TO BE TRUE (founder 2026-07-29) ════
-                It read "Cancel anytime — one tap, no questions asked", which answers a question she
-                has not asked yet and quietly implies the opposite of the ratified model: something
-                is already running that she might need to get out of. Nothing is. **No card is taken
-                and nothing is charged until the fourteen workouts are done** — so the line says
-                that, because it is both the stronger reassurance and the actual fact. */}
             <View style={styles.cancelRow}>
               <Icon name="check" size={15} color={color.accent} strokeWidth={2.4} />
-              <Text style={styles.cancelText}>{t('ob.readyCancel', { n: FREE_SESSION_LIMIT, d: TRIAL_MAX_DAYS ?? TRIAL_MAX_DAYS_DEFAULT })}</Text>
+              <Text style={styles.cancelText}>{t('ob.readyCancel', { count: FREE_SESSION_LIMIT, days: PRO_TRIAL_DAYS })}</Text>
             </View>
-            {/* And what comes AFTER the fourteen — the price, from the store, in her currency.
-                The strongest form of "no card, no charge" is saying the number it would be. */}
-            <Text style={styles.priceLine}>
-              {monthlyPrice ? t('ob.readyPrice', { price: monthlyPrice }) : t('ob.readyPriceUnknown')}
-            </Text>
-            {/* The band explains the two phases of the trial arc.
 
-                The second phase BEGINS WHERE THE FIRST ENDS. It read "5–14" whatever her week
-                held — so an athlete learning in 2 was told sessions 3 and 4 belonged to neither
-                phase, and one learning in 6 was told the engine knew her at 5 while the line
-                above still said it was learning. */}
-            <View style={styles.howCard}>
-              <Legend tone="accent">{t('ob.readyHowTitle')}</Legend>
-              <PhaseTimeline
-                learnCount={learnTicks}
-                learn={t('ob.readyLearnYou').toUpperCase()}
-                learnRange={t('ob.readyLearnRange', { n: learnTicks })}
-                learnSub={t('ob.readyLearnSub')}
-                know={t('ob.readyKnowYou').toUpperCase()}
-                knowRange={t('ob.readyKnowRange', { from: learnTicks + 1, to: FREE_SESSION_LIMIT })}
-                knowSub={t('ob.readyKnowSub')}
-              />
-            </View>
+            {/* ✦ THE WEEK — every day, every lift, every weight. See `week` above. */}
+            {week && week.length > 0 ? (
+              <View style={styles.weekBlock}>
+                <Legend tone="accent">{t('ob.readyWeekTitle')}</Legend>
+                {week.map((w, i) => (
+                  <View key={w.id} style={styles.dayCard}>
+                    <View style={styles.dayHead}>
+                      <Text style={styles.dayName}>{bidi(dayTitle(w.name))}</Text>
+                      <Text style={styles.dayMeta}>{t('program.dayMeta', { count: w.lifts, min: plannedMinutes(w.minutes) })}</Text>
+                    </View>
+                    {/* The first workout PERFORMED — the figure is the hero (2026-09-02); one per
+                        screen, on the day she trains first. */}
+                    {i === 0 ? (
+                      <DayInMotion
+                        exerciseIds={w.rows.map((r) => r.exerciseId)}
+                        figure={inputs.sex === 'male' ? 'male' : 'female'}
+                        paused={reduced}
+                        style={styles.dayMotion}
+                      />
+                    ) : null}
+                    {w.rows.map((r) => (
+                      <View key={`${w.id}:${r.exerciseId}`} style={styles.liftRow}>
+                        <Text style={styles.liftName} numberOfLines={3}>{bidi(r.name)}</Text>
+                        <FigureCells
+                          lift={{ load: r.load, sets: r.sets, band: r.band, ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift}
+                          units={units}
+                          bodyweightWord={t('workout.bodyweightShort')}
+                          bandWord={t('workout.bandWord')}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            ) : null}
             <Text style={styles.signature}>{t('ob.readySignature')}</Text>
             {/*
               ⛔ THE ONE THING SHE WROTE, AND WHETHER IT LANDED (2026-08-30).
@@ -464,33 +495,6 @@ export function ProgramCreated({ route, navigation }: Props) {
   );
 }
 
-/**
- * How many of the fourteen are the "I learn you" phase — HER number, not a constant.
- *
- * It was `4`. Loop 1 learns a lift the first time it meets it, so the phase lasts exactly as many
- * sessions as her week holds DIFFERENT workouts: an athlete training twice a week was promised four
- * learning sessions, two of them re-runs, and one training six had it stop at four (founder
- * 2026-07-28). The programme does not exist yet on this screen — it is built by the CTA below — but
- * the assembler is PURE, so the same call the generator will make answers the question now, from
- * the map she just drew. `learnPhaseLength` counts the work, not the names — and it is the SAME
- * call 2.0 makes off the finished programme, so the two screens cannot promise different lengths.
- */
-/**
- * How many sessions the learning phase runs for.
- *
- * ⛔ IT ASKS THE ASSEMBLER AGAIN. The comment here used to read *"the assembler is deleted"* — it is
- * back, and it is the only thing that composes her week, so the phase is counted from the programme
- * she will actually train rather than from a coach's answer nothing writes.
- *
- * ⚠️ ZERO IS NOT A LENGTH. `learnPhaseLength` floors at 1; this returns 0 only while the pure call
- * is still resolving, and the band is not drawn until it has. The old version returned 0 FOREVER,
- * which is how "I LEARN YOU 1–0" reached the screen.
- */
-function learnCount(program: Program | null): number {
-  if (!program) return 0;
-  return learnPhaseLength(program.days);
-}
-
 /** The moss start/finish measuring mark — two caps, a rule between them, the dot arrived at centre. */
 function StartFinishMark() {
   return (
@@ -499,84 +503,6 @@ function StartFinishMark() {
       <View style={styles.markCapStart} />
       <View style={styles.markCapEnd} />
       <View style={styles.markDot} />
-    </View>
-  );
-}
-
-/** The fourteen-tick trial arc: the first four cream (I learn you), the rest moss (I know you),
- *  under two down-brackets naming the phases. */
-
-function PhaseTimeline({ learn, learnRange, learnSub, know, knowRange, knowSub, learnCount: learnTicks }: { learn: string; learnRange: string; learnSub: string; know: string; knowRange: string; knowSub: string; learnCount: number }) {
-  return (
-    <View>
-      <View style={styles.tickRow}>
-        <View style={styles.baseline} />
-        {Array.from({ length: FREE_SESSION_LIMIT }).map((_, i) => {
-          const isLearn = i < learnTicks;
-          const last = i === FREE_SESSION_LIMIT - 1;
-          return (
-            <View
-              key={i}
-              style={[
-                styles.tick,
-                /* ⛔ TWO CHANNELS, NOT A HUE WHISPER (design review 2026-09-01). Cream vs moss on
-                   2-point ticks is a difference nobody perceives at arm's length, so the chart
-                   read as fourteen identical bars — decoration shaped like data. The phases now
-                   differ in HEIGHT as well (24 vs 34): the learning rungs are the short ones, the
-                   known ones stand taller, and the boundary is visible before the brackets say it. */
-                {
-                  backgroundColor: isLearn ? color.textPrimary : color.accent,
-                  height: isLearn ? 24 : last ? 40 : 34,
-                  marginTop: last ? -3 : 0,
-                },
-              ]}
-            />
-          );
-        })}
-      </View>
-      {/* ════ THE BRACKETS MEASURE HER PHASE, AND THE LABELS ARE NOT CLIPPED TO THEM ════
-
-          It read "I LEAR…" (founder 2026-07-29). Two faults, one on top of the other. The split was
-          a hardcoded 23% / 70% — an approximation of the constant `4` that `learnCount` stopped
-          being, so the bracket no longer measured anything; and the label was pinned inside that
-          column with `numberOfLines={1}`, so the one sentence this card exists to make was the
-          thing that got an ellipsis.
-
-          Now the brackets are the REAL proportion (her learning phase against the fourteen), and
-          the words sit on their own row underneath, free to take the width they need. A bracket is
-          a measurement; a label is a sentence; making one live inside the other cost both. */}
-      <View style={styles.bracketRow}>
-        <View style={[styles.bracket, { flex: learnTicks, borderColor: color.textPrimary }]} />
-        <View style={styles.bracketGap} />
-        <View style={[styles.bracket, { flex: Math.max(1, FREE_SESSION_LIMIT - learnTicks), borderColor: color.accent }]} />
-      </View>
-      {/*
-        ⛔ THE TWO SENTENCES CAME OUT OF THE COLUMNS (2026-08-26, the elevation pass).
-
-        The columns are right for the LABELS — "I learn you · 1–4" against "I know you · 5–14" is a
-        comparison, and a comparison wants two seats. They were wrong for the prose. Half of a 393
-        point screen, less the card's padding, is about 150 points; at the type floor that is roughly
-        NINE HEBREW CHARACTERS PER LINE, so both sentences wrapped four deep and broke mid-phrase
-        (`מדידה — כל סט`). An earlier eye-pass had already widened these columns once — the fix was
-        real and the shape was the problem.
-
-        A label is a word and fits a column. A sentence is a sentence and takes the width.
-      */}
-      <View style={styles.phaseRow}>
-        <View style={styles.phaseCol}>
-          <Text style={[styles.phaseLabel, { color: color.textPrimary }]}>{learn}</Text>
-          <Text style={styles.phaseRange}>{learnRange}</Text>
-        </View>
-        <View style={styles.phaseCol}>
-          <Text style={[styles.phaseLabel, styles.phaseLabelEnd, { color: color.accent }]}>{know}</Text>
-          <Text style={[styles.phaseRange, styles.phaseLabelEnd]}>{knowRange}</Text>
-        </View>
-      </View>
-      {/* THE CALIBRATION PROMISE (the review's RP steal, founder-approved 2026-08-24): the first
-          days' weights are a MEASUREMENT, said once, here at the programme's birth — so a cautious
-          opening load reads as the method, never as the app guessing wrong. */}
-      <Text style={styles.phaseSub}>{learnSub}</Text>
-      <Text style={styles.phaseSub}>{knowSub}</Text>
     </View>
   );
 }
@@ -648,12 +574,14 @@ const styles = StyleSheet.create({
    * ⚠️ AND IT MATTERS MORE IN HEBREW. `חינם` is four characters in a 176-point capsule; filled, that
    * is mostly empty paint. Outlined, the air inside it reads as the stamp's own margin.
    */
+  /* ⛔ A TAG, NOT A BUTTON (design audit 2026-09-29). A 1.5 pt moss outline on a pill is the
+     shape this app gives a secondary button, so "Free" read as something to press — and pressing it
+     did nothing. A fact wears a wash: moss ground, no stroke, nothing that invites a finger. */
   freePill: {
     width: 176,
     height: 36,
     borderRadius: 100,
-    borderWidth: 1.5,
-    borderColor: color.accent,
+    backgroundColor: color.accentWash,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -662,48 +590,30 @@ const styles = StyleSheet.create({
   // "Cancel anytime" — a moss check + a quiet sans line.
   cancelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cancelText: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: color.textSecondary, textAlign: 'left' },
-  priceLine: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
-
-  // The two-phase band.
-  howCard: {
-    gap: 14,
-    backgroundColor: color.fillSubtle,
-    borderWidth: 1.5,
-    // A DEEP-MOSS rim at 35%, not a cream hairline: the band is the one lit object on the
-    // step, and the handoff gives it a moss edge and a wide cream glow to say so.
-    borderColor: 'rgba(62,87,63,0.35)',
+  // The week (2026-09-28): one hairline card per day — the app's own card vocabulary.
+  weekBlock: { gap: 14, marginTop: 6 },
+  dayCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(241,238,229,0.16)',
     borderRadius: radius.sheet,
-    paddingHorizontal: 22,
-    paddingTop: 22,
-    paddingBottom: 20,
-    shadowColor: '#f1eee5',
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 20 },
-    elevation: 6,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  tickRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  baseline: { position: 'absolute', left: 0, right: 0, top: 16, height: 1.5, backgroundColor: 'rgba(241,238,229,0.14)' },
-  tick: { width: 2.5 },
-  // The two brackets, sized by the REAL split of the fourteen (see PhaseTimeline).
-  bracketRow: { flexDirection: 'row', marginTop: 12 },
-  bracketGap: { width: 8 },
-  bracket: { height: 8, borderTopWidth: 1.5, borderStartWidth: 1.5, borderEndWidth: 1.5 },
-  // …and the words beneath them, each free to take the width it needs.
-  phaseRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
-  /* flex:1, not flexShrink — with shrink alone the column whose sentence is longer takes the row
-     and squeezes the other into one-word-per-line fragments (eye-pass 2026-08-26). Equal halves:
-     both sentences wrap at their own pace, neither is starved. */
-  phaseCol: { flex: 1 },
-  // Sans, not mono: these are WORDS ("I learn you"), and the mono has no Hebrew glyphs — on the
-  // Hebrew build the fallback face + Latin letterspacing was the jumble on 1.5 (audit 2026-08-23).
-  // monoCarriesNoWords polices literals only; words that arrive via t() must obey it by hand.
-  phaseLabel: { fontFamily: font.sansSemibold, fontSize: 17, textAlign: 'left' },
-  phaseLabelEnd: { textAlign: 'right' }, // rtl-ok: the logical END, merged onto the base above
-  phaseRange: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, textAlign: 'left', marginTop: 3 },
-  /* Full width, and given the leading a sentence needs — see the note where they left the columns.
-     `marginTop: 10` is the air that says these two lines belong to the row above and not to it. */
-  phaseSub: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 23, color: color.textMuted, textAlign: 'left', marginTop: 10 },
+  dayHead: { gap: 2, marginBottom: 6 },
+  dayName: { fontFamily: font.serif, fontSize: 26, lineHeight: 32, color: color.textPrimary, textAlign: 'left' },
+  dayMeta: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },
+  dayMotion: { height: 150, marginVertical: 6 },
+  liftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(241,238,229,0.08)',
+  },
+  liftName: { flex: 1, minWidth: 0, fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textPrimary, textAlign: 'left' },
 
   // "— hush" — the italic serif signature.
   signature: { fontFamily: font.serif, fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },

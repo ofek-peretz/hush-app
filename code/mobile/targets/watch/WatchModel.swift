@@ -920,6 +920,14 @@ final class WatchModel: ObservableObject {
     if let engine = localEngine { engine.endRest() } else if !sendIntent(type: "end_rest") { intentDidNotLeave() }
   }
 
+  /// ⛔ "מוכן" on the wrist (2026-09-28): the voice's loading dialogue is open and the set — or the
+  /// hold — on stage starts now, on every surface, exactly as the lock card's Ready and her word
+  /// start it. Only under phone authority: a workout the wrist runs alone has no voice to answer.
+  func setReady() {
+    guard localEngine == nil, let m = effectiveMirror else { return }
+    if !sendIntent(type: "set_ready", expectedIndex: m.globalIndex) { intentDidNotLeave() }
+  }
+
   func addRest() {
     if let engine = localEngine {
       engine.addRest(seconds: 15)

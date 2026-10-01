@@ -8,8 +8,22 @@
 
 // 
 
-import type { Primitive, Vec2 } from './types';
+import type { ColorToken, Primitive, Vec2 } from './types';
 import { BAR_R, PLATE_R } from './anthro';
+
+/**
+ * The knockout seam a held implement is cut out with — the skin's own device (`skin.ts`: the same
+ * paper token, laid first and fattened), so a dumbbell or a bell crossing a thigh or the trunk reads
+ * as an object IN FRONT of it rather than a patch of the same cream fused into the body. It was the
+ * absence of this that turned the walking lunge's two bells into one blob on the hip (2026-09-30).
+ */
+const IMPLEMENT_SEAM: ColorToken = 'paper1';
+const IMPLEMENT_SEAM_W = 0.9;
+
+const unit = (d: Vec2): Vec2 => {
+  const len = Math.hypot(d.x, d.y) || 1;
+  return { x: d.x / len, y: d.y / len };
+};
 
 /** The near-side plate + bar end, drawn IN FRONT of the figure (nearest the camera).
  *  `r` defaults to the 45cm competition plate; lighter implements (curl bars) pass a smaller disc. */
@@ -30,6 +44,11 @@ export function plateGhost(bar: Vec2, r = PLATE_R): Primitive[] {
      * object. Unfilled it still reads as the collar, and the fist reads through it.
      */
     { kind: 'circle', c: bar, r: Math.min(4.6, r * 0.32), stroke: 'ink3', w: 1.5 },
+    /* The plate's RIM (2026-09-30): the raised lip every cast plate and every bumper's steel face
+       carries, a hairline a fifth in from the edge. It is what turns "a ring" into "a plate" at hero
+       size, and at thumbnail size it simply vanishes into the disc. Only a real plate has one — the
+       curl bar's small discs stay plain. */
+    ...(r >= 10 ? [{ kind: 'circle' as const, c: bar, r: r * 0.8, stroke: 'ink3' as const, w: 0.9 }] : []),
     { kind: 'circle', c: bar, r: BAR_R, fill: 'ink0' }, // the bar, end-on
   ];
 }
@@ -139,9 +158,35 @@ export function groundShadow(cx: number, rx: number, floorY: number): Primitive 
  *  same ghost grammar as the barbell plate at HONEST scale: a working dumbbell head is ≈18cm
  *  across → r≈8 against the canonical athlete (the 45cm barbell plate is r16), so the size
  *  hierarchy alone says barbell vs dumbbell. The solid center is the handle, end-on. */
-export function dumbbellEnd(hand: Vec2, r = 8): Primitive[] {
+/*
+ * ⛔ A HEXAGON, NOT A DISC (2026-09-30). End-on, the old dumbbell was the barbell plate at half size
+ * — the same ring in the same ink — and the size hierarchy was the only thing telling them apart,
+ * which a thumbnail does not preserve. The hex head is the gym's own word for "dumbbell": no plate is
+ * six-sided, so the silhouette alone names the implement at any size. It stays a GHOST (the fist is
+ * concentric with it and must read through), and it is locked to `along` — the forearm, or any
+ * direction rigid to the hand — so the head turns with the grip through a curl instead of standing
+ * still while the hand rotates inside it. Without `along` it rests flat-bottomed, as a bell on a rack.
+ */
+/** The hex face's turn: a flat face square to `along`, so a bell on a hanging forearm rests flat-bottomed. */
+const hexTurn = (along?: Vec2): number => (along ? Math.atan2(along.y, along.x) + Math.PI / 2 : 0);
+
+/**
+ * A dumbbell head's hex face, end-on — the one shape every end-on bell in the library is cut from.
+ * `r` is the radius of the disc it replaced (circumradius 1.06r, so the two weigh the same on the
+ * page); `stroke` outlines it with round joins; `along` turns it with the grip (see `hexTurn`).
+ */
+export function hexFace(c: Vec2, r: number, fill: ColorToken, o: { opacity?: number; stroke?: ColorToken; w?: number; along?: Vec2 } = {}): Primitive[] {
+  const a0 = hexTurn(o.along);
+  const R = r * 1.06;
+  const hex = Array.from({ length: 6 }, (_, i) => ({ x: c.x + Math.cos(a0 + (i * Math.PI) / 3) * R, y: c.y + Math.sin(a0 + (i * Math.PI) / 3) * R }));
+  const out: Primitive[] = [{ kind: 'poly', pts: hex, fill, ...(o.opacity != null ? { opacity: o.opacity } : {}) }];
+  if (o.stroke) out.push({ kind: 'polyline', pts: [...hex, hex[0], hex[1]], w: o.w ?? 2, color: o.stroke });
+  return out;
+}
+
+export function dumbbellEnd(hand: Vec2, r = 8, along?: Vec2): Primitive[] {
   return [
-    { kind: 'circle', c: hand, r, fill: 'ink3', fillOpacity: 0.14, stroke: 'ink3', w: 2 }, // same tint as `plateGhost`
+    ...hexFace(hand, r, 'ink3', { opacity: 0.14, stroke: 'ink3', w: 2, along }), // same tint as `plateGhost`
     { kind: 'circle', c: hand, r: 2.2, fill: 'ink0' },
   ];
 }
@@ -159,11 +204,23 @@ export function dumbbellEnd(hand: Vec2, r = 8): Primitive[] {
  * along `dir`, and the two horns of the handle running from the hand to its shoulders.
  */
 export function kettlebellHang(hand: Vec2, dir: Vec2, r = 8): Primitive[] {
-  const len = Math.hypot(dir.x, dir.y) || 1;
-  const u = { x: dir.x / len, y: dir.y / len };
+  const u = unit(dir);
   const n = { x: -u.y, y: u.x };
   /** The bell's centre — a handle's height plus the body's radius, along the hang. */
   const c = { x: hand.x + u.x * (r * 1.55), y: hand.y + u.y * (r * 1.55) };
+  /* The body is a ball with its BASE cut flat (2026-09-30) — the flat foot a kettlebell stands on is
+     the other half of its silhouette, and a full disc read as a ball on a handle. The chord sits at
+     0.8 of the radius along the hang, so it faces the floor whenever the bell does. */
+  const body = (grow: number): Primitive => {
+    const R = r + grow;
+    const pts = Array.from({ length: 28 }, (_, i) => {
+      const t = (i / 28) * Math.PI * 2;
+      const a = Math.min(Math.cos(t) * R, 0.8 * r + grow);
+      const b = Math.sin(t) * R;
+      return { x: c.x + u.x * a + n.x * b, y: c.y + u.y * a + n.y * b };
+    });
+    return { kind: 'poly', pts, fill: grow > 0 ? IMPLEMENT_SEAM : 'ink1' };
+  };
   const horn = (s: number): Primitive => ({
     kind: 'line',
     a: { x: hand.x + n.x * s * 1.6, y: hand.y + n.y * s * 1.6 },
@@ -172,25 +229,78 @@ export function kettlebellHang(hand: Vec2, dir: Vec2, r = 8): Primitive[] {
     color: 'ink0',
     cap: 'round',
   });
+  return [body(IMPLEMENT_SEAM_W), body(0), horn(-1), horn(1)];
+}
+
+/**
+ * One dumbbell head seen SIDE-ON: the silhouette of a cylinder (or a hex) with its axis in the
+ * drawing plane — a block ACROSS the handle, its corners eased to the rubber's radius. `grow` fattens
+ * it evenly on every side; that is how its seam is drawn.
+ */
+function headSide(c: Vec2, u: Vec2, halfLen: number, halfH: number, grow: number, fill: ColorToken): Primitive {
+  const n = { x: -u.y, y: u.x };
+  const L = halfLen + grow;
+  const H = halfH + grow;
+  const k = Math.min(L, H) * 0.45;
+  const P = (a: number, b: number): Vec2 => ({ x: c.x + u.x * a + n.x * b, y: c.y + u.y * a + n.y * b });
+  return { kind: 'poly', pts: [P(-L + k, -H), P(L - k, -H), P(L, -H + k), P(L, H - k), P(L - k, H), P(-L + k, H), P(-L, H - k), P(-L, -H + k)], fill };
+}
+
+/** A dumbbell seen SIDE-ON along direction `dir` (hammer grips, goblet holds, bells at the sides). */
+/* half 7.5 / plateR 6, not 6.5 / 4 (2026-09-07): a 10–15 kg bell's plates are ~14 cm ≈ 6u; at r4 every
+   lunge, calf raise and kickback carried a toy. Callers that pass their own numbers are unchanged. */
+/*
+ * ⛔ THE HEADS WERE DISCS, AND A DISC IS WHAT A HEAD LOOKS LIKE END-ON (2026-09-30). With the axis in
+ * the drawing plane the camera sees each head from its SIDE — a block as tall as the head is round
+ * and about half as long — and the bell reads as the ▮─▮ every gym sign uses. Two discs 3u apart
+ * read as a pair of balls, and at the lunge's hip, over the hand and the thigh, as one blob. The
+ * heads are centred where the discs were, so the bell's reach is unchanged; each is cut out with the
+ * implement seam.
+ */
+/*
+ * `plane: 'far'` is the bell in the OTHER hand (2026-09-30). A pair at the sides hang a hand's width
+ * apart in depth and a few units apart on the page, and drawn twice in the near ink they stacked into
+ * four heads on the hip. The far one is drawn the way the far limb is — the far ink, no seam — and its
+ * caller lays it in `back`, under the body, so it peeks out past the near thigh as the bell behind it.
+ */
+export function dumbbellSide(hand: Vec2, dir: Vec2, half = 7.5, plateR = 6, plane: 'near' | 'far' = 'near'): Primitive[] {
+  const u = unit(dir);
+  const a = { x: hand.x - u.x * half, y: hand.y - u.y * half };
+  const b = { x: hand.x + u.x * half, y: hand.y + u.y * half };
+  /* a head is ~0.55 of its own diameter long: 6.6u at the working bell, leaving ~8u of handle for the fist */
+  const hl = plateR * 0.55;
+  if (plane === 'far') {
+    return [
+      { kind: 'line', a, b, w: 2.5, color: 'ink4', cap: 'round' },
+      headSide(a, u, hl, plateR, 0, 'ink4'),
+      headSide(b, u, hl, plateR, 0, 'ink4'),
+    ];
+  }
   return [
-    { kind: 'circle', c, r, fill: 'ink1' },
-    horn(-1),
-    horn(1),
+    headSide(a, u, hl, plateR, IMPLEMENT_SEAM_W, IMPLEMENT_SEAM),
+    headSide(b, u, hl, plateR, IMPLEMENT_SEAM_W, IMPLEMENT_SEAM),
+    { kind: 'line', a, b, w: 2.5, color: 'ink0', cap: 'round' },
+    headSide(a, u, hl, plateR, 0, 'ink1'),
+    headSide(b, u, hl, plateR, 0, 'ink1'),
   ];
 }
 
-/** A dumbbell seen SIDE-ON along direction `dir` (hammer grips, goblet holds): handle + two plates. */
-/* half 7.5 / plateR 6, not 6.5 / 4 (2026-09-07): a 10–15 kg bell's plates are ~14 cm ≈ 6u; at r4 every
-   lunge, calf raise and kickback carried a toy. Callers that pass their own numbers are unchanged. */
-export function dumbbellSide(hand: Vec2, dir: Vec2, half = 7.5, plateR = 6): Primitive[] {
-  const len = Math.hypot(dir.x, dir.y) || 1;
-  const u = { x: dir.x / len, y: dir.y / len };
-  const a = { x: hand.x - u.x * half, y: hand.y - u.y * half };
-  const b = { x: hand.x + u.x * half, y: hand.y + u.y * half };
+/**
+ * The cable's D-HANDLE (stirrup), seen side-on (2026-09-30): the grip bar across the fist and the
+ * strap's two sides converging to the clip on the cable's line. It was a 3u dumbbell profile — a toy
+ * bell on a wire — and the rebuilt `dumbbellSide` would have made it two tiny blocks. A stirrup is a
+ * triangle hanging off the cable; that is its whole word. `toward` is where the cable comes from.
+ */
+export function stirrupHandle(hand: Vec2, dir: Vec2, toward: Vec2): Primitive[] {
+  const u = unit(dir);
+  const t = unit({ x: toward.x - hand.x, y: toward.y - hand.y });
+  const a = { x: hand.x - u.x * 3.4, y: hand.y - u.y * 3.4 };
+  const b = { x: hand.x + u.x * 3.4, y: hand.y + u.y * 3.4 };
+  const clip = { x: hand.x + t.x * 6.5, y: hand.y + t.y * 6.5 };
   return [
-    { kind: 'line', a, b, w: 2.5, color: 'ink0', cap: 'round' },
-    { kind: 'circle', c: a, r: plateR, fill: 'ink1' },
-    { kind: 'circle', c: b, r: plateR, fill: 'ink1' },
+    { kind: 'polyline', pts: [a, clip, b], w: 1.6, color: 'ink2' },
+    { kind: 'line', a, b, w: 2.6, color: 'ink0', cap: 'round' },
+    { kind: 'circle', c: clip, r: 1.3, fill: 'ink2' },
   ];
 }
 
@@ -210,24 +320,75 @@ export function dumbbellEdgeOn(hand: Vec2, dir: Vec2, half = 6.5, plateR = 6): P
  *  camera: the near plate face-on, one ghost disc) → 1 = palms-forward (axis across the frame:
  *  handle visible, plates foreshortened to edge-on slivers). The Arnold press drives `spin` with
  *  the rep; plain presses hold spin = 1. */
-export function dumbbellFront(hand: Vec2, spin = 1, half = 9, plateR = 8): Primitive[] {
+/*
+ * THE HEAD AS THE SOLID IT IS (2026-09-30). Each head is a hex prism; the camera sees its face
+ * foreshortened by the spin and swept sideways by its own length — the convex hull of the face at
+ * both ends of the head. At spin 0 that is the end-on hex of `dumbbellEnd`; at spin 1 it is the
+ * block `dumbbellSide` draws. The old ellipses were a disc squashed to a lens, which no dumbbell is
+ * from any side. `along` turns the face with the arm (the lateral raise rotates it a quarter turn
+ * about the handle); the fill thickens as the heads leave the fist, since the ghost exists only so
+ * the fist reads through a head laid over it.
+ */
+export function dumbbellFront(hand: Vec2, spin = 1, half = 9, plateR = 8, along?: Vec2): Primitive[] {
   const s = Math.sin((spin * Math.PI) / 2);
   const c = Math.cos((spin * Math.PI) / 2);
   const out: Primitive[] = [];
   const hx = half * s;
   if (hx > 1) out.push({ kind: 'line', a: { x: hand.x - hx, y: hand.y }, b: { x: hand.x + hx, y: hand.y }, w: 2.5, color: 'ink0', cap: 'round' });
-  const rx = Math.max(2.4, plateR * c);
-  out.push({ kind: 'ellipse', c: { x: hand.x - hx, y: hand.y }, rx, ry: plateR, fill: 'ink3', opacity: 0.55 });
-  out.push({ kind: 'ellipse', c: { x: hand.x + hx, y: hand.y }, rx, ry: plateR, fill: 'ink3', opacity: 0.55 });
+  const a0 = hexTurn(along);
+  const R = plateR * 1.06;
+  const d = plateR * 0.55 * s;
+  for (const side of [-1, 1]) {
+    const cx = hand.x + side * hx;
+    const pts: Vec2[] = [];
+    for (let i = 0; i < 6; i++) {
+      const t = a0 + (i * Math.PI) / 3;
+      const x = Math.cos(t) * R * c;
+      const y = hand.y + Math.sin(t) * R;
+      pts.push({ x: cx + x - d, y }, { x: cx + x + d, y });
+    }
+    const hull = convexHull(pts);
+    out.push(
+      { kind: 'poly', pts: hull, fill: 'ink3', opacity: 0.14 + 0.41 * s },
+      { kind: 'polyline', pts: [...hull, hull[0], hull[1]], w: 1.8, color: 'ink3' },
+    );
+  }
   out.push({ kind: 'circle', c: hand, r: 2.2, fill: 'ink0' });
   return out;
 }
 
+/** Andrew's monotone chain — the silhouette of a swept face. */
+function convexHull(points: Vec2[]): Vec2[] {
+  const p = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Vec2, a: Vec2, b: Vec2) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Vec2[] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 1e-9) lower.pop();
+    lower.push(q);
+  }
+  const upper: Vec2[] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 1e-9) upper.pop();
+    upper.push(q);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
 /** A barbell in FRONT view: the bar crossing the frame with edge-on plate slabs at the sleeves. */
+/*
+ * A plate edge-on is a SLAB — a 45 cm disc 5 cm thick is a tall block with its rim eased — not the
+ * lens an ellipse draws (2026-09-30). Each sleeve carries the slab and, outboard of it, the collar
+ * that locks it on: the small square step every loaded bar shows from the front.
+ */
 export function barbellFront(cx: number, y: number, halfBar = 78, plateX = 62, plateR = PLATE_R): Primitive[] {
+  const slabAt = (x: number): Primitive => ({ ...(headSide({ x, y }, { x: 1, y: 0 }, 2.2, plateR, 0, 'ink3') as Extract<Primitive, { kind: 'poly' }>), opacity: 0.55 });
+  const collar = (x: number): Primitive => ({ kind: 'line', a: { x, y: y - 3 }, b: { x, y: y + 3 }, w: 2.6, color: 'ink3', cap: 'butt' });
   return [
-    { kind: 'ellipse', c: { x: cx - plateX, y }, rx: 3.4, ry: plateR, fill: 'ink3', opacity: 0.55 },
-    { kind: 'ellipse', c: { x: cx + plateX, y }, rx: 3.4, ry: plateR, fill: 'ink3', opacity: 0.55 },
+    slabAt(cx - plateX),
+    slabAt(cx + plateX),
+    collar(cx - plateX - 4.4),
+    collar(cx + plateX + 4.4),
     { kind: 'line', a: { x: cx - halfBar, y }, b: { x: cx + halfBar, y }, w: 3, color: 'ink0', cap: 'round' },
   ];
 }
@@ -238,7 +399,11 @@ export function cable(from: Vec2, to: Vec2): Primitive {
 }
 
 export function pulley(c: Vec2): Primitive[] {
-  return [{ kind: 'circle', c, r: 4, stroke: 'ink3', w: 2, fill: 'paper1' }];
+  /* the axle (2026-09-30): an empty ring is a washer; the pin at its centre makes it a wheel */
+  return [
+    { kind: 'circle', c, r: 4, stroke: 'ink3', w: 2, fill: 'paper1' },
+    { kind: 'circle', c, r: 1.2, fill: 'ink3' },
+  ];
 }
 
 /**
@@ -332,9 +497,14 @@ export function rackUprights(cx: number, halfSpan: number, hookY: number, floorY
 /** A flat bench: pad from x0..x1 at `top`, with two legs to the floor. */
 export function flatBench(x0: number, x1: number, top: number, floorY: number): Primitive[] {
   const legIn = 16;
+  /* its feet (2026-09-30): a bench stands on two cross-feet, as the rack's uprights do — legs that
+     simply end at the floor line read as a table on stilts */
+  const foot = (x: number): Primitive => ({ kind: 'line', a: { x: x - 6, y: floorY }, b: { x: x + 6, y: floorY }, w: 2.5, color: 'ink3', cap: 'round' });
   return [
     { kind: 'line', a: { x: x0 + legIn, y: top + 10 }, b: { x: x0 + legIn, y: floorY }, w: 3, color: 'ink3' },
     { kind: 'line', a: { x: x1 - legIn, y: top + 10 }, b: { x: x1 - legIn, y: floorY }, w: 3, color: 'ink3' },
+    foot(x0 + legIn),
+    foot(x1 - legIn),
     { kind: 'rect', x: x0, y: top, width: x1 - x0, height: 10, rx: 4, fill: 'paper3', stroke: 'ink3', w: 2 },
   ];
 }

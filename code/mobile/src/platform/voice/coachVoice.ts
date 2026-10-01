@@ -13,6 +13,9 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  */
 
+import { audioSession } from '@/platform/voice/audioSession';
+import { neuralVoice } from '@/platform/voice/neuralVoice';
+
 type SpeechApi = {
   speak(text: string, opts?: {
     language?: string;
@@ -44,6 +47,13 @@ const RATE = 0.92;
 const BREATH_MS = 300;
 /** A line's longest honest length: a floor, plus far more per character than any voice needs. */
 const WATCHDOG_BASE_MS = 4000;
+/**
+ * How long a line not yet on the phone is waited on in the natural voice before Carmit says it
+ * instead (2026-09-27). Most lines are cached or prefetched; this is the price of a surprise.
+ */
+const NEURAL_WAIT_MS = 1_800;
+/** How long a line may take to START before it is tried once more on the default voice. */
+const START_BUDGET_MS = 2500;
 const WATCHDOG_PER_CHAR_MS = 150;
 
 interface Item {
@@ -60,6 +70,8 @@ let generation = 0;
 export type LineEnd = 'done' | 'stopped' | 'error' | 'watchdog';
 export interface LastLine {
   how: LineEnd;
+  /** Which mouth said it: the natural voice from its file, or Carmit on the device. */
+  engine: 'neural' | 'device';
   /** The synthesizer reported the line began — false means the phone never played a sound. */
   started: boolean;
   voice: string | null;
@@ -77,7 +89,11 @@ async function voiceFor(locale: string): Promise<string | undefined> {
   try {
     const voices = await s.getAvailableVoicesAsync();
     const ours = voices.filter((v) => v.language === lang);
-    const pick = ours.find((v) => v.quality === 'Enhanced') ?? ours.find((v) => /carmit|samantha/i.test(v.identifier)) ?? ours[0];
+    // The spec's voice first (Carmit / Samantha), its better recording when downloaded — an arbitrary
+    // enhanced en-US voice used to win over Samantha.
+    const named = (v: { identifier: string }) => /carmit|samantha/i.test(v.identifier);
+    const better = (v: { quality?: string }) => v.quality === 'Enhanced' || v.quality === 'Premium';
+    const pick = ours.find((v) => named(v) && better(v)) ?? ours.find(named) ?? ours.find(better) ?? ours[0];
     cachedVoice = { locale: lang, id: pick?.identifier ?? null };
     return pick?.identifier;
   } catch {
@@ -103,13 +119,14 @@ function next(): void {
   const gen = generation;
   let settled = false;
   let started = false;
+  let engine: 'neural' | 'device' = 'device';
   let watchdog: ReturnType<typeof setTimeout> | null = null;
   let usedVoice: string | undefined;
   const done = (how: LineEnd) => {
     if (settled) return;
     settled = true;
     if (watchdog) clearTimeout(watchdog);
-    last = { how, started, voice: usedVoice ?? null, atMs: Date.now() };
+    last = { how, engine, started, voice: usedVoice ?? null, atMs: Date.now() };
     item.resolve();
     setTimeout(() => {
       // An `interrupt()` since this line began owns the queue now: this line's end starts nothing.
@@ -128,31 +145,84 @@ function next(): void {
   watchdog = setTimeout(() => {
     if (settled) return;
     if (usedVoice && cachedVoice?.id === usedVoice) cachedVoice = { locale: cachedVoice.locale, id: null };
+    /* ⛔ AND THE SYNTHESIZER IS FLUSHED (2026-09-27, the output audit). Resolving the promise alone
+       left the stuck utterance at the head of iOS's own queue — every later line waited natively
+       behind it and ended by watchdog too: one interruption, and the coach was mute for the workout.
+       Its late `didCancel` lands on a settled line and is ignored. */
+    void s.stop().catch(() => {});
+    audioSession.stopFile();
     done('watchdog');
-  }, WATCHDOG_BASE_MS + item.text.length * WATCHDOG_PER_CHAR_MS);
-  void voiceFor(item.locale).then((voice) => {
+  }, NEURAL_WAIT_MS + WATCHDOG_BASE_MS + item.text.length * WATCHDOG_PER_CHAR_MS);
+  /** Which attempt the callbacks belong to — a retried line ignores its first attempt's cancel. */
+  let attempt = 0;
+  let startCheck: ReturnType<typeof setTimeout> | null = null;
+  const speakNow = (voice: string | undefined) => {
+    const mine = ++attempt;
     usedVoice = voice;
+    const ours = (f: () => void) => () => {
+      if (mine === attempt) f();
+    };
     try {
       s.speak(item.text, {
         language: item.locale.startsWith('he') ? 'he-IL' : 'en-US',
         ...(voice ? { voice } : {}),
         rate: RATE,
-        onStart: () => {
+        onStart: ours(() => {
           started = true;
-        },
-        onDone: () => done('done'),
-        onStopped: () => done('stopped'),
-        onError: () => done('error'),
+          if (startCheck) clearTimeout(startCheck);
+        }),
+        onDone: ours(() => done('done')),
+        onStopped: ours(() => done('stopped')),
+        onError: ours(() => done('error')),
       });
     } catch {
       done('error');
+      return;
     }
-  });
+    /* A line that has not STARTED within its start budget is retried once on the language's default
+       voice — the chosen one may be a voice the synthesizer can no longer load. */
+    if (mine === 1) {
+      startCheck = setTimeout(() => {
+        if (settled || started || gen !== generation) return;
+        if (voice && cachedVoice?.id === voice) cachedVoice = { locale: cachedVoice.locale, id: null };
+        void s.stop().catch(() => {});
+        speakNow(undefined);
+      }, START_BUDGET_MS);
+    }
+  };
+  void (async () => {
+    /*
+     * ⛔ THE NATURAL VOICE FIRST (2026-09-27, `neuralVoice`): a line already on the phone plays at
+     * once from its file; a new one is waited on for `NEURAL_WAIT_MS`. Anything else — no file, no
+     * network, a file that would not play — and Carmit says the line, exactly as before.
+     */
+    const uri = neuralVoice.enabled() ? await neuralVoice.clip(item.text, item.locale, NEURAL_WAIT_MS).catch(() => null) : null;
+    if (gen !== generation) return done('stopped');
+    if (uri) {
+      engine = 'neural';
+      usedVoice = neuralVoice.voice();
+      started = true;
+      const played = await audioSession.playFile(uri);
+      if (gen !== generation) return done('stopped');
+      if (played) return done('done');
+      engine = 'device';
+      started = false;
+    }
+    // Interrupted while the voice was being chosen (earbuds out): this line is never played.
+    const voice = await voiceFor(item.locale);
+    if (gen !== generation) return done('stopped');
+    speakNow(voice);
+  })();
 }
 
 export const coachVoice = {
   available(): boolean {
     return api() != null;
+  },
+
+  /** Warm the natural voice for lines about to be said (the conductor, before an utterance). */
+  warm(lines: readonly string[], locale: string): void {
+    neuralVoice.prefetch(lines, locale);
   },
 
   /** Say one line after whatever is queued; resolves when it has been said (or cut off). */
@@ -172,6 +242,7 @@ export const coachVoice = {
     for (const d of dropped) d.resolve();
     const s = api();
     if (s) void s.stop().catch(() => {});
+    audioSession.stopFile();
     speaking = false;
   },
 

@@ -409,5 +409,7 @@ const styles = StyleSheet.create({
   namedRule: { height: 1, backgroundColor: 'rgba(241,238,229,0.14)', marginBottom: 18 },
   // The largest type in onboarding. A playlist without a name is a list of songs.
   programmeName: { fontFamily: font.serif, fontSize: 34, lineHeight: 39, color: stage.ink0, textAlign: 'left' },
-  summary: { marginTop: 12, fontFamily: font.mono, fontSize: 17, color: stage.ink2, textAlign: 'left' },
+  // Sans, not mono: "10 muscles · 25 lifts" is a SENTENCE with two figures in it, and Plex Mono has
+  // no Hebrew — the words fell back to a system face mid-line (design audit 2026-09-29).
+  summary: { marginTop: 12, fontFamily: font.sansMedium, fontSize: 17, color: stage.ink2, textAlign: 'left' },
 });

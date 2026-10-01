@@ -71,10 +71,15 @@ export function hebrewNumber(n: number, gender: NumberGender): string {
   return `${hebrewWhole(whole, 'f')} ${f}`;
 }
 
-/** "ארבעים קילו" / "קילו אחד" / "שני קילו" / "שתיים וחצי קילו". */
+/**
+ * "ארבעים קילו" / "קילו אחד" / "שני קילו" / "שתיים וחצי קילו" — and one-and-a-fraction is "קילו ורבע",
+ * "קילו וחצי" (2026-09-27): "תוסיף אחת ורבע קילו בכל צד" is a sentence no one in a gym has ever said.
+ */
 export function hebrewKilos(kg: number): string {
   if (kg === 1) return 'קילו אחד';
   if (kg === 2) return 'שני קילו';
+  const f = kg > 1 && kg < 2 ? hebrewFraction(kg - 1) : null;
+  if (f) return `קילו ${f}`;
   return `${hebrewNumber(kg, 'm')} קילו`;
 }
 
@@ -95,20 +100,21 @@ export function hebrewDuration(seconds: number): string {
   if (r === 0) return minutes;
   if (r === 30) return m === 1 ? 'דקה וחצי' : `${minutes} וחצי`;
   if (r === 15) return m === 1 ? 'דקה ורבע' : `${minutes} ורבע`;
-  if (r === 45) return m === 1 ? 'דקה ושלושת רבעי' : `${minutes} ושלושת רבעי`;
+  // "דקה ושלושת רבעי" is correct and nobody says it about a rest — "דקה וארבעים וחמש שניות" is (2026-09-27).
   return `${minutes} ו${hebrewDuration(r)}`;
 }
 
 /** English keeps digits for figures; only a duration is worded, because "90 s" reads as "ninety s". */
 export function englishDuration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
-  if (s < 60) return `${s} seconds`;
+  const secs = (n: number) => `${n} ${n === 1 ? 'second' : 'seconds'}`;
+  if (s < 60) return secs(s);
   const m = Math.floor(s / 60);
   const r = s % 60;
   const minutes = m === 1 ? 'a minute' : `${m} minutes`;
   if (r === 0) return minutes;
   if (r === 30) return m === 1 ? 'a minute and a half' : `${m} and a half minutes`;
-  return `${minutes} and ${r} seconds`;
+  return `${minutes} and ${secs(r)}`;
 }
 
 /** A figure for the voice in either language: words in Hebrew, digits in English. */

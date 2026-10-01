@@ -49,7 +49,8 @@ import type { FigureSex } from '@/motion/types';
 import { Arrive, Legend, Button, TextField, WheelPicker } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
-import { bidi } from '@/i18n/bidi';
+import { bidi, rtl } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { color, font, radius } from '@/design/tokens';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
@@ -71,6 +72,9 @@ import { PLAN_TEMPLATES, materializeTemplate, templateById } from '@/domain/plan
 import { requestPlanReview, type PlanReviewResult } from '@/platform/coach/planReview';
 import { requestPlanBuild } from '@/platform/coach/planBuild';
 import { draftFromCoachWeek } from '@/domain/coachDraft';
+import { COACH_WIRE, weekIsLockedToCoach } from '@/domain/coachTrack';
+import { bandShown, setCoachBand, setLiftNote, setWeekTitle } from '@/domain/coachDesk';
+import { loadCoachLink } from '@/state/coachOutbox';
 
 /* ─────────────────────────────────────────────────────────────── how many days, asked once */
 
@@ -105,10 +109,12 @@ const DAYS_OPENS_ON = 3;
  * facts a template is handed, and cannot beat the template.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
+function AskTheCoach({ opensOn, intake, onBack, onAsk, title }: {
   opensOn: number;
   /** Inside the intake it wears the step chrome; from the Program tab it is a screen of its own. */
   intake: boolean;
+  /** The coach track's for-mode asks about HER, by name — the question is not the coach's own week. */
+  title?: string;
   onBack: () => void;
   onAsk: (days: number, ask: string) => void;
 }) {
@@ -215,7 +221,7 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
             <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
           </Pressable>
           <Arrive order={0}>
-            <Text style={styles.title}>{t('ob.askTitle')}</Text>
+            <Text style={styles.title}>{title ?? t('ob.askTitle')}</Text>
           </Arrive>
           <Arrive order={1}>{body}</Arrive>
           <View style={styles.askAct}>{act}</View>
@@ -233,8 +239,13 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk }: {
    add-a-lift door opens it with its own legend; nothing about the list changed. */
 /* ─────────────────────────────────────────────────────────────────── one lift row */
 
-function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggleSets, onSets, onMove, onRemove, onSwap, onDemo, isFirst, isLast }: {
+function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggleSets, onSets, onMove, onRemove, onSwap, onDemo, isFirst, isLast, chip, note }: {
   dayIdx: number; slotIdx: number; exerciseId: string; sets: number;
+  /** The coach track's for-mode: the chip prints the whole prescription (`3 × 6–8`) and opens the
+   *  lift sheet instead of the sets strip. Absent everywhere else — the chip stays `3×`. */
+  chip?: string;
+  /** For-mode: the coach's note on this lift, shown under the row the way the trainee will meet it. */
+  note?: string;
   figure: FigureSex;
   expanded: boolean;
   onToggleSets: () => void;
@@ -253,15 +264,25 @@ function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggle
         {/* The still is a DOOR: tap it and the full looping demo opens (the same card the workout
             uses), so "what is this exercise" is answered without leaving the build. */}
         <Pressable accessibilityRole="button" accessibilityLabel={t('builder.showDemo')} hitSlop={8} onPress={onDemo}>
-          <MotionThumb exerciseId={exerciseId} size={48} figure={figure} style={styles.liftThumb} />
+          <MotionThumb exerciseId={exerciseId} size={48} figure={figure} tone="stage" style={styles.liftThumb} />
         </Pressable>
         <View style={styles.liftText}>
           <Text style={styles.liftName} numberOfLines={2}>{bidi(exerciseDisplayName(exerciseId))}</Text>
           <Legend size={17} track={0.06}>{ex ? `${t(`muscle.${ex.muscle}`)} · ${t(`equipment.${ex.equipment}`, { defaultValue: ex.equipment })}` : ''}</Legend>
+          {/* ⛔ FOR-MODE: THE PRESCRIPTION TAKES A SECOND LINE (walked on web, 2026-09-17). `4 × 8–12`
+              beside the name squeezed "לחיצת כתפיים במשקולות יד" into three lines and broke "יד"
+              mid-word — a row may not break its most important element to protect its least. */}
+          {chip ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={t('builder.sets')} hitSlop={10} onPress={onToggleSets} style={[styles.setsChip, styles.setsChipUnder]}>
+              <Text style={styles.setsFigure}>{chip}</Text>
+            </Pressable>
+          ) : null}
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('builder.sets')} hitSlop={10} onPress={onToggleSets} style={styles.setsChip}>
-          <Text style={styles.setsFigure}>{`${sets}×`}</Text>
-        </Pressable>
+        {chip ? null : (
+          <Pressable accessibilityRole="button" accessibilityLabel={t('builder.sets')} hitSlop={10} onPress={onToggleSets} style={styles.setsChip}>
+            <Text style={styles.setsFigure}>{`${sets}×`}</Text>
+          </Pressable>
+        )}
         {/*
           ════ ⛔ FOUR IDENTICAL CONTROLS, AND ONE OF THEM DELETES A LIFT (2026-08-26) ════
 
@@ -297,6 +318,7 @@ function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggle
           </Pressable>
         </View>
       </View>
+      {note ? <Text style={styles.coachNoteLine}>{bidi(note)}</Text> : null}
       {expanded ? (
         <View style={styles.setsStrip} key={`sets-${dayIdx}-${slotIdx}`}>
           {Array.from({ length: BUILDER_SETS_MAX - BUILDER_SETS_MIN + 1 }, (_, i) => i + BUILDER_SETS_MIN).map((n) => (
@@ -313,6 +335,84 @@ function LiftRow({ dayIdx, slotIdx, exerciseId, sets, figure, expanded, onToggle
         </View>
       ) : null}
     </View>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────── the coach's lift sheet (for-mode) */
+
+/**
+ * ════ ONE LIFT, AS A COACH PRESCRIBES IT (the coach track, 2026-09-17) ════
+ *
+ * The self-built week edits sets on the row and nothing else; a coach writes three things on a lift
+ * — how many sets, in what rep band, and at most one short note (law 7: a note, not a chat). One
+ * sheet holds all three so the row stays a row. The band is stepped, never typed: the wire takes
+ * integers 1..50 with low ≤ high, and a stepper cannot produce anything else. The note is refused
+ * past 140 characters by the field itself, and the counter says where the edge is before she meets it.
+ */
+function CoachLiftSheet({ exerciseId, sets, band, note, onSets, onBand, onNote, onClose }: {
+  exerciseId: string;
+  sets: number;
+  band: [number, number];
+  note: string;
+  onSets: (n: number) => void;
+  onBand: (band: [number, number]) => void;
+  onNote: (note: string) => void;
+  onClose: () => void;
+}) {
+  const { t } = useCopy();
+  const [text, setText] = useState(note);
+  const close = () => { onNote(text); onClose(); };
+  const [lo, hi] = band;
+  /* ⚠️ AN LTR ISLAND, built the only way that holds on both platforms (`the-ltr-island-lesson`):
+     a range reads low → high left to right in every language, so the row reverses under RTL. */
+  const island = { flexDirection: (rtl ? 'row-reverse' : 'row') as 'row' | 'row-reverse' };
+  const stepper = (value: number, set: (v: number) => void, label: string) => (
+    <View style={[styles.bandStepper, island]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label} −`} hitSlop={8} onPress={() => set(value - 1)} style={styles.bandStep}>
+        <Icon name="minus" size={18} color={color.textPrimary} strokeWidth={2} />
+      </Pressable>
+      <Text style={styles.bandFigure}>{String(value)}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label} +`} hitSlop={8} onPress={() => set(value + 1)} style={styles.bandStep}>
+        <Icon name="plus" size={18} color={color.textPrimary} strokeWidth={2} />
+      </Pressable>
+    </View>
+  );
+  return (
+    <BottomSheet onClose={close}>
+      <Text style={styles.coachSheetName}>{bidi(exerciseDisplayName(exerciseId))}</Text>
+      <Text style={styles.coachSheetLabel}>{t('coachTrack.coach.pen.sets')}</Text>
+      <View style={styles.setsStrip}>
+        {Array.from({ length: BUILDER_SETS_MAX - BUILDER_SETS_MIN + 1 }, (_, i) => i + BUILDER_SETS_MIN).map((n) => (
+          <Pressable
+            key={n}
+            accessibilityRole="button"
+            accessibilityLabel={`${n} ${t('builder.sets')}`}
+            onPress={() => onSets(n)}
+            style={[styles.setsCell, n === sets && styles.setsCellOn]}
+          >
+            <Text style={[styles.setsCellText, n === sets && styles.setsCellTextOn]}>{n}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Text style={styles.coachSheetLabel}>{t('coachTrack.coach.pen.band')}</Text>
+      <View style={[styles.bandRow, island]}>
+        {stepper(lo, (v) => onBand([v, Math.max(v, hi)]), t('coachTrack.coach.pen.bandLow'))}
+        <Text style={styles.bandDash}>–</Text>
+        {stepper(hi, (v) => onBand([Math.min(lo, v), v]), t('coachTrack.coach.pen.bandHigh'))}
+      </View>
+      <TextField
+        block
+        label={t('coachTrack.coach.pen.note')}
+        value={text}
+        onChangeText={setText}
+        placeholder={t('coachTrack.coach.pen.notePlaceholder')}
+        maxLength={COACH_WIRE.noteMax}
+        multiline
+        inputStyle={styles.coachNoteInput}
+      />
+      <Legend size={17} track={0.06} style={styles.coachNoteCount}>{`${text.length} / ${COACH_WIRE.noteMax}`}</Legend>
+      <Button block label={t('coachTrack.coach.pen.done')} onPress={close} style={styles.reviewClose} />
+    </BottomSheet>
   );
 }
 
@@ -463,6 +563,39 @@ export interface PlanBuilderViewProps {
   /** What she wrote in the coach box on the Program tab, when that is how the review was opened. */
   reviewAsk?: string;
   onReviewClose: () => void;
+  /** ⛔ The coach track, law 5: a LINKED coach's week — the AI review door is not drawn at all. */
+  coachLocked?: boolean;
+  /**
+   * ⛔ THE COACH TRACK'S FOR-MODE (2026-09-17) — the same pen, writing SOMEBODY ELSE'S week.
+   *
+   * Present ⇒ the header says who it is for and what is known of her, the doors are the coach's four
+   * (write it, a sentence to the model from HER facts, a photographed page, a template), every lift
+   * carries a band and a note, and SAVE becomes SEND. Everything that is about the athlete holding
+   * the phone is gone: the ownership chips, the hybrid note, the pen-back, the AI review, the library
+   * and "start from my week". The container (`screens/coach/CoachWeekBuilder`) owns every write, and
+   * none of them is to this phone's programme — `aCoachWritingForSomeoneNeverTouchesHisOwnWeek`.
+   */
+  forAthlete?: ForAthlete;
+}
+
+export interface ForAthlete {
+  name: string;
+  /** What is known of her, already worded — "אישה · 61 ק״ג · 4 ימים". */
+  facts: string;
+  /** The days she said she trains — where the ask step's wheel opens. */
+  days?: number;
+  onSend: () => void;
+  sending: boolean;
+  /** Why the week cannot be sent yet, each in words, drawn under the send button. */
+  problems: string[];
+  onSaveTemplate: () => void;
+  onPhoto: () => void;
+  photoBusy: boolean;
+  /** The coach's own saved weeks — the fourth door, above the proven shelves. */
+  templates: { name: string; days: number }[];
+  onStartCoachTemplate: (name: string) => void;
+  /** A sentence the doors must say — a photograph that could not be read, a model that did not answer. */
+  notice?: string;
 }
 
 export function PlanBuilderView(props: PlanBuilderViewProps) {
@@ -477,6 +610,9 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
   /* The ask step, which stands instead of the doors. Declared with the other sheet state because
      the branches below return early and hooks may not sit behind one. */
   const [asking, setAsking] = useState(!!props.previewAsking);
+  /* The coach track's for-mode: the lift whose sets, band and note are open in the sheet. */
+  const [liftFor, setLiftFor] = useState<{ day: number; slot: number } | null>(null);
+  const fa = props.forAthlete;
   const d = props.draft;
   /*
    * ⛔ IN THE INTAKE THERE ARE NO DOORS ANY MORE (founder 2026-09-07): *"צריך שיהיה רק החלק של 'בנה
@@ -513,7 +649,8 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
   if ((asking || intakeAsks) && props.onLetHushBuild) {
     return (
       <AskTheCoach
-        opensOn={DAYS_OPENS_ON}
+        opensOn={props.forAthlete?.days ?? DAYS_OPENS_ON}
+        {...(props.forAthlete ? { title: t('coachTrack.coach.pen.askTitle', { name: props.forAthlete.name }) } : {})}
         intake={!!props.intake}
         onBack={intakeAsks ? props.onExit : () => setAsking(false)}
         onAsk={(days, ask) => {
@@ -612,6 +749,68 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
      * עבורי"); she says what she will do herself ("אני אבנה מאפס"). The product never refers to
      * itself by name in a sentence she is meant to be speaking.
      */
+    /*
+     * ════ THE COACH'S FOUR DOORS (the coach track, 2026-09-17) ════
+     *
+     * The spec's screen, door for door: *I write it* — a blank page; *a sentence to the model* — the
+     * same ask step, answered from HER facts (days, sex, weight), never the coach's own profile; *a
+     * photographed page* the coach already has; *a template* — the coach's own saved weeks first,
+     * the proven shelves under them. "Start from my week" is not a door here: the week on this phone
+     * is the COACH's, and it has nothing to do with hers.
+     */
+    if (fa) {
+      return (
+        <SafeAreaView style={styles.screen} edges={['top']}>
+          <ScrollView contentContainerStyle={styles.doorsWrap}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={props.onExit} hitSlop={12} style={styles.back}>
+              <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
+            </Pressable>
+            <Arrive order={0}>
+              <Text style={styles.title}>{t('coachTrack.coach.pen.title', { name: fa.name })}</Text>
+              <Text style={styles.forSign}>{t('coachTrack.coach.pen.forLine', { name: fa.name, facts: fa.facts })}</Text>
+            </Arrive>
+            <Arrive order={1}>
+              {props.onLetHushBuild ? (
+                <View style={styles.door}>
+                  <Button block label={props.buildBusy ? t('ob.weekEngineBusy') : t('coachTrack.coach.pen.doorAi')} onPress={() => setAsking(true)} disabled={props.buildBusy || fa.photoBusy} />
+                  <Text style={styles.doorTag}>{t('coachTrack.coach.pen.doorAiTag', { name: fa.name })}</Text>
+                </View>
+              ) : null}
+              <View style={styles.door}>
+                <Button block variant="secondary" label={t('coachTrack.coach.pen.doorBlank')} onPress={props.onStartBlank} disabled={props.buildBusy || fa.photoBusy} />
+                <Text style={styles.doorTag}>{t('coachTrack.coach.pen.doorBlankTag')}</Text>
+              </View>
+              <View style={styles.door}>
+                <Button block variant="ghost" label={fa.photoBusy ? t('coachTrack.coach.pen.doorPhotoBusy') : t('coachTrack.coach.pen.doorPhoto')} onPress={fa.onPhoto} disabled={props.buildBusy || fa.photoBusy} />
+                <Text style={styles.doorTag}>{t('coachTrack.coach.pen.doorPhotoTag')}</Text>
+              </View>
+              {fa.notice ? <Text style={styles.forNotice}>{fa.notice}</Text> : null}
+            </Arrive>
+            {fa.templates.length > 0 ? (
+              <>
+                <Legend size={17} track={0.14} style={styles.tplLegend}>{t('coachTrack.coach.pen.yourTemplates')}</Legend>
+                {fa.templates.map((tpl) => (
+                  <Pressable
+                    key={tpl.name}
+                    accessibilityRole="button"
+                    accessibilityLabel={tpl.name}
+                    onPress={() => fa.onStartCoachTemplate(tpl.name)}
+                    style={({ pressed }) => [styles.tplCard, pressed && styles.tplCardPressed]}
+                  >
+                    <View style={styles.tplHead}>
+                      <Text style={styles.tplName}>{bidi(tpl.name)}</Text>
+                      <Text style={styles.tplTag}>{t('coachTrack.coach.pen.templateDays', { count: tpl.days })}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </>
+            ) : null}
+            {shelves}
+          </ScrollView>
+        </SafeAreaView>
+      );
+    }
+
     if (props.intake) {
       return (
         <OnboardingScaffold
@@ -659,11 +858,10 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
             />
             <Text style={styles.doorTag}>{t('ob.weekEngineTag')}</Text>
           </View>
-          <View style={styles.door}>
-            <Button block variant="ghost" label={t('ob.weekBlank')} onPress={props.onStartBlank} disabled={props.buildBusy} />
-            <Text style={styles.doorTag}>{t('ob.weekBlankTag')}</Text>
-          </View>
-          {shelves}
+          {/* ⛔ THE AI WRITES HER WEEK — AND ONLY THE AI (founder 2026-09-28: *"הבינה צריכה לבנות תוכנית
+              אימון בלבד בלי אימונים מוכנים מראש ובלי אפשרות של צילום"*, and of the blank page: *"כן תוריד
+              גם את התחל מדף ריק"*). The blank page and the proven shelves left the athlete's doors;
+              the coach track keeps its own four (`fa` above), because a coach writes for someone else. */}
         </OnboardingScaffold>
       );
     }
@@ -704,10 +902,9 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
                 door ("הכי כיף וקצר וקולע") and keeps the cream; the draft is the outlined second;
                 the blank page stays the quiet third. Three doors, three weights. */}
             <Button block variant={props.onLetHushBuild ? 'secondary' : 'primary'} label={t('builder.fromEngine')} onPress={props.onStartFromEngine} disabled={props.buildBusy} style={styles.doorBtn} />
-            <Button block variant="ghost" label={t('builder.fromBlank')} onPress={props.onStartBlank} disabled={props.buildBusy} style={styles.doorBtn} />
           </Arrive>
-
-          {shelves}
+          {/* ⛔ AND HERE TOO: no blank page, no shelf (founder 2026-09-28) — the model writes her week
+              from what she asks; she edits the week she has. The coach's chrome keeps both. */}
 
           {props.onLibrary ? (
             <Pressable
@@ -767,15 +964,33 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
         <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={props.onExit} hitSlop={12} style={styles.back}>
           <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
         </Pressable>
-        <Text style={styles.title}>{t('builder.title')}</Text>
-        <Text style={styles.subtitle}>{t('builder.subtitle')}</Text>
+        {fa ? (
+          <>
+            <Text style={styles.title}>{t('coachTrack.coach.pen.title', { name: fa.name })}</Text>
+            <Text style={styles.forSign}>{t('coachTrack.coach.pen.forLine', { name: fa.name, facts: fa.facts })}</Text>
+            {/* The week's name, as the trainee will read it over her card — ≤ 60, refused past it. */}
+            <TextField
+              block
+              label={t('coachTrack.coach.pen.weekTitle')}
+              value={d.title ?? ''}
+              onChangeText={(v) => props.onDraft(setWeekTitle(d, v))}
+              placeholder={t('coachTrack.coach.pen.weekTitlePlaceholder')}
+              maxLength={COACH_WIRE.titleMax}
+            />
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>{t('builder.title')}</Text>
+            <Text style={styles.subtitle}>{t('builder.subtitle')}</Text>
+          </>
+        )}
 
         {d.days.map((day: ProgramDay, di: number) => (
           <View key={day.id + di} style={styles.dayCard}>
             <View style={styles.dayHead}>
               <TextInput
                 style={styles.dayName}
-                value={day.name}
+                value={dayTitle(day.name)}
                 onChangeText={(name) => props.onDraft(renameDay(d, di, name))}
                 accessibilityLabel={t('builder.dayName')}
                 maxLength={24}
@@ -788,7 +1003,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
                     and before there is an account every day is hers by construction — a row of
                     chips all saying the same word is a label, not information. The CLOCK stays:
                     it is the one thing the steward can tell her about a day she just wrote. */}
-                {props.intake ? null : (
+                {props.intake || fa ? null : (
                   <View style={[styles.ownChip, props.ownedIds.has(day.id) && styles.ownChipHers]}>
                     <Text style={[styles.ownChipText, props.ownedIds.has(day.id) && styles.ownChipTextHers]}>
                       {props.ownedIds.has(day.id) ? t('builder.dayYours') : t('builder.dayEngine')}
@@ -808,8 +1023,9 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
                   sets={s.setCount}
                   figure={props.figure}
                   onDemo={() => setDemoFor(s.exerciseId)}
-                  expanded={setsFor === `${di}:${si}`}
-                  onToggleSets={() => setSetsFor(setsFor === `${di}:${si}` ? null : `${di}:${si}`)}
+                  expanded={!fa && setsFor === `${di}:${si}`}
+                  onToggleSets={() => (fa ? setLiftFor({ day: di, slot: si }) : setSetsFor(setsFor === `${di}:${si}` ? null : `${di}:${si}`))}
+                  {...(fa ? { chip: `${s.setCount} × ${bandShown(s)[0]}–${bandShown(s)[1]}`, ...(s.coachNote ? { note: s.coachNote } : {}) } : {})}
                   onSets={(n) => { props.onDraft(setLiftSets(d, di, si, n)); setSetsFor(null); }}
                   onMove={(dir) => props.onDraft(moveLift(d, di, si, si + dir))}
                   onRemove={() => props.onDraft(removeLift(d, di, si))}
@@ -892,18 +1108,24 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
             `not_configured` when there is none — and there is none until `ProgramCreated` writes it.
             The button could only ever have shown her a failure. It is one tap away on the Program
             tab from her first minute in the app. */}
-        {props.intake ? null : (
-          <Button
-            block
-            variant="ghost"
-            label={props.aiBusy ? t('builder.aiBusy') : t('builder.aiReview')}
-            onPress={props.onAiReview}
-            disabled={props.aiBusy}
-            style={styles.aiBtn}
-          />
+        {/* For-mode draws no review: the model's opinion of a week is a door of the athlete's own pen,
+            and the coach's pen already has the model behind its first door (the ask, from HER facts). */}
+        {fa ? null : (
+          <>
+            {props.intake || props.coachLocked ? null : (
+              <Button
+                block
+                variant="ghost"
+                label={props.aiBusy ? t('builder.aiBusy') : t('builder.aiReview')}
+                onPress={props.onAiReview}
+                disabled={props.aiBusy}
+                style={styles.aiBtn}
+              />
+            )}
+          </>
         )}
 
-        {!props.savedIsAuthored && props.ownedIds.size > 0 && props.ownedIds.size < d.days.length ? (
+        {!fa && !props.savedIsAuthored && props.ownedIds.size > 0 && props.ownedIds.size < d.days.length ? (
           <Text style={styles.hybridNote}>{t('builder.hybridNote')}</Text>
         ) : null}
 
@@ -916,10 +1138,33 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
           step, which onboarding may never have. Same guard as the body map's S-3, and for the same
           reason: an unbuildable answer never leaves the screen, and the screen says what is missing.
         */}
-        <Button block label={t(props.intake ? 'ob.weekMine' : 'builder.save')} onPress={props.onSave} disabled={!sealable} style={styles.saveBtn} />
-        {sealable ? null : <Text style={styles.emptyNote}>{t('builder.needsALift')}</Text>}
+        {fa ? (
+          /* ⛔ SEND REPLACES SAVE (the spec, 2026-09-17). Moss, because it is a decision leaving the
+             desk; every reason it cannot leave yet is said under it, in words, with the day it is about. */
+          <>
+            <Button
+              block
+              variant="signal"
+              label={fa.sending ? t('coachTrack.coach.pen.sending') : t('coachTrack.coach.pen.send', { name: fa.name })}
+              onPress={fa.onSend}
+              disabled={!sealable || fa.sending}
+              style={styles.saveBtn}
+            />
+            {sealable ? null : <Text style={styles.emptyNote}>{t('builder.needsALift')}</Text>}
+            {fa.problems.map((p, i) => (
+              <Text key={i} style={styles.forProblem}>{p}</Text>
+            ))}
+            <Text style={styles.forLoads}>{t('coachTrack.coach.pen.loadsNote')}</Text>
+            <Button block variant="ghost" label={t('coachTrack.coach.pen.saveTemplate')} onPress={fa.onSaveTemplate} disabled={!sealable} />
+          </>
+        ) : (
+          <>
+            <Button block label={t(props.intake ? 'ob.weekMine' : 'builder.save')} onPress={props.onSave} disabled={!sealable} style={styles.saveBtn} />
+            {sealable ? null : <Text style={styles.emptyNote}>{t('builder.needsALift')}</Text>}
+          </>
+        )}
 
-        {props.savedIsAuthored ? (
+        {!fa && props.savedIsAuthored ? (
           confirmRevert ? (
             <View style={styles.revertConfirm}>
               <Text style={styles.revertBody}>{t('builder.revertBody')}</Text>
@@ -953,6 +1198,20 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
           taken={new Set(d.days[allFor.day].slots.map((s) => s.exerciseId))}
           onPick={(id) => { props.onDraft(replaceLift(d, allFor.day, allFor.slot, id)); setAllFor(null); }}
           onClose={() => setAllFor(null)}
+        />
+      ) : null}
+
+      {fa && liftFor && d.days[liftFor.day]?.slots[liftFor.slot] ? (
+        <CoachLiftSheet
+          key={`${liftFor.day}:${liftFor.slot}`}
+          exerciseId={d.days[liftFor.day].slots[liftFor.slot].exerciseId}
+          sets={d.days[liftFor.day].slots[liftFor.slot].setCount}
+          band={bandShown(d.days[liftFor.day].slots[liftFor.slot])}
+          note={d.days[liftFor.day].slots[liftFor.slot].coachNote ?? ''}
+          onSets={(n) => props.onDraft(setLiftSets(d, liftFor.day, liftFor.slot, n))}
+          onBand={(band) => props.onDraft(setCoachBand(d, liftFor.day, liftFor.slot, band))}
+          onNote={(note) => props.onDraft(setLiftNote(d, liftFor.day, liftFor.slot, note))}
+          onClose={() => setLiftFor(null)}
         />
       ) : null}
 
@@ -1090,7 +1349,8 @@ export function PlanBuilder({ navigation, route }: Props) {
         .then((p) => {
           if (!alive) return;
           clearTimeout(late);
-          if (p && (p.authored ?? 'engine') === 'athlete_or_coach' && inputs) {
+          // A coach's week (the coach track, 2026-09-17) is a week she already has, exactly like one she brought.
+          if (p && (p.authored ?? 'engine') !== 'engine' && inputs) {
             navigation.replace('BuildingProgramme', {
               inputs: { ...inputs, daysPerWeek: p.days.filter((d) => !d.isRest).length },
               authored: true,
@@ -1105,6 +1365,8 @@ export function PlanBuilder({ navigation, route }: Props) {
     void db.loadProgram().then((p) => {
       if (!alive) return;
       setSaved(p ?? null);
+      // ⛔ The coach track, law 5 — asked of the week on disk and the link on disk, like every gate.
+      if (p?.authored === 'coach') void loadCoachLink().then((l) => { if (alive) setCoachLocked(weekIsLockedToCoach(p, !!l)); });
       // A week SHE already owns opens straight into editing — the doors are for taking over.
       if ((p?.authored ?? 'engine') === 'athlete_or_coach') setDraft(draftFromProgram(p as Program));
       setLoaded(true);
@@ -1172,9 +1434,15 @@ export function PlanBuilder({ navigation, route }: Props) {
   const dayNamer = useCallback((letter: string) => t('builder.dayNamed', { letter }), [t]);
 
   const [reviewOpen, setReviewOpen] = useState(false);
+  /*
+   * ⛔ THE COACH TRACK, LAW 5 — THE AI REVIEW OFFERS NO WEEK EDITS ON A COACH'S WEEK (2026-09-17).
+   * While she is linked, only the coach changes the week: no review, no "let the coach AI build",
+   * and `saveBuiltProgram` refuses the save besides (`appStore.lockedToCoach`).
+   */
+  const [coachLocked, setCoachLocked] = useState(false);
   const onAiReview = useCallback(() => {
-    if (draft) setReviewOpen(true);
-  }, [draft]);
+    if (draft && !coachLocked) setReviewOpen(true);
+  }, [draft, coachLocked]);
   /*
    * ⛔ SHE WROTE TO THE COACH AND THE SCREEN OPENS ON THE ANSWER (founder, 2026-09-16: *"כל שינוי
    * שרוצים לבצע פשוט כותבים שם לבינה"*).
@@ -1186,13 +1454,13 @@ export function PlanBuilder({ navigation, route }: Props) {
   const coachAsk = route?.params?.ask?.trim() || '';
   const askedOnce = useRef(false);
   useEffect(() => {
-    if (!coachAsk || askedOnce.current || !draft) return;
+    if (!coachAsk || askedOnce.current || !draft || coachLocked) return;
     askedOnce.current = true;
     setReviewOpen(true);
-  }, [coachAsk, draft]);
+  }, [coachAsk, draft, coachLocked]);
 
   /** Whoever can answer for her: the relay inside the intake, the stored profile outside it. */
-  const canBuildForHer = !!(inputs || app.profile);
+  const canBuildForHer = !!(inputs || app.profile) && !coachLocked;
   const letTheModelBuild = useCallback(
     (daysPerWeek: number, ask: string) => {
       /*
@@ -1263,6 +1531,7 @@ export function PlanBuilder({ navigation, route }: Props) {
         daysPerWeek,
         sex: her.sex === 'female' ? 'female' : 'male',
         ...(her.weightKg != null ? { weightKg: her.weightKg } : {}),
+        ...(her.experience ? { experience: her.experience } : {}),
         ...(ask.trim() ? { ask: ask.trim() } : {}),
       })
         .then((res) => {
@@ -1359,7 +1628,8 @@ export function PlanBuilder({ navigation, route }: Props) {
       onRevert={onRevert}
       onAiReview={onAiReview}
       aiBusy={aiBusy}
-      reviewOpen={reviewOpen}
+      reviewOpen={reviewOpen && !coachLocked}
+      coachLocked={coachLocked}
       {...(coachAsk ? { reviewAsk: coachAsk } : {})}
       onReviewClose={() => setReviewOpen(false)}
     />
@@ -1532,4 +1802,26 @@ const styles = StyleSheet.create({
   reviewVerb: { fontFamily: font.sansSemibold, fontSize: 17, lineHeight: 22, color: color.textPrimary, textAlign: 'left' },
   reviewWhy: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
   reviewClose: { marginTop: 10 },
+
+  /* ════ the coach track's for-mode (2026-09-17) ════ */
+  setsChipUnder: { alignSelf: 'flex-start', marginTop: 6 },
+  /* "for Dana · woman · 61 kg · 4 days" — the coach's own voice, the serif, one rung under the title. */
+  forSign: { fontFamily: font.serif, fontSize: 18, lineHeight: 25, color: color.textSecondary, textAlign: 'left' },
+  forNotice: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: color.textSecondary, textAlign: 'left', marginTop: 4 },
+  /* A reason the week cannot leave yet — muted, under the control it refuses, never a scolding. */
+  forProblem: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  forLoads: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'center', marginTop: 2 },
+  /* The note sits under its lift in moss — the same mark the trainee meets it in. */
+  coachNoteLine: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.accentText, textAlign: 'left', paddingBottom: 8, marginTop: -4 },
+  /* An exercise name is set in the UI face, as the set stage sets it (design audit 2026-09-29) —
+     the serif is the coach's voice, and a lift's name is not something the coach says. */
+  coachSheetName: { fontFamily: font.sansSemibold, fontSize: 22, lineHeight: 28, color: color.textPrimary, textAlign: 'left', marginBottom: 12 },
+  coachSheetLabel: { fontFamily: font.sansSemibold, fontSize: 17, color: color.textSecondary, textAlign: 'left', marginTop: 6, marginBottom: 8 },
+  bandRow: { alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 14 },
+  bandStepper: { alignItems: 'center', gap: 10, borderWidth: 1, borderColor: color.border, borderRadius: radius.full, paddingHorizontal: 8, paddingVertical: 4 },
+  bandStep: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  bandFigure: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 24, minWidth: 34, color: color.textPrimary, textAlign: 'center' },
+  bandDash: { fontFamily: font.monoMedium, fontSize: 24, color: color.textMuted, textAlign: 'center' },
+  coachNoteInput: { fontSize: 19, lineHeight: 26, minHeight: 64, textAlignVertical: 'top' },
+  coachNoteCount: { alignSelf: 'flex-end', marginTop: 4 },
 });

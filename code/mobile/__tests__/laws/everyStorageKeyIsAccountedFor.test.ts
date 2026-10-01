@@ -58,6 +58,8 @@ const WIPED_BY_ERASER: Record<string, { declaredIn: string; eraser: string }> = 
  * retired (`cancelRetiredNotes` / `cancelAll` is).
  */
 const NOT_STORAGE = new Set([
+  'hush.week_closed', // the rotation's one-shot week-closed note (2026-09-28) — a notification id
+  'hush.trial_ending', // the trial-ending note's identifier (2026-09-28) — a notification id, nothing persisted
   'hush.weekly_program_ready',
   'hush.quarterly_report',
   'hush.rest_warn',

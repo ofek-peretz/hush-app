@@ -36,6 +36,35 @@ function slab(cx: number, w: number, y: number, opacity: number): Primitive {
   };
 }
 
+/**
+ * ⛔ A STACK LIFTS AS A BLOCK, NOT A PLATE (2026-09-30).
+ *
+ * Every tower used to lift ONE slab off the top and leave the rest behind, which is not what a
+ * selectorized stack can do: the selector stem runs down through the plates, the pin goes into the
+ * one she chose, and that plate and EVERY plate above it rise together. The drawing now lifts the
+ * block — the top plate and the three under it — and shows the pin itself, a short stub standing
+ * out of the lowest lifted plate on the side facing the athlete. The block's top is the same point
+ * the lone slab's was, so every cable attachment and every 1:1 travel is unchanged; at rest the
+ * stack is the same unbroken run it always was.
+ *
+ * `slots` are the tops of every plate position from the top of the stack down; `pinSide` is +1 when
+ * the athlete stands to the right of the tower.
+ */
+const PINNED = 4;
+function stackRun(cx: number, w: number, slots: number[], lift: number, rest: number, loaded: number, pinSide: 1 | -1): Primitive[] {
+  const k = Math.max(1, Math.min(PINNED, slots.length - 2));
+  const out: Primitive[] = [];
+  for (let i = k; i < slots.length; i++) out.push(slab(cx, w, slots[i], rest));
+  for (let i = 0; i < k; i++) out.push(slab(cx, w, slots[i] - lift, loaded));
+  const pinY = slots[k - 1] - lift + 1.75;
+  const edge = cx + (pinSide * w) / 2;
+  out.push(
+    { kind: 'line', a: { x: edge - pinSide * 1.5, y: pinY }, b: { x: edge + pinSide * 3.4, y: pinY }, w: 1.5, color: 'ink2', cap: 'round' },
+    { kind: 'circle', c: { x: edge + pinSide * 3.9, y: pinY }, r: 1.4, fill: 'ink2' }, // the pin's knob
+  );
+  return out;
+}
+
 // ── the shared resistance statement ──────────────────────────────────────────────
 
 export interface TowerSpec {
@@ -67,11 +96,13 @@ export function stackTower(t: TowerSpec, lift: number): { prims: Primitive[]; pl
     { kind: 'line', a: { x: cx - slabW / 2 + 2.5, y: t.capY + 3 }, b: { x: cx - slabW / 2 + 2.5, y: FLOOR }, w: 1.2, color: 'ink3', opacity: 0.6 },
     { kind: 'line', a: { x: cx + slabW / 2 - 2.5, y: t.capY + 3 }, b: { x: cx + slabW / 2 - 2.5, y: FLOOR }, w: 1.2, color: 'ink3', opacity: 0.6 },
   ];
-  // the resting run (unselected plates stay put)…
-  for (let y = t.stackTopY + 5; y + 3.5 <= FLOOR - 0.5; y += 5) prims.push(slab(cx, slabW, y, 0.4));
-  // …and the selected plate — the load — riding the cable
+  // the resting run stays put; the block above the pin — the load — rides the cable
+  const slots: number[] = [];
+  for (let y = t.stackTopY; y + 3.5 <= FLOOR - 0.5; y += 5) slots.push(y);
+  /* the pin faces the athlete: towers stand either side of her, and the authoring space's centre
+     (the figure's column) is x≈176 */
+  prims.push(...stackRun(cx, slabW, slots, lift, 0.4, 0.75, cx > 176 ? -1 : 1));
   const plateY = t.stackTopY - lift;
-  prims.push(slab(cx, slabW, plateY, 0.75));
   return { prims, plateTop: { x: cx, y: plateY } };
 }
 
@@ -363,7 +394,9 @@ export function facePullStation(p: {
    * mast on its own. A real column carries ~85 cm of plates and the pull uses most of that travel;
    * drawn at true height the same lift reads as a stack doing its job.
    */
-  for (let y = 120; y + 3.5 <= FLOOR - 0.5; y += 5) prims.push(slab(mastX, halfPlate * 2, y, 0.35));
-  prims.push(slab(mastX, halfPlate * 2, Math.max(p.pulley.y + 12, 115 - p.lift), 0.6));
+  const slots: number[] = [];
+  for (let y = 115; y + 3.5 <= FLOOR - 0.5; y += 5) slots.push(y);
+  const lifted = 115 - Math.max(p.pulley.y + 12, 115 - p.lift);
+  prims.push(...stackRun(mastX, halfPlate * 2, slots, lifted, 0.35, 0.6, 1));
   return prims;
 }

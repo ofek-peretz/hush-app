@@ -24,7 +24,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Arrive, Climb, Legend, Button, TextField } from '@/components/ds';
+import { Arrive, Climb, Legend, Button, TextField, opticalFigure } from '@/components/ds';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
@@ -355,7 +355,7 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
         </View>
         {!empty ? (
           <View style={styles.standRow}>
-            <Text style={styles.stand}>{conv(climb.current)}</Text>
+            <Text style={styles.stand}>{opticalFigure(conv(climb.current))}</Text>
             <Text style={styles.standUnit}>{unit}</Text>
           </View>
         ) : null}
@@ -403,11 +403,13 @@ export function LiftDetailView({ exerciseId, units, climb, moments, changes, ban
         <View style={styles.measuredRow}>
           <Legend size={17} track={0.18}>{t('progress.measuredStrength')}</Legend>
           <View style={styles.measuredFig}>
-            <Text style={styles.measuredNum}>{conv(estimate.e1rm)}</Text>
+            <Text style={styles.measuredNum}>{opticalFigure(conv(estimate.e1rm))}</Text>
             <Text style={styles.measuredUnit}>{unit}</Text>
           </View>
           <Text style={styles.measuredFrom}>
-            {t('progress.measuredFrom', { load: conv(estimate.load), unit, reps: estimate.reps, date: shortDate(estimate.atMs) })}
+            {/* The set is ONE left-to-right measurement (design audit 2026-09-29): left loose, "47.5 kg ×
+                8" and the date's "29" merged into one run and the line came out scrambled in Hebrew. */}
+            {t('progress.measuredFrom', { load: `⁦${conv(estimate.load)}`, unit, reps: `${estimate.reps}⁩`, date: shortDate(estimate.atMs) })}
           </Text>
         </View>
       ) : null}
@@ -756,7 +758,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, paddingHorizontal: 30, paddingTop: 16 },
   titleLeft: { flexShrink: 1, gap: 5 },
   // The lift is named in the coach's serif at 34 — a screen headline, under the 40 of a surface.
-  name: { fontFamily: font.serif, fontSize: 34, lineHeight: 36, color: color.textPrimary, textAlign: 'left' },
+  /* An exercise name is set in the UI face, as the set stage sets it (design audit 2026-09-29) —
+     the serif is the coach's voice, and a lift's name is not something the coach says. */
+  name: { fontFamily: font.sansSemibold, fontSize: 34, lineHeight: 40, color: color.textPrimary, textAlign: 'left' },
   standRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, flexShrink: 0 },
   stand: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 46, lineHeight: 47, letterSpacing: -1.38, color: color.textPrimary, textAlign: 'left' },
   standUnit: { fontFamily: font.sansMedium, fontSize: textScale.base, color: color.textMuted, textAlign: 'left' },

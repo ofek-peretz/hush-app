@@ -84,7 +84,15 @@ describe('the thinking level follows who is waiting', () => {
 describe('and the Worker treats that level as the fast path', () => {
   it('⛔ `low` is what selects the short hedge and the short budget', () => {
     // The app asking for `low` buys nothing unless the Worker branches on it. This is the pair.
-    expect(worker()).toContain("const conversational = call.think === 'low' || call.think === 'minimal';");
+    /*
+     * ⛔ THE RULE IS PINNED, NOT ITS SPELLING (2026-09-18). This read `call.think` verbatim until the
+     * bake-off gave the Worker a local `think` — the level the PROBE header may override for one
+     * measured call, which equals `call.think` on every production request. A law that pins a
+     * variable's name fails on a rename that changes nothing, and a red law nobody believes is worse
+     * than no law. So: whatever it is called, the fast path is still chosen by `low` OR `minimal`,
+     * and both hedge lengths below still hang off it.
+     */
+    expect(worker()).toMatch(/const conversational = \w+(\.think)? === 'low' \|\| \w+(\.think)? === 'minimal';/);
   });
 
   it('and the fast branch hedges in seconds, not tens of seconds', () => {

@@ -10,7 +10,8 @@
  *
  * The sheet it sends is the coach's ordinary sheet: her profile, her history, and the DRAFT as
  * `facts.programme` (via `coachPlanFromProgram`, so the coach sees exactly the week she is looking
- * at, engine-priced loads included). No conversation state — a review is one question.
+ * at, engine-priced loads included), each day numbered as she has it (`reviewPrompt.numberedDays`).
+ * No conversation state — a review is one question.
  */
 
 //
@@ -19,7 +20,7 @@ import { db } from '@/data/local/db';
 import { fixtureModel } from '@/data/api/fixtureModel';
 import type { Program } from '@/data/local/models';
 import { coachFacts } from '@/domain/coachFacts';
-import { coachRequest } from '@/domain/coachPrompt';
+import { reviewRequest } from '@/domain/reviewPrompt';
 import { coachPlanFromProgram, bandFromChoice } from '@/domain/enginePlan';
 import { parsePlanReview, PLAN_REVIEW_SCHEMA, type PlanReview } from '@/domain/planReview';
 import { currentLocale } from '@/i18n';
@@ -60,8 +61,10 @@ export async function requestPlanReview(draft: Program, ask?: string): Promise<P
   });
 
   const said = (ask ?? '').trim().slice(0, 400);
+  /* ⛔ ITS OWN PROMPT SINCE 2026-09-28 (`domain/reviewPrompt`): what is true about her sheet and the
+     five edits, and nothing about what to decide — the founder's ruling is in that file's header. */
   const reply = await askCoach(
-    coachRequest({ facts, ask: { kind: 'plan_review', ...(said ? { ask: said } : {}) }, cache: true }),
+    reviewRequest({ facts, draft, ...(said ? { ask: said } : {}) }),
     PLAN_REVIEW_SCHEMA,
     undefined,
     undefined,

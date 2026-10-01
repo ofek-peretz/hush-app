@@ -114,6 +114,8 @@ describe('the build carries the App Group — or says exactly why it does not ye
 describe('the widget is told when the week moves', () => {
   it('boot and every completed session both reload it — fire-and-forget', () => {
     const app = read('src/state/stores/appStore.tsx');
-    expect(app.split('void updateHomeWidget()').length - 1).toBe(2);
+    // …and a third since the rotation (2026-09-28): the moment a cycle closes, which is AFTER the
+    // post-session reload ran, so the widget would otherwise say "week done" until the next boot.
+    expect(app.split('void updateHomeWidget()').length - 1).toBe(3);
   });
 });

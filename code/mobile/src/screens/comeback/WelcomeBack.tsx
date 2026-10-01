@@ -130,7 +130,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowRuled: { borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.1)', paddingTop: 12 },
   // The lift is named in the serif; its load is the measured figure beside it.
-  liftName: { flexShrink: 1, fontFamily: font.serif, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
+  /* An exercise name is set in the UI face, as the set stage sets it (design audit 2026-09-29) —
+     the serif is the coach's voice, and a lift's name is not something the coach says. */
+  liftName: { flexShrink: 1, fontFamily: font.sansMedium, fontSize: 17, color: color.textPrimary, textAlign: 'left' },
   loadRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   load: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 20, color: color.textPrimary, textAlign: 'left' },
   unit: { fontFamily: font.mono, fontSize: 17, color: color.textMuted, textAlign: 'left' },

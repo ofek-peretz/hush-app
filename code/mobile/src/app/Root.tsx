@@ -52,6 +52,7 @@ import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
 import { PlanBuilder } from '@/screens/plan/PlanBuilder';
 import { ImportPlan } from '@/screens/import/ImportPlan';
 import { SessionFlow } from '@/screens/session/SessionFlow';
+import { FigureFlightHost } from '@/components/FigureFlight';
 import { WellDone } from '@/screens/session/WellDone';
 import { History } from '@/screens/history/History';
 import { FreeLogScreen } from '@/screens/history/FreeLog';
@@ -68,7 +69,21 @@ import { ShareCardModal } from '@/screens/share/ShareCardModal';
 import { PreWorkoutScreen } from '@/screens/plan/PreWorkoutScreen';
 import { SharePlanScreen } from '@/screens/plan/SharePlanScreen';
 import { Together } from '@/screens/together/Together';
+import { CrewScreen } from '@/screens/crew/CrewScreen';
+import { circleTabShown, setPendingCircleCode } from '@/state/stores/circleStore';
+import { circleCodeFromUrl } from '@/domain/circle';
 import { PlanReceivedScreen } from '@/screens/plan/PlanReceivedScreen';
+import { CoachJoin } from '@/screens/trainee/CoachJoin';
+import { MyCoach } from '@/screens/trainee/MyCoach';
+import { inviteCodeFromUrl } from '@/domain/coachTrackAthlete';
+import { setPendingCoachInvite } from '@/state/pendingCoachInvite';
+import { Athletes } from '@/screens/coach/Athletes';
+import { AthleteDetail } from '@/screens/coach/AthleteDetail';
+import { CoachEnroll } from '@/screens/coach/CoachEnroll';
+import { CoachPlans } from '@/screens/coach/CoachPlans';
+import { CoachTemplates } from '@/screens/coach/CoachTemplates';
+import { CoachWeekBuilder } from '@/screens/coach/CoachWeekBuilder';
+import { CoachTrackContext } from '@/state/stores/coachStore';
 
 const OnboardingStack = createNativeStackNavigator<OnboardingParamList>();
 const MainStack = createNativeStackNavigator<MainParamList>();
@@ -101,6 +116,9 @@ function CardioTab() {
  *  deeper is pushed above them. The Cardio tab shows the READY stage at rest; "Start cardio" opens
  *  the Main-stack live stage, so a live run has no tab bar in its tree. */
 function HomeTabs() {
+  /* ⛔ THE FIFTH TAB (the coach track, ruling 2): drawn only while `/coach/me` says this account is a
+     coach. Read through the raw context, so a tree mounted without the provider has four tabs. */
+  const isCoach = !!React.useContext(CoachTrackContext)?.coach;
   return (
     <Tabs.Navigator
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: color.bgBase } }}
@@ -108,8 +126,15 @@ function HomeTabs() {
     >
       <Tabs.Screen name="Today" component={Home} />
       <Tabs.Screen name="Program" component={ProgramTab} />
-      <Tabs.Screen name="Cardio" component={CardioTab} />
+      {/* ⛔ THE CARDIO TAB IS HIDDEN (founder 2026-09-29: *"אפשר להסתיר את הפקד של קרדיו"*). The
+          screen, the live stage and every run inside a workout stay; only the door in the bar is
+          gone. `CardioTab` is kept above, registered nowhere, for the day it returns. */}
+      {/* ✦ THE CIRCLE (founder 2026-09-29) — in Cardio's slot, drawn wherever the circle exists in
+          this build (the identity URL, or the web fixture). A build with no server has no tab — never
+          a door to nowhere. */}
+      {circleTabShown() ? <Tabs.Screen name="Crew" component={CrewScreen} /> : null}
       <Tabs.Screen name="Progress" component={Progress} />
+      {isCoach ? <Tabs.Screen name="Athletes" component={Athletes} /> : null}
       {/* ⛔ `You` IS NOT A TAB (founder 2026-09-16) — the corner disc on Today opens it, and the bar
           is four surfaces of training. Registered on the main stack below. */}
     </Tabs.Navigator>
@@ -152,6 +177,9 @@ function OnboardingNavigator() {
           nowhere else. Registered here because a route must exist on the stack that pushes it;
           its position in this list carries no meaning (only the first child is the initial). */}
       <OnboardingStack.Screen name="Authentication" component={Authentication} />
+      {/* The coach track's invite inside the intake (2026-09-17) — About you's code line, or a link
+          that arrived before a profile existed. Registered in BOTH stacks, like the builder. */}
+      <OnboardingStack.Screen name="CoachJoin" component={CoachJoin} />
       {/* ⛔ HEALTH SECOND, THE WEEK LAST (founder 2026-08-10, and 2026-08-29). The last answering
           step is the one that shapes the week, because the peak belongs beside the payoff — a
           permission ask was a fine thing to put in front of a conversation and a poor thing to put
@@ -242,6 +270,9 @@ function MainNavigator() {
       {/* History folded out of the tab bar in v7 — it opens from the Progress surface now. */}
       {/* Her own page — pushed from the corner disc on Today (founder 2026-09-16). */}
       <MainStack.Screen name="You" component={ProfileSheet} />
+      {/* The coach track, the trainee's side (2026-09-17): the invite a link opens, and her coach. */}
+      <MainStack.Screen name="CoachJoin" component={CoachJoin} />
+      <MainStack.Screen name="MyCoach" component={MyCoach} />
       <MainStack.Screen name="ExerciseLibrary" component={ExerciseLibrary} />
       {/* Same wheel, same reason — see the note on the onboarding registration. */}
       <MainStack.Screen name="PlanBuilder" component={PlanBuilder} options={{ fullScreenGestureEnabled: false }} />
@@ -278,6 +309,14 @@ function MainNavigator() {
       <MainStack.Screen name="CardioLive" component={Cardio} options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <MainStack.Screen name="CardioDetail" component={CardioDetail} />
       <MainStack.Screen name="WeeklyUpdate" component={WeeklyUpdate} />
+      {/* The coach track, the coach's side (2026-09-17): enrol, one trainee, the pen for her, the saved weeks. */}
+      <MainStack.Screen name="CoachEnroll" component={CoachEnroll} />
+      <MainStack.Screen name="AthleteDetail" component={AthleteDetail} />
+      <MainStack.Screen name="CoachWeekBuilder" component={CoachWeekBuilder} options={{ fullScreenGestureEnabled: false }} />
+      <MainStack.Screen name="CoachTemplates" component={CoachTemplates} />
+      {/* What a seat costs (ruling 1). A modal like the Paywall it is the sibling of — it is opened
+          from the middle of something else (a full roster, the Paywall's foot) and returns there. */}
+      <MainStack.Screen name="CoachPlans" component={CoachPlans} options={{ presentation: 'modal', animation: sheet }} />
       <MainStack.Screen name="Paywall" component={Paywall} options={{ presentation: 'modal', animation: sheet }} />
       {/* The share card floats over its opener as a transparent modal — the preview sits on a dim
           stage, the sheet rises from the bottom. Never part of a back-stack a gesture walks into. */}
@@ -425,8 +464,41 @@ export function Root() {
       /* BOTH FORMS, and the path is matched rather than the word. `hush://pair?c=…` is what the
          landing page's own button uses and what older builds send; `https://…/pair?c=…` is the
          universal link, which is the one that reaches a phone with no app on it yet. */
+      /*
+       * ⛔ A COACH'S INVITE (the coach track, 2026-09-17) — `hush://coach?c=CODE`, the universal
+       * `https://getferrox.com/c/CODE`, and the identity origin's `/c/CODE`. Matched by
+       * `inviteCodeFromUrl` BEFORE the pair, which shares the `c` param. Nothing is fetched here: the
+       * invite opens, and the join is hers to press. With no profile yet the code waits for About you
+       * (`state/pendingCoachInvite`) — the join is conjugated at her and carries her name.
+       */
+      const invite = inviteCodeFromUrl(url);
+      if (invite) {
+        void track('coach_invite_opened', { enrolled: enrolledRef.current });
+        if (!enrolledRef.current) {
+          setPendingCoachInvite(invite);
+          return;
+        }
+        navigateMain('CoachJoin', { code: invite });
+        return;
+      }
+      /*
+       * ✦ A FRIEND'S CIRCLE (2026-09-29) — `hush://circle?c=CODE` and `https://getferrox.com/k/CODE`.
+       * She tapped a friend's invite, so she joins and lands on the circle, where the friend is. With
+       * no profile yet the code waits in memory and the circle tab spends it on her first visit.
+       */
+      const circleCode = circleCodeFromUrl(url);
+      if (circleCode) {
+        void track('circle_invite_opened', { enrolled: enrolledRef.current });
+        if (!enrolledRef.current || !circleTabShown()) {
+          setPendingCircleCode(circleCode);
+          return;
+        }
+        setPendingCircleCode(circleCode);
+        navigateMain('HomeTabs', { screen: 'Crew' });
+        return;
+      }
       const pairCode = /[?&]c=([^&]+)/.exec(url)?.[1];
-      if (pairCode && /(^hush:\/\/pair)|(\/pair(\?|$))/.test(url)) {
+      if (pairCode && /(^hush:\/\/pair\b)|(\/pair(\?|$))/.test(url)) {
         if (!enrolledRef.current) return;
         void pairRef.current.join(decodeURIComponent(pairCode).toUpperCase(), true);
         // Today, because the room is only legible where the sheet is — and quietly, because she
@@ -540,6 +612,8 @@ export function Root() {
     >
       {app.profile ? <MainNavigator /> : <OnboardingNavigator />}
     </NavigationContainer>
+    {/* ✦ Above every screen, so the athlete can cross from Today to the stage (`FigureFlight`). */}
+    <FigureFlightHost />
     </View>
   );
 }

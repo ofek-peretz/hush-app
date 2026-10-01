@@ -211,41 +211,58 @@ export function TimeStage({
   item,
   name,
   onDone,
+  started = false,
+  endsAtMs = null,
+  frozenRemainingS = null,
+  onStart,
 }: {
   item: Extract<PlannedItem, { kind: 'time' }>;
   name: string;
   onDone: (actualSeconds: number) => void;
+  /*
+   * ════ THE HOLD'S ONE CLOCK (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן אמת"*) ════
+   * This stage ran a clock of its own, from its own Start — while the voice counted the same plank
+   * from "מוכן" on another, and the wrist and the lock card drew a duration that never moved. The
+   * clock is the STORE's now (`holdStartedAtMs` / `holdEndsAtMs`): Start here, Ready on the wrist
+   * or the card, or her word, starts it on every surface, and this stage counts to the same end.
+   *
+   * ⛔ AND ZERO WRITES NOTHING (founder, 2026-09-09: *"הסט האוטומטי … לבטל אותו לגמרי"*). This stage
+   * used to log the hold the instant its clock ran out — the one clock left in the app that wrote a
+   * step. At zero it now offers Done; her tap writes the hold as prescribed, and Stop before it
+   * writes what she actually held.
+   */
+  started?: boolean;
+  endsAtMs?: number | null;
+  frozenRemainingS?: number | null;
+  onStart?: () => void;
 }) {
   const { t } = useCopy();
-  const [remaining, setRemaining] = useState(item.seconds);
-  const [running, setRunning] = useState(false);
+  const [, tick] = useState(0);
   const doneRef = useRef(false);
+  const running = endsAtMs != null;
+
+  // A new hold on this stage (the next round) — the one-shot guard belongs to the hold, not the mount.
+  useEffect(() => {
+    if (!started) doneRef.current = false;
+  }, [started]);
 
   useEffect(() => {
     if (!running) return;
-    const id = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          clearInterval(id);
-          if (!doneRef.current) {
-            doneRef.current = true;
-            onDone(item.seconds);
-          }
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
+    const id = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(id);
-  }, [running, item.seconds, onDone]);
+  }, [running]);
+
+  const remaining =
+    endsAtMs != null ? Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000)) : frozenRemainingS != null ? frozenRemainingS : item.seconds;
+  const over = started && remaining === 0;
 
   // Stopping early is a real answer, not a failure: she held it for as long as she held it, and
-  // that number is the measurement. It ends the item with what actually happened.
+  // that number is the measurement. At zero, Done is the prescribed hold — said by her, not the clock.
   const stop = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
-    onDone(item.seconds - remaining);
-  }, [item.seconds, remaining, onDone]);
+    onDone(over ? item.seconds : item.seconds - remaining);
+  }, [item.seconds, remaining, over, onDone]);
 
   const figure = clockOf(remaining);
   return (
@@ -298,8 +315,8 @@ export function TimeStage({
           variant="onstage"
           size="stage"
           block
-          label={running ? t('workout.itemStop') : t('workout.itemStart')}
-          onPress={running ? stop : () => setRunning(true)}
+          label={!started ? t('workout.itemStart') : over ? t('workout.itemDone') : t('workout.itemStop')}
+          onPress={!started ? () => onStart?.() : stop}
         />
       </View>
     </>

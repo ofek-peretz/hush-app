@@ -32,6 +32,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { Arrive } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
@@ -101,7 +102,8 @@ export interface TogetherViewProps {
   onShareSession: () => void;
   onShareWeek: () => void;
   onSendPlan: () => void;
-  onBringPlan: () => void;
+  /* `onBringPlan` LEFT (founder 2026-09-28: the week is the AI's — *"בלי אפשרות של צילום"*). The
+     photographed-plan import is no longer an athlete's door; the coach track keeps its own. */
   onBack: () => void;
 }
 
@@ -141,7 +143,7 @@ export function TogetherView(props: TogetherViewProps) {
               <DoorRow
                 icon="share"
                 title={t('together.shareSession')}
-                sub={bidi(props.sessionCard.dayName) || t('together.shareSessionSub')}
+                sub={bidi(dayTitle(props.sessionCard.dayName)) || t('together.shareSessionSub')}
                 onPress={props.onShareSession}
               />
             ) : null}
@@ -164,9 +166,8 @@ export function TogetherView(props: TogetherViewProps) {
 
         {/* ── the programme, travelling — the moss door that used to sit in You ── */}
         {props.hasPlan ? (
-          <DoorRow icon="layers" title={t('together.sendPlan')} sub={t('together.sendPlanSub')} onPress={props.onSendPlan} />
+          <DoorRow icon="layers" title={t('together.sendPlan')} sub={t('together.sendPlanSub')} onPress={props.onSendPlan} last />
         ) : null}
-        <DoorRow icon="camera" title={t('together.bringPlan')} sub={t('together.bringPlanSub')} onPress={props.onBringPlan} last />
 
         {/* ── the together record — a fact, only when it is one ── */}
         {props.sharedCount > 0 ? (
@@ -363,15 +364,13 @@ export function Together({ navigation }: Props) {
     const ready = await circleSignedIn();
     setCircleReady(ready);
     if (!ready) return;
-    const [history, weekOpen] = await Promise.all([
-      db.loadHistory().catch(() => []),
-      db.loadWeekOpen().catch(() => null),
-    ]);
+    const history = await db.loadHistory().catch(() => []);
+    // The calendar week, as `circlePublish` counts it — see the note there (the rotation, 2026-09-28).
     const payload = circleWeekPayload({
       name: app.profile?.name,
       sessions: history,
       plannedPerWeek: app.profile?.daysPerWeek ?? 0,
-      weekOpenMs: weekOpen ?? currentWeekOpen(Date.now()),
+      weekOpenMs: currentWeekOpen(Date.now()),
     });
     if (payload) await circlePublishWeek(payload);
     setCircle(await circleFetch());
@@ -396,11 +395,9 @@ export function Together({ navigation }: Props) {
       const units = app.profile?.units ?? 'kg';
       const sex = app.profile?.sex === 'male' ? ('male' as const) : ('female' as const);
       setSessionCard(sessionCardFromHistory(history, units, app.profile?.weightKg, sex));
-      setWeekCard(
-        weekOpenMs != null
-          ? weekCardFromHistory(history, weekOpenMs, app.profile?.weightKg, units, app.profile?.memberSince)
-          : null,
-      );
+      // The week card is the calendar week too — the one friends see (the rotation, 2026-09-28).
+      void weekOpenMs;
+      setWeekCard(weekCardFromHistory(history, currentWeekOpen(Date.now()), app.profile?.weightKg, units, app.profile?.memberSince));
       setHasPlan(plan != null);
       /*
        * ⛔ ONE DERIVATION, TWO READERS. The count and the names are the same question about the same
@@ -430,7 +427,9 @@ export function Together({ navigation }: Props) {
       circle={circle}
       weekTogether={circle ? circleWeekTotal(circle.members) : null}
       trainedTogether={trainedTogether}
-      onTrainTogether={pair.ready ? () => setPairing(true) : undefined}
+      /* ⛔ THE PAIR'S DOOR IS HIDDEN (founder 2026-09-29: *"מתאמנים ביחד — מקרה קצה, רוב האנשים עושים
+         אימון אישי גם אם שניהם מגיעים יחד"*). The room, the sheet and the strip stay as kept code. */
+      onTrainTogether={undefined}
       onCreateCircle={() => {
         void circleCreate().then(() => refreshCircle());
       }}
@@ -449,7 +448,6 @@ export function Together({ navigation }: Props) {
         if (weekCard) navigation.navigate('ShareCardModal', { card: weekCard });
       }}
       onSendPlan={() => navigation.navigate('SharePlan')}
-      onBringPlan={() => navigation.navigate('ImportPlan')}
       onBack={() => navigation.goBack()}
     />
     {/*

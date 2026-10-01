@@ -170,6 +170,12 @@ export interface ShareWeekCard {
   /** Tonnage moved this week, in the athlete's display unit (kg or lb). */
   moved: number;
   unit: string;
+  /**
+   * The same tonnage in TONNES — what the card prints (design audit 2026-09-29). Well Done and the
+   * weekly letter state this fact in tonnes; the card posted from them said "750 lb" for the same
+   * workout. One fact, one unit, wherever she meets it. (Optional: older cards derive it from `moved`.)
+   */
+  tonnes?: number;
   /** Estimated calories spent across the week's sessions; null without bodyweight. */
   kcal: number | null;
   /** Whole-percent change vs the previous week's tonnage; null when there is no prior week. */
@@ -260,6 +266,7 @@ export function weekCardFromHistory(
     days,
     moved: displayWeight(movedKg, units) ?? 0,
     unit: unitLabel(units),
+    tonnes: movedKg / 1000,
     kcal: kcalKnown ? kcal : null,
     deltaPct,
     trainedDays,
@@ -290,6 +297,10 @@ export interface ShareSessionCard {
   /** Weight moved, in the display unit. */
   moved: number;
   unit: string;
+  /** The same weight in TONNES — what the card prints, as Well Done does (see `ShareWeekCard`). */
+  tonnes?: number;
+  /** She ended it early — the card says "partial", never "completed" (design audit 2026-09-29). */
+  partial?: true;
   kcal: number | null;
   dateMs: number;
   /** Whose body wears the work — the morning's own lesson: the figure defaults female. */
@@ -304,6 +315,14 @@ export interface ShareSessionCard {
    * it is a LINE on that story, not a rival card.
    */
   record?: { exerciseId: string; weight: number; unit: string; reps: number };
+  /**
+   * ✦ NEXT TIME, ON THE STORY (founder 2026-09-28: *"סטורי ברמה בינלאומית — זה הפרסום שלנו"*).
+   * The weights the engine has already decided for her next visit — the one line on the card that
+   * says what this app does and no other does. Handed in by Well Done from the engine's own record
+   * of the session (`sessionForward`); absent when nothing was raised. Two at most — a story is
+   * read in a second.
+   */
+  next?: { name: string; load: string; unit: string }[];
 }
 
 /** The story card for the LATEST session, or null when there is nothing real to show. */
@@ -328,6 +347,8 @@ export function sessionCardFromHistory(
     durationMin: durationMs >= 60_000 ? Math.round(durationMs / 60_000) : null,
     moved: displayWeight(sessionTonnageKg(latest), units) ?? 0,
     unit: unitLabel(units),
+    tonnes: sessionTonnageKg(latest) / 1000,
+    ...(latest.earlyFinish ? { partial: true as const } : {}),
     kcal,
     dateMs: Date.parse(latest.startedAt),
     ...(sex ? { sex } : {}),

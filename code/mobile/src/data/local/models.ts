@@ -99,6 +99,17 @@ export interface Profile {
    */
   voiceMic?: 'headset' | 'phone';
   /**
+   * The coach's voice (2026-09-27, `platform/voice/neuralVoice`): one of `NEURAL_VOICES` — a natural
+   * voice synthesized once per line and kept on the phone — or `'device'` for Carmit, Apple's
+   * on-device voice. Absent = the first natural voice; Carmit still says any line not yet fetched.
+   */
+  coachVoiceId?: string;
+  /**
+   * The second ear (2026-09-27, `platform/voice/cloudEar`): a number she says, and a window the
+   * phone did not understand, are heard again by a stronger cloud recognizer. Absent = on.
+   */
+  voiceCloudEar?: boolean;
+  /**
    * ⛔ HER OWN WORDS, from onboarding (founder 2026-08-04, taking the chat out of the front door).
    *
    * The ONLY goal the product carries since 2026-09-10 — the four-way `Goal` enum that used to sit
@@ -171,6 +182,12 @@ export interface Profile {
   healthConnected: boolean;
   /** ISO date the account was created (Profile §4.28 "Member since"). App-layer. */
   memberSince?: string;
+  /**
+   * The trial she was promised at the intake (2026-09-28). `'three'` = three free workouts, then
+   * Apple's 14-day trial — stamped by the intake that promised it. ABSENT = an athlete who enrolled
+   * under the fourteen-workout promise, and keeps it (`entitlement.grandfatherTrial`).
+   */
+  trialModel?: 'three';
 }
 
 /** Everything onboarding gathers before building the first program (§4.2–4.6). */
@@ -209,6 +226,21 @@ export interface Slot {
    * arithmetic, a different pair of numbers. Never a load, never a rest.
    */
   repBand?: [number, number];
+  /**
+   * ⛔ THE OPENING LOAD THE AUTHOR WROTE FOR THIS LIFT, kg (founder 2026-09-28: B-1 is cancelled —
+   * *"אין בעיה לבטל את B1 … לתת לבינה את כל המידע … כולל משקל, חזרות וסטים"*). The model writes it
+   * from what she told it ("לחיצת חזה 80 על 8"), written only by `planBuilder.setLiftStartLoad`.
+   * The engine seeds a lift she has NEVER lifted from it (`fixtureModel.slotStartLoadOf`) instead of
+   * the sex × bodyweight guess; her first real set replaces it, as her history always does. Belongs to
+   * the LIFT, not the seat: a swap clears it (`replaceLift`). Dumbbells: one dumbbell's weight.
+   */
+  startLoadKg?: number;
+  /**
+   * ⛔ THE COACH'S LINE ON THIS LIFT — law 7 of the coach track: *a note, not a chat*. At most 140
+   * characters, written only by `domain/coachTrack.wireToProgram` from the coach's own week. Nothing
+   * she does edits it; it never reaches the engine (it prescribes nothing).
+   */
+  coachNote?: string;
 
   // Supplemental work (currently: core) — included in the program but NOT a primary
   // progression target. One per week, 3 sets, placed last, preferring upper sessions.
@@ -319,7 +351,25 @@ export interface Program {
    *
    * This is also the door for the COACH track: a coach writes the week, Hush runs the loads.
    */
-  authored?: 'engine' | 'athlete_or_coach';
+  authored?: 'engine' | 'athlete_or_coach' | 'coach';
+  /**
+   * ⛔ THE COACH TRACK (founder, 2026-09-17: *"אני רוצה להוסיף מסלול למאמנים שנותנים למתאמנים שלהם
+   * להתאמן איתנו."*). Present only on `authored: 'coach'` — a week her LINKED coach wrote and sent.
+   *
+   * `coachVersion` is the per-link version it was landed from (1, 2, 3 …): the pull asks the server
+   * only for a newer one, and every uploaded session names the version it was trained from.
+   * `coachName` is who wrote it, as the coach enrolled. Written ONLY by `domain/coachTrack.wireToProgram`;
+   * `engineMayRebuild` refuses the week exactly as it refuses one she brought (law 1), and it stays
+   * `'coach'` after she leaves the coach (law 6 — unlinking takes nothing).
+   */
+  coachVersion?: number;
+  coachName?: string;
+  /**
+   * The link the week was landed through (stamped by `state/coachOutbox.pullCoachWeek`). Versions
+   * count per LINK, so a week from an ended link must not make a new link's v1 look stale — found on
+   * the web walk (2026-09-17): leave, re-join, and the coach's next weeks never landed.
+   */
+  coachLinkId?: string;
   /**
    * The AUTHOR'S title for the week, when it has one — today the model's (`BUILD_WEEK_SCHEMA.name`,
    * 2026-09-09). Shown by the reveal and the ready screen ahead of the shape heuristic in
@@ -618,6 +668,14 @@ export interface Session {
    * Absent on every session saved before the field existed (those were all finished by hand).
    */
   finishedByAthlete?: true;
+  /**
+   * ⛔ THE SWAP FOR TODAY (the coach track, ruling 4 — 2026-09-17). On a linked coach's week the
+   * pre-workout card may not edit the week; it starts the session with the lift replaced instead,
+   * and records it here, so the upload tells her coach what she did even when the replacement is not
+   * a same-muscle synonym the derivation (`swapLearning.extractOccurrences`) could have inferred.
+   * Stamped at START by `startCoach`; absent on every other session.
+   */
+  todaySwaps?: Array<{ from: string; to: string }>;
   startedAt: string;
   state: SessionState;
   earlyFinish: boolean;

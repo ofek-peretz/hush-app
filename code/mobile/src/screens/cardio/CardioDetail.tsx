@@ -13,7 +13,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
-import { Arrive, Legend } from '@/components/ds';
+import { Arrive, Legend, opticalFigure } from '@/components/ds';
 import { RouteTrace, MIN_ROUTE_POINTS } from '@/components/RouteTrace';
 import { useCopy } from '@/i18n/useCopy';
 import { fmtPace } from '@/platform/cardio/cardioTracker';
@@ -148,7 +148,7 @@ export function CardioDetail({ navigation, route }: Props) {
 
         {/* hero distance — left-aligned, the run's headline fact */}
         <Arrive order={1} style={styles.heroRow}>
-          <Text style={styles.heroNum}>{a.distanceKm.toFixed(1)}</Text>
+          <Text style={styles.heroNum}>{opticalFigure(a.distanceKm.toFixed(1))}</Text>
           <Text style={styles.heroUnit}>{t('cardio.km')}</Text>
         </Arrive>
 

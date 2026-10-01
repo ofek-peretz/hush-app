@@ -212,7 +212,13 @@ describe('⛔ the intake never freezes', () => {
       + beatFor(MOST_LIFTS_IN_A_MUSCLE)
       + num(screen, 'REVEAL_MS');
 
-    expect({ worstMs: worst, under20s: worst <= 20_000 }).toEqual({ worstMs: worst, under20s: true });
+    /*
+     * ⛔⛔ THE 20 s CEILING WAS OVERRULED ON 2026-09-27 (founder: *"כן, תשים את OPUS גם למי שלא כתב
+     * כלום"*). Every build now waits for the strong model, so the wait term is a minute. What stays
+     * pinned is that the reveal is still BOUNDED — a wait, one fill, a name — and never a second
+     * minute: nothing may be added to it without this number saying so.
+     */
+    expect({ worstMs: worst, underAMinuteAndAQuarter: worst <= 75_000 }).toEqual({ worstMs: worst, underAMinuteAndAQuarter: true });
   });
 });
 
@@ -242,7 +248,19 @@ describe('the ordering that a first run always breaks', () => {
     expect(src).toContain('const profile = React.useMemo<Profile>(');
     expect(read('src/app/Root.tsx')).toContain('{app.profile ? <MainNavigator /> : <OnboardingNavigator />}');
     // …and the screen that DOES write it is the one she taps through.
-    expect(read('src/screens/onboarding/ProgramCreated.tsx')).toContain('await app.completeOnboarding(inputs)');
+    expect(read('src/screens/onboarding/ProgramCreated.tsx')).toMatch(/await app\.completeOnboarding\([^)]*inputs/);
+  });
+
+  it('⛔ her sentence from the ask step is KEPT — the plan review reads it as her own words (2026-09-28)', () => {
+    /* It wrote her first week and was then thrown away: no screen sets `goalText` any more, so the
+       one call that checks her week for what hurts never heard "my shoulder hurts" unless she typed
+       it twice. It is stored as `goalText` (only when nothing else set one), and `coachFacts`
+       hands it to every later review as `trainingFor`. */
+    const created = read('src/screens/onboarding/ProgramCreated.tsx');
+    expect(created).toContain('const said = coachAsk?.trim().slice(0, 400);');
+    expect(created).toContain('await app.completeOnboarding(said && !inputs.goalText ? { ...inputs, goalText: said } : inputs);');
+    expect(read('src/state/stores/appStore.tsx')).toContain('...(inputs.goalText ? { goalText: inputs.goalText } : {}),');
+    expect(read('src/domain/coachFacts.ts')).toContain('...(profile.goalText ? { trainingFor: profile.goalText } : {}),');
   });
 
   it('⚠️ the assembled profile carries every fact onboarding collected', () => {

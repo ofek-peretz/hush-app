@@ -114,3 +114,6 @@ server/**/.env
 # so two copies of it can be driven against a local room. Never edited, never committed.
 .driven/
 brand/landing/dist/
+
+# The voice bake-off's audio and results (`server/voiceBakeoff.cjs`) — measurements, not source.
+server/.bakeoff/

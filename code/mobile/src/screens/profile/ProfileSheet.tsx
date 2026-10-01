@@ -23,6 +23,7 @@ import { Icon } from '@/components/Icon';
 import { LegalSheet } from '@/components/LegalSheet';
 import { FerroxMark } from '@/components/FerroxLogo';
 import { Arrive, Avatar, SegmentedControl, Switch, Legend, Button, Badge, useToast } from '@/components/ds';
+import { bidiName } from '@/i18n/bidi';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
@@ -38,6 +39,7 @@ import { reloadApp } from '@/app/reload';
 import { nativeWatchPairing, lastWatchPublish } from '@/platform/watch/watchTransportNative';
 import { audioSession, type EarSource } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
+import { DEFAULT_COACH_VOICE, DEVICE_VOICE, NEURAL_VOICES, neuralVoice } from '@/platform/voice/neuralVoice';
 import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
 
 /** The locked-phone test: time to lock the phone, then the window that asks for a number. */
@@ -49,6 +51,9 @@ import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement'
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
+import { CoachTrackContext } from '@/state/stores/coachStore';
+import { circleTabShown } from '@/state/stores/circleStore';
+import { coachWeekNumber } from '@/domain/coachTrackAthlete';
 
 /* ⛔ A PUSHED SCREEN AGAIN SINCE 2026-09-16 (founder: the corner of Today, not a tab). It was a tab
    from 2026-07-17; what changed is only the door, so the composite props collapse to the stack's. */
@@ -56,6 +61,7 @@ type Props = NativeStackScreenProps<MainParamList, 'You'>;
 type Overlay = 'none' | 'delete' | 'signout';
 
 export function ProfileSheet({ navigation }: Props) {
+  const coachTrack = React.useContext(CoachTrackContext);
   // The training-day reminder's switch — read once; this screen is its only writer.
   const [reminderOn, setReminderOn] = React.useState(false);
   React.useEffect(() => {
@@ -213,6 +219,20 @@ export function ProfileSheet({ navigation }: Props) {
   const sessionsLeft = freeSessionsRemaining(app.modeState.completedSessions);
   const membershipState: 'active' | 'trial' | 'ended' = ent.active ? 'active' : sessionsLeft > 0 ? 'trial' : 'ended';
   function onMembership() {
+    // The coach track, ruling 1: Pro that comes from her coach is managed where the link is.
+    if (ent.source === 'coach') {
+      navigation.navigate('MyCoach');
+      return;
+    }
+    /*
+     * ⛔ AND THE COACH'S OWN PRO IS MANAGED WHERE HIS PLAN IS. Sending him to Apple's
+     * manage-subscriptions sheet would be honest but useless — what he actually came to change is
+     * how many seats he has, and that is one screen, not a system list of product identifiers.
+     */
+    if (ent.source === 'coachPlan') {
+      navigation.navigate('CoachPlans');
+      return;
+    }
     if (ent.active) {
       void Linking.openURL('itms-apps://apps.apple.com/account/subscriptions').catch(() => {});
     } else {
@@ -222,9 +242,13 @@ export function ProfileSheet({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* No back chevron — Settings is a tab now, not a modal; you leave by tapping another tab.
-          The title sits at the page edge, matching History and Progress. */}
+      {/* ⛔ A BACK CHEVRON (founder 2026-09-28: "להוסיף כפתור חזרה"). The note here said "Settings is
+          a tab now — you leave by tapping another tab"; it has not been a tab since 2026-09-16 (it is
+          pushed from Today's corner), so the only way out was a swipe nobody is shown. */}
       <View style={styles.header}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => navigation.goBack()} hitSlop={12} style={styles.back}>
+          <Icon name="chevronLeft" size={22} color={color.textPrimary} strokeWidth={1.8} />
+        </Pressable>
         {/*
           ⛔ ONE NAME FOR ONE PLACE (2026-08-21). The tab said "You" and the screen said "Settings",
           which is two names for the same destination — and the wrong one won: what is on this screen
@@ -303,7 +327,14 @@ export function ProfileSheet({ navigation }: Props) {
             </View>
             <Text style={styles.memberSub}>
               {membershipState === 'active' ? (
-                t('profile.activeSub', { plan: planPeriod ? t(`paywall.${planPeriod}`) : t('profile.membershipProGeneric') })
+                ent.source === 'coach' && coachTrack?.link
+                  /* ⛔ `bidi()` — a Latin name dropped bare into a Hebrew sentence lets the BiDi
+                     algorithm carry the sentence's final stop to the wrong side of it. Every other
+                     site that interpolates this name isolates it; these two did not. */
+                  ? t('coachTrack.athlete.proLine', { coach: bidiName(coachTrack.link.coachName) })
+                  : ent.source === 'coachPlan'
+                    ? t('coachTrack.coach.plans.proFromPlan')
+                    : t('profile.activeSub', { plan: planPeriod ? t(`paywall.${planPeriod}`) : t('profile.membershipProGeneric') })
               ) : membershipState === 'ended' ? (
                 t('profile.endedSub')
               ) : (
@@ -344,26 +375,71 @@ export function ProfileSheet({ navigation }: Props) {
           the corner is hers now — so the social surface moved where a person's people belong, one row
           under her own card. The feature is untouched: share a week, bring a friend's, the pair.
         */}
-        <Row
-          label={t('together.title')}
-          sub={t('together.sub')}
-          onPress={() => navigation.navigate('Together')}
-          last
-        />
+        {/* ⛔ THE COACH'S DOOR (the coach track, 2026-09-17) — become a coach, or the account he has.
+            Drawn only in a build that has the identity server; read through the raw context so a
+            tree without the provider (a harness, a law) simply has no row. */}
+        {/*
+          ⛔ HER COACH (the coach track, trainee side — 2026-09-17): drawn only while she is linked.
+
+          ⛔ AND THE DOOR BACK IN, WHEN SHE IS NOT (2026-09-18). One slot, two states, never both.
+          The row above stood only WHILE linked, so an athlete who left — or who was removed — and
+          then got a fresh six-character code from a coach had no way to use it anywhere in the
+          product: the typed-code screen existed and nothing on any screen reached it except an
+          invite LINK arriving from outside the app, which is the one thing the code exists for the
+          absence of. (`MyCoach` grew its own way back the same day, but that screen is itself
+          behind the linked-only row, so it is not reachable by the athlete who needs it.)
+
+          ⚠️ AND IT DOES NOT NAG. It is a quiet `Row` in the same list as Together and the coach
+          account — no pill, no badge, no accent, nothing that reads as an offer — and it is drawn
+          only where the track EXISTS at all (`available`), so a build without the identity server
+          has no row. An athlete who has never met a coach reads one line of furniture in a
+          settings list, in the place where a coach would be if she had one, and nothing more.
+        */}
+        {coachTrack?.link ? (
+          <Row
+            label={t('coachTrack.athlete.myCoachTitle')}
+            sub={t('coachTrack.athlete.myCoachRowSub', {
+              coach: bidiName(coachTrack.link.coachName),
+              n: coachWeekNumber(coachTrack.link.since, Date.now()) ?? 1,
+            })}
+            onPress={() => navigation.navigate('MyCoach')}
+          />
+        ) : null}
+        {/* ⛔ THE SOCIAL HOME IS THE CIRCLE TAB NOW (2026-09-29) — sharing, sending the week and the
+            circle itself live one tap away in the bar, so this row is drawn only in a build without
+            the circle, where Together is still the only social door. */}
+        {circleTabShown() ? null : (
+          <Row
+            label={t('together.title')}
+            sub={t('together.sub')}
+            onPress={() => navigation.navigate('Together')}
+            last
+          />
+        )}
 
         <Legend tone="accent" style={styles.sectionLegend}>{t('profile.preferences')}</Legend>
-        <View style={styles.pickBlock}>
+        {/*
+          ⛔ A SETTING IS A ROW (design audit 2026-09-29; the founder's free hand, 2026-09-30). Units and
+          language were two pairs of 60-point cards — the onboarding answer's geometry, which is right
+          for a question asked once in the intake and heavy for a preference changed once a year. They
+          are the settings idiom now: the name at the start, a compact switch at the end, one line
+          each. The switch is the app's own `SegmentedControl` (the Log's Lifts/Log switch), 44 tall.
+          The voice choice below keeps the cards — that one is chosen by EAR, six at a time.
+        */}
+        <View style={styles.prefRow}>
           <Text style={styles.pickLabel}>{t('profile.units')}</Text>
-          <Pick
+          <SegmentedControl
+            size="pill"
             options={[{ value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' }]}
             value={units}
             onChange={(v) => onUnits(v as 'kg' | 'lb')}
           />
         </View>
-        <View style={styles.pickBlock}>
+        <View style={styles.prefRow}>
           <Text style={styles.pickLabel}>{t('profile.language')}</Text>
-          <Pick
-            options={[{ value: 'en', label: 'English' }, { value: 'he', label: 'עברית' }]}
+          <SegmentedControl
+            size="pill"
+            options={[{ value: 'he', label: 'עברית' }, { value: 'en', label: 'English' }]}
             value={locale}
             onChange={onLanguage}
           />
@@ -444,7 +520,14 @@ export function ProfileSheet({ navigation }: Props) {
           }
         />
         {p?.voiceSpec !== false ? (
-          <VoiceGateLine mic={p?.voiceMic ?? 'headset'} onMic={(m) => void app.updateProfileInfo({ voiceMic: m })} />
+          <VoiceGateLine
+            mic={p?.voiceMic ?? 'phone'}
+            onMic={(m) => void app.updateProfileInfo({ voiceMic: m })}
+            voiceId={p?.coachVoiceId ?? DEFAULT_COACH_VOICE}
+            onVoice={(v) => void app.updateProfileInfo({ coachVoiceId: v })}
+            cloudEarOn={p?.voiceCloudEar !== false}
+            onCloudEar={(on) => void app.updateProfileInfo({ voiceCloudEar: on })}
+          />
         ) : null}
         {/*
           THE WIRE'S SWITCH (2026-09-01, audit finding 4). GDPR wants an opt-out for behavioural
@@ -457,6 +540,34 @@ export function ProfileSheet({ navigation }: Props) {
           control={<Switch checked={shareUsage} onChange={() => void onShareUsageToggle()} accessibilityLabel={t('profile.usageRow')} />}
           last
         />
+
+        {/*
+          ⛔ FOR COACHES — A SECTION OF ITS OWN, AT THE FOOT (design audit 2026-09-29). The code door
+          and the coach account stood directly under her membership card, the second and third thing
+          every athlete reads — for the handful who coach, on the page of the thousands who do not.
+          A LINKED athlete's own coach stays up there, beside the membership he pays for; the doors for
+          everyone else move here, still one tap away, weighted like what they are to most people.
+        */}
+        {coachTrack?.available ? (
+          <>
+            <Legend tone="accent" style={styles.sectionLegend}>{t('profile.coachesSection')}</Legend>
+            {coachTrack.link ? null : (
+              <Row
+                label={t('coachTrack.athlete.codeLegend')}
+                sub={t('coachTrack.athlete.codeEntrySub')}
+                onPress={() => navigation.navigate('CoachJoin', {})}
+              />
+            )}
+            <Row
+              label={coachTrack.coach ? t('coachTrack.coach.profile.enrolled') : t('coachTrack.coach.profile.become')}
+              sub={coachTrack.coach
+                ? t('coachTrack.coach.profile.enrolledSub', { used: coachTrack.coach.used, seats: coachTrack.coach.seats })
+                : t('coachTrack.coach.profile.becomeSub')}
+              onPress={() => navigation.navigate('CoachEnroll')}
+              last
+            />
+          </>
+        ) : null}
 
         {/*
             ════ THE ACCOUNT SECTION IS GONE (founder 2026-08-01) ════
@@ -588,7 +699,34 @@ function versionLabel(): string {
  * line reads the gates live, so the athlete (and the founder on a gym floor) can tell "no earbuds"
  * from "no engine" without a debugger. It draws nothing on the stage; the stage stays what it was.
  */
-function VoiceGateLine({ mic, onMic }: { mic: EarSource; onMic: (m: EarSource) => void }) {
+/**
+ * The coach's voices, as she chooses them: five natural voices by their character, and Carmit.
+ * OpenAI's (marin, coral, sage, shimmer, nova — `NEURAL_VOICES` order), named by how each sounds.
+ */
+const VOICE_CHOICES: { id: string; key: string }[] = [
+  { id: NEURAL_VOICES[0], key: 'profile.coachVoiceNatural' },
+  { id: NEURAL_VOICES[1], key: 'profile.coachVoiceWarm' },
+  { id: NEURAL_VOICES[2], key: 'profile.coachVoiceSoft' },
+  { id: NEURAL_VOICES[3], key: 'profile.coachVoiceClear' },
+  { id: NEURAL_VOICES[4], key: 'profile.coachVoiceLively' },
+  { id: DEVICE_VOICE, key: 'profile.coachVoiceDevice' },
+];
+
+function VoiceGateLine({
+  mic,
+  onMic,
+  voiceId,
+  onVoice,
+  cloudEarOn,
+  onCloudEar,
+}: {
+  mic: EarSource;
+  onMic: (m: EarSource) => void;
+  voiceId: string;
+  onVoice: (id: string) => void;
+  cloudEarOn: boolean;
+  onCloudEar: (on: boolean) => void;
+}) {
   const { t } = useCopy();
   const capable = Platform.OS === 'ios' && coachVoice.available() && voiceCapture.available() && audioSession.available();
   const [headset, setHeadset] = useState(() => audioSession.headsetConnected());
@@ -612,6 +750,9 @@ function VoiceGateLine({ mic, onMic }: { mic: EarSource; onMic: (m: EarSource) =
     setTest('playing');
     setTestDetail('');
     reread();
+    // A voice heard for the first time is fetched before it is played — the sample is the voice she
+    // chose, never Carmit standing in for a slow network (2026-09-27).
+    if (neuralVoice.enabled()) await neuralVoice.clip(t('profile.voiceTestLine'), currentLocale(), 8_000);
     await audioSession.duck();
     await coachVoice.say(t('profile.voiceTestLine'), currentLocale());
     await audioSession.unduck();
@@ -619,7 +760,7 @@ function VoiceGateLine({ mic, onMic }: { mic: EarSource; onMic: (m: EarSource) =
     reread();
     const ok = !!lastLine && lastLine.started && lastLine.how === 'done';
     setTest(ok ? 'heard' : 'failed');
-    setTestDetail(lastLine ? `${lastLine.how}${lastLine.started ? '' : ' · never started'}${lastLine.voice ? ` · ${lastLine.voice}` : ''}` : 'no line');
+    setTestDetail(lastLine ? `${lastLine.how} · ${lastLine.engine}${lastLine.started ? '' : ' · never started'}${lastLine.voice ? ` · ${lastLine.voice}` : ''}` : 'no line');
     void track('voice_test', { ok, how: lastLine?.how ?? null, started: lastLine?.started ?? false, outputs: route?.outputs.map((o) => o.type).join(',') ?? null });
   };
   /*
@@ -734,6 +875,32 @@ function VoiceGateLine({ mic, onMic }: { mic: EarSource; onMic: (m: EarSource) =
               {test === 'heard' ? t('profile.voiceTestHeard') : t('profile.voiceTestFailed')} {testDetail ? `(${testDetail})` : ''}
             </Text>
           ) : null}
+          {/*
+            ════ THE COACH'S VOICE (2026-09-27, `platform/voice/neuralVoice`) ════
+            Chosen by ear: a tap sets it and plays the test line in it at once.
+          */}
+          <Text style={styles.voiceGate}>{t('profile.coachVoiceLabel')}</Text>
+          {[VOICE_CHOICES.slice(0, 3), VOICE_CHOICES.slice(3)].map((row, i) => (
+            <Pick
+              key={i}
+              options={row.map((c) => ({ value: c.id, label: t(c.key) }))}
+              value={voiceId}
+              onChange={(v) => {
+                onVoice(v);
+                neuralVoice.setVoice(v);
+                void runTest();
+              }}
+            />
+          ))}
+          <Text style={styles.voiceGate}>{t('profile.coachVoiceSub')}</Text>
+          {/* The second ear (`platform/voice/cloudEar`): on unless she turns it off. */}
+          <View style={styles.voiceEarRow}>
+            <View style={styles.rowText}>
+              <Text style={styles.voiceGate}>{t('profile.cloudEarRow')}</Text>
+              <Text style={styles.voiceGateRoute}>{t('profile.cloudEarSub')}</Text>
+            </View>
+            <Switch checked={cloudEarOn} onChange={() => onCloudEar(!cloudEarOn)} accessibilityLabel={t('profile.cloudEarRow')} />
+          </View>
           <Text style={styles.voiceGate}>{t('profile.voiceMicLabel')}</Text>
           <SegmentedControl
             size="pill"
@@ -839,6 +1006,7 @@ function Pick({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: space.gutter - 4, paddingTop: 6, paddingBottom: 4, minHeight: 44 },
+  back: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
   // v7 (2026-07-22): the section headline is the serif — the coach's voice, matching Progress/History.
   headerTitle: { fontFamily: font.serif, fontSize: textScale['2xl'], letterSpacing: trackingPx(textScale['2xl'], tracking.display), color: color.textPrimary, textAlign: 'left' },
   scroll: { flex: 1 },
@@ -856,7 +1024,16 @@ const styles = StyleSheet.create({
   sectionLegend: { marginTop: 28, marginBottom: 6 },
 
   /* The preference choices — the onboarding sex control's own geometry. */
-  pickBlock: { marginTop: 16, gap: 10 },
+  prefRow: {
+    marginTop: 12,
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(241,238,229,0.12)',
+  },
   pickLabel: { fontFamily: font.sansMedium, fontSize: 19, color: color.textPrimary, textAlign: 'left' },
   pickRow: { flexDirection: 'row', gap: 10 },
   pick: {
@@ -921,6 +1098,7 @@ const styles = StyleSheet.create({
   // A reading, not copy: port names and types as iOS reports them, in their own direction.
   voiceGateRoute: { fontFamily: font.sans, fontSize: textScale.xs, color: color.textMuted, textAlign: 'left', writingDirection: 'ltr' },
   voiceGateTest: { gap: 6, alignItems: 'flex-start' },
+  voiceEarRow: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch' },
 
   // membership card
   memberCard: {

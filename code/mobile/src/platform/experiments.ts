@@ -25,12 +25,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deviceContext } from '@/platform/deviceContext';
 import { track } from '@/platform/telemetry';
 
-export type ExperimentName = 'signInAfterFirstWorkout';
+export type ExperimentName = 'signInAfterFirstWorkout' | 'paywallAfterFirstWorkout';
 
 /** The percentage of installs on the NEW arm, per experiment. Remote config overrides these. */
 const DEFAULT_PCT: Record<ExperimentName, number> = {
   /* 50/50 — the report's recommendation is the new arm; the founder's ruling is the old one. */
   signInAfterFirstWorkout: 50,
+  /* 50/50 (founder 2026-09-28): the paywall after workout ONE against the default after THREE —
+     the one placement question no published benchmark answers for this model. */
+  paywallAfterFirstWorkout: 50,
 };
 
 const pct: Record<ExperimentName, number> = { ...DEFAULT_PCT };

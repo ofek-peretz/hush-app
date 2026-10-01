@@ -343,8 +343,10 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
        `Start` and its bring-a-sheet panel are gone; the intake opens on About you. The import itself
        stands — the Together door below, and every link after it. */
     expect(root).not.toMatch(/OnboardingStack\.Screen name="Start"/);
-    // …and the profile keeps its own door for an athlete who already finished onboarding.
-    expect(profile).toMatch(/navigate\('ImportPlan'\)/);
+    /* ⛔ AND THE TOGETHER DOOR IS DELETED TOO (founder 2026-09-28: *"הבינה צריכה לבנות תוכנית אימון
+       בלבד בלי אימונים מוכנים מראש ובלי אפשרות של צילום"*). No door opens the import any more; the
+       screen and every link below it stay as kept code, so this chain still holds if a door returns. */
+    expect(profile).not.toMatch(/navigate\('ImportPlan'\)/);
 
     // 2 · REGISTERED IN BOTH NAVIGATORS, because they are separate stacks.
     expect(root).toMatch(/OnboardingStack\.Screen name="ImportPlan"/);
@@ -422,7 +424,8 @@ describe('⛔ the engine may not rewrite a week she brought', () => {
      */
     expect(builderSrc).toContain('const readOnce = useRef(false);');
     expect(builderSrc).toMatch(/setTimeout\(\(\) => \{ if \(alive\) setLoaded\(true\); \}, 2000\)/);
-    expect(builderSrc).toMatch(/authored \?\? 'engine'\) === 'athlete_or_coach' && inputs/);
+    // ⚠️ `!== 'engine'` since 2026-09-17: a COACH's week (the coach track) is a week she has, too.
+    expect(builderSrc).toMatch(/authored \?\? 'engine'\) !== 'engine' && inputs/);
 
     /*
      * 6b · MORE THAN ONE PAGE (founder 2026-08-29): *"שמתי לב שאפשר לשלוח רק תמונה אחת בשביל
@@ -602,6 +605,95 @@ describe('a cold start does not forget whose week it is', () => {
     await settle();
     expect(told).toBe(true);
     expect(shapeOf(await db.loadProgram())).not.toEqual(shapeOf(ours));
+
+    await act(async () => { tree!.unmount(); });
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ AND A WEEK HER COACH SENT IS NOT OURS EITHER — the coach track, law 1 (2026-09-17).
+ *
+ * FOUNDER, 2026-09-17: *"אני רוצה להוסיף מסלול למאמנים שנותנים למתאמנים שלהם להתאמן איתנו."*
+ * The door this file was written for is open: a week a linked coach wrote lands as
+ * `authored: 'coach'` (`domain/coachTrack.wireToProgram`), and every guarantee above must hold for it
+ * word for word — the gate, the cold start, and the builder's seal that must never demote it to an
+ * engine week the next rebuild is free to rewrite.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ a coach’s week is refused exactly as a week she brought', () => {
+  const coachSent = (): Program => ({ ...coachesWeek(), id: 'coach-v3', authored: 'coach', coachVersion: 3, coachName: 'Dana' } as Program);
+
+  function Probe({ hold }: { hold: (api: unknown) => void }) {
+    hold(useApp());
+    return null;
+  }
+  const settle = async () => {
+    for (let i = 0; i < 30; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => { await Promise.resolve(); });
+    }
+  };
+
+  it('⛔ the gate refuses `authored: "coach"`', () => {
+    expect(engineMayRebuild(coachSent())).toBe(false);
+  });
+
+  it('⛔ the wire stamps `coach` — and nothing but the coach track’s domain writes it', () => {
+    const { wireToProgram, weekToWire } = require('@/domain/coachTrack');
+    const { program } = wireToProgram({ version: 3, sentAt: '2026-09-17T08:00:00Z', coachName: 'Dana', week: weekToWire(coachesWeek()) });
+    expect(program.authored).toBe('coach');
+    expect(engineMayRebuild(program)).toBe(false);
+
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(rel);
+        else if (/\.tsx?$/.test(e.name)) {
+          const text = fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+          if (/authored:\s*'coach'/.test(text)) offenders.push(rel);
+        }
+      }
+    };
+    walk('src');
+    expect(offenders).toEqual(['src/domain/coachTrack.ts']);
+  });
+
+  it('⛔ the builder never demotes a coach’s week to an engine week', () => {
+    const { sealSmart } = require('@/domain/planBuilder');
+    const original = coachSent();
+    // She changes ONE day (after leaving her coach): a diff-stamp against an engine week would answer
+    // `authored: 'engine'`, which the next profile edit is free to rebuild.
+    const draft = { ...original, days: original.days.map((d, i) => (i === 0 ? { ...d, slots: d.slots.slice(0, 3), muscleGroups: [] } : { ...d, muscleGroups: [] })) };
+    const sealed = sealSmart(draft, original);
+    expect(sealed.authored).not.toBe('engine');
+    expect(engineMayRebuild(sealed)).toBe(false);
+  });
+
+  it('⛔ the first edit after a restart leaves her coach’s week exactly as the coach sent it', async () => {
+    await AsyncStorage.clear();
+    const sent = coachSent();
+    await db.saveProfile(athlete());
+    await db.saveProgram(sent);
+
+    let api: any = null;
+    let tree: renderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = renderer.create(
+        React.createElement(AppProvider, null, React.createElement(Probe, { hold: (a: any) => { api = a; } })),
+      );
+    });
+    await settle();
+    expect(api.program).toBeNull();
+
+    let told: unknown = null;
+    await act(async () => { told = await api.updateProfileInfo({ bodyMap: { Back: 'emphasis' } }); });
+    await settle();
+    expect(told).toBe(false);
+    await act(async () => { await api.reportPain('Chest', 'pain'); });
+    await settle();
+    expect(await db.loadProgram()).toEqual(sent);
 
     await act(async () => { tree!.unmount(); });
   });

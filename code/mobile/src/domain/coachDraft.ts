@@ -46,7 +46,7 @@
 import { exerciseById } from '@/data/exercises';
 import { matchLift } from '@/domain/importedPlan';
 import type { Program } from '@/data/local/models';
-import { BUILDER_SETS_MAX, BUILDER_SETS_MIN } from '@/domain/planBuilder';
+import { BUILDER_SETS_MAX, BUILDER_SETS_MIN, START_LOAD_MAX_KG } from '@/domain/planBuilder';
 import { BUILD_MAX_LIFTS, REPS_MAX, REPS_MIN } from '@/domain/buildPrompt';
 import { proseFingerprint, readableProse, type ProseFault } from '@/domain/modelText';
 import { materializeTemplate, type PlanTemplate } from '@/domain/planTemplates';
@@ -55,7 +55,7 @@ import { materializeTemplate, type PlanTemplate } from '@/domain/planTemplates';
 export interface CoachWeekDraft {
   /** The model's own title for the week — see `name` on `BUILD_WEEK_SCHEMA`. Absent when it gave none. */
   name?: string;
-  days: { name: string; lifts: { ex: string; sets: number; pair?: boolean; reps?: [number, number] }[] }[];
+  days: { name: string; lifts: { ex: string; sets: number; pair?: boolean; reps?: [number, number]; load?: number }[] }[];
   /**
    * ⛔ THE LIFTS IT WANTED AND WE DO NOT CARRY (founder 2026-08-29): *"אם כן נוסיף עוד תרגילים ככל
    * שנצטרך."*
@@ -100,6 +100,16 @@ function readReps(raw: unknown): [number, number] | undefined {
   return [lo, hi];
 }
 
+/**
+ * ⛔ THE OPENING LOAD THE MODEL WROTE, kg (2026-09-28 — B-1 cancelled by the founder). A positive,
+ * finite number no heavier than `START_LOAD_MAX_KG`; anything else is no load (the engine then
+ * prices the lift, as it always has) — never a guess made from a wrong-shaped value.
+ */
+function readLoad(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0 || raw > START_LOAD_MAX_KG) return undefined;
+  return Math.round(raw * 100) / 100;
+}
+
 export function readCoachWeek(json: unknown): CoachWeekDraft | null {
   if (!json || typeof json !== 'object') return null;
 
@@ -130,7 +140,8 @@ export function readCoachWeek(json: unknown): CoachWeekDraft | null {
          two lifts the model never coupled. Absent is the answer for everything but the word. */
       const pair = (l as { pair?: unknown }).pair === true;
       const reps = readReps((l as { reps?: unknown }).reps);
-      rows.push({ ex, sets, ...(pair ? { pair: true } : {}), ...(reps ? { reps } : {}) });
+      const load = readLoad((l as { load?: unknown }).load);
+      rows.push({ ex, sets, ...(pair ? { pair: true } : {}), ...(reps ? { reps } : {}), ...(load != null ? { load } : {}) });
     }
     /* The per-day cap lives HERE since 2026-09-07, not in the schema — see the note at `lifts` in
        `buildPrompt`. A day past it is a malformed reply; the tail is dropped, the day stands. */
@@ -195,7 +206,7 @@ export function draftFromCoachWeek(
   const days: PlanTemplate['days'] = [];
   for (const day of week.days) {
     const seen = new Set<string>();
-    const lifts: { ex: string; sets: number; pair?: boolean; reps?: [number, number] }[] = [];
+    const lifts: { ex: string; sets: number; pair?: boolean; reps?: [number, number]; load?: number }[] = [];
     for (const l of day.lifts) {
       /*
        * ⛔ A NAME WHERE AN ID WAS ASKED FOR IS STILL AN ANSWER (found live, 2026-08-30).
@@ -235,6 +246,7 @@ export function draftFromCoachWeek(
         sets: Math.min(BUILDER_SETS_MAX, Math.max(BUILDER_SETS_MIN, Math.round(l.sets))),
         ...(l.pair ? { pair: true as const } : {}),
         ...(l.reps ? { reps: l.reps } : {}),
+        ...(l.load != null ? { load: l.load } : {}),
       });
 
     }

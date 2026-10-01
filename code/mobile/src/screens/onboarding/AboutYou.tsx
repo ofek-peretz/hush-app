@@ -48,6 +48,7 @@ import React, { useState } from 'react';
 import { View, Text, Keyboard, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { FirstLight } from '@/components/onboarding/FirstLight';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
 import { Button, Legend, TextField, WheelPicker } from '@/components/ds';
@@ -71,6 +72,8 @@ import { useApp } from '@/state/stores/appStore';
  */
 import { line, color, font, textScale, signal, radius } from '@/design/tokens';
 import type { OnboardingParamList } from '@/app/navigation';
+import type { Experience } from '@/data/local/models';
+import { takePendingCoachInvite } from '@/state/pendingCoachInvite';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'AboutYou'>;
 
@@ -155,6 +158,13 @@ export function AboutYou({ navigation }: Props) {
    */
   const [sex, setSex] = useState<'female' | 'male' | null>(app.profile?.sex ?? null);
   /*
+   * ⛔ HOW LONG SHE HAS TRAINED — ONE TAP, AND NOT REQUIRED (founder 2026-09-28: *"אפשר אולי להוסיף
+   * ניסיון או כל דבר שיעזור לבינה לדייק במשקלים כמה שיותר וגם לא יאריך לנו את ה-ONBOARDING"*).
+   * B-1 is cancelled: the model reads it beside her words, and the app's own estimate reads it too
+   * (`startingLoad.experienceFactor`). Unanswered is "not said" — never a default that decides for her.
+   */
+  const [experience, setExperience] = useState<Experience | null>(app.profile?.experience ?? null);
+  /*
    * ⛔ THE TWO RULERS CAME BACK HERE (founder 2026-08-10): *"תמשיך למיזוג המסכים."* — and one of
    * them left again on 2026-08-29; see the note over the constant above. What that merge was
    * actually right about survives: one screen, not two half-empty ones.
@@ -232,12 +242,23 @@ export function AboutYou({ navigation }: Props) {
     app.setPendingSex(sex);
     // The one place lb becomes kg. The record is metric; the wheel is hers.
     const kg = units === 'lb' ? +(weight / 2.2046226).toFixed(1) : weight;
+    /*
+     * ⛔ THE COACH TRACK (2026-09-17). A trainee whose coach writes the week does not build one: her
+     * code — typed, or carried by the invite link that opened the app — takes her to the invite, and
+     * the plan-build step is skipped. The same three answers ride with her.
+     */
+    const invite = takePendingCoachInvite();
+    if (invite) {
+      navigation.navigate('CoachJoin', { ...(invite ? { code: invite } : {}), sex, weightKg: kg });
+      return;
+    }
     // Carried in the params, exactly as `sex` is — `ConnectHealth` assembles the whole
     // `OnboardingInputs` and there must be ONE place that does.
-    navigation.navigate('ConnectHealth', { sex, weightKg: kg });
+    navigation.navigate('ConnectHealth', { sex, weightKg: kg, ...(experience ? { experience } : {}) });
   }
 
   return (
+    <View style={styles.host}>
     <OnboardingScaffold
       progress={{ index: 1, total: 3 }}
       topAction={
@@ -263,8 +284,12 @@ export function AboutYou({ navigation }: Props) {
             size="lg"
             block
             label={t('ob.continue')}
-            onPress={onContinue}
+            onPress={() => onContinue()}
           />
+          {/* ⛔ "יש לי קוד מאמן" LEFT THIS SCREEN (founder 2026-09-28, approving the review: *"אם אתה
+              לא הבנת מה זה, גם מתאמן חדש לא יבין"*). The trainee whose coach writes her week arrives
+              by the coach's invite link — `takePendingCoachInvite` below still carries her straight
+              to `CoachJoin` — and a code typed by hand is a row in the profile. */}
           {/*
             ⛔ THE DOOR FOR A PROGRAMME SHE ALREADY HAS IS NOT HERE ANY MORE (founder 2026-08-12).
 
@@ -393,12 +418,43 @@ export function AboutYou({ navigation }: Props) {
           </View>
           {needsSex ? <Text style={styles.needs}>{t('ob.sexNeeded')}</Text> : null}
         </View>
+        <View style={styles.col}>
+          <Legend size={22} track={0.26} style={styles.fieldLegend}>{t('ob.experience')}</Legend>
+          <View style={styles.choices}>
+            {EXPERIENCE_CHOICES.map(([v, key]) => (
+              <Pressable
+                key={v}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: experience === v }}
+                accessibilityLabel={t(key)}
+                onPress={() => setExperience(experience === v ? null : v)}
+                style={({ pressed }) => [styles.choice, experience === v && styles.choiceOn, pressed && styles.choicePressed]}
+              >
+                <Text style={[styles.choiceText, experience === v && styles.choiceTextOn]} numberOfLines={1}>
+                  {t(key)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       </View>
     </OnboardingScaffold>
+    {/* ✦ Two seconds of the product before its first question — see `FirstLight`. */}
+    <FirstLight />
+    </View>
   );
 }
 
+/** The three answers to "how long have you trained", in the order a lifter would say them. */
+const EXPERIENCE_CHOICES: [Experience, string][] = [
+  ['beginner', 'ob.expNew'],
+  ['intermediate', 'ob.expSome'],
+  ['advanced', 'ob.expYears'],
+];
+
 const styles = StyleSheet.create({
+  /* The front door and the layer over it (`FirstLight`) share one box. */
+  host: { flex: 1 },
   /* Two answers, drawn on the same rules the wheels below are drawn with — a hairline each, the
      chosen one lit. Whole-row targets: this is a question, not a toolbar. */
   choices: { flexDirection: 'row', gap: 10 },
@@ -413,6 +469,7 @@ const styles = StyleSheet.create({
   },
   langSwapPressed: { backgroundColor: color.fillSubtleStrong },
   langSwapText: { fontFamily: font.sansMedium, fontSize: textScale.sm, color: color.textPrimary, textAlign: 'left' },
+  /* The coach code's door — a line under the act, never a second button beside it. */
   /* The one line that names what is missing — quiet, and only ever present when it is true. */
   needs: { fontFamily: font.sans, fontSize: textScale.sm, color: color.textSecondary, marginTop: 10, textAlign: 'left' },
   choice: {

@@ -337,7 +337,7 @@ function Row({
 
   const grip = isMovable ? (
     <GestureDetector gesture={pan}>
-      <View accessible accessibilityRole="button" accessibilityLabel={gripLabel} hitSlop={10} style={styles.grip}>
+      <View accessible accessibilityRole="button" accessibilityLabel={gripLabel} hitSlop={GRIP_SLOP} style={styles.grip}>
 
         <Icon name="grip" size={18} color={gripColor} strokeWidth={1.8} />
       </View>
@@ -354,7 +354,14 @@ function Row({
   );
 }
 
+const GRIP_SLOP = { top: 10, bottom: 10 };
+
 const styles = StyleSheet.create({
-  grip: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },
+  /* ⛔ 44 WIDE, AND NO SIDEWAYS SLOP (design audit 2026-09-29). The grip was 32 wide with 10 of
+     slop all round, and it sits 12 points after the swap glyph — so its slop reached into the gap and
+     took the swap's own slop from it. A grip is a plain View, not a responder: a tap it stole fell
+     through to the ROW, and the row opens the why-sheet. The box is the full 44 now and slops only up
+     and down, so a neighbour's target ends where its own box ends. */
+  grip: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   lifted: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
 });

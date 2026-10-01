@@ -66,13 +66,14 @@ import { audioSession } from '@/platform/voice/audioSession';
 import { factForLift, type KnownFact } from '@/domain/whatIKnow';
 import { setNudge } from '@/platform/setNudge';
 import { restHaptics } from '@/platform/restHaptics';
-import { displayWeight, unitLabel } from '@/domain/schedule';
+import { displayWeight, kgFromDisplay, unitLabel } from '@/domain/schedule';
 import { priorPeakKg, livePeakKg, recordBaselineKg, isRecordSet } from '@/domain/setRecord';
 import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
 import { sessionDurationMs, sessionEnergyKcal } from '@/domain/sessionMetrics';
 import { healthWrite } from '@/platform/health/healthWrite';
 import { LIVE_ACTIVITY_EVENTS } from '@/platform/events';
 import { useApp } from './appStore';
+import { queueSessionForCoach } from '@/state/coachOutbox';
 
 /** True if a failed sync is worth queuing for retry (transient), not a doomed payload. */
 function worthQueuing(e: unknown): boolean {
@@ -86,6 +87,7 @@ function worthQueuing(e: unknown): boolean {
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { bandOf, currentBlockSets } from '@/domain/setRow';
+import { dayTitle } from '@/i18n/dayTitle';
 
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds } from '@/domain/restPrescription';
 
@@ -465,6 +467,12 @@ export function retargetPlanForSwap(
 export interface CompleteResult {
   ended: boolean;
   unlockedPortrait: boolean;
+  /**
+   * THIS call wrote the set (2026-09-27). A refused write — a second channel landed first, the
+   * session paused, a rest already running — returns the same `ended: false`, and the voice
+   * announced "נרשם" and moved the next load over a row it never wrote. Read it, never infer it.
+   */
+  written?: boolean;
   /** Closing summary for the Complete screen — present when a real (≥1 set) session was saved. */
   summary?: SessionSummary;
   /** The athlete left without logging a single set: NOT a workout — nothing was saved or counted. */
@@ -692,7 +700,8 @@ export interface SessionView {
    * `workoutId` is the coach workout's positional id (`coachWorkoutId`), stamped on the session so
    * History can say which workout this was long after the programme has changed shape.
    */
-  startCoach: (session: PlannedSession, workoutId: string, withPartners?: readonly string[]) => Promise<void>;
+  /* `opts.todaySwaps` — the coach track's swap for today (ruling 4), recorded on the session for the upload. */
+  startCoach: (session: PlannedSession, workoutId: string, withPartners?: readonly string[], opts?: { todaySwaps?: Array<{ from: string; to: string }> }) => Promise<void>;
   /** An interrupted (app-killed) workout that can still be picked up, or null. Home reads
    *  this on focus to offer "Continue {workout}" as the primary CTA (S3). */
   loadResumable: () => Promise<{ workoutName: string } | null>;
@@ -732,9 +741,22 @@ export interface SessionView {
   /** "מוכן" — the set on stage starts NOW: the clock's stamp moves to this instant and the pocket
    *  alerts re-arm from it. The lock screen's Ready button lands here too (`set_ready`). */
   markSetStarted: () => void;
-  /** The loading dialogue is open: the lock screen shows Ready beside Done. */
+  /** The loading dialogue is open: EVERY surface shows Ready beside Done (the stage, the wrist, the card). */
   setAwaitingReady: (on: boolean) => void;
   awaitingReady: boolean;
+  /**
+   * ════ THE HOLD'S ONE CLOCK (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן אמת"*) ════
+   * A plank was timed three ways at once — the voice on its own clock from "מוכן", the stage on a
+   * clock of its own from Start, and the wrist and the card not at all. Now `markSetStarted` on a
+   * hold starts THIS clock, from any surface, and every surface counts to its one end. It pauses with
+   * the workout and resumes where it stood. Nothing is written when it reaches zero (founder,
+   * 2026-09-09: the clock never writes) — her Done, or her word, does.
+   */
+  holdStartedAtMs: number | null;
+  /** When the running hold ends — null until it starts, while paused, and on every set. */
+  holdEndsAtMs: number | null;
+  /** While PAUSED mid-hold: what remains of it, frozen at the pause instant. */
+  holdFrozenRemainingS: number | null;
   /**
    * The engine's first-set prescription for ANY exercise in the session's target table — what a
    * swap WOULD put on the bar (design review 2026-09-01: the swap sheet offered three names with
@@ -1597,13 +1619,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         loadHistory: () => db.loadHistory(),
         appendCompletedSession: async (s) => {
           await db.appendCompletedSession(s);
+          void queueSessionForCoach(s); // the coach track, law 3 — a wrist workout reaches her coach too, never awaited
           /*
            * THE SAVE RECEIPT (2026-08-23): a standalone wrist workout just became part of her
            * record — often with the phone in a bag. Say so, once, quietly. Foreground is exempt:
            * the app is open and the record lands where she can see it. The note rides the same
            * fact-not-reminder decree as the kilometre.
            */
-          if (AppState.currentState !== 'active') void notifier.watchWorkoutSaved(s.programDayName ?? '');
+          if (AppState.currentState !== 'active') void notifier.watchWorkoutSaved(dayTitle(s.programDayName));
         },
         recordSessionCompleted: () => appRef.current.recordSessionCompleted(),
         markWorkoutCompleted: (id) => appRef.current.markWorkoutCompleted(id),
@@ -1731,8 +1754,34 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // rest is republished to the watch + Live Activity.
   const restExtraSecondsRef = useRef(0);
   const [restNonce, setRestNonce] = useState(0);
-  /** The voice's loading dialogue is open (spec §3.2): the lock screen shows Ready beside Done. */
+  /** The voice's loading dialogue is open (spec §3.2): every surface shows Ready beside Done. */
   const [awaitingReady, setAwaitingReadyState] = useState(false);
+  /**
+   * The hold's one clock (`SessionView.holdStartedAtMs`): which step it belongs to (the session and
+   * the step's own key — a hold of an earlier workout can never look started), and when it began.
+   * Moved forward by exactly the time stood still on resume, as the rest's anchor is.
+   */
+  const [holdRun, setHoldRun] = useState<{ key: string; startedAtMs: number } | null>(null);
+  const holdRunRef = useRef(holdRun);
+  holdRunRef.current = holdRun;
+  /** Which hold a clock belongs to: this workout, this position in it, this step. */
+  const holdKeyOf = (st: Step) => `${sessionRef.current?.id ?? ''}:${st.globalIndex}:${stepKey(st)}`;
+  /**
+   * The running hold on `st` — its start, its end, and (paused) what is left of it. Null when `st`
+   * is not a hold or its clock has not started. ONE derivation, read by the view AND the mirror, so
+   * the stage and every other surface cannot count to two different ends.
+   */
+  const holdClockOf = (st: Step | undefined): { startedAtMs: number; endsAtMs: number | null; frozenS: number | null } | null => {
+    const h = holdRunRef.current;
+    if (!st || st.item?.kind !== 'time' || !(st.item.seconds > 0) || !h || h.key !== holdKeyOf(st)) return null;
+    const endMs = h.startedAtMs + st.item.seconds * 1000;
+    const pausedAt = pauseStartedAtRef.current;
+    return {
+      startedAtMs: h.startedAtMs,
+      endsAtMs: pausedAt == null ? endMs : null,
+      frozenS: pausedAt == null ? null : Math.max(0, Math.round((endMs - pausedAt) / 1000)),
+    };
+  };
   /** Bumped by `markSetStarted` so the arming effect re-arms from the new stamp (its key is unchanged). */
   const [startedNonce, setStartedNonce] = useState(0);
   // The set the watch last logged, published to the phone's stage so it plays the same "Set
@@ -1754,6 +1803,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const watchActionsRef = useRef<Partial<Record<SessionEvent['type'], () => void>>>({});
   // Exercise Busy is a session-store action (not a machine event); kept in its own ref.
   const watchBusyRef = useRef<() => void>(() => {});
+  // "מוכן" from the wrist (2026-09-28) — the same start the lock screen's Ready and her word make.
+  const watchReadyRef = useRef<() => void>(() => {});
   /**
    * The latest view, for wrist handlers that first catch the clock up (`applyClock`) and must then
    * act on the state AFTER the catch-up — the `view` a handler closed over is the render before it.
@@ -1789,6 +1840,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       completeSet: (actualReps, actualWeight) => watchCompleteRef.current(actualReps, actualWeight),
       dispatch: (event) => watchActionsRef.current[event.type]?.(),
       markEquipmentOccupied: () => watchBusyRef.current(),
+      setReady: () => watchReadyRef.current(),
       swapExercise: (exerciseId) => watchSwapRef.current(exerciseId),
       startWorkout: (workoutId) => watchStartRef.current(workoutId),
       selectWorkout: (workoutId) => watchSelectRef.current(workoutId),
@@ -2044,7 +2096,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             // On the stage → logged, as written or with her figures (the steppers moved), exactly
             // as a typed set on the stage is. During a rest → nothing: the set is written and the
             // tap was a second one.
-            const hers = i.reps != null && i.weight !== undefined ? { weight: i.weight, reps: i.reps } : undefined;
+            /* The card's figures are in HER units (`liveActivity.onCard`); the record is kilograms. */
+            const lockUnits = appRef.current?.profile?.units ?? 'kg';
+            const hers =
+              i.reps != null && i.weight !== undefined
+                ? { weight: i.weight == null ? null : kgFromDisplay(i.weight, lockUnits), reps: i.reps }
+                : undefined;
             /*
              * ⛔ AND A TAP THAT CANNOT LAND IS COUNTED (founder, gym 2026-09-14: *"כשאני מזין
              * מהלייב אקטיביטי את הסטים והחזרות זה לא מעדכן באפליקציה"*).
@@ -2205,7 +2262,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       restExtraS: restExtraSecondsRef.current,
       restStartedAtMs: restStartedAtRef.current,
       nowMs: Date.now(),
-      workoutName: state.session?.programDayName ?? '',
+      workoutName: dayTitle(state.session?.programDayName),
       sessionStartedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
       completedSets: loggedSets.length,
       // The actuals, in step order — the wrist's read-back prints the best set of each lift, and
@@ -2228,6 +2285,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // THE SIGNATURE MOMENT — through the ONE projection, so the wrist and the phone cannot
       // disagree about it (§8.5: no duplicate state).
       correction: correction ? { from: correction.from, to: correction.to, direction: correction.direction, reps: correction.reps } : null,
+      // ⛔ THE VOICE'S READY AND THE HOLD'S CLOCK, ON THE WIRE (2026-09-28) — the same two facts the
+      // phone's stage draws from `useSession()`, so the wrist and the card cannot draw a third state.
+      awaitingReady: awaitingReady && machine.phase === 'SET_PRESENTED',
+      holdEndsAtMs: machine.phase === 'SET_PRESENTED' ? holdClockOf(plan[machine.setIndex])?.endsAtMs ?? null : null,
     });
 
     // One projection → both surfaces. The watch receives the full mirror (incl. the
@@ -2338,7 +2399,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     // restNonce: re-publish when "+15 sec" extended the current rest (ref change alone
     // would not re-run this effect). awaitingReady: the lock card gains or loses its Ready button.
-  }, [state, restNonce, awaitingReady]);
+  }, [state, restNonce, awaitingReady, holdRun]);
 
   const view = useMemo<SessionView>(() => {
     const { plan, machine } = state;
@@ -2419,6 +2480,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // must ALWAYS run, online or offline — completion never depends on the
       // backend (§6.2). Backend sync is best-effort and queued on failure (§6.4).
       await db.appendCompletedSession(saved);
+      /* ⛔ THE COACH TRACK, LAW 3 — NO UPLOAD BLOCKS A SET. Queued AFTER the record is on disk and
+         never awaited: a linked trainee's coach sees this workout when the network allows, and an
+         athlete with no coach pays one storage read (`state/coachOutbox`). */
+      void queueSessionForCoach(saved);
       await db.clearActiveSession();
       await db.clearSessionResume().catch(() => {});
       /*
@@ -2583,7 +2648,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         restTransitionS: REST_UNSTATED_S,
         restStartedAtMs: null,
         nowMs: Date.now(),
-        workoutName: saved.programDayName ?? '',
+        workoutName: dayTitle(saved.programDayName),
         sessionStartedAtMs: Date.parse(saved.startedAt),
         completedSets: saved.sets.length,
         loggedSets: saved.sets.map((s) => ({ weight: s.actualWeight ?? null, reps: s.actualReps })),
@@ -2631,7 +2696,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        */
       const progressed = progressedLiftCount(plan, saved.sets);
       const summary: SessionSummary = {
-        workoutName: saved.programDayName ?? exerciseById(plan[0]?.exerciseId ?? '')?.name ?? '',
+        workoutName: dayTitle(saved.programDayName ?? exerciseById(plan[0]?.exerciseId ?? '')?.name ?? ''),
         // Every step she did, for the same reason `sessionTrained` counts them: a session of
         // intervals reading "0" would tell her she had done nothing on the screen that closes it.
         // Working sets only — the warm-up ramp is not counted here, exactly as everywhere else
@@ -2760,7 +2825,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       restAlert: resting && next ? nextSetAlert(next, appRef.current?.profile?.units ?? 'kg') : null,
       watchLoggedSet,
       startedAtMs: state.session ? Date.parse(state.session.startedAt) : null,
-      workoutName: state.session?.programDayName ?? '',
+      workoutName: dayTitle(state.session?.programDayName),
       // Equipment Occupied applies at the START of an exercise that has a later exercise to do.
       // The start is the exercise's FIRST step — its first warm-up bridge when it has a ramp
       // (that is the moment she discovers the station is busy), else working set 0.
@@ -2909,7 +2974,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         });
       },
 
-      async startCoach(planned, workoutId, withPartners) {
+      async startCoach(planned, workoutId, withPartners, opts) {
         /*
          * ════ ⛔ THE GATE, GUARDED WHERE IT CANNOT BE ROUTED AROUND (founder, 2026-08-23) ════
          *
@@ -2964,6 +3029,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
            * only one of them remembered it happened.
            */
           ...(withPartners && withPartners.length > 0 ? { partners: [...withPartners] } : {}),
+          ...(opts?.todaySwaps && opts.todaySwaps.length > 0 ? { todaySwaps: opts.todaySwaps.map((x) => ({ from: x.from, to: x.to })) } : {}),
           /*
            * The only answer to "did she finish it?" for a coach session — there is no `ProgramDay`
            * to count slots on, and the fallback for an unknown prescription is "any logged work
@@ -2994,7 +3060,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           const m = snap.machine as SessionMachine;
           if (m.phase === 'SESSION_SAVED' || m.phase === 'WELL_DONE') return null;
           if (Date.now() - Date.parse(snap.savedAt) > RESUME_WINDOW_MS) return null;
-          return { workoutName: active.programDayName ?? '' };
+          return { workoutName: dayTitle(active.programDayName) };
         } catch {
           return null;
         }
@@ -3287,7 +3353,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             restExtraSecondsRef.current = 0;
           }
           if (m.phase === 'SESSION_SAVED') return finalize(false);
-          return { ended: false, unlockedPortrait: false };
+          return { ended: false, unlockedPortrait: false, written: true };
         }
         /*
          * ════ ⛔ LOOP 1 NO LONGER TOUCHES THE IRON MID-SESSION (founder, 2026-08-26) ════
@@ -3325,7 +3391,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (m.phase === 'SESSION_SAVED') {
           return finalize(false);
         }
-        return { ended: false, unlockedPortrait: false, correction: null };
+        return { ended: false, unlockedPortrait: false, correction: null, written: true };
         } finally {
           completingRef.current = false;
         }
@@ -3389,7 +3455,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             restExtraSecondsRef.current = 0;
           }
           if (m.phase === 'SESSION_SAVED') return finalize(false);
-          return { ended: false, unlockedPortrait: false };
+          // THIS call wrote the hold — the voice says "נרשם" over nothing else (see `CompleteResult.written`).
+          return { ended: false, unlockedPortrait: false, written: true };
         } finally {
           completingRef.current = false;
         }
@@ -3461,6 +3528,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             pauseStartedAtRef.current,
             Date.now(),
           );
+          // The hold's clock stood still with the workout, and moves on by the same stretch (2026-09-28).
+          const held = holdRunRef.current;
+          if (held && held.startedAtMs <= pauseStartedAtRef.current) {
+            const moved = { ...held, startedAtMs: held.startedAtMs + pausedMs };
+            holdRunRef.current = moved;
+            setHoldRun(moved);
+          }
           void track('resume', { sessionId: sessionRef.current?.id, pausedMs });
           pauseStartedAtRef.current = null;
         }
@@ -3548,9 +3622,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       markSetStarted() {
         const cur = plan[machine.setIndex];
         if (!cur || machine.phase !== 'SET_PRESENTED') return;
+        const startedAt = clockNow();
+        /*
+         * ⛔ A HOLD'S "מוכן" STARTS ITS ONE CLOCK (2026-09-28) — whichever surface said it: her word,
+         * the stage's Start, the wrist's or the card's Ready. Idempotent per step: a second Ready
+         * (two surfaces in the same second) never restarts a hold already running.
+         */
+        if (cur.item?.kind === 'time' && cur.item.seconds > 0) {
+          const key = holdKeyOf(cur);
+          setHoldRun((h) => (h && h.key === key ? h : { key, startedAtMs: startedAt }));
+        }
         // Her word, at this instant: the stamp is hers (no clock mark), and the arming effect
         // re-arms the pocket from it — `armedForRef` is cleared so the same set is armed again.
-        setPresentedAtRef.current = { key: stepKey(cur), atMs: clockNow() };
+        setPresentedAtRef.current = { key: stepKey(cur), atMs: startedAt };
         armedForRef.current = null;
         setStartedNonce((n) => n + 1);
         // "מוכן" from any channel closes the loading dialogue: the card's Ready button goes, and
@@ -3561,6 +3645,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setAwaitingReadyState(on);
       },
       awaitingReady: awaitingReady && machine.phase === 'SET_PRESENTED',
+      ...(() => {
+        // The hold on stage — on stage, or on stage under a pause — and its one clock.
+        const onStage =
+          machine.phase === 'SET_PRESENTED' || (machine.phase === 'PAUSED' && (machine.resumePhase ?? 'SET_PRESENTED') === 'SET_PRESENTED');
+        const hc = onStage ? holdClockOf(plan[machine.setIndex]) : null;
+        return {
+          holdStartedAtMs: hc?.startedAtMs ?? null,
+          holdEndsAtMs: hc?.endsAtMs ?? null,
+          holdFrozenRemainingS: hc?.frozenS ?? null,
+        };
+      })(),
       reviseToday(edits) {
         /*
          * ⛔ FROM THE STEP SHE IS ON, NEVER BEHIND IT. A logged set is a fact about her body; no
@@ -3681,7 +3776,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     };
     // restNonce: `restExtraSeconds` is read from a ref, so a "+15 sec" (from either surface)
     // must re-memo the view or the phone's Rest screen would never see the rest grow.
-  }, [state, app, endResult, correction, restNonce, watchLoggedSet, setRunningLong, applyLockIntents, awaitingReady]);
+  }, [state, app, endResult, correction, restNonce, watchLoggedSet, setRunningLong, applyLockIntents, awaitingReady, holdRun]);
 
   // Map watch intents → the same view actions a tap fires. A watch Complete Set
   // accepts the recommended target (no override) — editing stays phone-only.
@@ -3756,6 +3851,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   };
   // Exercise Busy → the same equipment-occupied reorder a phone tap performs.
   watchBusyRef.current = () => view.markEquipmentOccupied();
+  // Ready from the wrist → the set (or the hold) on stage starts now, exactly as the lock screen's
+  // Ready does: after the clock, and only on a set that is still on stage.
+  watchReadyRef.current = afterClock((v) => {
+    if (v.displayPhase === 'SET_PRESENTED') v.markSetStarted();
+  });
   // "+15 sec" from the watch → extend the running rest (re-publishes to every surface).
   watchAddRestRef.current = (seconds) => view.extendRest(seconds);
   // Swap from the watch → the same swap a phone tap performs, routed by live phase

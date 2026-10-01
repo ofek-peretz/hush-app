@@ -20,6 +20,7 @@ import Svg, { Circle } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
 import { color, font, textScale, signal, stage as stageC } from '@/design/tokens';
 import { Legend } from './Legend';
+import { opticalFigure } from './Figure';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -120,7 +121,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
   if (bare) {
     return (
       <View style={styles.bareWrap}>
-        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{fmt(remaining)}</Text>
+        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{opticalFigure(fmt(remaining))}</Text>
         {label ? (
           <Legend
             size={size >= 220 ? 17 : textScale['2xs']}
@@ -156,7 +157,7 @@ export function RestRing({ remaining = 60, total = 90, size = 160, stroke = 6, l
         />
       </Svg>
       <View style={styles.readout}>
-        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{fmt(remaining)}</Text>
+        <Text style={[styles.time, { fontSize: timeSize }, onStage && { color: stageC.ink0 }, closing && (onStage ? styles.timeClosingStage : styles.timeClosing)]}>{opticalFigure(fmt(remaining))}</Text>
         {label ? (
           <Legend
             /* ⛔ 16 → 17 (the type floor). It hid from `typeHasAFloor` inside a TERNARY — the law

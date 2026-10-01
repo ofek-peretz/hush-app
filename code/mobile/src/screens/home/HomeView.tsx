@@ -49,7 +49,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { I18nManager } from 'react-native';
 import Svg, { Defs, LinearGradient as SvgGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
-import { Arrive, Avatar, Legend, Display, Body, Button, Stage, FooterFade } from '@/components/ds';
+import { Arrive, Avatar, Legend, Display, Body, Button, Stage, FooterFade, opticalFigure } from '@/components/ds';
 /*
  * ⛔ NEITHER THE WEEK COLUMN NOR THE WEEK SHEET IS DRAWN HERE ANY MORE.
  *
@@ -77,7 +77,8 @@ import { sheetSegments } from '@/components/WeekMeter';
 import { figureLoad, figureUnit, figureScheme, FigureCells } from '@/components/PlanLifts';
 import type { Weekday } from '@/domain/coachPlan';
 import { useCopy } from '@/i18n/useCopy';
-import { bidi } from '@/i18n/bidi';
+import { bidi, bidiName, ltrIsland } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import type { Line } from '@/domain/voice';
 import { displayWeight, unitLabel } from '@/domain/schedule';
 import * as haptics from '@/platform/haptics';
@@ -86,7 +87,12 @@ import { DayInMotion } from '@/components/DayInMotion';
 import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import type { FigureSex } from '@/motion/types';
 import { color, space, font, textScale, ramp, radius, signal, stage, motion, tracking, trackingPx, directionTone, type LoadDirection } from '@/design/tokens';
+import { KCAL_SHOWN_FROM } from '@/domain/energy';
+import { registerFlightSource } from '@/components/FigureFlight';
+import { massFigure } from '@/domain/sessionMetrics';
 import { TRIAL_NEWS_AT } from '@/domain/entitlement';
+import { CrewStack, type CrewFace } from '@/components/CrewStack';
+import { CoachUpdateCard, type CoachUpdateCardProps } from '@/components/CoachUpdateCard';
 // The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
 import { currentLocale } from '@/i18n';
 
@@ -184,6 +190,8 @@ export interface HomePlanLift {
   band: [number, number];
   /** Which way the engine moved this lift's load this week; absent = it did not touch it. */
   changed?: LoadDirection;
+  /** …and by how much, in kg (signed). Absent when only the direction is known. */
+  changedByKg?: number;
   /**
    * THE FIGURE HAS NOT LANDED YET (founder A.12 — "tapping the chips flickers").
    *
@@ -229,6 +237,10 @@ export interface HomeNextMark {
 
 export interface HomeViewProps {
   resting: boolean;
+  /** The crew's faces on the week row (2026-09-29) — null = no crew yet (the dashed "+"). */
+  crew?: CrewFace[] | null;
+  /** Opens the crew. Absent draws nothing on the week row. */
+  onCrew?: () => void;
   /** The corner disc — HER (founder 2026-09-16). Absent draws nothing, never a door to nowhere. */
   onProfile?: () => void;
   /** Whether an account exists, for the disc alone: `false` draws the figure and offers sign-in. */
@@ -373,6 +385,25 @@ export interface HomeViewProps {
   weekStats?: { tonnes: number; kcal: number | null; loadsUp: number } | null;
   /** The workout that opens the next week (rotation's first) — named, without a fabricated load. */
   nextWorkoutName?: string | null;
+  /**
+   * ════ ⛔ THE COACH TRACK ON TODAY (2026-09-17) ════
+   *
+   * `coachUpdate` — a new version of her coach's week landed: the paper card, first on the page.
+   * `coachSignature` — the week is a coach's (`authored: 'coach'`): named for its author, *"השבוע של
+   * דני"*. The signature is the coach's NAME, not a badge. `coachWaiting` — linked, and the coach has
+   * not sent a week yet: the card that says it is on its way, over the week she can train meanwhile.
+   */
+  coachUpdate?: CoachUpdateCardProps | null;
+  coachSignature?: string | null;
+  coachWaiting?: string | null;
+}
+
+/** A moved load as a signed figure in her units — "+2.5 kg", "−5 lb" — isolated LTR (U+2066…U+2069). */
+function movedFigure(kg: number, units: 'kg' | 'lb'): string {
+  const by = displayWeight(Math.abs(kg), units) ?? 0;
+  const LRI = '\u2066';
+  const PDI = '\u2069';
+  return `${LRI}${kg > 0 ? '+' : '\u2212'}${Number(by.toFixed(2))} ${unitLabel(units)}${PDI}`;
 }
 
 export function HomeView(props: HomeViewProps) {
@@ -484,7 +515,7 @@ export function HomeView(props: HomeViewProps) {
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         {/* brand + account — the FERROX mark and wordmark, the avatar opposite */}
         <View style={styles.brandRow}>
-          <View style={styles.brand}>
+          <View style={[styles.brand, ltrIsland()]}>
             <FerroxMark width={30} />
             <FerroxWordmark width={84} />
           </View>
@@ -508,7 +539,7 @@ export function HomeView(props: HomeViewProps) {
           {props.onProfile ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={props.signedIn === false ? t('profile.signIn') : t('nav.you')}
+              accessibilityLabel={t('nav.you')}
               hitSlop={8}
               onPress={props.onProfile}
               style={({ pressed }) => [styles.togetherDisc, pressed && styles.togetherDiscPressed]}
@@ -555,6 +586,13 @@ export function HomeView(props: HomeViewProps) {
               </View>
             </View>
           ))}
+          {props.coachUpdate ? <CoachUpdateCard {...props.coachUpdate} /> : null}
+          {props.coachWaiting ? (
+            <View style={styles.coachWaiting} accessible>
+              <Text style={styles.coachWaitingTitle}>{t('coachTrack.athlete.waitingTitle', { coach: bidiName(props.coachWaiting) })}</Text>
+              <Text style={styles.coachWaitingBody}>{t('coachTrack.athlete.waitingBody')}</Text>
+            </View>
+          ) : null}
           {props.resting ? (
             <View style={styles.restBlock}>
               {/* the day + week, quietly — a sans eyebrow (holds the translated word "Week") */}
@@ -639,8 +677,12 @@ export function HomeView(props: HomeViewProps) {
               {/* the week's facts — moved · kcal · loads up (mono figures, sans labels) */}
               {props.weekStats ? (
                 <View style={styles.statBand}>
-                  <RestFact value={props.weekStats.tonnes.toFixed(1)} label={`${t('weekly.tonneUnit')} ${t('weekly.statMoved')}`} />
-                  {props.weekStats.kcal != null ? <RestFact value={String(props.weekStats.kcal)} label={t('weekly.statKcal')} /> : null}
+                  {/* In tonnes from one up, in her unit below — `massFigure` (design audit 2026-09-29). */}
+                  {(() => {
+                    const m = massFigure(props.weekStats.tonnes * 1000, props.units);
+                    return <RestFact value={m.value} label={`${m.tonnes ? t('weekly.tonneUnit') : unitLabel(props.units)} ${t('weekly.statMoved')}`} />;
+                  })()}
+                  {props.weekStats.kcal != null && props.weekStats.kcal >= KCAL_SHOWN_FROM ? <RestFact value={String(props.weekStats.kcal)} label={t('weekly.statKcal')} /> : null}
                   <RestFact value={String(props.weekStats.loadsUp)} label={t('home.loadsUp')} accent />
                 </View>
               ) : null}
@@ -730,12 +772,15 @@ export function HomeView(props: HomeViewProps) {
                 which is the difference between composed and slow.
                 ════════════════════════════════════════════════════════════════════════════════
               */}
-              <Arrive order={0}>
+              <Arrive order={0} style={styles.weekHead}>
                 <Legend track={0.18}>
                   {props.weekNumber != null && props.workouts.length > 0
                     ? t('home.weekLabel', { n: props.weekNumber })
                     : `${restWeekday} · ${t('home.upNext')}`}
                 </Legend>
+                {/* ✦ THE CREW (2026-09-29) — on the week's own label line: "שבוע 3" is a few characters
+                    wide and the rest of the line was empty, so the crew costs Today almost nothing. */}
+                {props.onCrew ? <CrewStack faces={props.crew ?? null} onPress={props.onCrew} /> : null}
               </Arrive>
 
               {/* ⚠️ ONE DERIVATION FOR THE METER AND THE SHEET (`sheetSegments`), so the rule at the
@@ -758,6 +803,10 @@ export function HomeView(props: HomeViewProps) {
                 appears nowhere near it.
               */}
               {props.notice ? <Text style={styles.weekNotice}>{props.notice}</Text> : null}
+              {/* ⛔ The coach track: the week is named for the person who wrote it. */}
+              {props.coachSignature ? (
+                <Text style={styles.coachSignature}>{t('coachTrack.athlete.signature', { coach: bidiName(props.coachSignature) })}</Text>
+              ) : null}
 
               {/*
                 ════════════════════════════════════════════════════════════════════════════════════
@@ -870,13 +919,17 @@ export function HomeView(props: HomeViewProps) {
                       card exists at all. The figure says what today IS; the rows say what it costs.
                     */}
                     {props.plan && props.plan.length > 0 && !props.dayDone ? (
-                      <DayInMotion
-                        exerciseIds={props.plan.map((l) => l.exerciseId)}
-                        figure={props.figure}
-                        /* Today stays MOUNTED behind the other tabs — see the prop. */
-                        paused={props.motionPaused}
-                        style={styles.todayMotion}
-                      />
+                      /* The box the athlete takes off from when Begin is pressed (`FigureFlight`). */
+                      <View ref={registerFlightSource} collapsable={false} style={styles.todayMotion}>
+                        <DayInMotion
+                          exerciseIds={props.plan.map((l) => l.exerciseId)}
+                          figure={props.figure}
+                          /* Today stays MOUNTED behind the other tabs — see the prop. */
+                          paused={props.motionPaused}
+                          fit
+                          style={StyleSheet.absoluteFill as object}
+                        />
+                      </View>
                     ) : null}
                     {props.plan && props.plan.length > 0 && !props.dayDone ? (
                       <View style={styles.todayLifts}>
@@ -900,7 +953,20 @@ export function HomeView(props: HomeViewProps) {
                               this card has been bitten once already by a figure column starving the
                               name (see the note at `headLiftFigure`).
                             */}
-                            <Text style={styles.headLiftName}>{bidi(lift.name)}</Text>
+                            {/* ✦ WHAT IS NEW TODAY, SAID ON THE ROW IT IS ABOUT (founder 2026-09-28). The
+                                colour alone said a load moved; the amount says how far — "+2.5 kg since
+                                last time" is the sentence a trainer says walking her to the bar. The
+                                figure is an LTR isolate so the sign stays in front of it in Hebrew. */}
+                            {lift.changed && lift.changedByKg ? (
+                              <View style={styles.headLiftNameCol}>
+                                <Text style={[styles.headLiftName, styles.headLiftNameStacked]}>{bidi(lift.name)}</Text>
+                                <Text style={[styles.headLiftMoved, { color: directionTone(lift.changed) }]}>
+                                  {t('home.loadMoved', { delta: movedFigure(lift.changedByKg, props.units) })}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.headLiftName}>{bidi(lift.name)}</Text>
+                            )}
                             {/* A pending row's figure has not landed yet, and `load: null` already
                                 means BODYWEIGHT — a blank column here would be a claim, not a wait. */}
                             {/*
@@ -1017,11 +1083,17 @@ export function HomeView(props: HomeViewProps) {
 
                     {/* The week's running figures — the rest band's own vocabulary, live. */}
                     <View style={styles.liveStats}>
-                      <View style={styles.liveStat}>
-                        <Text style={styles.liveStatValue}>{props.weekLive.tonnes.toFixed(1)}</Text>
-                        <Legend size={17} tone="muted">{`${t('weekly.tonneUnit')} ${t('weekly.statMoved')}`}</Legend>
-                      </View>
-                      {props.weekLive.kcal != null ? (
+                      {(() => {
+                        // "0.3 t" after a light first workout was the loudest figure here — see `massFigure`.
+                        const m = massFigure(props.weekLive.tonnes * 1000, props.units);
+                        return (
+                          <View style={styles.liveStat}>
+                            <Text style={styles.liveStatValue}>{opticalFigure(m.value)}</Text>
+                            <Legend size={17} tone="muted">{`${m.tonnes ? t('weekly.tonneUnit') : unitLabel(props.units)} ${t('weekly.statMoved')}`}</Legend>
+                          </View>
+                        );
+                      })()}
+                      {props.weekLive.kcal != null && props.weekLive.kcal >= KCAL_SHOWN_FROM ? (
                         <View style={styles.liveStat}>
                           <Text style={styles.liveStatValue}>{String(props.weekLive.kcal)}</Text>
                           <Legend size={17} tone="muted">{t('weekly.statKcal')}</Legend>
@@ -1079,7 +1151,7 @@ export function HomeView(props: HomeViewProps) {
                   variant="primary"
                   size="lg"
                   block
-                  label={t('home.continueWorkout', { name: bidi(props.resumable.workoutName) })}
+                  label={t('home.continueWorkout', { name: bidi(dayTitle(props.resumable.workoutName)) })}
                   onPress={props.onResume}
                   leading={<Icon name="play" size={16} color={color.onAccent} />}
                 />
@@ -1184,7 +1256,7 @@ export function HomeView(props: HomeViewProps) {
 function RestFact({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
   return (
     <View style={styles.restFact}>
-      <Text style={[styles.restFactVal, accent && styles.restFactValUp]}>{value}</Text>
+      <Text style={[styles.restFactVal, accent && styles.restFactValUp]}>{opticalFigure(value)}</Text>
       <Legend size={20} tone={accent ? 'accent' : 'muted'}>{label}</Legend>
     </View>
   );
@@ -1267,7 +1339,7 @@ const styles = StyleSheet.create({
   togetherDisc: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(241,238,229,0.08)', borderWidth: 1, borderColor: 'rgba(241,238,229,0.12)' },
   togetherDiscPressed: { backgroundColor: 'rgba(241,238,229,0.14)' },
   // The wordmark stays LTR ("hush") in every locale rather than mirroring.
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 9, direction: 'ltr' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 9 }, // an LTR island via ltrIsland()
   // ════ THE SHARE DOOR IS A CONTROL, SO IT LOOKS LIKE ONE (founder A.8) ════
   /*
    * ⛔ `shareDoor` GOES WITH THE DOOR IT DRESSED (2026-08-12) — see the brand row.
@@ -1320,6 +1392,11 @@ const styles = StyleSheet.create({
    */
   /* The engine's own note. Sans rather than the coach's serif — it is a fact about her inputs, not
      a voice speaking to her, and the two must not be mistaken for each other. */
+  /* The coach track — the waiting card (a stage wash: it is a state, not a message) and the signature. */
+  coachWaiting: { borderRadius: radius.lg, borderWidth: 1, borderColor: 'rgba(169,196,159,0.42)', backgroundColor: 'rgba(169,196,159,0.08)', paddingHorizontal: 16, paddingVertical: 14, marginBottom: 18, gap: 4 },
+  coachWaitingTitle: { fontFamily: font.sansSemibold, fontSize: 19, lineHeight: 24, color: stage.ink0, textAlign: 'left' },
+  coachWaitingBody: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: stage.ink1, textAlign: 'left' },
+  coachSignature: { fontFamily: font.serif, fontSize: 20, lineHeight: 26, color: signal[0], marginTop: 10, textAlign: 'left' },
   weekNotice: {
     marginTop: 10,
     fontFamily: font.sans,
@@ -1343,10 +1420,19 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   headLiftName: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: stage.ink1, textAlign: 'left' },
+  headLiftNameCol: { flex: 1 },
+  headLiftNameStacked: { flex: 0 },
+  headLiftMoved: { marginTop: 2, fontFamily: font.sans, fontSize: 17, lineHeight: 22, textAlign: 'left' },
   /* The hero's own band of air. It is the one moving thing on Today, so it is given room rather
      than tucked between two text blocks — and the height is fixed so the card does not resize as
      the day cycles through lifts of different builds. */
-  todayMotion: { height: 132, marginTop: 14, marginBottom: 2, alignItems: 'center', justifyContent: 'center' },
+  /* 132 → 168 (design audit 2026-09-29): "the athlete is the face of the product" (founder
+     2026-08-30), and at 132 the face was a hundred points of figure in a card-wide band of black.
+     168 gives the body the room to read from arm's length and still leaves three rows of the day
+     above the act. */
+  /* 210 on the stage's fitted frame (design audit 2026-09-29): the athlete draws at ~1.5× the size she
+     had at 132 on the shared crop — the audit's ask — and still leaves the first rows above the fold. */
+  todayMotion: { height: 210, marginTop: 10, marginBottom: 2, alignItems: 'center', justifyContent: 'center' },
   /* ⚠️ MONO, AND IT MAY BE: this span is DIGITS — a load, a unit, "4×8–10". `monoCarriesNoWords`
      forbids the face on translated sentences because IBM Plex Mono cannot draw Hebrew at all; a
      figure has no words in it in any locale, and the numbers want the column. */
@@ -1436,6 +1522,8 @@ const styles = StyleSheet.create({
    * stacks as one label rather than two rows of text.
    */
   todayName: { fontFamily: font.serif, fontSize: 38, lineHeight: 42, color: color.textPrimary, textAlign: 'left' },
+  /* No minimum height: without a crew the line is exactly the legend it always was (measured 2026-09-29). */
+  weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   /* The shape — how much work and how long. The one line that answers "have I got time for this?",
      so it is never below the floor (founder 2026-08-03, raising it once already). */
   todayShape: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },

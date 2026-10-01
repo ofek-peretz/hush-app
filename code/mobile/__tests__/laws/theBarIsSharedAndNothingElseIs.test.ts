@@ -250,7 +250,8 @@ describe('5 · the guest adopts a shape, and every number comes from his own bod
     // …and the HOST's, through her ordinary Begin. This asymmetry shipped for an afternoon: the
     // poster and the story card named a partner on his phone and nobody on hers.
     expect(read('src/screens/home/Home.tsx')).toContain('pair.partnerName ? [pair.partnerName] : undefined');
-    expect(read('src/state/stores/sessionStore.tsx')).toContain('async startCoach(planned, workoutId, withPartners)');
+    // (2026-09-17: `opts` carries the coach track's swap for today — the partners argument is unchanged.)
+    expect(read('src/state/stores/sessionStore.tsx')).toMatch(/async startCoach\(planned, workoutId, withPartners(?:, opts)?\)/);
     expect(read('src/data/local/models.ts')).toContain('partners?: string[];');
   });
 
@@ -351,7 +352,10 @@ describe('7 · whose lifts, how you are invited, and what the room remembers', (
     const worker = readRepo('server/hush-identity/src/index.ts');
     // 1 · the association file Apple's CDN fetches, scoped to /pair and nothing else on this origin
     expect(worker).toContain("path === '/.well-known/apple-app-site-association'");
-    expect(worker).toContain("components: [{ '/': '/pair*' }, { '/': '/plan*' }]");
+    // (2026-09-17) + the coach invite, as `/c/*` and `/c` — never a bare `/c*`, which would claim
+    // `/circle`, `/config` and every `/coach/…` API path on this origin.
+    expect(worker).toContain("components: [{ '/': '/pair*' }, { '/': '/plan*' }, { '/': '/c/*' }, { '/': '/c' }]");
+    expect(worker).not.toContain("'/c*'");
     expect(worker).toContain('T6ZRTBRT2U');
     /*
      * 2 · ⛔ THE ENTITLEMENT IS BACK, AND THE CAPABILITY CAME FIRST (2026-09-01). The old form of
@@ -428,8 +432,10 @@ describe('7 · whose lifts, how you are invited, and what the room remembers', (
       expect({ ranking, present: circle.toLowerCase().includes(ranking.toLowerCase()) })
         .toEqual({ ranking, present: false });
     }
-    // …and it needed NO new field on the wire, which is the tell that it was the right fact.
-    expect(circle).toContain("CIRCLE_PAYLOAD_KEYS = ['name', 'done', 'planned']");
+    // …and it needed NO new field on the wire, which is the tell that it was the right fact. (The
+    // two keys added 2026-09-29 — `week`, `last` — carry the circle tab's streak and "trained today",
+    // not this sum; see `theCircleCarriesOneFactAndNothingElse`.)
+    expect(circle).toContain("CIRCLE_PAYLOAD_KEYS = ['name', 'done', 'planned', 'week', 'last']");
   });
 
   it('the together record is read from her OWN history — no circle, no wire, no account', () => {

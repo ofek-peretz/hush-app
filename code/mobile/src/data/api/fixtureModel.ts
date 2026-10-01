@@ -17,6 +17,7 @@
 
 // 
 
+import { setLoadRoom } from '@/engine/v5/loadGrid';
 import type {
   Capability,
   MuscleStance,
@@ -29,7 +30,7 @@ import type {
 } from '@/data/local/models';
 import { EXERCISES, exerciseById, exercisesForMuscle, engineMayAssign, patternFamily, indirectMusclesOf, INDIRECT_SHARE, type Exercise, type MuscleGroup } from '@/data/exercises';
 import { swapScore, effectiveSubstitutes } from '@/domain/swapPool';
-import { startingWeight, personalScale, snapToStock } from '@/domain/startingLoad';
+import { startingWeight, personalScale, snapToStock, doneAsWritten, experienceFactor } from '@/domain/startingLoad';
 import { retainedAfterGap, daysSinceLastSession } from '@/engine/v5/detraining';
 import { computePortrait } from '@/data/progression';
 import { bandFor } from '@/engine/v5/repBand';
@@ -1092,9 +1093,10 @@ function bestPatternE1rm(
   muscle: string | undefined,
   tier: Tier | undefined,
   history: Session[],
-): { e1rm: number; baseKg: number } {
+): { e1rm: number; baseKg: number; asWritten: boolean } {
   let e1rm = 0;
   let baseKg = 0;
+  let asWritten = false;
   for (const s of history) {
     for (const log of s.sets) {
       if (!isEvidenceSet(log) || log.actualWeight == null || log.actualReps <= 0) continue;
@@ -1106,10 +1108,11 @@ function bestPatternE1rm(
       if (e > e1rm) {
         e1rm = e;
         baseKg = ex.baseKg;
+        asWritten = doneAsWritten(log);
       }
     }
   }
-  return { e1rm, baseKg };
+  return { e1rm, baseKg, asWritten };
 }
 
 /** The e1RM→working-load conversion's DEFAULT rep count — the default band's Tlo. Callers that know
@@ -1130,7 +1133,7 @@ const DEFAULT_SEED_REP_TARGET = 8;
  */
 export function smartSeed(
   id: string,
-  profile: Pick<Profile, 'sex' | 'weightKg'>,
+  profile: Pick<Profile, 'sex' | 'weightKg'> & { experience?: Profile['experience'] },
   history: Session[],
   /** Her Tlo for this lift's muscle — what a "working load" means to HER (default: the 8-10 band's). */
   repTarget: number = DEFAULT_SEED_REP_TARGET,
@@ -1150,7 +1153,14 @@ export function smartSeed(
   const pattern = enginePattern(id);
   if (pattern) {
     const best = bestPatternE1rm(pattern, ex.muscle, ex.tier, history);
-    if (best.e1rm > 0 && best.baseKg > 0) return toWorking(best.e1rm * (ex.baseKg / best.baseKg));
+    if (best.e1rm > 0 && best.baseKg > 0) {
+      const transferred = toWorking(best.e1rm * (ex.baseKg / best.baseKg));
+      /* ⛔ A donor done AS WRITTEN is a floor, not her strength (`doneAsWritten`, 2026-09-28): it may
+         raise this lift above the cold start, never pull it below. */
+      if (!best.asWritten) return transferred;
+      const cold = coldSeed(ex, profile, history, repTarget);
+      return cold != null ? Math.max(transferred, cold) : transferred;
+    }
   }
   /*
    * ════ 3 · THE COLD START — AND HER OWN CORRECTION TO IT ════
@@ -1184,9 +1194,17 @@ export function smartSeed(
    * what it weighs, and S-55b's answer to "this is still too heavy for her" is a different lift, not
    * a lighter impossible one. Stated because the paragraph above reads like a promise otherwise.
    */
-  const scale = personalScale(history, profile, exerciseById, repTarget, epley);
+  return coldSeed(ex, profile, history, repTarget);
+}
+
+/**
+ * Step 3 alone: the cold start, scaled by what she has measurably shown (`personalScale`) — or, until
+ * she has shown it, by how long she says she has trained (`experienceFactor`, 2026-09-28).
+ */
+function coldSeed(ex: Exercise, profile: Pick<Profile, 'sex' | 'weightKg'> & { experience?: Profile['experience'] }, history: Session[], repTarget: number): number | null {
+  const scale = personalScale(history, profile, exerciseById, repTarget, epley) ?? experienceFactor(profile.experience);
   const cold = startingWeight(ex, profile);
-  if (cold == null || scale == null) return cold;
+  if (cold == null || scale === 1) return cold;
   return snapToStock(cold * scale, ex);
 }
 
@@ -1611,7 +1629,7 @@ function growEmphasised(
 // `goal` and `experience` are NOT read here: Part 5 deletes the goal fork ("there is one goal:
 // hypertrophy") and Part 9 §A deletes `experience` from the decision path. `age` survives only for
 // the age-based rep guidance outside the engine, never for a load or a set count.
-async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'age' | 'memberSince' | 'repBand' | 'repBandByMuscle'>> {
+async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'age' | 'memberSince' | 'repBand' | 'repBandByMuscle'> & { units?: Profile['units'] }> {
   try {
     const p = await db.loadProfile();
     if (p) return p;
@@ -1709,6 +1727,60 @@ async function foldEngine(
   return run;
 }
 
+/**
+ * The opening load written on a lift's seat in the week on disk, if its author wrote one — see
+ * `Slot.startLoadKg` (2026-09-28, B-1 cancelled). Snapped onto a weight the equipment can hold, the
+ * same way every cold seed is. Only ever a SEED: a lift she has lifted is priced from her own sets.
+ */
+function slotStartLoadOf(program: Program | null | undefined, exId: string): number | null {
+  const ex = exerciseById(exId);
+  if (!ex || ex.bodyweight) return null;
+  for (const d of program?.days ?? []) {
+    for (const s of d.slots) {
+      if (s.exerciseId === exId && s.startLoadKg != null && s.startLoadKg > 0) return snapToStock(s.startLoadKg, ex);
+    }
+  }
+  return null;
+}
+
+/**
+ * ════ THE WEEK'S OPENING LOADS, BEFORE ANYTHING IS ON DISK (2026-09-28) ════
+ *
+ * The Ready screen shows her week WITH its weights (founder 2026-09-28: *"מסך התוכנית מוכנה —
+ * מאשר, שיהיה יפה ומרשים"*), and it runs before `completeOnboarding` writes the profile — so it
+ * cannot ask `sessionTargets`. This is the same seed chain the engine runs the first time it meets
+ * a lift she has never lifted (`foldEngineUnsynchronised` → `initExercise`): the load her week's
+ * author wrote, else `smartSeed` at her band's floor. Pure, so the screen and the first workout
+ * cannot disagree (`theReadyScreenShowsTheLoadsSheTrains`).
+ */
+export function openingTargetsOf(
+  program: Program,
+  profile: Pick<Profile, 'sex' | 'weightKg' | 'repBand' | 'repBandByMuscle'> & { experience?: Profile['experience'] },
+): SetTarget[] {
+  const out: SetTarget[] = [];
+  const seen = new Set<string>();
+  for (const d of program.days) {
+    for (const s of d.slots) {
+      if (seen.has(s.exerciseId)) continue;
+      seen.add(s.exerciseId);
+      const ex = exerciseById(s.exerciseId);
+      if (!ex) continue;
+      const band = slotBandOf(program, s.exerciseId) ?? bandFor((profile.repBandByMuscle?.[ex.muscle] ?? undefined) ?? profile.repBand);
+      const load = ex.bodyweight ? null : slotStartLoadOf(program, s.exerciseId) ?? smartSeed(s.exerciseId, profile, [], band.lo);
+      out.push({ exerciseId: s.exerciseId, setIndex: 0, recommendedWeight: load, recommendedReps: band.lo, repBandLo: band.lo, repBandHi: band.hi });
+    }
+  }
+  return out;
+}
+
+/** The same seeds, keyed by lift — what the Ready screen prints beside each name. */
+export function openingLoadsOf(
+  program: Program,
+  profile: Parameters<typeof openingTargetsOf>[1],
+): Record<string, number | null> {
+  return Object.fromEntries(openingTargetsOf(program, profile).map((t) => [t.exerciseId, t.recommendedWeight]));
+}
+
 /** The band written on a lift's seat in the week on disk, if its author wrote one — see `Slot.repBand`. */
 function slotBandOf(program: Program | null | undefined, exId: string): Band | null {
   for (const d of program?.days ?? []) {
@@ -1740,7 +1812,10 @@ async function foldEngineUnsynchronised(
   };
   // The seed's working-load conversion is priced at HER Tlo for the lift's muscle (S-9/S-43 — no
   // invented rep count sizes a load once she has declared a band).
-  const seedFor = (id: string) => smartSeed(id, profile, history, bandOf(id).lo);
+  /* ⛔ THE LOAD HER WEEK'S AUTHOR WROTE COMES FIRST (2026-09-28, B-1 cancelled): the model read "לחיצת
+     חזה 80 על 8" and wrote the opening loads from it. The sex × bodyweight guess is for the lift
+     nobody wrote a number for. (The engine seeds only lifts she has never lifted — her own sets win.) */
+  const seedFor = (id: string) => slotStartLoadOf(program, id) ?? smartSeed(id, profile, history, bandOf(id).lo);
   /*
    * ⛔ AND THE SEED RE-READ STANDS DOWN WHILE SHE IS INSIDE A GAP (B-9, caught in review 2026-08-16).
    *
@@ -2278,6 +2353,9 @@ export const fixtureModel: ModelClient = {
   async sessionTargets({ programDayId }): Promise<SetTarget[]> {
     void programDayId; // targets are keyed by exercise; the screen picks the day's slots
     const profile = await loadProfileSafe();
+    // The week's loads land on HER room's rungs (`engine/v5/loadGrid`) — read off the disk here too,
+    // so the one producer every surface reads is right even before the app store has rendered.
+    setLoadRoom(profile?.units);
     const history = await loadHistorySafe();
     const out: SetTarget[] = [];
 
@@ -2407,7 +2485,7 @@ export const fixtureModel: ModelClient = {
     for (const ex of EXERCISES) {
       const v5t = v5targets[ex.id];
       // v5 owns every managed exercise; an unmanaged / swap-only lift falls back to the seed + her band.
-      const weight = v5t ? v5t.weight : smartSeed(ex.id, profile, history, bandOf(ex.id).lo);
+      const weight = v5t ? v5t.weight : slotStartLoadOf(program, ex.id) ?? smartSeed(ex.id, profile, history, bandOf(ex.id).lo);
       const reps = v5t ? v5t.reps : bandOf(ex.id).lo;
       const repBandHi = v5t ? v5t.bandHi : bandOf(ex.id).hi;
       let reasonType: SetTarget['reasonType'];

@@ -42,7 +42,7 @@ const noop = () => {};
 const asyncNoop = async () => ({ ended: false, unlockedPortrait: false, correction: null });
 
 /** The step she is standing in front of — a lift when `item` is reps or absent, a movement otherwise. */
-function makeSession(item: PlannedItem | null, completeItem = jest.fn(asyncNoop)) {
+function makeSession(item: PlannedItem | null, completeItem = jest.fn(asyncNoop), extra: Record<string, unknown> = {}) {
   const isSet = !item || item.kind === 'reps';
   return {
     active: true,
@@ -93,6 +93,13 @@ function makeSession(item: PlannedItem | null, completeItem = jest.fn(asyncNoop)
     setWatchHomeActions: noop,
     clearEndResult: noop,
     clearCorrection: noop,
+    // The voice's Ready and the hold's one clock (2026-09-28) — the store's; idle here unless a test says so.
+    awaitingReady: false,
+    markSetStarted: noop,
+    holdStartedAtMs: null,
+    holdEndsAtMs: null,
+    holdFrozenRemainingS: null,
+    ...extra,
   } as unknown as React.ContextType<typeof SessionContext>;
 }
 
@@ -184,9 +191,15 @@ describe('a step that is not a set never reaches the set stage', () => {
 
   it('ends the step through the door that knows its shape', () => {
     const completeItem = jest.fn(asyncNoop);
-    const r = draw(makeSession(PLANK as PlannedItem, completeItem));
-    const start = r.root.find((n) => n.props?.accessibilityLabel === tg('workout.itemStart') && typeof n.props.onPress === 'function');
+    // Start is the store's start (2026-09-28): the same `markSetStarted` as Ready on the wrist or the
+    // card, or "מוכן" — it starts the hold's ONE clock, and the stage counts to the end it is handed.
+    const markSetStarted = jest.fn();
+    const idle = draw(makeSession(PLANK as PlannedItem, completeItem, { markSetStarted }));
+    const start = idle.root.find((n) => n.props?.accessibilityLabel === tg('workout.itemStart') && typeof n.props.onPress === 'function');
     act(() => start.props.onPress());
+    expect(markSetStarted).toHaveBeenCalledTimes(1);
+    const t0 = Date.now();
+    const r = draw(makeSession(PLANK as PlannedItem, completeItem, { holdStartedAtMs: t0, holdEndsAtMs: t0 + 45_000 }));
     act(() => { jest.advanceTimersByTime(20_000); });
     const stop = r.root.find((n) => n.props?.accessibilityLabel === tg('workout.itemStop') && typeof n.props.onPress === 'function');
     act(() => stop.props.onPress());
@@ -203,5 +216,17 @@ describe('a set is still a set', () => {
     const r = draw(makeSession(item));
     expect(labels(r)).toContain(tg('workout.completeSet'));
     expect(labels(r)).not.toContain(tg('workout.itemStart'));
+  });
+
+  it('⛔ while the voice waits for "מוכן", the stage offers Ready beside Done — as the wrist and the card do (2026-09-28)', () => {
+    const markSetStarted = jest.fn();
+    const quiet = draw(makeSession(null));
+    expect(labels(quiet)).not.toContain(tg('notifications.lockActReady'));
+    const r = draw(makeSession(null, jest.fn(asyncNoop), { awaitingReady: true, markSetStarted }));
+    expect(labels(r)).toContain(tg('notifications.lockActReady'));
+    expect(labels(r)).toContain(tg('workout.completeSet')); // Done stays: she may lift without the word
+    const ready = r.root.find((n) => n.props?.accessibilityLabel === tg('notifications.lockActReady') && typeof n.props.onPress === 'function');
+    act(() => ready.props.onPress());
+    expect(markSetStarted).toHaveBeenCalledTimes(1);
   });
 });

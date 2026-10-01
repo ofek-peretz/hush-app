@@ -101,11 +101,23 @@ describe('⛔ the model is called from ONE place', () => {
      * ⚠️ AND IT IS HER TAP, once, on one door of the intake — never after a session, never on a
      * schedule. That is the distinction the whole file turns on.
      */
+    /*
+     * ════ THE COACH'S PEN HOLDS THE IMPORT'S TRANSPORT (the coach track, founder 2026-09-17) ════
+     *
+     * *"אני רוצה להוסיף מסלול למאמנים"* — and the approved screen is the builder in for-mode with ALL
+     * FOUR doors, one of which is "צילום דף שכבר יש לך". That door IS the import: the same
+     * `runImport(askCoach, …)` `ImportPlan` runs, on the coach's tap, once per page. It is not a new
+     * kind of surface, only the sanctioned one reached from a second screen, and it is held to the
+     * same three limits: it cannot prescribe (the import schema carries no load), it writes no
+     * `CoachPlan` (the writer sweep below), and its answer becomes a DRAFT that leaves the phone only
+     * on the coach's Send — never this phone's programme (`aCoachWritingForSomeoneNeverTouchesHisOwnWeek`).
+     */
     expect(holders).toEqual([
       'platform/coach/afterSession.ts',
       'platform/coach/coachClient.ts',
       'platform/coach/planBuild.ts',
       'platform/coach/planReview.ts',
+      'screens/coach/CoachWeekBuilder.tsx',
       'screens/import/ImportPlan.tsx',
     ]);
   });

@@ -54,6 +54,10 @@ export function ExerciseDemo({ title, cues, doneLabel, onDone, exerciseId }: Pro
       {/* THE BACKDROP IS THE BUTTON. A press anywhere outside the card closes it — including on
           the hint line, which sits on this layer rather than inside the card. */}
       <Pressable accessibilityRole="button" accessibilityLabel={doneLabel} onPress={onDone} style={styles.scrim} />
+      {/* The card and its one instruction are one column: the hint sits UNDER THE CARD, never at a
+          fixed height from the bottom, where it landed on the Begin button's words (design audit
+          2026-09-29). `box-none` so a press beside the card still reaches the backdrop. */}
+      <View style={styles.stack} pointerEvents="box-none">
       <View style={styles.card}>
         <View style={styles.media}>
           <FormMedia exerciseId={exerciseId} title={title} />
@@ -69,17 +73,15 @@ export function ExerciseDemo({ title, cues, doneLabel, onDone, exerciseId }: Pro
         </View>
       </View>
       <Text pointerEvents="none" style={styles.hint}>{doneLabel}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,14,12,0.75)' },
+  stack: { position: 'absolute', left: 20, right: 20, top: 150 },
   card: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    top: 150,
     backgroundColor: '#1d1c19',
     borderWidth: 1,
     borderColor: 'rgba(241,238,229,0.14)',
@@ -112,5 +114,5 @@ const styles = StyleSheet.create({
   // A cue is READ under load: brighter than the app's secondary ink, short of the headline's.
   cue: { flex: 1, fontFamily: font.sans, fontSize: 17, lineHeight: 20, color: '#d8d4c8', textAlign: 'left' },
   // The one instruction on the screen, under the card, on the backdrop it describes.
-  hint: { position: 'absolute', left: 0, right: 0, bottom: 60, fontFamily: font.sans, fontSize: 17, color: stage.ink1, textAlign: 'center' },
+  hint: { marginTop: 16, fontFamily: font.sans, fontSize: 17, color: stage.ink1, textAlign: 'center' },
 });

@@ -109,7 +109,9 @@ describe('and it reaches two screens, not one', () => {
      * documentation, which this one did on its first run.
      */
     const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
-    expect(code).not.toContain('coachPlan');
+    /* The stale RECORD (`db.loadCoachPlan`) is what this forbids. Since 2026-09-28 the screen draws
+       her week through `coachPlanFromProgram` — the same projection Today runs — which is not it. */
+    expect(code).not.toMatch(/loadCoachPlan|\bcoachPlan\b/);
   });
 
   it('⛔ …and NOT on Today, which is the screen that has to be about today', () => {

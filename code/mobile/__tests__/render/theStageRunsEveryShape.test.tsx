@@ -50,33 +50,57 @@ function press(r: ReactTestRenderer, label: string): void {
 describe('a held duration', () => {
   const item = { kind: 'time', ex: 'plank', seconds: 45, say: 'Ribs down, breathe.' } as const;
 
+  /*
+   * ⛔ THE CLOCK IS THE STORE'S (2026-09-28): the stage is handed the hold's one start and end
+   * (`holdStartedAtMs` / `holdEndsAtMs`) and counts to them — the same end the wrist, the card and the
+   * voice count to. This harness plays the store: Start stamps the clock, and the stage is re-drawn
+   * with it, exactly as `SessionFlow` hands it `useSession()`'s fields.
+   */
+  function Held({ onDone, pausedLeftS = null }: { onDone: (s: number) => void; pausedLeftS?: number | null }) {
+    const [startedAt, setStartedAt] = React.useState<number | null>(null);
+    return (
+      <TimeStage
+        item={item}
+        name="Plank"
+        started={startedAt != null}
+        endsAtMs={startedAt != null && pausedLeftS == null ? startedAt + item.seconds * 1000 : null}
+        frozenRemainingS={startedAt != null ? pausedLeftS : null}
+        onStart={() => setStartedAt(Date.now())}
+        onDone={onDone}
+      />
+    );
+  }
+
   it('shows the duration as a clock and does not start on its own', () => {
-    const r = draw(<TimeStage item={item} name="Plank" onDone={jest.fn()} />);
+    const r = draw(<Held onDone={jest.fn()} />);
     expect(textOf(r)).toContain('0:45');
     // A plank timer that begins while she is still walking to the mat has measured the walk.
     act(() => { jest.advanceTimersByTime(5000); });
     expect(textOf(r)).toContain('0:45');
   });
 
-  it('counts down once she starts it', () => {
-    const r = draw(<TimeStage item={item} name="Plank" onDone={jest.fn()} />);
+  it('counts down once she starts it — to the one end it is handed', () => {
+    const r = draw(<Held onDone={jest.fn()} />);
     press(r, tg('workout.itemStart'));
     act(() => { jest.advanceTimersByTime(5000); });
     expect(textOf(r)).toContain('0:40');
   });
 
-  it('ends itself at zero with the full duration — nothing to confirm at the end of a plank', () => {
+  it('⛔ ZERO WRITES NOTHING (founder, 2026-09-09): at the end it offers Done, and her tap is the full hold', () => {
     const onDone = jest.fn();
-    const r = draw(<TimeStage item={item} name="Plank" onDone={onDone} />);
+    const r = draw(<Held onDone={onDone} />);
     press(r, tg('workout.itemStart'));
-    act(() => { jest.advanceTimersByTime(45000); });
+    act(() => { jest.advanceTimersByTime(60000); });
+    expect(onDone).not.toHaveBeenCalled();
+    expect(textOf(r)).toContain('0:00');
+    press(r, tg('workout.itemDone'));
     expect(onDone).toHaveBeenCalledWith(45);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it('reports what she ACTUALLY held when she stops early — that is the measurement', () => {
     const onDone = jest.fn();
-    const r = draw(<TimeStage item={item} name="Plank" onDone={onDone} />);
+    const r = draw(<Held onDone={onDone} />);
     press(r, tg('workout.itemStart'));
     act(() => { jest.advanceTimersByTime(20000); });
     press(r, tg('workout.itemStop'));
@@ -85,7 +109,7 @@ describe('a held duration', () => {
 
   it('never reports twice, however the item ends', () => {
     const onDone = jest.fn();
-    const r = draw(<TimeStage item={item} name="Plank" onDone={onDone} />);
+    const r = draw(<Held onDone={onDone} />);
     press(r, tg('workout.itemStart'));
     act(() => { jest.advanceTimersByTime(20000); });
     press(r, tg('workout.itemStop'));
@@ -93,8 +117,15 @@ describe('a held duration', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
+  it('a paused hold holds what is left of it — and does not count', () => {
+    const r = draw(<Held onDone={jest.fn()} pausedLeftS={25} />);
+    press(r, tg('workout.itemStart'));
+    act(() => { jest.advanceTimersByTime(30000); });
+    expect(textOf(r)).toContain('0:25');
+  });
+
   it('says the coach\'s instruction', () => {
-    const r = draw(<TimeStage item={item} name="Plank" onDone={jest.fn()} />);
+    const r = draw(<Held onDone={jest.fn()} />);
     expect(textOf(r)).toContain('Ribs down, breathe.');
   });
 });

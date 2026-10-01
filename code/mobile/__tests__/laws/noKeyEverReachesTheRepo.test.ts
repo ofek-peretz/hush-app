@@ -6,7 +6,8 @@ import path from 'path';
 /**
  * ════ NO KEY EVER REACHES THE REPO ════
  *
- * The Gemini key lives in Cloudflare's secret store and nowhere else. This is the law that says so
+ * The provider's key (OpenAI's since 2026-09-28; Gemini's before) lives in Cloudflare's secret
+ * store and nowhere else. This is the law that says so
  * in a way nobody has to remember.
  *
  * It is worth a test rather than a note because of how the mistake actually happens: not by
@@ -84,8 +85,13 @@ describe('no key ever reaches the repo', () => {
   it('keeps the Worker reading its key from the environment and nowhere else', () => {
     // The one file that touches the key. It may name the variable; it may never hold a value.
     const worker = fs.readFileSync(path.join(ROOT, 'server', 'worker.ts'), 'utf8');
-    expect(worker).toContain('env.GEMINI_API_KEY');
-    // No assignment of a literal to anything key-shaped — `GEMINI_API_KEY = "…"`, `apiKey: '…'`.
-    expect(worker).not.toMatch(/(GEMINI_API_KEY|HUSH_TOKEN|apiKey)\s*[:=]\s*['"][^'"]{8,}/);
+    expect(worker).toContain('env.OPENAI_API_KEY');
+    // No assignment of a literal to anything key-shaped — `OPENAI_API_KEY = "…"`, `apiKey: '…'`.
+    expect(worker).not.toMatch(/(OPENAI_API_KEY|GEMINI_API_KEY|ANTHROPIC_API_KEY|HUSH_TOKEN|apiKey)\s*[:=]\s*['"][^'"]{8,}/);
+    // …and the two files that carry it to OpenAI take it as a parameter, never as a value.
+    for (const f of ['openaiModel.ts', 'voice.ts']) {
+      const src = fs.readFileSync(path.join(ROOT, 'server', f), 'utf8');
+      expect(src).not.toMatch(/(OPENAI_API_KEY|apiKey)\s*[:=]\s*['"][^'"]{8,}/);
+    }
   });
 });

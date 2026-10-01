@@ -158,7 +158,7 @@ function props(over: Partial<HomeViewProps> = {}): HomeViewProps {
     brief: null,
     briefCount: null,
     briefUnseen: false,
-    trialLeft: 2, // inside the news window — see `TRIAL_NEWS_AT`
+    trialLeft: 1, // inside the news window — see `TRIAL_NEWS_AT` (the last free workout, 2026-09-28)
     onStart: () => {},
     onChooseWorkout: () => {},
     onWeeklyUpdate: () => {},
@@ -206,7 +206,7 @@ describe('the one act is never below the fold', () => {
       j.children?.forEach(walk);
     };
     walk(r.toJSON());
-    expect(said.join(' ')).toContain(tg('home.trialLeft', { count: 2 }).toUpperCase());
+    expect(said.join(' ')).toContain(tg('home.trialLeft', { count: 1 }).toUpperCase());
   });
 
   /**

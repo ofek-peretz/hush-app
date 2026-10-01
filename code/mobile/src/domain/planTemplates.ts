@@ -27,7 +27,7 @@
 //
 
 import type { Program } from '@/data/local/models';
-import { addDay, addLift, blankDraft, renameDay, setLiftBand, setLiftSets, togglePair } from '@/domain/planBuilder';
+import { addDay, addLift, blankDraft, renameDay, setLiftBand, setLiftSets, setLiftStartLoad, togglePair } from '@/domain/planBuilder';
 
 export interface TemplateLift {
   ex: string;
@@ -46,6 +46,9 @@ export interface TemplateLift {
   /** A rep range the sheet's author wrote for this lift (the model, 2026-09-07 — see `buildPrompt`
    *  at `REPS_MIN`). Absent on every shelf: a shelf takes her own band, as it always has. */
   reps?: [number, number];
+  /** The opening load the author wrote, kg (the model, 2026-09-28 — `Slot.startLoadKg`). Absent on
+   *  every shelf: a shelf is priced by the engine, as it always has been. */
+  load?: number;
 }
 export interface TemplateDay {
   /** i18n suffix under `builder.templates.dayNames.` — resolved AT materialization, because a
@@ -540,6 +543,7 @@ export function materializeTemplate(tpl: PlanTemplate, dayName: (nameKey: string
       d = addLift(d, di, l.ex);
       d = setLiftSets(d, di, li, l.sets);
       if (l.reps) d = setLiftBand(d, di, li, l.reps);
+      if (l.load != null) d = setLiftStartLoad(d, di, li, l.load);
     });
 
     /*

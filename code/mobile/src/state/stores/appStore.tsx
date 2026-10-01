@@ -5,7 +5,8 @@
 
 // 
 
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { setLoadRoom } from '@/engine/v5/loadGrid';
 import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
 import type { LearnedAboutHer } from '@/domain/coachPlan';
 import { applyLearned } from '@/domain/coachLearned';
@@ -13,7 +14,8 @@ import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
 import type { AthleteRecord } from '@/domain/record';
 import { salvageOrphanSession, RESUME_WINDOW_MS, type SalvageResult } from '@/state/sessionRecovery';
-import { applyWeekOpenDow, currentWeekOpen, firstBucketOpen, healWeekCompletion, shouldRollWeek, weekOpenDowForDevice } from '@/domain/weekCadence';
+import { applyWeekOpenDow, currentWeekOpen, healWeekCompletion, nextMorningAt, weekOpenDowForDevice } from '@/domain/weekCadence';
+import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import * as Localization from 'expo-localization';
 import { agedProfile } from '@/domain/profileAge';
 import { CONSENT_VERSION } from '@/domain/consent';
@@ -51,10 +53,13 @@ import { cloudAutoBackup } from '@/platform/cloudBackup';
 import { updateHomeWidget } from '@/platform/homeWidget';
 import { syncTrainingRemindersFromPlan } from '@/platform/trainingReminders';
 import { armGapCatch } from '@/platform/gapCatch';
-import { armTrialLast } from '@/platform/trialCatch';
+import { armTrialEnding, armTrialLast } from '@/platform/trialCatch';
 import { armCirclePublish } from '@/platform/circlePublish';
+import { rollClosedCycles } from '@/data/local/cycleRoll';
+import { loadCoachLink, onCoachLinkChange } from '@/state/coachOutbox';
+import { weekIsLockedToCoach } from '@/domain/coachTrack';
 import { readRecord as readAthleteRecord, restoreVerdict } from '@/domain/record';
-import { NO_ENTITLEMENT, entitlementNow, type Entitlement } from '@/domain/entitlement';
+import { NO_COACH_PLAN, NO_ENTITLEMENT, entitlementNow, grandfatherTrial, withCoachLink, withCoachPlan, type CoachPlan, type Entitlement } from '@/domain/entitlement';
 
 /** Derive the calibration mode from the backend's completed-session count
  *  (source of truth, §2.3). Reinstall/device-change safe. */
@@ -105,14 +110,18 @@ interface AppState {
   justUnlockedPortrait: boolean; // one-shot flag consumed by the Well Done → Portrait route
   snapshots: PortraitSnapshot[]; // oldest first; [0] is the week-one baseline
   recents: string[]; // exercise ids, most-recent first ("Your exercises")
-  weekOpenMs: number | null; // Saturday-20:30-local the current bucket was built for (calendar cadence)
+  weekOpenMs: number | null; // when the current CYCLE opened (the rotation, 2026-09-28 — it was the Saturday 20:30 bucket)
+  /** Which cycle she is in — "שבוע N" on Today (the rotation, 2026-09-28). Null until the first roll. */
+  weekCycle: number | null;
   entitlement: Entitlement; // subscription state (StoreKit truth, locally cached for gating)
 }
 
 type Action =
-  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[]; entitlement: Entitlement; weekOpenMs: number | null }
+  | { type: 'BOOTED'; profile: Profile | null; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; recents: string[]; entitlement: Entitlement; weekOpenMs: number | null; weekCycle?: number | null }
   | { type: 'ENTITLEMENT'; entitlement: Entitlement }
   | { type: 'PROGRAM_UPDATED'; program: Program | null; recents: string[]; weekOpenMs?: number }
+  /** The rotation opened a new cycle (or adopted an anchor) — nothing else about her state moved. */
+  | { type: 'WEEK_OPENED'; weekOpenMs: number; weekCycle?: number | null }
   | { type: 'ONBOARDED'; profile: Profile; program: Program | null; mode: AthleteModeState; snapshots: PortraitSnapshot[]; weekOpenMs: number }
   | { type: 'PROFILE_UPDATED'; profile: Profile }
   | { type: 'SESSION_COMPLETED'; mode: AthleteModeState; unlocked: boolean; snapshots: PortraitSnapshot[] }
@@ -130,6 +139,7 @@ const initial: AppState = {
   snapshots: [],
   recents: [],
   weekOpenMs: null,
+  weekCycle: null,
   entitlement: NO_ENTITLEMENT,
 };
 
@@ -139,13 +149,15 @@ function reducer(s: AppState, a: Action): AppState {
     // stops saying "active" the moment it is read, not the day StoreKit is next reachable
     // (domain/entitlement, audit finding 5).
     case 'BOOTED':
-      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: entitlementNow(a.entitlement), weekOpenMs: a.weekOpenMs };
+      return { ...s, booted: true, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, recents: a.recents, entitlement: entitlementNow(a.entitlement), weekOpenMs: a.weekOpenMs, weekCycle: a.weekCycle ?? null };
     case 'ENTITLEMENT':
       return { ...s, entitlement: entitlementNow(a.entitlement) };
     case 'PROGRAM_UPDATED':
       return { ...s, program: a.program, recents: a.recents, ...(a.weekOpenMs !== undefined ? { weekOpenMs: a.weekOpenMs } : {}) };
+    case 'WEEK_OPENED':
+      return { ...s, weekOpenMs: a.weekOpenMs, ...(a.weekCycle !== undefined ? { weekCycle: a.weekCycle } : {}) };
     case 'ONBOARDED':
-      return { ...s, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, weekOpenMs: a.weekOpenMs };
+      return { ...s, profile: a.profile, program: a.program, modeState: a.mode, snapshots: a.snapshots, weekOpenMs: a.weekOpenMs, weekCycle: 1 };
     case 'PROFILE_UPDATED':
       return { ...s, profile: a.profile };
     case 'SESSION_COMPLETED':
@@ -266,6 +278,14 @@ interface AppApi extends AppState {
    */
   saveBuiltProgram: (program: Program) => Promise<void>;
   /**
+   * ════ THE COACH'S WEEK LANDS (the coach track, 2026-09-17) ════
+   * The one writer of a week stamped `authored: 'coach'` — called by `state/coachOutbox.pullCoachWeek`
+   * after `landCoachUpdate` has already decided it may land (law 2). Same naked-save contract as
+   * `adoptImportedProgram`: what the coach sent is what lands on disk, not one clamp on the way past.
+   * Refuses anything that is not a coach week, so it can never become a side door around the gates.
+   */
+  adoptCoachWeek: (program: Program) => Promise<void>;
+  /**
    * Hands the pen back: regenerates a fresh ENGINE week (stamped `authored: 'engine'` by absence)
    * and saves it over her built one. Only she calls this, from the builder's own door — it is the
    * single sanctioned way out of authorship, and it is loud in the UI, never implied.
@@ -307,6 +327,10 @@ interface AppApi extends AppState {
     voiceSpec?: boolean;
     /** The pocket ear's microphone. Absent = headset. */
     voiceMic?: 'headset' | 'phone';
+    /** The coach's voice — a natural voice id or `'device'` (Carmit). Absent = the first natural voice. */
+    coachVoiceId?: string;
+    /** The second ear (cloud recognizer). Absent = on. */
+    voiceCloudEar?: boolean;
   }) => Promise<boolean>;
   /**
    * ════ SHE TOLD THE COACH SOMETHING ABOUT HERSELF, AND THE APP WRITES IT DOWN ════
@@ -410,7 +434,23 @@ export const AppContext = Ctx;
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 export function engineMayRebuild(program: Program | null | undefined): boolean {
+  /*
+   * ⛔ `'coach'` IS REFUSED TOO (the coach track, law 1 — 2026-09-17). Deliberately written as
+   * "only 'engine' may be rebuilt" rather than as a list of refusals: a fourth author added next
+   * year is protected on the day it is declared, instead of on the day somebody remembers this line.
+   */
   return (program?.authored ?? 'engine') === 'engine';
+}
+
+/**
+ * ⛔ LAW 5 OF THE COACH TRACK, asked of the DISK (the same cold-start lesson as the gate above):
+ * while she is linked, the coach's week takes no reshape from any of her doors — not the declared
+ * swap, not the drag, not the builder's save, not an import. A swap for TODAY lives in the session.
+ */
+async function lockedToCoach(fallback: Program | null): Promise<boolean> {
+  const onDisk = await db.loadProgram().catch(() => fallback);
+  if (onDisk?.authored !== 'coach') return false;
+  return weekIsLockedToCoach(onDisk, !!(await loadCoachLink().catch(() => null)));
 }
 
 function programProfile(profile: Profile, nowMs = Date.now()): Profile {
@@ -421,6 +461,12 @@ function programProfile(profile: Profile, nowMs = Date.now()): Profile {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initial);
+  /*
+   * ⛔ THE ENGINE WALKS HER ROOM'S RUNGS (2026-09-30, `engine/v5/loadGrid`). Set during render, not in
+   * an effect: children's effects run BEFORE this provider's, and the first thing Today does is ask for
+   * the week's loads. Idempotent — the same units in, the same room out — so a render may repeat it.
+   */
+  setLoadRoom(state.profile?.units);
   /*
    * ⛔ THE MODEL IS THE FIXTURE, FULL STOP (founder ruling, 2026-08-25: "איזה V4? אנחנו ב-v8").
    *
@@ -442,6 +488,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Sign-in happened THIS RUN (the wall moved behind the aha, 2026-09-01) — `isSignedIn` reads
   // this first and falls back to the Keychain session for a relaunch mid-onboarding.
   const signedInRef = useRef(false);
+  /*
+   * ⛔ THE COACH TRACK, RULING 1 — a trainee with a live link is Pro. Read off the disk at mount and
+   * kept current by the link's two writers (`state/coachOutbox`); the entitlement every gate reads
+   * (`api.entitlement`, below) is StoreKit's answer with this overlaid — never written back.
+   */
+  const [coachLinked, setCoachLinked] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void loadCoachLink().then((l) => alive && setCoachLinked(!!l)).catch(() => {});
+    const off = onCoachLinkChange((linked) => setCoachLinked(linked));
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  /*
+   * ⛔ AND THE OTHER HALF OF RULING 1 — A PAYING COACH IS A PAYING CUSTOMER.
+   *
+   * The trainee's Pro comes from a LINK (above); the coach's own comes from his TIER, which is a
+   * StoreKit fact and therefore read exactly where the Pro entitlement is read: once at boot, and
+   * again on every reconcile (an approval landing, a return from background). Both are overlays on
+   * `state.entitlement` at the seam below and neither is ever written back to the cache — see
+   * `domain/entitlement.withCoachPlan`. `getCoachPlan` never throws, so this needs no catch of its
+   * own and can never disturb the entitlement reconcile it rides beside.
+   */
+  const [coachPlan, setCoachPlan] = useState<CoachPlan>(NO_COACH_PLAN);
 
   useEffect(() => {
     (async () => {
@@ -550,7 +622,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         /* a failed cloud read costs the restore, never the boot — she starts fresh, as before */
       }
 
-      const [storedProfile, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs, ledger] = await Promise.all([
+      const [storedProfile, persistedMode, snapshots, recents, cachedEntitlement, weekOpenMs, ledger, weekCycle] = await Promise.all([
         db.loadProfile(),
         db.loadMode(),
         db.loadSnapshots(),
@@ -558,11 +630,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         db.loadEntitlement(),
         db.loadWeekOpen(),
         readTrialLedger(),
+        db.loadWeekCycle().catch(() => null),
       ]);
       // Age upkeep (founder 2026-07-10): age is asked once — the app advances it a
       // year per full year elapsed, so program construction always sees the current
       // age. Best-effort persist; the aged value is used this session regardless.
       let profile = storedProfile;
+      // A member from before the three-workout model keeps the fourteen she was promised (2026-09-28).
+      grandfatherTrial(storedProfile);
       // Her week-opening day applies BEFORE anything derives from the cadence this boot — read off
       // the phone's own first weekday, never asked (founder 2026-09-16, `weekOpenDowForDevice`).
       applyWeekOpenDow(weekOpenDowForDevice(Localization.getCalendars()[0]?.firstWeekday));
@@ -611,7 +686,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // The copy layer must know who it is speaking to BEFORE the first screen renders
       // (Hebrew conjugates every verb by gender — i18n/gender.ts).
       setGender(profile?.sex);
-      dispatch({ type: 'BOOTED', profile, program: null, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs });
+      dispatch({ type: 'BOOTED', profile, program: null, mode, snapshots, recents, entitlement: cachedEntitlement ?? NO_ENTITLEMENT, weekOpenMs, weekCycle });
       // The widget catches up with whatever changed while the app was closed (a week roll, a
       // restore) — after BOOTED, so it never stands in the boot path.
       void updateHomeWidget();
@@ -634,6 +709,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       void armGapCatch();
       // The trial's last-workout note re-derives on the same cadence (`platform/trialCatch`).
       void armTrialLast();
+      // …and so does the reminder two days before Apple's free trial charges (2026-09-28).
+      void armTrialEnding();
       // The analytics opt-out latch loads before any flush can ship (audit finding 4).
       void refreshTelemetryOptOut();
       // The circle hears about the week at boot too — not only on a Together visit (audit lever 5).
@@ -664,6 +741,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } catch {
           /* store unavailable — keep the cached entitlement */
         }
+        setCoachPlan(await billing.getCoachPlan());
       })();
 
       // HealthKit (convenience-only) — silent bodyweight ingestion on boot. It is
@@ -714,6 +792,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } catch {
         /* store unavailable — keep the cached entitlement */
       }
+      setCoachPlan(await billing.getCoachPlan());
     };
     onEntitlementArrived(() => void reconcile());
     const sub = RNAppState.addEventListener('change', (st) => {
@@ -737,9 +816,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // …and the CLOUD half — per Apple ID, so a new device does not restart the fourteen either.
       cloud.ledgerSet(nextLedger(cloud.ledgerGet(), m.completedSessions));
     }
+    /**
+     * The rotation's one door into the store (2026-09-28): roll whatever the record has closed, tell
+     * the screens, and re-derive the three things that read "is her week done" — the widget, the
+     * reminders, the circle — which the post-session side effects ran BEFORE the cycle turned.
+     */
+    async function openNextCycleIfClosed(): Promise<void> {
+      const next = await rollClosedCycles();
+      if (next == null) return;
+      const cycle = await db.loadWeekCycle().catch(() => null);
+      dispatch({ type: 'WEEK_OPENED', weekOpenMs: next, weekCycle: cycle });
+      void track('cycle_opened', { cycle: cycle ?? null });
+      void updateHomeWidget();
+      void syncTrainingRemindersFromPlan();
+      void armCirclePublish();
+      // The closed week's letter, told the next morning — when there is something in it.
+      void getWeeklyUpdate()
+        .then((u) => {
+          if (u && u.explanations.length > 0) void notifier.scheduleWeekClosed(nextMorningAt(Date.now()));
+        })
+        .catch(() => {});
+    }
 
     return {
       ...state,
+      /*
+       * ⛔ Ruling 1 of the coach track, both halves — see `coachLinked` / `coachPlan` above.
+       * THE LINK IS TRIED FIRST because a person can be both: a coach who also trains under
+       * somebody else reads "your coach's plan covers you", which is the relationship he would name
+       * himself. Either way the first ACTIVE answer wins and a real purchase beats both.
+       */
+      entitlement: withCoachPlan(withCoachLink(state.entitlement, coachLinked), coachPlan),
       model,
       currentSnapshot: state.snapshots.length > 0 ? state.snapshots[state.snapshots.length - 1] : null,
       baselineSnapshot: state.snapshots.length > 0 ? state.snapshots[0] : null,
@@ -818,6 +925,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           daysPerWeek: inputs.daysPerWeek,
           healthConnected: inputs.healthConnected,
           memberSince: new Date().toISOString(),
+          // The deal the Ready screen just promised her — see `Profile.trialModel` (2026-09-28).
+          trialModel: 'three',
           // Engine v5 (Revision 7): onboarding puts every NEW athlete on v5. `repBand` is the cohort
           // switch — its presence routes generation, progression and the weekly mirror through v5.
           // It is NOT asked (register Part 9 §A): the rep band defaults to 8-10, editable per-muscle in
@@ -878,15 +987,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const snapshots = baseline ? await db.appendSnapshot(baseline) : await db.loadSnapshots();
         if (baseline) emitCapabilitySnapshot(baseline, 'onboarding', 0);
 
-        // Stamp the calendar-week anchor (calendar-primary cadence, founder 2026-07-09).
-        // Mid-week signup (founder 2026-07-10): when the remaining days cannot fit the chosen
-        // frequency (e.g. Thursday + 4×/week), the first bucket is stamped for the NEXT open so
-        // it survives the first Saturday roll — the athlete's first program gets a full runway.
-        const weekOpenMs = firstBucketOpen(Date.now(), inputs.daysPerWeek);
+        /*
+         * ⛔ HER FIRST CYCLE OPENS NOW (the rotation, founder 2026-09-28). It was stamped for a
+         * Saturday — sometimes NEXT Saturday, a future anchor under which nothing she trained this
+         * week could count as done (`firstBucketOpen`'s runway, and the latent bug it hid). A cycle
+         * is her N workouts, whenever she trains them, so it begins at the moment she has a week.
+         */
+        const weekOpenMs = Date.now();
         await Promise.all([
           db.saveProfile(profile),
           ...(program ? [db.saveProgram(program)] : []),
           db.saveWeekOpen(weekOpenMs),
+          db.saveWeekCycle(1),
           persistMode(m),
         ]);
         setGender(profile.sex);
@@ -1093,38 +1205,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
              */
           }
         }
-        // CALENDAR-PRIMARY CADENCE (founder 2026-07-09): the weekly bucket turns over at
-        // Saturday 20:30 local, regardless of workout completion. Finishing every workout early just
-        // leaves Home in Recovery (no next workout to offer) until the calendar rolls; missed
-        // workouts never carry over — each week is a fresh bucket and the engine only progresses
-        // from completed, real-logged work. So the SOLE regeneration trigger is the calendar week
-        // advancing past the one the current bucket was built for (no completion-driven roll — that
-        // was the old `weeklyRest` gate whose hardcoded `false` froze the bucket forever).
-        const nowMs = Date.now();
-        const weekOpen = currentWeekOpen(nowMs);
-        const rolled = shouldRollWeek(state.weekOpenMs, state.program != null, nowMs);
-        if (!rolled) {
-          // A persisted bucket with no anchor is pre-upgrade state: adopt it into the CURRENT week
-          // (persist the anchor) so upgrading never wipes an in-progress week — it rolls next Saturday.
-          if (state.program && state.weekOpenMs == null) {
-            await db.saveWeekOpen(weekOpen);
-            dispatch({ type: 'PROGRAM_UPDATED', program: state.program, recents: state.recents, weekOpenMs: weekOpen });
-          }
-          return; // mid-week: keep the bucket intact (completed flags + athlete edits survive).
-        }
         /*
-         * ⛔ THE ROLL NO LONGER COMPOSES A WEEK. It only advances the anchor.
+         * ════ ⛔ THE CALENDAR NO LONGER ROLLS HER WEEK (the rotation, founder 2026-09-28) ════
          *
-         * A new week used to mean a newly generated programme. It does not any more: the coach
-         * decides the programme after every session, so by Saturday the current one is already the
-         * one it wants her to train — regenerating on the calendar would overwrite a decision that
-         * was made from her actual training with one assembled from her body map.
+         * This used to turn the anchor at Saturday 20:30 whatever she had done — and, because it
+         * read `state.program`, which is null after every cold start, it re-stamped the anchor on
+         * EVERY launch. Under a Saturday week that was nearly harmless; under a rotation it would
+         * have reset her cycle each time she opened the app. The only thing that opens a cycle now
+         * is her finishing one (`rollClosedCycles`); here it is asked again, because a coach week
+         * that landed or a record that reconciled can close a cycle with no session in between.
          *
-         * The anchor still turns, because plenty still hangs off it: which decisions belong to
-         * "this week" in the letter, when the weekly push fires, and when Recovery gives way.
+         * A record with no anchor at all is pre-upgrade state: it is adopted into the current
+         * calendar week, so the workouts she already trained this week still count as done.
          */
-        await db.saveWeekOpen(weekOpen);
-        dispatch({ type: 'PROGRAM_UPDATED', program: state.program, recents: state.recents, weekOpenMs: weekOpen });
+        if (state.weekOpenMs == null) {
+          const adopted = currentWeekOpen(Date.now());
+          await db.saveWeekOpen(adopted);
+          dispatch({ type: 'WEEK_OPENED', weekOpenMs: adopted });
+        }
+        await openNextCycleIfClosed();
       },
 
       async setUnits(units) {
@@ -1192,6 +1291,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
 
       async saveBuiltProgram(program) {
+        // ⛔ The coach track, law 5: a linked coach's week is not hers to overwrite from the builder.
+        if (await lockedToCoach(state.program)) return;
         // Same law as adoptImportedProgram below: what she sealed is what lands on disk.
         await db.saveProgram(program);
         dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
@@ -1204,6 +1305,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async revertProgramToEngine() {
         const profile = state.profile ?? (await db.loadProfile().catch(() => null));
         if (!profile) return false;
+        // ⛔ The coach track, law 5: the pen-back is hers — but not while a coach is writing the week.
+        if (await lockedToCoach(state.program)) return false;
         /*
          * A full pen-back clears DAY-LEVEL ownership too: `generateProgram` preserves `authored`
          * days by design (the hybrid week), so a revert that left the flags standing would rebuild
@@ -1227,7 +1330,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return true;
       },
 
+      async adoptCoachWeek(program) {
+        if (program.authored !== 'coach') return;
+        await db.saveProgram(program);
+        dispatch({ type: 'PROGRAM_UPDATED', program, recents: state.recents });
+      },
+
       async adoptImportedProgram(program) {
+        if (await lockedToCoach(state.program)) return; // the coach track, law 5
         /*
          * ⛔ NO GENERATION, NO VALIDATION, NO TIDYING — see the note on the interface above. A
          * `saveProgram` that ran her week through anything on the way past would undo the entire
@@ -1320,6 +1430,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(fields.repBandByMuscle != null ? { repBandByMuscle: fields.repBandByMuscle } : {}),
           ...(fields.voiceSpec != null ? { voiceSpec: fields.voiceSpec } : {}),
           ...(fields.voiceMic != null ? { voiceMic: fields.voiceMic } : {}),
+          ...(fields.coachVoiceId != null ? { coachVoiceId: fields.coachVoiceId } : {}),
+          ...(fields.voiceCloudEar != null ? { voiceCloudEar: fields.voiceCloudEar } : {}),
         };
         // The room: null clears to the full-gym default (the key leaves the profile), a list sets it.
         if (fields.equipment === null) delete profile.equipment;
@@ -1537,6 +1649,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          */
         const program = await db.loadProgram().catch(() => state.program);
         if (!program) return false;
+        /* ⛔ THE COACH TRACK, LAW 5 — her declaration above is kept (it is a preference, and it serves
+           any engine week she has later), but a LINKED coach's week is not edited: the swap for today
+           is made inside the session, and the coach sees it on the upload. */
+        if (weekIsLockedToCoach(program, !!(await loadCoachLink().catch(() => null)))) return false;
         let next = program;
         program.days.forEach((day, di) => {
           day.slots.forEach((slot, si) => {
@@ -1587,6 +1703,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          */
         const program = await db.loadProgram().catch(() => state.program);
         if (!program) return;
+        if (weekIsLockedToCoach(program, !!(await loadCoachLink().catch(() => null)))) return; // coach track, law 5
         const di = program.days.findIndex((d) => d.id === dayId);
         if (di < 0) return;
         const next = moveLift(program, di, fromIndex, toIndex);
@@ -1615,8 +1732,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * It is DERIVED now: a coach workout is done when a completed session carrying its id sits
          * in this week's history. One fact, read where it is needed, and there is no second copy to
          * fall out of step with the first — which is what the heal existed to repair.
+         *
+         * ✦ AND THIS IS WHERE A CYCLE CLOSES (the rotation, 2026-09-28). Every road a workout is
+         * saved by — the phone, the wrist's reconcile, the in-session salvage — passes here, after
+         * the history write, so the session that finished her week is on disk when the roll reads.
          */
         void programDayId;
+        await openNextCycleIfClosed();
       },
 
       // Test harness only — never reachable in a release build. Simulates having
@@ -1662,6 +1784,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           trackEntitlementChange(state.entitlement, result.entitlement);
           dispatch({ type: 'ENTITLEMENT', entitlement: result.entitlement });
           void armTrialLast(); // a member's pending trial note cancels itself here
+          // A purchase that opened Apple's free trial arms the reminder the paywall promised.
+          void armTrialEnding(result.entitlement);
           void track(BILLING_EVENTS.purchaseSucceeded, { productId, source: result.entitlement.source });
         } else if (result.status === 'cancelled') {
           void track(BILLING_EVENTS.purchaseCancelled, { productId });
@@ -1702,6 +1826,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // next athlete "already told" until the app is force-quit.
         resetWristOffered();
         pendingNameRef.current = null;
+        setCoachLinked(false); // the wipe took the link key; the Pro overlay goes with it
         dispatch({ type: 'RESET' });
       },
 
@@ -1741,10 +1866,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // next athlete "already told" until the app is force-quit.
         resetWristOffered();
         pendingNameRef.current = null;
+        setCoachLinked(false); // the wipe took the link key; the Pro overlay goes with it
         dispatch({ type: 'RESET' });
       },
     };
-  }, [state]);
+  }, [state, coachLinked, coachPlan]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }

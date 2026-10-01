@@ -31,6 +31,7 @@ import { ATHLETE } from '../anthro';
 import {
   barPathTicks,
   floorScene,
+  hexFace,
   linePathTicks,
   padStroke,
   plateGhost,
@@ -148,14 +149,17 @@ function benchSide(hip: Vec2, u: Vec2, headEnd: Vec2): Primitive[] {
  * end-on the two heads are concentric and one disc with a dot in it read as a small plate, not a
  * dumbbell (audit, 2026-09-03). The 2u offset is the licence a hand takes when it is not held
  * perfectly square to the camera, and it is what makes the object a dumbbell.
+ *
+ * Every face is the HEX (`kit.hexFace`, 2026-09-30): four discs with a dot read as a stack of small
+ * plates; four hexes read as two dumbbells before anything else is noticed.
  */
 function dumbbellsEndOn(c: Vec2): Primitive[] {
   const far = { x: c.x - 5, y: c.y + 3 };
   return [
-    { kind: 'circle', c: { x: far.x + 2, y: far.y + 1.5 }, r: 7.5, fill: 'ink4' },
-    { kind: 'circle', c: far, r: 8, fill: 'ink3' },
-    { kind: 'circle', c: { x: c.x + 2, y: c.y + 1.5 }, r: 8, fill: 'ink4' },
-    { kind: 'circle', c, r: 8.5, fill: 'ink1', stroke: 'ink0', w: 1.5 },
+    ...hexFace({ x: far.x + 2, y: far.y + 1.5 }, 7.5, 'ink4'),
+    ...hexFace(far, 8, 'ink3'),
+    ...hexFace({ x: c.x + 2, y: c.y + 1.5 }, 8, 'ink4'),
+    ...hexFace(c, 8.5, 'ink1', { stroke: 'ink0', w: 1.5 }),
     { kind: 'circle', c, r: 2.6, fill: 'ink0' }, // the handle, end-on
   ];
 }

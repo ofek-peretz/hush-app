@@ -59,7 +59,9 @@
       "holdSeconds": null,
       "holdMetres": null,
       "nextHoldSeconds": null,
-      "nextHoldMetres": null
+      "nextHoldMetres": null,
+      "awaitingReady": false,
+      "holdEndsAt": null
     },
     "lobby": null,
     "plan": null,

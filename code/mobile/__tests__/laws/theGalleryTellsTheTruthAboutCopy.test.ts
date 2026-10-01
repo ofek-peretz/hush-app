@@ -70,7 +70,7 @@ describe('1b · nor does it smuggle one in as a parameter', () => {
    * name or an id, never a hand-typed English string.
    */
   it('no explanation parameter is given a hand-typed name', () => {
-    const literals = [...src.matchAll(/ex:\s*'([^']+)'/g)]
+    const literals = [...src.matchAll(/\bex:\s*'([^']+)'/g)]
       .map((m) => m[1])
       // ids and enum values are fine — a capitalised, spaced phrase is a name someone typed.
       .filter((v) => /[A-Z]/.test(v) && /\s|-/.test(v));

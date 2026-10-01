@@ -15,9 +15,15 @@
  * DELIBERATELY CUSTOM, not the default bar: the stock tab bar is iOS-blue on a translucent white
  * blur, which is neither the palette nor the v7 law. This one is cream-on-stage — the active tab is
  * `textPrimary` (the brightest thing, emphasis by distance from the ground), the rest are
- * `textMuted`. And the active tab WEARS THE MARK: a small moss "measured-range" glyph (a hairline
- * with two end ticks) is struck beneath its label — the one place the brand's range mark signs the
- * navigation (design 1.0 / 2.1). A hairline separates the bar from the page; nothing else is drawn.
+ * `textMuted`, and a small moss DOT sits beneath the active label. A hairline separates the bar from
+ * the page; nothing else is drawn.
+ *
+ * ⛔ IT WAS THE RANGE MARK, AND ON TODAY IT SAID ITSELF TWICE (design audit 2026-09-29; the founder's
+ * free hand, 2026-09-30). The active tab wore the brand's measured-range glyph under its label — and
+ * Today's own ICON is that glyph, so the one tab opened every day drew the mark over the word and
+ * again under it: a doubled icon, read as a rendering fault. The mark keeps its place where it means
+ * something (Today's icon, the logo); the selection is a dot, the mark every tab bar in the world
+ * uses for "you are here", in the moss this product reserves for what is lit.
  *
  * It is hidden entirely on the deeper screens (a live workout, cardio, a modal) — those are pushed
  * ABOVE the tab navigator, so the bar is simply not in their tree. A stage has no navigation.
@@ -39,6 +45,9 @@ const ICON: Record<string, IconName> = {
   Program: 'program',
   Cardio: 'activity',
   Progress: 'lineChart',
+  Crew: 'twoPeople',
+  // The coach track's fifth tab — present only on a coach account (Root.HomeTabs).
+  Athletes: 'twoPeople',
 };
 
 const LABEL: Record<string, string> = {
@@ -46,6 +55,8 @@ const LABEL: Record<string, string> = {
   Program: 'nav.program',
   Cardio: 'nav.cardio',
   Progress: 'nav.progress',
+  Crew: 'crew.title',
+  Athletes: 'coachTrack.coach.tab',
 };
 
 export function HushTabBar({ state, navigation }: BottomTabBarProps) {
@@ -82,7 +93,7 @@ export function HushTabBar({ state, navigation }: BottomTabBarProps) {
             <Text style={[styles.label, focused && styles.labelActive, { color: tint }]} numberOfLines={1}>
               {t(LABEL[route.name] ?? route.name)}
             </Text>
-            <RangeMark active={focused} />
+            <ActiveDot active={focused} />
           </Pressable>
         );
       })}
@@ -90,20 +101,9 @@ export function HushTabBar({ state, navigation }: BottomTabBarProps) {
   );
 }
 
-/**
- * The measured-range mark — a hairline spanning two end ticks. Struck in moss beneath the
- * ACTIVE tab (the brand's range glyph signing the navigation); an empty 6pt spacer otherwise,
- * so the row never reflows as the selection moves.
- */
-function RangeMark({ active }: { active: boolean }) {
-  if (!active) return <View style={styles.markSpacer} />;
-  return (
-    <View style={styles.mark}>
-      <View style={styles.markBar} />
-      <View style={[styles.markTick, styles.markTickStart]} />
-      <View style={[styles.markTick, styles.markTickEnd]} />
-    </View>
-  );
+/** A moss dot beneath the ACTIVE tab; an equal empty spacer otherwise, so the row never reflows. */
+function ActiveDot({ active }: { active: boolean }) {
+  return <View style={active ? styles.dot : styles.dotSpacer} />;
 }
 
 const styles = StyleSheet.create({
@@ -118,11 +118,6 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 44 },
   label: { fontFamily: font.sansMedium, fontSize: 17, textAlign: 'center' },
   labelActive: { fontFamily: font.sansSemibold }, // rtl-ok: merged onto label, which sets textAlign:'center'
-  // The moss range-mark under the active tab (16 × 6): a hairline bar struck between two end ticks.
-  mark: { width: 16, height: 6 },
-  markSpacer: { width: 16, height: 6 },
-  markBar: { position: 'absolute', start: 0, end: 0, top: 2.5, height: 1.5, backgroundColor: color.accent },
-  markTick: { position: 'absolute', top: 0, width: 1.5, height: 6, backgroundColor: color.accent },
-  markTickStart: { start: 0 },
-  markTickEnd: { end: 0 },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: color.accent },
+  dotSpacer: { width: 5, height: 5 },
 });

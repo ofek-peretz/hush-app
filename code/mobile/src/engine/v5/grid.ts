@@ -12,7 +12,7 @@
  */
 
 import type { Equipment } from '@/engine/catalog';
-import { STARTING_INCREMENT, BAR_KG, FIXED_BAR_KG } from './constants';
+import { barOf, incrementOf } from './loadGrid';
 
 const EPS = 1e-9;
 
@@ -68,9 +68,10 @@ function inRange(load: number, observedLoads?: number[]): boolean {
  * equipment's own increment (B-6). Nothing else is claimed.
  */
 export function loadFloor(equipment: Equipment, observedLoads?: number[]): number {
-  if (equipment === 'barbell') return BAR_KG; // a fact of the room, not a statistic
-  if (equipment === 'fixed_barbell') return FIXED_BAR_KG; // the lightest fixed bar in the rack (F-19)
-  const inc = STARTING_INCREMENT[equipment] || 0;
+  // The bar is a fact of the room, not a statistic — and the room is hers (`loadGrid`, 2026-09-30).
+  const bar = barOf(equipment); // the Olympic bar, or the lightest fixed bar in the rack (F-19)
+  if (bar != null) return bar;
+  const inc = incrementOf(equipment);
   const rungs = rungsOf(observedLoads);
   if (rungs.length === 0) return inc;
   return inc > 0 ? Math.min(rungs[0], inc) : rungs[0];
@@ -89,7 +90,7 @@ export function snapDown(ideal: number, equipment: Equipment, observedLoads?: nu
     for (const r of rungs) if (r <= ideal + EPS) down = r;
     return Math.max(down, floor);
   }
-  const inc = STARTING_INCREMENT[equipment];
+  const inc = incrementOf(equipment);
   if (inc <= 0) return ideal;
   return Math.max(Math.floor(ideal / inc + EPS) * inc, floor);
 }
@@ -106,7 +107,7 @@ export function nextRung(load: number, equipment: Equipment, observedLoads?: num
   if (load >= (rungsOf(observedLoads)[0] ?? Infinity) - EPS) {
     for (const r of rungsOf(observedLoads)) if (r > load + EPS) return Math.max(r, floor);
   }
-  const inc = STARTING_INCREMENT[equipment];
+  const inc = incrementOf(equipment);
   if (inc <= 0) return load;
   // Above her observed max (or no grid): the next multiple of the increment STRICTLY above. A load
   // stored below the floor (legacy state) climbs straight back onto it rather than crawling under it.
@@ -126,7 +127,7 @@ export function prevRung(load: number, equipment: Equipment, observedLoads?: num
   let below: number | null = null;
   for (const r of rungs) if (r < load - EPS) below = r;
   if (below != null) return Math.max(below, floor);
-  const inc = STARTING_INCREMENT[equipment];
+  const inc = incrementOf(equipment);
   if (inc <= 0) return load;
   // The previous multiple of the increment STRICTLY below — same ladder alignment as `nextRung`
   // (audit 2026-08-23): `load - inc` kept an off-grid load off-grid for ever (41.5 → 39 → 36.5…),
@@ -149,7 +150,7 @@ export function rungSize(load: number, equipment: Equipment, observedLoads?: num
  * true. No new constant, and nothing invented — the answer was in the situation's own wording.
  */
 export function isBigJump(load: number, equipment: Equipment, observedLoads?: number[]): boolean {
-  const inc = STARTING_INCREMENT[equipment];
+  const inc = incrementOf(equipment);
   if (inc <= 0) return false; // bodyweight — no load axis (S-51)
   return rungSize(load, equipment, observedLoads) > inc + EPS;
 }

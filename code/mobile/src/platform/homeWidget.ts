@@ -65,7 +65,7 @@ export function composeWidgetSnapshot(
   }
   return {
     title: next.name,
-    sub: tg('program.dayMeta', { exercises: next.lifts, min: next.minutes }),
+    sub: tg('program.dayMeta', { count: next.lifts, min: next.minutes }),
     weekLabel,
     dots,
     done: false,

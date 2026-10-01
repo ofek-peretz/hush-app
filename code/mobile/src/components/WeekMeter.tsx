@@ -62,6 +62,8 @@ export interface WeekMeterProps {
    * wants (the sheet's own title already says which week it is).
    */
   showCount?: boolean;
+  /** What stands at the far end of the count row — the crew (2026-09-29). */
+  trailing?: React.ReactNode;
 }
 
 /** How many of them are behind her. Exported so the law and the copy read one derivation. */
@@ -85,7 +87,7 @@ export function sheetSegments(
   return workouts.map((w) => (w.done ? 'done' : w.id === selectedId ? 'queued' : 'ahead'));
 }
 
-export function WeekMeter({ segments, showCount = true }: WeekMeterProps) {
+export function WeekMeter({ segments, showCount = true, trailing }: WeekMeterProps) {
   const { t } = useCopy();
   if (!segments.length) return null;
 
@@ -127,9 +129,14 @@ export function WeekMeter({ segments, showCount = true }: WeekMeterProps) {
           string, so English gets the mono the design draws and Hebrew gets Assistant rather than a
           line of missing glyphs (`monoCarriesNoWords`). */}
       {showCount ? (
-        <Legend track={0.12} tone="muted" style={styles.count}>
-          {t('home.weekMeter', { done, total: segments.length })}
-        </Legend>
+        /* The count row's far side is the one seat on Today that costs no height — the crew sits
+           there (`CrewStack`, 2026-09-29). */
+        <View style={styles.countRow}>
+          <Legend track={0.12} tone="muted" style={styles.count}>
+            {t('home.weekMeter', { done, total: segments.length })}
+          </Legend>
+          {trailing ?? null}
+        </View>
       ) : null}
     </View>
   );
@@ -160,6 +167,7 @@ const styles = StyleSheet.create({
       the threshold of sight. `meterLine` is the dedicated instrument-hairline token (~3.5:1). */
   segmentAhead: { height: 1.5, backgroundColor: color.meterLine },
   count: { paddingTop: 0 },
+  countRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 32 },
 });
 
 export default WeekMeter;

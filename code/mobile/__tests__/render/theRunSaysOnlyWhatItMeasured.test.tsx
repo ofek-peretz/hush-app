@@ -59,10 +59,15 @@ afterEach(() => {
 type Json = { type: string; props: Record<string, unknown>; children: Json[] | null } | string | null;
 function texts(r: ReactTestRenderer): string[] {
   const out: string[] = [];
+  // One <Text> is one string however it is built inside: since 2026-09-29 a figure's separator is a
+  // nested <Text> in the sans (`ds/Figure`), and "31.5" is still one number to a reader.
+  const flat = (n: Json | Json[] | string): string =>
+    n == null ? '' : typeof n === 'string' ? n : Array.isArray(n) ? n.map(flat).join('') : (n.children ?? []).map(flat).join('');
   const walk = (n: Json | Json[]): void => {
     if (n == null) return;
     if (typeof n === 'string') return void out.push(n);
     if (Array.isArray(n)) return void n.forEach(walk);
+    if ((n as { type?: string }).type === 'Text') return void out.push(flat(n));
     if (n.children) n.children.forEach(walk);
   };
   walk(r.toJSON() as unknown as Json);

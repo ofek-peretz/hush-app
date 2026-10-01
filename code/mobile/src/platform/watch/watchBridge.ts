@@ -101,6 +101,10 @@ export interface WatchSessionDeps {
   /** Apply an Exercise Busy (equipment-occupied) reorder — a phone session-store
    *  action, not a machine event. */
   markEquipmentOccupied: () => void;
+  /** "מוכן" on the wrist (2026-09-28): the set — or the hold — on stage starts now, exactly as the
+   *  lock screen's Ready and her spoken word start it. Optional in the type so a harness may omit it;
+   *  `everyWristIntentLandsSomewhere` proves the app supplies it. */
+  setReady?: () => void;
   /** Queue the workout the Start screen picked (lobby proposal). Optional — the
    *  phone owns the program; absent = the proposal is accepted but no-op. */
   selectWorkout?: (workoutId?: string) => void;
@@ -560,6 +564,9 @@ export class WatchSession {
         break;
       case 'mark_equipment_occupied':
         this.d.markEquipmentOccupied();
+        break;
+      case 'set_ready':
+        this.d.setReady?.();
         break;
       case 'select_workout':
         this.d.selectWorkout?.(action.workoutId);

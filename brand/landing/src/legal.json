@@ -8,8 +8,8 @@
         "en": ["What stays on your device", "Your workouts, loads, body map, pain reports and training history are stored on your phone. An encrypted backup lives in iCloud under your own Apple ID; we cannot read it."]
       },
       {
-        "he": ["המאמן", "כשמבקשים מהמאמן לבנות או לסקור שבוע, נתוני האימון הנחוצים לבקשה מעובדים עבורנו על ידי Google (Gemini) דרך שרת ביניים שלנו. הם אינם משמשים לאימון המודלים של Google, ואנחנו לא שומרים את הבקשה."],
-        "en": ["The coach", "When you ask the coach to build or review a week, the training data needed for that request is processed on our behalf by Google (Gemini) over our own relay. It is not used to train Google’s models, and we never store the request."]
+        "he": ["המאמן", "כשמבקשים מהמאמן לבנות או לסקור שבוע, או לקרוא תוכנית שצילמת, נתוני האימון הנחוצים לבקשה מעובדים עבורנו על ידי OpenAI דרך שרת ביניים שלנו. כשהמאמן הקולי פעיל, גם הקלטות קצרות של התשובות שלך נשלחות באותה דרך לזיהוי דיבור, ושורות המאמן — להקראה. הנתונים אינם משמשים לאימון המודלים של OpenAI, ואנחנו לא שומרים את הבקשה או את ההקלטה."],
+        "en": ["The coach", "When you ask the coach to build or review a week, or to read a routine you photographed, the training data needed for that request is processed on our behalf by OpenAI over our own relay. When the voice coach is on, short recordings of your spoken answers are sent the same way to be recognised, and the coach’s lines to be spoken. None of it is used to train OpenAI’s models, and we never store the request or the recording."]
       },
       {
         "he": ["מדידה", "השימוש במוצר נמדד באמצעות PostHog תחת מזהה התקנה אקראי, לעולם לא תחת השם, האימייל או ה-Apple ID שלך. דוחות קריסה מגיעים ל-Sentry כשהנתונים האישיים מנוטרלים. שום דבר מאלה לא נמכר ולא משמש לפרסום."],
@@ -53,8 +53,8 @@
         "en": ["Your licence", "You receive a personal, non-transferable licence to use the app. Its content, code and figures are FERROX’s property. Use is also subject to Apple’s Standard Licensed Application End User License Agreement."]
       },
       {
-        "he": ["מנוי", "14 האימונים הראשונים, בתוך 30 יום, חינם ובלי כרטיס אשראי. לאחר מכן FERROX Pro זמין כמנוי חודשי או שנתי שמתחדש אוטומטית ומחויב על ידי Apple, במחיר שמוצג לפני כל חיוב. המנוי מתחדש אלא אם בוטל לפחות 24 שעות לפני סוף התקופה, וניתן לנהל ולבטל אותו בהגדרות ה-Apple ID. ההיסטוריה, השיאים והייצוא נשארים שלך, עם מנוי או בלעדיו."],
-        "en": ["Membership", "Your first 14 workouts, within 30 days, are free and take no card. After that, FERROX Pro is a monthly or yearly auto-renewing subscription billed by Apple, at the price shown before any charge. It renews unless cancelled at least 24 hours before the end of the period, and you can manage or cancel it in your Apple ID settings. Your history, records and export stay yours with or without a membership."]
+        "he": ["מנוי", "האימונים הראשונים שהאפליקציה מציעה חינם ובלי כרטיס אשראי. לאחר מכן FERROX Pro זמין כמנוי חודשי או שנתי שמתחדש אוטומטית ומחויב על ידי Apple, במחיר שמוצג לפני כל חיוב. כשמוצעת תקופת ניסיון חינם של Apple, היא קודמת לחיוב הראשון, ונשלחת תזכורת יומיים לפני סופה. המנוי מתחדש אלא אם בוטל לפחות 24 שעות לפני סוף התקופה, וניתן לנהל ולבטל אותו בהגדרות ה-Apple ID. ההיסטוריה, השיאים והייצוא נשארים שלך, עם מנוי או בלעדיו."],
+        "en": ["Membership", "The first workouts the app offers are free and take no card. After that, FERROX Pro is a monthly or yearly auto-renewing subscription billed by Apple, at the price shown before any charge. Where Apple offers a free trial, it comes before the first charge, with a reminder two days before it ends. It renews unless cancelled at least 24 hours before the end of the period, and you can manage or cancel it in your Apple ID settings. Your history, records and export stay yours with or without a membership."]
       },
       {
         "he": ["התנהלות", "שימוש שמפר את החוק או פוגע בשירות עלול להביא לסגירת החשבון."],

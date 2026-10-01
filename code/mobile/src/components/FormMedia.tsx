@@ -9,18 +9,19 @@
 
 // 
 
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Icon } from '@/components/Icon';
 import { ExerciseVideoPlayer } from '@/components/ExerciseVideoPlayer';
 import { exerciseVideoSource } from '@/platform/media/exerciseVideo';
 import { exerciseMotion } from '@/motion/registry';
+import { FRONT_VIEWS } from '@/motion/library/frontViews';
 import { MotionFigure } from '@/motion/render/MotionFigure';
 import { STAGE_FRAME_ASPECT } from '@/motion/frame';
 import { useCopy } from '@/i18n/useCopy';
 import { useApp } from '@/state/stores/appStore';
-import { color, paper, radius, up, font, tracking, trackingPx } from '@/design/tokens';
+import { color, stage, radius, up, font, tracking, trackingPx } from '@/design/tokens';
 import { legendVoice } from '@/design/monoVoice';
 
 /**
@@ -44,6 +45,16 @@ export function FormMedia({ exerciseId, title }: Props) {
   const video = exerciseVideoSource(exerciseId);
   const hasVideo = !!video;
   const looping = !!motion || hasVideo; // both read as a live, muted, looping demonstration
+  /* ✦ HALF SPEED, ON ASK (design audit 2026-09-29: "slow motion is what turns a figure into a real
+     lesson"). One toggle on the clip itself — the bar path and the lockout are what she opened
+     this card to study, and at the authored tempo a rep is gone in two seconds. */
+  const [slow, setSlow] = useState(false);
+  /* ✦ THE SECOND CAMERA (2026-09-30, `motion/library/frontViews`). The side shows the PATH; the front
+     shows the stance, the knees over the toes and the grip. Offered only where a face-on view has been
+     authored and proven to be the same rep — so the switch continues the rep rather than restarting it. */
+  const front = exerciseId ? FRONT_VIEWS[exerciseId] : undefined;
+  const [view, setView] = useState<'side' | 'front'>('side');
+  const rig = view === 'front' && front ? front : motion;
 
   /*
    * ════ THE FORM DOOR GETS THE STAGE'S FRAME (audit, 2026-09-03) ════
@@ -56,7 +67,9 @@ export function FormMedia({ exerciseId, title }: Props) {
    * box, or the letter-boxing comes straight back; the video seam keeps its own 16:10.
    */
   return (
-    <View style={[styles.frame, motion ? { aspectRatio: STAGE_FRAME_ASPECT } : null]}>
+    <View style={styles.frame}>
+      <View style={[styles.clip, motion ? { aspectRatio: STAGE_FRAME_ASPECT } : null]}>
+        {/* ── the demonstration ── */}
       {/*
         ════════════════════════════════════════════════════════════════════════════════════════
         ⛔ THE DIAGONAL STRIPES ARE DELETED (2026-08-27).
@@ -82,7 +95,11 @@ export function FormMedia({ exerciseId, title }: Props) {
       */}
 
       {motion ? (
-        <MotionFigure rig={motion} figure={figure} fit fps={FORM_DOOR_FPS} style={StyleSheet.absoluteFill as object} />
+        /* ⛔ THE STAGE'S ATHLETE, NOT A SILHOUETTE ON PAPER (design audit 2026-09-29). This well was
+           cream with the figure in ink — the one place in the product she was drawn dark on light, a
+           third style beside Today's and the stage's. The form door is where she studies the SAME
+           athlete she trains beside, so it is the same drawing on the same black. */
+        <MotionFigure rig={rig!} figure={figure} fit fps={FORM_DOOR_FPS} tone="stage" speed={slow ? 0.5 : 1} style={StyleSheet.absoluteFill as object} />
       ) : video ? (
         <ExerciseVideoPlayer source={video} accessibilityLabel={title ?? ''} style={StyleSheet.absoluteFill as object} />
       ) : (
@@ -110,18 +127,71 @@ export function FormMedia({ exerciseId, title }: Props) {
           return <Text style={[styles.chipText, { letterSpacing: legendVoice(l, 17, tracking.legend).letterSpacing }]}>{l}</Text>;
         })()}
       </View>
+      </View>
+
+      {/*
+        ⛔ THE CONTROLS SIT UNDER THE CLIP, NEVER ON IT (2026-09-30). On the drawing they covered the
+        very things they help her study — a plate at the end of the bar, the hands at an overhead
+        lockout. A strip of the same black under the clip keeps the whole demonstration clear: the
+        camera on the start side, the pace on the end side.
+      */}
+      {motion ? (
+        <View style={styles.controls}>
+          {/* The camera, where a second one exists; an empty start otherwise, so the pace keeps its end. */}
+          {front ? (
+            <View style={styles.views} accessibilityRole="radiogroup" accessibilityLabel={t('workout.viewA11y')}>
+              {(['side', 'front'] as const).map((v) => (
+                <Pressable
+                  key={v}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: view === v }}
+                  accessibilityLabel={t(v === 'side' ? 'workout.viewSide' : 'workout.viewFront')}
+                  onPress={() => setView(v)}
+                  hitSlop={{ top: 8, bottom: 8 }}
+                  style={[styles.viewCell, view === v && styles.viewCellOn]}
+                >
+                  <Text style={[styles.viewText, view === v && styles.viewTextOn]}>{t(v === 'side' ? 'workout.viewSide' : 'workout.viewFront')}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <View />
+          )}
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: slow }}
+            accessibilityLabel={t('workout.slowMotionA11y')}
+            onPress={() => setSlow((s) => !s)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.slow, slow && styles.slowOn, pressed && styles.slowPressed]}
+          >
+            <Icon name="history" size={15} color={slow ? color.onAccent : color.textSecondary} strokeWidth={2} />
+            <Text style={[styles.slowText, slow && styles.slowTextOn]}>{t('workout.slowMotion')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   frame: {
-    aspectRatio: 16 / 10,
     borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: color.border,
-    backgroundColor: paper[2],
+    backgroundColor: stage[0],
+  },
+  /* The demonstration's own box — 16:10 for a video, the stage frame's aspect for a figure. */
+  clip: { aspectRatio: 16 / 10 },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: color.border,
   },
   center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   chip: {
@@ -139,6 +209,36 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
+  /* The slow toggle — the chip's twin at the other corner, and a real 36-point control (8 of slop
+     makes it 52). On: the app's one "on" dress, cream with ink. */
+  slow: {
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  slowOn: { backgroundColor: color.accentFill, borderColor: color.accentFill },
+  /* The camera switch — the bottom corner, the slow toggle's dress, one cell lit. */
+  views: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: radius.full,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  viewCell: { height: 32, minWidth: 64, paddingHorizontal: 12, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  viewCellOn: { backgroundColor: color.accentFill },
+  viewText: { fontFamily: font.sansMedium, fontSize: 17, color: color.textSecondary, textAlign: 'center' },
+  viewTextOn: { color: color.onAccent },
+  slowPressed: { backgroundColor: color.surface2 },
+  slowText: { fontFamily: font.sansMedium, fontSize: 17, color: color.textSecondary, textAlign: 'left' },
+  slowTextOn: { color: color.onAccent },
   /* The clip's own eyebrow.
      ⚠️ THE TRACKING IS SUPPLIED AT THE CALL SITE, from `legendVoice`. It is an answer about the
      STRING — Latin keeps the instrument's open track, Hebrew never gets it — and a StyleSheet

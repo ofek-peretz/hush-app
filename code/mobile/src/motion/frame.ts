@@ -261,10 +261,12 @@ export function headOver(front: Primitive[], figure: Primitive[], pose: Pose, ch
   const covered = front.some((p) => p.kind === 'circle' && (p.fillOpacity ?? 1) < 0.5 && p.r >= 8 && Math.hypot(p.c.x - head.x, p.c.y - head.y) < p.r + r * 0.6);
   if (!covered) return front;
   const near = (q: { x: number; y: number }) => Math.hypot(q.x - head.x, q.y - head.y) <= r * 1.6;
+  // the skin of the head and, since 2026-09-30, its hair — a head re-laid bald over a plate is not his
+  const isHead = (fill: string | undefined) => fill === 'ink1' || fill === 'hair';
   const headPrims = figure.filter((p) => {
-    if (p.kind === 'circle') return p.fill === 'ink1' && near(p.c);
-    if (p.kind === 'ellipse') return p.fill === 'ink1' && near(p.c);
-    if (p.kind === 'path') return p.fill === 'ink1' && near(p.start);
+    if (p.kind === 'circle') return isHead(p.fill) && near(p.c);
+    if (p.kind === 'ellipse') return isHead(p.fill) && near(p.c);
+    if (p.kind === 'path') return isHead(p.fill) && near(p.start);
     return false;
   });
   return headPrims.length ? [...front, ...headPrims] : front;

@@ -16,9 +16,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Button } from '@/components/ds';
+import { Button, SegmentedControl } from '@/components/ds';
 import { ShareCard } from '@/components/share/ShareCard';
-import { share } from '@/platform/share';
+import { copySticker, share } from '@/platform/share';
 import { track } from '@/platform/telemetry';
 import { useCopy } from '@/i18n/useCopy';
 import { color, stage, font, textScale, space, radius, press } from '@/design/tokens';
@@ -26,10 +26,34 @@ import type { MainParamList } from '@/app/navigation';
 
 type Props = NativeStackScreenProps<MainParamList, 'ShareCardModal'>;
 
+/** The switch's words, one per story kind. A record is never offered (see below), and names the workout if it ever is. */
+const STORY_LABEL: Record<string, string> = {
+  session: 'share.storySession',
+  week: 'share.storyWeek',
+  cardio: 'share.storyCardio',
+  record: 'share.storySession',
+};
+
 export function ShareCardModal({ navigation, route }: Props) {
   const { t } = useCopy();
-  const card = route.params.card;
+  /*
+   * ════ ✦ WHICH STORY (design audit 2026-09-29: "templates to choose — that is what people really post") ════
+   *
+   * A door may hand the modal its other stories (`alternates`): Well Done and the Circle offer the
+   * workout AND the week. The card she opened on is first and is the default — the founder's ruling
+   * stands (device QA 2026-08-23: the door opens THE WORKOUT, always; a record rides it as a line and
+   * is never a rival card, so no record is ever offered here as an alternative). One kind per option;
+   * a door with nothing else to offer draws no switch at all.
+   */
+  const choices = [route.params.card, ...(route.params.alternates ?? [])].filter(
+    (c, i, all) => all.findIndex((o) => o.kind === c.kind) === i && c.kind !== 'record',
+  );
+  const [kind, setKind] = useState<string>(route.params.card.kind);
+  const card = choices.find((c) => c.kind === kind) ?? route.params.card;
   const cardRef = useRef<View>(null);
+  /* The sticker face of the same card, drawn UNDER the preview at the same size: a capture reads a
+     view's own layers, so it can be taken without the athlete ever seeing the card change. */
+  const stickerRef = useRef<View>(null);
   // The share funnel's first half (audit lever 2): the modal opening IS the intent. Once per mount.
   useEffect(() => {
     void track('share_opened', { kind: card.kind });
@@ -55,18 +79,48 @@ export function ShareCardModal({ navigation, route }: Props) {
     if (res !== 'shared') setNote(t('share.unavailable'));
   }
 
+  async function onSticker() {
+    if (busy) return;
+    setBusy(true);
+    setNote(null);
+    const res = await copySticker(stickerRef);
+    void track('share_sticker_copied', { kind: card.kind, result: res });
+    setBusy(false);
+    setNote(res === 'copied' ? t('share.stickerCopied') : t('share.unavailable'));
+  }
+
   return (
     <View style={styles.root}>
       <Pressable style={StyleSheet.absoluteFill} onPress={() => navigation.goBack()} accessibilityLabel={t('common.close')} />
       <SafeAreaView style={styles.safe} edges={['bottom']} pointerEvents="box-none">
         <View style={styles.preview} pointerEvents="none">
-          <ShareCard ref={cardRef} card={card} width={previewW} />
+          <View>
+            <View style={styles.stickerUnder}>
+              <ShareCard ref={stickerRef} card={card} width={previewW} sticker />
+            </View>
+            <ShareCard ref={cardRef} card={card} width={previewW} />
+          </View>
         </View>
 
         <View style={styles.sheet}>
           <Text style={styles.sheetTitle} accessibilityRole="header">{t('share.sheetTitle')}</Text>
           {note ? <Text style={styles.note}>{note}</Text> : null}
+          {choices.length > 1 ? (
+            <SegmentedControl
+              block
+              size="md"
+              options={choices.map((c) => ({ value: c.kind, label: t(STORY_LABEL[c.kind]) }))}
+              value={kind}
+              onChange={(v) => {
+                setKind(v);
+                void track('share_story_switched', { kind: v });
+              }}
+              style={styles.choice}
+            />
+          ) : null}
           <Button variant="onstage" size="lg" block label={t('share.shareAction')} onPress={onShare} disabled={busy} />
+          {/* ✦ Over her own photo — the card as a sticker, pasted into the story (see `copySticker`). */}
+          <Button variant="onstageGhost" size="md" block label={t('share.copySticker')} onPress={onSticker} disabled={busy} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('share.done')}
@@ -85,7 +139,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'rgba(9,8,7,0.82)' },
   safe: { flex: 1, justifyContent: 'flex-end' },
   preview: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  stickerUnder: { position: 'absolute', top: 0, start: 0 },
 
+  choice: { marginBottom: 14 },
   sheet: {
     backgroundColor: stage[1],
     borderTopLeftRadius: radius.sheet,
@@ -95,7 +151,9 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     gap: 12,
   },
-  sheetTitle: { fontFamily: font.serif, fontSize: textScale.lg, color: stage.ink0, textAlign: 'center', marginBottom: 4 },
+  /* The UI face, not the coach's serif (design audit 2026-09-29): a sheet asking about an OPERATION is
+     the app speaking — the same voice as the stage's end-workout sheet. The serif is the coach's. */
+  sheetTitle: { fontFamily: font.sansSemibold, fontSize: textScale.lg, color: stage.ink0, textAlign: 'center', marginBottom: 4 },
   note: { fontFamily: font.sans, fontSize: textScale.sm, lineHeight: 19, color: stage.ink2, textAlign: 'center' },
   ghost: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.done },
   ghostLabel: { fontFamily: font.sansSemibold, fontSize: textScale.base, color: color.textSecondary, textAlign: 'left' },

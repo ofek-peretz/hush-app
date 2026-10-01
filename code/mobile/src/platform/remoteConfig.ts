@@ -29,7 +29,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { applyTrialLimitOverride, applyTrialMaxDaysOverride } from '@/domain/entitlement';
-import { applyExperimentPct } from '@/platform/experiments';
+import { applyExperimentPct, onNewArm } from '@/platform/experiments';
 
 /* Deliberately OUTSIDE db.K (like the install id): config is a fact about the BUILD's tuning, not
  * about the athlete, and an account wipe should not reset an experiment arm mid-flight. */
@@ -55,13 +55,33 @@ export interface RemoteConfig {
   /** Percent of installs whose account wall stands AFTER the first workout (the formula report's
    *  reopened ruling, run as an experiment). 0 and 100 end it. Clamped at the apply site. */
   signInAfterFirstWorkoutPct?: number;
+  /** Percent of installs whose paywall stands after workout ONE instead of three (2026-09-28). */
+  paywallAfterFirstWorkoutPct?: number;
 }
+
+/** The server's explicit trial length, when it said one — it outranks the experiment's arm. */
+let lastLimitWord: number | undefined;
 
 /** The allow-list, applied. Unknown keys never get this far; bad types are ignored per-field. */
 function apply(cfg: RemoteConfig): void {
   applyTrialLimitOverride(cfg.trialSessionLimit);
   applyTrialMaxDaysOverride(cfg.trialMaxDays);
   applyExperimentPct('signInAfterFirstWorkout', cfg.signInAfterFirstWorkoutPct);
+  applyExperimentPct('paywallAfterFirstWorkout', cfg.paywallAfterFirstWorkoutPct);
+  lastLimitWord = cfg.trialSessionLimit;
+}
+
+/**
+ * ════ THE PAYWALL-PLACEMENT ARM (founder 2026-09-28) ════
+ *
+ * On the NEW arm the free workouts are ONE; on the old, the default three. An explicit
+ * `trialSessionLimit` from the server is a decision and wins over the coin. Applied after every
+ * config read, so a fresh word and the arm can never disagree for long; `FREE_SESSION_LIMIT` is a
+ * live binding, so every reader (the gate, the paywall, the Ready screen) moves together.
+ */
+async function applyPaywallArm(): Promise<void> {
+  if (typeof lastLimitWord === 'number') return;
+  if (await onNewArm('paywallAfterFirstWorkout')) applyTrialLimitOverride(1);
 }
 
 /** Rebuild the config field-by-field from an untrusted body — the circle's own discipline. */
@@ -72,6 +92,7 @@ function sanitize(raw: unknown): RemoteConfig {
     if (typeof r.trialSessionLimit === 'number') cfg.trialSessionLimit = r.trialSessionLimit;
     if (typeof r.trialMaxDays === 'number') cfg.trialMaxDays = r.trialMaxDays;
     if (typeof r.signInAfterFirstWorkoutPct === 'number') cfg.signInAfterFirstWorkoutPct = r.signInAfterFirstWorkoutPct;
+    if (typeof r.paywallAfterFirstWorkoutPct === 'number') cfg.paywallAfterFirstWorkoutPct = r.paywallAfterFirstWorkoutPct;
   }
   return cfg;
 }
@@ -88,6 +109,7 @@ export async function loadRemoteConfig(): Promise<void> {
   } catch {
     /* a corrupt cache is just no cache */
   }
+  await applyPaywallArm().catch(() => {});
   if (!configUrl) return;
   try {
     const controller = new AbortController();
@@ -101,6 +123,7 @@ export async function loadRemoteConfig(): Promise<void> {
     if (!res.ok) return;
     const cfg = sanitize(await res.json());
     apply(cfg);
+    await applyPaywallArm().catch(() => {});
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cfg));
   } catch {
     /* offline / bad server — the cache (or the defaults) already applied */

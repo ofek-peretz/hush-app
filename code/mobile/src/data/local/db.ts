@@ -60,6 +60,10 @@ const K = {
   mode: 'hush.mode',
   activeSession: 'hush.session.active',
   sessionResume: 'hush.session.resume', // live machine snapshot — mid-workout resume (S3)
+  // The voice's own resume half (`useVoiceCoach`, 2026-09-27): the opening said, the loads confirmed.
+  voiceState: 'hush.voice.state',
+  /** The natural voice's cache index (`platform/voice/neuralVoice`) — wiped, so a new athlete starts empty. */
+  voiceClips: 'hush.voice.clips',
   history: 'hush.history.sessions',
   cardio: 'hush.cardio.activities', // recorded run/walk activities (Open training)
   /* The run that is happening RIGHT NOW, written as its metres are earned — the cardio half of
@@ -83,6 +87,9 @@ const K = {
   engineV5: 'hush.engine.v5', // Hush v5 exercise-keyed progression state (see engine/v5)
   entitlement: 'hush.entitlement', // cached subscription entitlement (offline gating mirror)
   weekOpen: 'hush.week.open', // Sunday-04:00 the current weekly bucket was built for (calendar cadence)
+  trialEnds: 'hush.billing.trialEnds', // when Apple's free trial she started turns into a charge (2026-09-28)
+  weekPrevOpen: 'hush.week.prevOpen', // the opening of the cycle that closed last — the letter's window (the rotation, 2026-09-28)
+  weekCycle: 'hush.week.cycle', // which cycle she is in — "שבוע N" counts her cycles, not Saturdays (2026-09-28)
   reminderOptIn: 'hush.reminder.optin', // training-day reminder — SHE asked (2026-08-23); absent/false = silence
   telemetryOptOut: 'hush.telemetry.optout', // analytics wire opt-out (2026-09-01, audit 4) — absent/false = the wire ships
 
@@ -152,6 +159,16 @@ const K = {
   recoverySealed: 'hush.recovery.sealed', // 3.5 · screens/home/HomeView
   reviewAsked: 'hush.review.asked', // the once-ever store-review ask · platform/review
   liftNotes: 'hush.lift.notes', // her own line per lift ("safety bar, seat 4") · 2026-09-09
+
+  /* ── THE COACH TRACK (2026-09-17, docs/architecture/COACH_TRACK_V1.md) ─────────────────────────
+   * A human coach, not the AI one above — hence `coachtrack`, never `coach`. All four are facts
+   * about THIS account (her link, her unsent workouts, the update waiting on Home, the role the
+   * server last reported), so all four go with a wipe. The link on the SERVER survives sign-out and
+   * is ended only by leaving or by deleting the account (law 8). See `state/coachOutbox`. */
+  coachTrackLink: 'hush.coachtrack.link',
+  coachTrackOutbox: 'hush.coachtrack.outbox',
+  coachTrackPending: 'hush.coachtrack.pending',
+  coachTrackMe: 'hush.coachtrack.me',
 } as const;
 
 /**
@@ -473,11 +490,31 @@ export const db = {
   loadProgram: () => getJSON<Program>(K.program),
   saveProgram: (p: Program) => setJSON(K.program, p),
 
+  // ---- The coach track (2026-09-17) — typed by `state/coachOutbox`, stored opaque here so this
+  //      repo does not import the track's domain (the same layering rule as `CoachUpdate`). ----
+  loadCoachTrackLink: <T>() => getJSON<T>(K.coachTrackLink),
+  saveCoachTrackLink: (v: unknown) => setJSON(K.coachTrackLink, v),
+  clearCoachTrackLink: () => AsyncStorage.removeItem(K.coachTrackLink),
+  loadCoachTrackOutbox: async <T>(): Promise<T[]> => (await getJSON<T[]>(K.coachTrackOutbox)) ?? [],
+  saveCoachTrackOutbox: (v: unknown[]) => setJSON(K.coachTrackOutbox, v),
+  loadCoachTrackPending: <T>() => getJSON<T>(K.coachTrackPending),
+  saveCoachTrackPending: (v: unknown) => setJSON(K.coachTrackPending, v),
+  clearCoachTrackPending: () => AsyncStorage.removeItem(K.coachTrackPending),
+  loadCoachTrackMe: <T>() => getJSON<T>(K.coachTrackMe),
+  saveCoachTrackMe: (v: unknown) => setJSON(K.coachTrackMe, v),
+
   // Calendar cadence (product model 2026-07-05): the Sunday-04:00-local instant the current
   // weekly bucket was generated for. The bucket turns over when the calendar week advances
   // past this, regardless of workout completion. Null until the first bucket is stamped.
   loadWeekOpen: () => getJSON<number>(K.weekOpen),
   saveWeekOpen: (ms: number) => setJSON(K.weekOpen, ms),
+  /** The end of Apple's free trial, stamped when a purchase opens it — the reminder counts from it. */
+  loadTrialEnds: () => getJSON<number>(K.trialEnds),
+  saveTrialEnds: (ms: number) => setJSON(K.trialEnds, ms),
+  loadWeekPrevOpen: () => getJSON<number>(K.weekPrevOpen),
+  saveWeekPrevOpen: (ms: number) => setJSON(K.weekPrevOpen, ms),
+  loadWeekCycle: () => getJSON<number>(K.weekCycle),
+  saveWeekCycle: (n: number) => setJSON(K.weekCycle, n),
 
   // The training-day reminder is OPT-IN (2026-08-23, releasing the 2026-07-13 "no reminders"
   // decree for the one case it never meant: a reminder SHE asked for). Absent = false = silence.

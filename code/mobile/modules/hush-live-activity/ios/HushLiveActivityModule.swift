@@ -65,6 +65,8 @@ struct ActivityRecord: Record {
   @Field var wordBodyweight: String = "BW"
   /// A hold or a carry: "0:45" / "400 m". Nil on every set.
   @Field var holdLabel: String? = nil
+  /// The running hold's end (epoch ms) — the one clock every surface counts to (2026-09-28). Nil until it starts.
+  @Field var holdEndsAtMs: Double? = nil
 
   // ---- cardio ----
   @Field var gait: String = "run"
@@ -274,7 +276,8 @@ final class HushActivityController {
       wordBodyweight: r.wordBodyweight,
       awaitingReady: r.awaitingReady,
       actReady: r.actReady,
-      holdLabel: r.holdLabel
+      holdLabel: r.holdLabel,
+      holdEndDate: r.phase == "set" ? r.holdEndsAtMs.map { Date(timeIntervalSince1970: $0 / 1000.0) } : nil
     )
   }
 

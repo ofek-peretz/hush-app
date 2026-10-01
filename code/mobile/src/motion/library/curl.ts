@@ -34,7 +34,7 @@ import { lerp } from '../geometry';
 import { CONCENTRIC_TEMPO, DEFAULT_TEMPO } from '../timeline';
 import { ATHLETE, BAR_R } from '../anthro';
 import { easesOut, grindsIn, type Curve } from '../curves';
-import { bandAnchor, bandStrip, cable, dumbbellEnd, dumbbellSide, floorScene, padStroke, plateGhost, pulley, sampledPathTicks } from '../kit';
+import { bandAnchor, bandStrip, cable, dumbbellEnd, dumbbellSide, floorScene, padStroke, plateGhost, pulley, sampledPathTicks, stirrupHandle } from '../kit';
 import { stackTower } from '../machines';
 import { FLOOR_Y, far, standingCore } from '../bodies';
 
@@ -273,7 +273,7 @@ function curl(p: CurlParams): Rig {
       /* Supinated: the handle's axis runs across the body, so the side sees one plate END-ON. One
          disc — the far dumbbell is exactly behind it from this camera (the pair in ink1 at a 6u
          offset used to merge into a cluster of four circles on the fist; audit, 2026-09-03). */
-      front = dumbbellEnd(hand);
+      front = dumbbellEnd(hand, 8, dir);
     } else if (p.implement === 'db_neutral') {
       /* The hammer: thumb up, the handle stands across the forearm IN the sagittal plane, so the
          side sees the whole profile — handle and both plates, riding perpendicular to the forearm.
@@ -330,7 +330,7 @@ function curl(p: CurlParams): Rig {
         front.push({ kind: 'circle', c: hand, r: 2.6, fill: 'ink0' }); // the swivel the tails hang from
       } else if (p.singleArm) {
         // the D-handle: a stirrup's short profile across the fist
-        front.push(...dumbbellSide(hand, dir, 3, 2.5));
+        front.push(...stirrupHandle(hand, dir, PULLEY));
       } else {
         /* The straight bar, end-on — it used to be a 7u dumbbell profile, a toy weight on a cable.
            The bar is its own word here, as the EZ's camber is: a level 14u stroke through the fist
@@ -501,7 +501,7 @@ function positionedCurl(p: PositionedCurlParams): Rig {
                concentration and spider squeeze palm-up), so the side sees the plate end-on — one
                disc on the near fist; the far dumbbell is behind it. They drew the hammer profile,
                twice, in the same ink (audit, 2026-09-03). */
-            dumbbellEnd(pose.j.hand),
+            dumbbellEnd(pose.j.hand, 8, { x: pose.j.hand.x - pose.j.elbow.x, y: pose.j.hand.y - pose.j.elbow.y }),
     };
   };
 

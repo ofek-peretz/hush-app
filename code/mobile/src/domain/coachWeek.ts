@@ -132,6 +132,8 @@ export interface CoachRow {
   metres?: number;
   /** The coach's instruction for this item, in its own words. Never generated, never edited. */
   say?: string;
+  /** A linked human coach's note on the lift (the coach track, law 7) — attributed where drawn. */
+  coachNote?: string;
 }
 
 /**
@@ -295,6 +297,7 @@ export function coachRows(plan: CoachPlan | null | undefined, workoutId: string)
         ...(item.kind === 'time' ? { seconds: item.seconds, ...(item.load != null ? { load: item.load } : {}) } : {}),
         ...(item.kind === 'distance' ? { metres: item.metres, ...(item.load != null ? { load: item.load } : {}) } : {}),
         ...(item.say ? { say: item.say } : {}),
+        ...(item.coachNote ? { coachNote: item.coachNote } : {}),
       });
     }
   }
@@ -326,10 +329,11 @@ export function coachSession(plan: CoachPlan | null | undefined, workoutId: stri
 export function coachPlanRows(
   rows: CoachRow[] | null,
   units: 'kg' | 'lb',
-): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; detail?: string }[] | null {
+): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; detail?: string; coachNote?: string }[] | null {
   if (!rows) return null;
   return rows.map((r) => {
-    const base = { exerciseId: r.ex, name: r.name, sets: r.rounds, band: [0, 0] as [number, number] };
+    /* The coach track's note rides the row (law 7) — the card draws it, attributed; Today does not. */
+    const base = { exerciseId: r.ex, name: r.name, sets: r.rounds, band: [0, 0] as [number, number], ...(r.coachNote ? { coachNote: r.coachNote } : {}) };
     switch (r.kind) {
       case 'reps':
         // The one shape the existing assembly already says correctly.

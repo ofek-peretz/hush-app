@@ -31,9 +31,35 @@ import Foundation
 // `.playback` plays under the ring/silent switch — exactly how her music does — which is the
 // whole answer to "what if the phone is on silent" (spec, the first fact).
 
+/// The natural voice's line ended — once, whichever way (finished, failed to decode, stopped).
+final class ClipDone: NSObject, AVAudioPlayerDelegate {
+  private var callback: ((Bool) -> Void)?
+
+  init(_ callback: @escaping (Bool) -> Void) {
+    self.callback = callback
+  }
+
+  func fire(_ ok: Bool) {
+    let c = callback
+    callback = nil
+    c?(ok)
+  }
+
+  func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+    fire(flag)
+  }
+
+  func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
+    fire(false)
+  }
+}
+
 public class HushVoiceAudioModule: Module {
   private var keepAlive: AVAudioPlayer?
   private var chime: AVAudioPlayer?
+  /// The natural voice's current line and its one-shot ending (main queue only).
+  private var clipPlayer: AVAudioPlayer?
+  private var clipDone: ClipDone?
   private var keepAliveWanted = false
   private var routeObserver: NSObjectProtocol?
   private var interruptionObserver: NSObjectProtocol?
@@ -63,7 +89,7 @@ public class HushVoiceAudioModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("HushVoiceAudio")
-    Events("onRouteChange", "onEarResult", "onEarState")
+    Events("onRouteChange", "onEarResult", "onEarState", "onInterruption")
 
     OnCreate {
       self.routeObserver = NotificationCenter.default.addObserver(
@@ -86,12 +112,16 @@ public class HushVoiceAudioModule: Module {
       }
       // A phone call, Siri, an alarm: the interruption stops the keep-alive player, and when it
       // ends the process would go to sleep in the pocket. Put the loop back the moment it ends.
+      // ⛔ And the voice is TOLD (2026-09-27, spec §3.9): a question dropped by a call is asked once
+      // after it, and nothing is said over the call — until today JS never heard of it.
       self.interruptionObserver = NotificationCenter.default.addObserver(
         forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
       ) { [weak self] note in
-        guard let self, self.keepAliveWanted,
+        guard let self,
               let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-              AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        self.sendEvent("onInterruption", ["began": type == .began])
+        guard type == .ended, self.keepAliveWanted else { return }
         try? self.applySession(duck: false)
         if let p = self.keepAlive, !p.isPlaying { p.play() }
       }
@@ -155,6 +185,41 @@ public class HushVoiceAudioModule: Module {
     AsyncFunction("earStopListening") { () async in
       guard #available(iOS 26.0, *), let ear = self.ear else { return }
       await ear.stopListening()
+    }
+
+    /// The window's audio (16 kHz mono WAV, base64) for the second ear — nil when it is not that
+    /// window's, or the ear does not run (2026-09-27, `platform/voice/cloudEar`).
+    AsyncFunction("earClip") { (token: Int, maxSeconds: Double) -> [String: Any]? in
+      guard #available(iOS 26.0, *), let ear = self.ear else { return nil }
+      return ear.clip(token: token, maxSeconds: maxSeconds)
+    }
+
+    /// ════ THE NATURAL VOICE (2026-09-27, `platform/voice/neuralVoice`) ════
+    /// A cached line played on the session the coach already holds (ducked by `duck`, like Carmit).
+    /// Resolves true when it played to the end, false when it could not start, failed, or was
+    /// stopped. Everything runs on the main queue, where the player's delegate calls back.
+    AsyncFunction("playFile") { (path: String, promise: Promise) in
+      DispatchQueue.main.async {
+        self.finishClip(false)
+        let url: URL = path.hasPrefix("file://") ? (URL(string: path) ?? URL(fileURLWithPath: path)) : URL(fileURLWithPath: path)
+        do {
+          let player = try AVAudioPlayer(contentsOf: url)
+          let done = ClipDone { ok in promise.resolve(ok) }
+          player.delegate = done
+          player.volume = 1.0
+          player.prepareToPlay()
+          self.clipPlayer = player
+          self.clipDone = done
+          if !player.play() { self.finishClip(false) }
+        } catch {
+          promise.resolve(false)
+        }
+      }
+    }
+
+    /// Earbuds out, a call, the moment passed: the line stops now, and its promise resolves false.
+    Function("stopFile") { () in
+      DispatchQueue.main.async { self.finishClip(false) }
     }
 
     OnDestroy {
@@ -223,7 +288,16 @@ public class HushVoiceAudioModule: Module {
     }
 
     /// Before a line is spoken: her music down to a quarter for as long as the session is active.
+    /// ⚠️ Ducking begins when a session ACTIVATES (2026-09-27, the output audit) — the keep-alive has
+    /// kept ours active since the first set, so the option alone could land on a live session and
+    /// duck nothing. A session not already ducking is deactivated first (without telling her music,
+    /// which plays on), then activated with the duck.
     AsyncFunction("duck") { () in
+      let session = AVAudioSession.sharedInstance()
+      if !self.earRunning && !session.categoryOptions.contains(.duckOthers) {
+        self.keepAlive?.pause()
+        try? session.setActive(false)
+      }
       try self.applySession(duck: true)
       if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
     }
@@ -242,8 +316,12 @@ public class HushVoiceAudioModule: Module {
       let session = AVAudioSession.sharedInstance()
       self.keepAlive?.pause()
       try? session.setActive(false, options: [.notifyOthersOnDeactivation])
+      // ⛔ THE LOOP COMES BACK EVEN IF THE CATEGORY DOES NOT (2026-09-27, the output audit). A failed
+      // `setPlayback` (a call or Siri holding the audio) used to skip the `play()` below: the session
+      // stayed inactive, the loop paused, and iOS put the process to sleep in her pocket — the clock,
+      // the voice and the lock-screen buttons with it. `play()` also activates the session.
+      defer { if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() } }
       try Self.setPlayback(duck: false)
-      if self.keepAliveWanted, let p = self.keepAlive { p.play() }
     }
 
     /// The rest-over sound: half a second, generated, at the level of the music.
@@ -259,14 +337,29 @@ public class HushVoiceAudioModule: Module {
     }
   }
 
+  // MARK: - The natural voice's player (main queue only)
+
+  private func finishClip(_ ok: Bool) {
+    let done = clipDone
+    clipDone = nil
+    clipPlayer?.stop()
+    clipPlayer = nil
+    done?.fire(ok)
+  }
+
   // MARK: - The session
 
   /// Every session change goes through here: playback-mixed normally, record-and-play with the
   /// ear's own options while the pocket ear runs (leaving `.playAndRecord` would stop its engine).
+  ///
+  /// ⛔ NEVER DUCK UNDER THE POCKET EAR (2026-09-27, the output audit). iOS releases a duck only by
+  /// deactivating the session, and deactivating it here would stop the microphone — so a duck set
+  /// once held her music at a quarter for the rest of the workout. With the ear running the coach
+  /// speaks over the music at full level; `duck` applies to the playback session only.
   private func applySession(duck: Bool) throws {
     if #available(iOS 26.0, *), let ear = self.ear, ear.running {
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(ear.source, duck: duck))
+      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(ear.source, duck: false))
       try session.setActive(true)
       return
     }

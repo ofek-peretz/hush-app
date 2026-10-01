@@ -27,7 +27,8 @@ import { snapDown, nextRung, prevRung } from './grid';
 import { retainedAfterGap, daysSinceLastSession, lastSessionStartMs } from './detraining';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
-import { RECENCY_WINDOW_SESSIONS, SETS_MIN, STARTING_INCREMENT } from './constants';
+import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
+import { incrementOf } from './loadGrid';
 import { isEvidenceSet } from '@/domain/setEvidence';
 import { track } from '@/platform/telemetry';
 
@@ -76,7 +77,9 @@ export function observedLoads(exerciseId: string, sessions: Session[], equipment
    * the half-kilo behaviour they were written against.
    * ════════════════════════════════════════════════════════════════════════════════════════════
    */
-  const grain = equipment ? STARTING_INCREMENT[equipment] || 0.5 : 0.5;
+  // In HER room's rungs (`loadGrid`, 2026-09-30): kilograms for a kilogram athlete, the kilogram
+  // values of pound rungs for a pound one.
+  const grain = equipment ? incrementOf(equipment) || 0.5 : 0.5;
   const seen = new Set<number>();
   for (const s of sessions) for (const log of s.sets) {
     if (log.exerciseId === exerciseId && isEvidenceSet(log) && log.actualWeight != null && log.actualWeight > 0) {
@@ -1052,8 +1055,16 @@ export function explainChange(c: ChangeEntry): Explanation {
 
 type ChangeEntry = NonNullable<EngineV5State['changeLog']>[number];
 
-/** The window of the week that ended at the most recent Saturday roll: [prev week-open, this week-open). */
-function closedWeek(nowMs: number): { start: number; end: number } {
+/** A closed cycle's bounds, when the app knows them (the rotation, 2026-09-28): [its opening, the next's). */
+export type ClosedWindow = { start: number; end: number };
+
+/**
+ * The window of the week that just closed. Under the rotation (2026-09-28) that is the CYCLE she
+ * last finished — handed in by the caller from the record (`domain/weeklyUpdate`); without one it is
+ * the calendar week that ended at the most recent Saturday roll, as it always was.
+ */
+function closedWeek(nowMs: number, window?: ClosedWindow | null): { start: number; end: number } {
+  if (window && window.end > window.start) return window;
   const end = currentWeekOpen(nowMs);
   const start = currentWeekOpen(end - 1);
   return { start, end };
@@ -1062,8 +1073,8 @@ function closedWeek(nowMs: number): { start: number; end: number } {
 /** The changes made during the week that just closed — the Saturday mirror's content (S-45). Since a
  *  lift may move more than once in a week (per-workout), the NET change per exercise is used: its
  *  earliest loadFrom → its latest loadTo, so the mirror reads "back went up" once, not thrice. */
-function closedWeekChanges(log: ChangeEntry[], nowMs: number): ChangeEntry[] {
-  const { start, end } = closedWeek(nowMs);
+function closedWeekChanges(log: ChangeEntry[], nowMs: number, window?: ClosedWindow | null): ChangeEntry[] {
+  const { start, end } = closedWeek(nowMs, window);
   const inWeek = log.filter((c) => c.at >= start && c.at < end).sort((a, b) => a.at - b.at);
   const netByEx = new Map<string, ChangeEntry>();
   for (const c of inWeek) {
@@ -1179,11 +1190,11 @@ export async function getSessionForwardV5(
 }
 
 /** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */
-export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<WeeklyUpdate | null> {
+export async function getWeeklyUpdateV5(nowMs: number = Date.now(), window?: ClosedWindow | null): Promise<WeeklyUpdate | null> {
   const state = await load();
-  const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs, window);
   if (changes.length === 0) return null;
-  const { end } = closedWeek(nowMs);
+  const { end } = closedWeek(nowMs, window);
   /*
    * ONE SENTENCE PER LIFT PER MOMENT: a deload stamped at the same fold as a Loop 2 move overrode
    * it before she ever saw it, so the letter narrates the deload alone — never "raised to 62.5"
@@ -1195,9 +1206,9 @@ export async function getWeeklyUpdateV5(nowMs: number = Date.now()): Promise<Wee
 }
 
 /** Mark the current closed-week mirror as seen (keyed to its week-end, so a new week reads unseen). */
-export async function markWeeklyUpdateSeenV5(nowMs: number = Date.now()): Promise<void> {
+export async function markWeeklyUpdateSeenV5(nowMs: number = Date.now(), window?: ClosedWindow | null): Promise<void> {
   const state = await load();
-  state.seenWeekEnd = closedWeek(nowMs).end;
+  state.seenWeekEnd = closedWeek(nowMs, window).end;
   await save(state);
 }
 
@@ -1206,11 +1217,11 @@ export async function markWeeklyUpdateSeenV5(nowMs: number = Date.now()): Promis
  * week that just closed + Why. Same shape as v4 `getWeeklyPlan`, so the screens render unchanged.
  * Read-only.
  */
-export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now()): Promise<WeeklyPlanView | null> {
+export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now(), window?: ClosedWindow | null): Promise<WeeklyPlanView | null> {
   const state = await load();
   const ex = asStates(state);
-  const changes = closedWeekChanges(state.changeLog ?? [], nowMs);
-  const { end } = closedWeek(nowMs);
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs, window);
+  const { end } = closedWeek(nowMs, window);
 
   // The change log carries FOUR kinds of news, and only one of them is keyed by a lift that is
   // still in the programme. Attaching everything by `c.exerciseId` — as this function used to —

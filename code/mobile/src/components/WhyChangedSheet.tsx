@@ -35,7 +35,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { Legend, Button, Arrive } from '@/components/ds';
+import { Legend, Button, Arrive, opticalFigure } from '@/components/ds';
 import { SHEET_SETTLE } from '@/components/BottomSheet';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -170,8 +170,8 @@ export function WhyChangedSheet(props: WhyChangedProps) {
 
           {/* THE CHANGE, AS ONE MOTION — struck, then standing. */}
           <View style={styles.change}>
-            {props.loadFrom != null ? <Text style={styles.from}>{props.loadFrom}</Text> : null}
-            <Text style={[styles.to, { color: tone.fg, textShadowColor: tone.glow }]}>{props.loadTo}</Text>
+            {props.loadFrom != null ? <Text style={styles.from}>{opticalFigure(props.loadFrom)}</Text> : null}
+            <Text style={[styles.to, { color: tone.fg, textShadowColor: tone.glow }]}>{opticalFigure(props.loadTo)}</Text>
             <Text style={styles.unit}>{props.unit}</Text>
             <View style={[styles.pill, { backgroundColor: tone.fg }, held && styles.pillHeld]}>
               <Legend size={17} track={0.06} style={held ? styles.pillTextHeld : styles.pillText}>

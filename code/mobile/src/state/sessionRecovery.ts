@@ -22,6 +22,7 @@ import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { sessionTrained } from '@/domain/completion';
 import type { Session } from '@/data/local/models';
+import { queueSessionForCoach } from '@/state/coachOutbox';
 
 /** How long an interrupted session stays resumable. Past this, the gym visit is over —
  *  salvage the logged work and compose the next start cleanly. */
@@ -204,6 +205,7 @@ export async function salvageOrphanSession(): Promise<SalvageResult> {
             annotation: 'ended_early',
           };
           await db.appendCompletedSession(saved);
+          void queueSessionForCoach(saved); // the coach track, law 3 — a salvaged workout is still her coach's to see
           await db.enqueuePendingSync({
             sessionId: saved.id,
             programDayId: saved.programDayId,

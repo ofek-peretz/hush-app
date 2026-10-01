@@ -38,7 +38,11 @@ describe('⛔ numbers as words — Hebrew agrees with its noun', () => {
     expect(hebrewKilos(2)).toBe('שני קילו');
     expect(hebrewKilos(3)).toBe('שלושה קילו');
     expect(hebrewKilos(42.5)).toBe('ארבעים ושתיים וחצי קילו');
-    expect(hebrewKilos(1.25)).toBe('אחת ורבע קילו');
+    // One and a fraction is said the way a gym says it (2026-09-27): "קילו ורבע", never "אחת ורבע קילו".
+    expect(hebrewKilos(1.25)).toBe('קילו ורבע');
+    expect(hebrewKilos(1.5)).toBe('קילו וחצי');
+    expect(hebrewKilos(2.5)).toBe('שתיים וחצי קילו');
+    expect(hebrewKilos(0.5)).toBe('חצי קילו');
     expect(hebrewKilos(12.5)).toBe('שתים עשרה וחצי קילו');
     expect(hebrewKilos(100)).toBe('מאה קילו');
     expect(hebrewKilos(120)).toBe('מאה ועשרים קילו');
@@ -68,7 +72,7 @@ describe('⛔ the load line — the total, then how to build it (spec §2)', () 
     expect(loadLine(BENCH, 40, HE)).toBe('ארבעים קילו: המוט עשרים קילו, ועשרה קילו בכל צד');
     // Standard Hebrew: kilos take the masculine ("ארבעים וחמישה קילו"); a fraction is said in the
     // spoken feminine ("שתיים וחצי קילו") — the founder's condition was correct language, not slang.
-    expect(loadLine(BENCH, 45, HE)).toBe('ארבעים וחמישה קילו: המוט עשרים קילו, ושתים עשרה וחצי קילו בכל צד — עשרה קילו ושתיים וחצי קילו');
+    expect(loadLine(BENCH, 45, HE)).toBe('ארבעים וחמישה קילו: המוט עשרים קילו, ושתים עשרה וחצי קילו בכל צד: עשרה ושתיים וחצי'); // the plates counted, the unit said once (2026-09-27)
     expect(loadLine(BENCH, 20, HE)).toBe('עשרים קילו: המוט בלבד');
   });
   it('dumbbells say "in each hand", a cable says where the pin goes, bodyweight says no weight', () => {
@@ -100,8 +104,8 @@ describe('⛔ the load line — the total, then how to build it (spec §2)', () 
     expect(rangeLine(8, 10, null, HE)).toBe('שמונה עד עשר חזרות, בלי משקל');
   });
   it('a change is an instruction in the equipment\'s own terms', () => {
-    expect(deltaLine(BENCH, 40, 42.5, HE)).toBe('תוסיף אחת ורבע קילו בכל צד');
-    expect(deltaLine(BENCH, 40, 37.5, HE)).toBe('תוריד אחת ורבע קילו מכל צד');
+    expect(deltaLine(BENCH, 40, 42.5, HE)).toBe('תוסיף קילו ורבע בכל צד');
+    expect(deltaLine(BENCH, 40, 37.5, HE)).toBe('תוריד קילו ורבע מכל צד');
     expect(deltaLine(DB, 12.5, 15, HE)).toBe('קח חמישה עשר קילו בכל יד');
     // A bare number (the pin's mark) is abstract counting — feminine, as in "תשים את הפין על ארבעים וחמש".
     expect(deltaLine(CABLE, 40, 45, HE)).toBe('תעביר את הפין לארבעים וחמש');
@@ -130,20 +134,24 @@ describe('⛔ the lines, word for word (spec §3)', () => {
       'לחיצת חזה במוט. זו הפעם הראשונה שלך בתרגיל הזה, אז המשקל הוא הצעה: ארבעים קילו: המוט עשרים קילו, ועשרה קילו בכל צד. אם זה נראה לך קל מדי או כבד מדי, תגיד משקל אחר. שמונה עד עשר חזרות. כשהמוט טעון, תגיד: מוכן.',
     );
     setGender('female');
-    expect(voiceScript.loadCalibrated(BENCH, 40, 8, 10, HE)).toContain('כשהמוט טעון, תגידי: מוכן. אם את רוצה משקל אחר, תגידי אותו.');
+    expect(voiceScript.loadCalibrated(BENCH, 40, 8, 10, HE)).toContain('כשהמוט טעון, תגידי: מוכנה. אם את רוצה משקל אחר, תגידי אותו.');
     expect(voiceScript.readyPrompt()).toBe('מוכנה?');
   });
   it('a changed load names the set, the direction, the new total and the plates to move', () => {
     expect(voiceScript.loadChanged(BENCH, 40, 42.5, 2, 4, false, HE)).toBe(
-      'סט שתיים מתוך ארבע. עולים לארבעים ושתיים וחצי קילו: תוסיף אחת ורבע קילו בכל צד. כשהמוט טעון, תגיד: מוכן.',
+      'סט שתיים מתוך ארבע. עולים לארבעים ושתיים וחצי קילו: תוסיף קילו ורבע בכל צד. כשהמוט טעון, תגיד: מוכן.',
     );
+    // The last working set of a lift is named as such (2026-09-27).
+    expect(voiceScript.loadChanged(BENCH, 40, 42.5, 4, 4, false, HE)).toMatch(/^סט אחרון\. עולים ל/);
   });
   it('the calibration start, the go, the fallback', () => {
     expect(voiceScript.calibrationStart(BENCH, 30, HE)).toBe(
       'אין בעיה, נתחיל קל. שלושים קילו: המוט עשרים קילו, וחמישה קילו בכל צד. תעשה כמה חזרות שיוצא בנוח, ותגיד לי כמה. כשהמוט טעון, תגיד: מוכן.',
     );
     expect(voiceScript.go()).toBe('קדימה.');
-    expect(voiceScript.readyFallback()).toBe('כשתהיה מוכן, תלחץ על מוכן בשעון או במסך הנעילה.');
+    // ⛔ 2026-09-27: the loading window running out is never a dead end — the question still comes.
+    expect(voiceScript.readyFallback()).toBe('כשתהיה מוכן, תלחץ על מוכן במסך הנעילה. אשאל אותך בסוף הסט.');
+    expect(voiceScript.readyNotHeard()).toBe('לא שמעתי מוכן. אם כבר התחלת, אשאל אותך בסוף הסט.');
   });
   it('the done question asks for a number; the echo says the figures and "נרשם"', () => {
     expect(voiceScript.askDone()).toBe('סיימת את הסט? כמה חזרות עשית?');
@@ -153,19 +161,58 @@ describe('⛔ the lines, word for word (spec §3)', () => {
     expect(voiceScript.echo(null, 10, HE)).toBe('עשר חזרות. נרשם.');
     expect(figuresLine(40, 8, HE)).toBe('ארבעים קילו, שמונה חזרות');
     // Two silences write NOTHING (founder, 2026-09-09): the set stays open, and she is told where "done" lives.
-    expect(voiceScript.notHeard()).toBe('לא שמעתי תשובה. הסט נשאר פתוח: תגיד לי כמה חזרות כשתסיים, או תלחץ סיום במסך הנעילה או בשעון.');
-    expect(voiceScript.confirmHeard(40, 12, HE)).toBe('ארבעים קילו, שתים עשרה חזרות, נכון?');
+    expect(voiceScript.notHeard()).toBe('לא שמעתי תשובה. הסט עדיין פתוח, ולא נרשם. תגיד לי כמה חזרות, או תסמן אותו במסך הנעילה או בשעון.');
+    // ⛔ 2026-09-27: silence after this question writes NOTHING, so the line says what she can answer.
+    expect(voiceScript.confirmHeard(40, 12, HE)).toBe('שמעתי ארבעים קילו, שתים עשרה חזרות. נכון? תגיד כן, או את המספר הנכון.');
   });
   it('the verdict, the rest, the set start, the crossing and the end', () => {
-    expect(voiceScript.verdictUp(BENCH, 40, 42.5, HE)).toBe('יותר מהטווח. בסט הבא נעלה לארבעים ושתיים וחצי קילו: תוסיף אחת ורבע קילו בכל צד.');
-    expect(voiceScript.verdictDown(BENCH, 40, 37.5, HE)).toBe('פחות מהטווח. בסט הבא נוריד לשלושים ושבע וחצי קילו: תוריד אחת ורבע קילו מכל צד.');
-    expect(voiceScript.verdictHold()).toBe('בתוך הטווח. הסט הבא באותו משקל.');
+    // A word of a coach before the fact (2026-09-27): "מעולה" over the range, "יפה" inside it — and
+    // nothing warm said over a miss that it did not earn.
+    expect(voiceScript.verdictUp(BENCH, 40, 42.5, HE)).toBe('מעולה, יותר מהטווח. בסט הבא נעלה לארבעים ושתיים וחצי קילו: תוסיף קילו ורבע בכל צד.');
+    expect(voiceScript.verdictDown(BENCH, 40, 37.5, HE)).toBe('פחות מהטווח. בסט הבא נוריד לשלושים ושבע וחצי קילו: תוריד קילו ורבע מכל צד.');
+    expect(voiceScript.verdictHold()).toBe('יפה, בתוך הטווח. הסט הבא באותו משקל.');
+    expect(voiceScript.verdictCalibrated(BENCH, 30, 35, HE)).toBe('עכשיו אני יודעת. בסט הבא: שלושים וחמישה קילו: תוסיף שתיים וחצי קילו בכל צד.');
     expect(voiceScript.rest(90, HE)).toBe('מנוחה: דקה וחצי.');
     expect(voiceScript.tenSeconds()).toBe('עוד עשר שניות.');
-    expect(voiceScript.setStart(BENCH, 40, 8, 10, 2, 4, false, HE)).toBe('סט שתיים מתוך ארבע. ארבעים קילו: המוט עשרים קילו, ועשרה קילו בכל צד. שמונה עד עשר חזרות.');
-    expect(voiceScript.liftDone(BENCH, CABLE, 120, HE)).toBe('סיימת לחיצת חזה במוט. התרגיל הבא: חתירה בפולי בישיבה. מנוחה: שתי דקות.');
-    expect(voiceScript.sessionDone(5, 42, HE)).toBe('סיימת את האימון. חמישה תרגילים, ארבעים ושתיים דקות. הסיכום מחכה בטלפון.');
-    expect(voiceScript.nextTimeLearned(42.5, HE)).toBe('למדתי. בפעם הבאה נתחיל בארבעים ושתיים וחצי קילו.');
+    expect(voiceScript.setStart(BENCH, 40, 8, 10, 2, 4, false, HE)).toBe('סט שתיים מתוך ארבע. ארבעים קילו. שמונה עד עשר חזרות.');
+    expect(voiceScript.setStart(BENCH, 40, 8, 10, 4, 4, false, HE)).toBe('סט אחרון. ארבעים קילו. שמונה עד עשר חזרות.');
+    // The crossing names the next lift AND its load — she fetches it during this rest (2026-09-27).
+    expect(voiceScript.liftDone(BENCH, CABLE, 45, false, 120, HE)).toBe('סיימת עם לחיצת חזה במוט. התרגיל הבא: חתירה בפולי בישיבה, ארבעים וחמישה קילו. מנוחה: שתי דקות.');
+    expect(voiceScript.liftDone(BENCH, DB, 20, true, 90, HE)).toBe('סיימת עם לחיצת חזה במוט. התרגיל האחרון: לחיצת חזה במשקולות יד, עשרים קילו בכל יד. מנוחה: דקה וחצי.');
+    expect(voiceScript.liftDone(BENCH, 'pull_up', null, false, 60, HE)).toBe('סיימת עם לחיצת חזה במוט. התרגיל הבא: מתח באחיזה רחבה. מנוחה: דקה.');
+    expect(voiceScript.sessionDone(5, 42, 0, HE)).toBe('כל הכבוד. סיימת את האימון: חמישה תרגילים, ארבעים ושתיים דקות. הסיכום מחכה בטלפון.');
+    expect(voiceScript.sessionDone(5, 42, 1, HE)).toBe('כל הכבוד. סיימת את האימון: חמישה תרגילים, ארבעים ושתיים דקות, ושיא אישי חדש. הסיכום מחכה בטלפון.');
+    expect(voiceScript.sessionDone(5, 42, 3, HE)).toBe('כל הכבוד. סיימת את האימון: חמישה תרגילים, ארבעים ושתיים דקות, ושלושה שיאים אישיים חדשים. הסיכום מחכה בטלפון.');
+    // ⛔ No promise about next time (2026-09-27): the next load is the engine's fold, not the last set.
+    expect(voiceScript.learnedLift()).toBe('למדתי את המשקל שלך בתרגיל הזה.');
+    expect((voiceScript as Record<string, unknown>).nextTimeStart).toBeUndefined();
+    expect(voiceScript.record()).toBe('שיא אישי חדש בתרגיל הזה.');
+    setGender('female');
+    expect(voiceScript.liftDone(BENCH, CABLE, 45, false, 120, HE)).toMatch(/^סִיַּמְתְּ עם /);
+  });
+  it('⛔ a hold is counted aloud and ended by her word (2026-09-27)', () => {
+    expect(voiceScript.holdLoading('פלאנק', 45, HE)).toBe('פלאנק, ארבעים וחמש שניות. כשאתה במקום, תגיד: מוכן.');
+    expect(voiceScript.askDoneHold(45, HE)).toBe('זהו, ארבעים וחמש שניות. סיימת?');
+    expect(voiceScript.askDoneHoldAgain()).toBe('סיימת?');
+    expect(voiceScript.holdEcho('פלאנק', 30, HE)).toBe('פלאנק, שלושים שניות. נרשם.');
+    expect(voiceScript.holdNotHeard()).toBe('לא שמעתי תשובה. כשתסיים, תגיד: סיימתי — או תסמן במסך הנעילה.');
+    setGender('female');
+    expect(voiceScript.holdLoading('פלאנק', 45, HE)).toBe('פלאנק, ארבעים וחמש שניות. כשאת במקום, תגידי: מוכנה.');
+  });
+  it('⛔ no technique line, on any set (founder, 2026-09-27: "לא צריך בכלל")', () => {
+    expect((voiceScript as Record<string, unknown>).formCue).toBeUndefined();
+  });
+  it('⛔ a superset is loaded as one sentence per lift, each named once; its echo is the reps (2026-09-27)', () => {
+    const steps = [
+      { exerciseId: 'triceps_pushdown', kg: 25, lo: 12, hi: 15 },
+      { exerciseId: 'ez_bar_curl', kg: 25, lo: 10, hi: 12 },
+    ];
+    const line = voiceScript.roundLoading(steps, HE);
+    expect(line).toMatch(/^סופר סט\. קודם פשיטת מרפקים בפולי עליון: .+\. ומיד אחריו כפיפת מרפקים במוט איזי: .+\. כשהכל מוכן, תגיד: מוכן\.$/);
+    expect(line.split('פשיטת מרפקים בפולי עליון').length - 1).toBe(1);
+    expect(voiceScript.echoRound([{ exerciseId: 'triceps_pushdown', kg: 25, reps: 15 }, { exerciseId: 'ez_bar_curl', kg: 25, reps: 12 }], HE)).toBe(
+      'פשיטת מרפקים בפולי עליון: חמש עשרה חזרות. כפיפת מרפקים במוט איזי: שתים עשרה חזרות. נרשם.',
+    );
   });
 });
 

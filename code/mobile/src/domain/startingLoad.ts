@@ -16,7 +16,8 @@ import type { Profile, Experience, Capability } from '@/data/local/models';
 import { isEvidenceSet } from '@/domain/setEvidence';
 import { BAR_KG, emptyBarKg } from '@/engine/loadMath';
 import { loadFloor } from '@/engine/v5/grid';
-import { STARTING_INCREMENT, SEED_RUNGS_LIGHT } from '@/engine/v5/constants';
+import { SEED_RUNGS_LIGHT } from '@/engine/v5/constants';
+import { incrementOf } from '@/engine/v5/loadGrid';
 import type { Exercise } from '@/data/exercises';
 
 /**
@@ -157,7 +158,7 @@ export function canLoad(ex: Exercise, profile?: LoadProfile): boolean {
  * here would be the engine guessing — which it does not do. Flagged for the founder, not assumed.
  */
 export function snapToStock(kg: number, ex: Exercise): number {
-  const inc = STARTING_INCREMENT[ex.equipment] ?? 0;
+  const inc = incrementOf(ex.equipment); // her room's rung (`loadGrid`, 2026-09-30)
   if (inc <= 0) return kg; // bodyweight — no load axis to land on
   const floor = emptyBarKg(ex.equipment); // the Olympic bar, or the lightest fixed bar (F-19)
   const rungs = Math.max(0, Math.round((kg - floor) / inc));
@@ -205,8 +206,41 @@ export function snapToStock(kg: number, ex: Exercise): number {
 export const MIN_SCALE_LIFTS = 3;
 export const PERSONAL_SCALE_FLOOR = 0.5;
 
+/**
+ * ⛔ HOW LONG SHE HAS TRAINED, BACK IN THE COLD START (founder 2026-09-28: B-1 is cancelled, and
+ * AboutYou asks it again in one tap). The factors are the v4 ones this file struck on 2026-07-21
+ * (0.78 / 1.00 / 1.22) — and the reason they were struck is answered, not ignored: every athlete
+ * then took the beginner discount BY OMISSION, because the question had left the intake. Now an
+ * unanswered question is 1.00 (the model, unchanged), and only her answer moves the number.
+ *
+ * It yields to measurement: `coldSeed` uses it only until `personalScale` has her own evidence, and a
+ * load the model wrote from her words (`Slot.startLoadKg`) comes before either.
+ */
+export const EXPERIENCE_FACTOR: Record<Experience, number> = { beginner: 0.78, intermediate: 1, advanced: 1.22 };
+export function experienceFactor(experience: Experience | undefined): number {
+  return experience ? EXPERIENCE_FACTOR[experience] : 1;
+}
+
+/**
+ * ⛔ A SET DONE AS WRITTEN IS NOT A MEASUREMENT OF HER (2026-09-28, the founder's screen review).
+ *
+ * "Done" on the stage, untouched, logs the prescription as performed: this load, these reps. That is
+ * true, and it proves she can do AT LEAST that — never that it is all she can do. Read as her
+ * capacity, it closed a loop that only ever ran downwards: B-1c hands her the first bar one rung
+ * LIGHT on purpose, she does exactly what she was told, and the ratio "what she did ÷ what the model
+ * predicted" came out below 1 — so every lift she had not yet met was cut too. Walked live: an
+ * athlete who benches 80 kg did day A as written, and every load of day B fell 8–15%, on the same
+ * screen that told her "nothing needed to move".
+ *
+ * A set she REPORTED — edited on the stage, said to the voice, typed on the lock screen or the wrist,
+ * or simply different from what was written — stays a measurement, exactly as before.
+ */
+export function doneAsWritten(log: { actualWeight: number | null; actualReps: number; recommendedWeight?: number | null; recommendedReps?: number; edited?: boolean }): boolean {
+  return log.edited === false && log.recommendedReps === log.actualReps && log.recommendedWeight === log.actualWeight;
+}
+
 export function personalScale(
-  history: readonly { sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean; presumed?: boolean }[] }[],
+  history: readonly { sets: readonly { exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean; presumed?: boolean; recommendedWeight?: number | null; recommendedReps?: number; edited?: boolean }[] }[],
   profile: LoadProfile,
   exerciseById: (id: string) => Exercise | undefined,
   /** Her Tlo — what "a working load" means to her. The ratio is taken at the same rep target B-1 is. */
@@ -218,6 +252,8 @@ export function personalScale(
   for (const s of history)
     for (const log of s.sets) {
       if (!isEvidenceSet(log) || log.actualWeight == null || log.actualWeight <= 0 || log.actualReps <= 0) continue;
+      // A floor, not a measurement (see `doneAsWritten`): it can never say she is weaker than modelled.
+      if (doneAsWritten(log)) continue;
       const e1rm = epley(log.actualWeight, log.actualReps);
       if (e1rm > (best.get(log.exerciseId) ?? 0)) best.set(log.exerciseId, e1rm);
     }
@@ -267,7 +303,7 @@ export function startingWeight(ex: Exercise, profile: LoadProfile): number | nul
   kg = Math.max(kg, emptyBarKg(ex.equipment));
   // B-1c — the first guess errs one rung light (`SEED_RUNGS_LIGHT`, measured): the model's number is
   // the load she makes Tlo on fresh, which leaves every later set under it. Never below the bar.
-  const inc = STARTING_INCREMENT[ex.equipment] ?? 0;
+  const inc = incrementOf(ex.equipment);
   if (inc > 0) kg = Math.max(emptyBarKg(ex.equipment), kg - inc * SEED_RUNGS_LIGHT);
   return Math.max(kg, step);
 }

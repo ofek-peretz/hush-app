@@ -258,8 +258,8 @@ function lunge(p: LungeParams): Rig {
     }
     /* Neutral grip at the side: the handle runs front-to-back, so side-on it shows its length with
        a plate at each end — the farmer's-carry silhouette. End-on is what a FRONT camera sees. */
-    const front: Primitive[] =
-      p.implement === 'db' ? [...dumbbellSide(J.farHand, DOWN), ...dumbbellSide(J.hand, DOWN)] : [];
+    if (p.implement === 'db') back.push(...dumbbellSide(J.farHand, DOWN, undefined, undefined, 'far'));
+    const front: Primitive[] = p.implement === 'db' ? dumbbellSide(J.hand, DOWN) : [];
     return { back, front };
   };
 

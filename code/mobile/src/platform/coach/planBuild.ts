@@ -93,8 +93,15 @@ export const PLAN_BUILD_ATTEMPTS = 3;
  * which is why this is a coincidence worth locking rather than a threshold worth tuning —
  * `theModelWritesAWeekSheCanEdit` recomputes the beat from the screen's own constants and fails if
  * the two ever drift apart.
+ *
+ * ⛔⛔ OVERRULED 2026-09-27 — THE EMPTY ASK GETS THE STRONG MODEL TOO (founder: *"כן, תשים את OPUS
+ * גם למי שלא כתב כלום"*). Everything above is the history of a 13 s budget that bought the fast
+ * model only, and of the 20 s reveal ceiling that followed from it. Both are gone by his word: every
+ * build now waits as long as a sentence does (`PLAN_BUILD_SAID_MS`), which is what lets the Worker
+ * hand it to Claude Opus 5.5. The wait screen can hold it — it is a breathing body, not a finite
+ * walk (2026-09-14) — and a miss without a sentence still lands the local week, as before.
  */
-export const PLAN_BUILD_BUDGET_MS = 13_000;
+export const PLAN_BUILD_BUDGET_MS = 60_000;
 /**
  * ⛔ AND SHE WAITS LONGER ONLY WHEN SHE HAS SOMETHING TO LOSE (2026-08-30).
  *
@@ -135,8 +142,13 @@ export const PLAN_BUILD_BUDGET_MS = 13_000;
  *
  * ⚠️ AND PAST IT SHE IS NO LONGER HANDED A DIFFERENT WEEK IN SILENCE. The caller shows the failure,
  * names it, and offers to ask again — the local assembler is a door she opens, not a substitution.
+ *
+ * ⛔ 45 → 60 s ON 2026-09-27, FOR THE STRONG MODEL (founder: *"הכי חשוב זו התוכנית הטובה ביותר"*).
+ * A sentence she wrote is now answered by Claude Opus 5.5 (~13 s to its first token, then a week at
+ * ~80 tokens/s), with 13 s of this kept back for the fast model should it miss — see the Worker's
+ * `BUILD_STRONG_MIN_WAIT_MS`. Since the same day the empty ask waits as long (`PLAN_BUILD_BUDGET_MS`).
  */
-export const PLAN_BUILD_SAID_MS = 45_000;
+export const PLAN_BUILD_SAID_MS = 60_000;
 
 /**
  * Ask the model for a week. Never throws; never retries; never writes.
@@ -150,6 +162,8 @@ export async function requestPlanBuild(her: {
   daysPerWeek: number;
   sex: 'female' | 'male';
   weightKg?: number;
+  /** How long she has trained, when she said (AboutYou's one tap, 2026-09-28). */
+  experience?: 'beginner' | 'intermediate' | 'advanced';
   /** Her own instruction, when she wrote one. Empty is the ordinary case and is not sent. */
   ask?: string;
 }): Promise<PlanBuildResult> {
@@ -172,7 +186,7 @@ export async function requestPlanBuild(her: {
    * with the import for no gain she can see.
    */
   const startedAt = Date.now();
-  /* Her own words are the only thing that buys the longer wait — see `PLAN_BUILD_SAID_MS`. */
+  /* Equal since 2026-09-27 (the empty ask gets the strong model too) — the two names keep the history. */
   const budget = her.ask?.trim() ? PLAN_BUILD_SAID_MS : PLAN_BUILD_BUDGET_MS;
   const left = () => budget - (Date.now() - startedAt);
   /** The reply, or `null` when the budget ran out first — never a reply-shaped lie about a timeout. */
@@ -188,7 +202,9 @@ export async function requestPlanBuild(her: {
     }
   };
 
-  const ask1 = () => askCoach({ v: req.v, blocks: req.blocks }, req.schema, req.think, undefined, 'build');
+  /* ⛔ THE WAIT RIDES ALONG (2026-09-27): what is left of her budget is what the Worker may spend,
+     and it is the Worker that decides whether that buys the strong model or only the fast one. */
+  const ask1 = () => askCoach({ v: req.v, blocks: req.blocks }, req.schema, req.think, undefined, 'build', left());
   const said = !!her.ask?.trim();
   const done = (r: PlanBuildResult): PlanBuildResult => {
     /*

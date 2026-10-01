@@ -36,6 +36,7 @@ import { GALLERY, DEFAULT_SCREEN, type GalleryEntry } from '@/screens/dev/galler
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
 import { PairProvider } from '@/state/stores/pairStore';
+import { CoachTrackProvider } from '@/state/stores/coachStore';
 import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
 
@@ -178,9 +179,11 @@ export default function App() {
                       sits inside it. Without this the web build's Home draws no "train together"
                       door and §11.2 is unreachable from the real-app path. */}
                   <PairProvider>
-                    <ToastProvider>
-                      <Root />
-                    </ToastProvider>
+                    <CoachTrackProvider>
+                      <ToastProvider>
+                        <Root />
+                      </ToastProvider>
+                    </CoachTrackProvider>
                   </PairProvider>
                 </SessionProvider>
               </AppProvider>

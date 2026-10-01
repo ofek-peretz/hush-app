@@ -22,7 +22,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { circleWeekPayload, CIRCLE_PAYLOAD_KEYS } from '@/domain/circle';
+import { circleWeekPayload, circleWeekKey, CIRCLE_PAYLOAD_KEYS } from '@/domain/circle';
 import type { Session } from '@/data/local/models';
 
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
@@ -31,7 +31,13 @@ const readRepo = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..
 const session = (startedAt: string, trained = true): Session =>
   ({ id: `s_${startedAt}`, programDayId: 'd', startedAt, state: 'SAVED', earlyFinish: false, trained, sets: [{ exerciseId: 'x', setIndex: 0, recommendedWeight: 60, recommendedReps: 8, actualWeight: 60, actualReps: 8, edited: false, persistedAt: startedAt }] }) as unknown as Session;
 
-describe('1 · the payload is the allow-list, and the allow-list is three facts', () => {
+/*
+ * ⛔ AMENDED 2026-09-29, BY DECISION (the circle tab — the founder's shared streak and "who trained
+ * today"): the allow-list grew by two, `week` (the local date her week opened — the streak's key)
+ * and `last` (when her last whole workout started; the worker floors it to the hour). A day and a
+ * week. Still no load, no set, no body, no history — clause 3 below still bans every one of them.
+ */
+describe('1 · the payload is the allow-list, and the allow-list is a name, a week and a day', () => {
   const weekOpen = Date.parse('2026-08-22T20:30:00.000Z');
   const DAY = 24 * 60 * 60 * 1000;
 
@@ -47,8 +53,16 @@ describe('1 · the payload is the allow-list, and the allow-list is three facts'
       plannedPerWeek: 4,
       weekOpenMs: weekOpen,
     });
-    expect(p).toEqual({ name: 'Sigal', done: 2, planned: 4 });
+    // `last` is the latest WHOLE workout — the partial on day 3 finished nothing, so day 2 it is.
+    expect(p).toEqual({ name: 'Sigal', done: 2, planned: 4, week: circleWeekKey(weekOpen), last: weekOpen + 2 * DAY });
+    expect(p!.week).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(Object.keys(p!).sort()).toEqual([...CIRCLE_PAYLOAD_KEYS].sort()); // nothing rides along
+  });
+
+  it('before her first workout there is no day to tell — `last` is null, never a guess', () => {
+    const p = circleWeekPayload({ name: 'Sigal', sessions: [], plannedPerWeek: 3, weekOpenMs: weekOpen });
+    expect(p!.last).toBeNull();
+    expect(p!.done).toBe(0);
   });
 
   it('a nameless athlete sends nothing at all', () => {

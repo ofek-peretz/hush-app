@@ -35,6 +35,8 @@ export { Switch } from './Switch';
 export { TextField } from './TextField';
 export { Display, TitleL, Title, BodyL, Body, Caption } from './Type';
 export { Sparkline } from './Sparkline';
+export { Figure, opticalFigure } from './Figure';
+export { CountUp } from './CountUp';
 export { FooterFade } from './FooterFade';
 export { Climb } from './Climb';
 export { GhostClimb } from './GhostClimb';

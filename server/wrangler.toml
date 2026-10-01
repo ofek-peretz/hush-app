@@ -36,6 +36,16 @@ type = "ratelimit"
 namespace_id = "1"
 simple = { limit = 30, period = 60 }
 
+# ── THE VOICE'S OWN LIMITER (2026-09-27, `voice.ts`) ─────────────────────────────────────────────
+# A workout hears every answer, listens inside the long windows, and fetches the coach's lines ahead —
+# bursts the coach's 30/60 s was never sized for, and a limiter shared with the week's build would let
+# one starve the other. 240 per minute per account: a workout's prefetch and hearing fit, a loop does not.
+[[unsafe.bindings]]
+name = "VOICE_LIMIT"
+type = "ratelimit"
+namespace_id = "2"
+simple = { limit = 240, period = 60 }
+
 # ── REAL AUTHENTICATION + THE DAY'S BUDGET (2026-09-01, audit finding 1) ────────────────────────
 # The SAME namespace hush-identity writes its sessions into — the coach READS `session:<token>`
 # to tell an athlete from a script, and keeps its own `quota:*` counters beside them. One extra

@@ -248,7 +248,10 @@ describe('⛔ a decision states its lift once, not twice in forty points', () =>
      */
     const out = draw({ decisions: [RAISE] });
     expect(out).toContain('Barbell Bench Press'); // the heading
-    expect(out.split('Barbell Bench Press').length - 1).toBe(1);
+    /* Twice on the screen since 2026-09-28 — the poster's NEXT TIME list names the raise, and the
+       ledger row names it — but never twice in one row: the sentence under the name does not say it. */
+    expect(out.split('Barbell Bench Press').length - 1).toBe(2);
+    expect(out).not.toMatch(/Barbell Bench Press met/);
     expect(out).toContain('so I added 7 kg');
   });
 });

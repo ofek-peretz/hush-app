@@ -89,5 +89,9 @@ struct HushSessionAttributes: ActivityAttributes {
     /// "0:45" / "400 m", baked on the phone in her language — the step on stage, or on a rest the
     /// step coming. Nil on every set. Drawn in place of the load and reps; no steppers.
     var holdLabel: String?
+    /// ⛔ The running hold's end (2026-09-28): the card and the island count down to it, as to a rest,
+    /// and stop at 0:00 — nothing is written there. The same instant the phone, the wrist and the
+    /// voice count to. Nil until the hold starts, while paused, and on every set.
+    var holdEndDate: Date?
   }
 }

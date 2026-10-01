@@ -34,9 +34,10 @@
  */
 
 import { db } from '@/data/local/db';
-import { fixtureModel } from '@/data/api/fixtureModel';
+import { fixtureModel, openingTargetsOf } from '@/data/api/fixtureModel';
 import { coachPlanFromProgram, bandFromChoice } from '@/domain/enginePlan';
 import type { CoachPlan } from '@/domain/coachPlan';
+import type { Program } from '@/data/local/models';
 
 /**
  * Her week, from whoever decided it — or `null` when nothing has.
@@ -62,4 +63,19 @@ export async function loadWeekPlan(): Promise<CoachPlan | null> {
     .catch(() => []);
   const profile = await db.loadProfile().catch(() => null);
   return coachPlanFromProgram(program, targets, bandFromChoice(profile?.repBand));
+}
+
+/**
+ * ════ THE WEEK SHE IS ABOUT TO TRAIN, BEFORE ANYTHING IS ON DISK (the Ready screen, 2026-09-28) ════
+ *
+ * `completeOnboarding` has not written the profile yet when the Ready screen draws her week, so it
+ * cannot ask `sessionTargets`. This is the same conversion `loadWeekPlan` runs — kept HERE, beside
+ * it, because one bridge is a law (`todayDrawsTheEngineWeek`) — over the engine's own first-meeting
+ * seeds (`openingTargetsOf`). Pinned equal to `loadWeekPlan` by `theReadyScreenShowsTheLoadsSheTrains`.
+ */
+export function previewWeekPlan(
+  program: Program,
+  profile: Parameters<typeof openingTargetsOf>[1],
+): CoachPlan | null {
+  return coachPlanFromProgram(program, openingTargetsOf(program, profile), bandFromChoice(profile.repBand));
 }

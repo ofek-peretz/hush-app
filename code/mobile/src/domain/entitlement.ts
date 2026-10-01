@@ -19,7 +19,9 @@
 /** Where an active entitlement comes from. `trial` = a StoreKit intro free-trial
  *  period (still a paid subscription, just in its grace window); `subscription` =
  *  a normally-billed period; `none` = no active entitlement. */
-export type EntitlementSource = 'none' | 'trial' | 'subscription';
+/** `coach` = no purchase, but a LIVE link to a coach (the coach track, ruling 1 — the coach pays).
+ *  `coachPlan` = HIS purchase: an active FERROX Coach tier, which carries his own training too. */
+export type EntitlementSource = 'none' | 'trial' | 'subscription' | 'coach' | 'coachPlan';
 
 export interface Entitlement {
   /** Whether training is unlocked by a purchase (subscription or its intro trial). */
@@ -43,7 +45,18 @@ export const NO_ENTITLEMENT: Entitlement = {
  *  Portrait unlock; the trial now runs the full fourteen the design promises — I LEARN
  *  YOU (1–4) then I KNOW YOU (5–14) — before the paywall. Kept as its own constant so the
  *  trial length can be tuned without moving the calibration boundary. */
-export let FREE_SESSION_LIMIT = 14;
+export let FREE_SESSION_LIMIT = 3;
+/*
+ * ⛔ THREE, NOT FOURTEEN (founder 2026-09-28, approving the pricing model: *"מאשר את הכל"*).
+ *
+ * The fourteen were a no-card trial that asked nothing until the wall — and a decision met cold, a
+ * month in, with no default, is the weakest close there is (RevenueCat 2026: download→paid by day 35
+ * is 10.7% on a hard paywall against 2.1% freemium). The three are the engine's own learning phase
+ * (`TRIAL_NEWS_AT`'s "I learn you 1–3"): she trains, the loads calibrate to her, and the paywall
+ * lands at the end of the third — on the moment the app can say "now I know you" — offering Apple's
+ * 14-day free trial, annual first. A remote word (`trialSessionLimit`) still moves it, and the
+ * experiment `paywallAfterFirstWorkout` tests one against three (`platform/remoteConfig`).
+ */
 
 /**
  * ════ THE TRIAL LENGTH LEFT THE BINARY (2026-09-01, the audit's finding 03) ═════════════════════
@@ -62,6 +75,7 @@ export let FREE_SESSION_LIMIT = 14;
  * the clamp is what keeps a bad deploy from gating the first workout or ungating the product.
  */
 export function applyTrialLimitOverride(n: unknown): void {
+  if (grandfathered) return;
   if (typeof n !== 'number' || !Number.isInteger(n)) return;
   FREE_SESSION_LIMIT = Math.max(1, Math.min(60, n));
 }
@@ -82,7 +96,7 @@ export function applyTrialLimitOverride(n: unknown): void {
  * that the fact is a tap away in You, where the membership row states it with a bar.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-export const TRIAL_NEWS_AT = 3;
+export const TRIAL_NEWS_AT = 1;
 
 /**
  * ════ THE TRIAL'S TIME CAP — ARMED AT THIRTY DAYS (2026-09-09, the formula report) ══════════════
@@ -94,11 +108,14 @@ export const TRIAL_NEWS_AT = 3;
  * says both halves ("14 workouts, within 30 days"). Remote config (`trialMaxDays`) can still move
  * it, and `0` disarms it — a KV word, never a silent code change.
  */
-export const TRIAL_MAX_DAYS_DEFAULT = 30;
+export const TRIAL_MAX_DAYS_DEFAULT = 10;
+/* ⛔ TEN, NOT THIRTY (2026-09-28): three workouts are about ten days at the cadence this product is
+   for, and the Apple trial that follows carries the next fourteen. Clamped 7..365 as before. */
 export let TRIAL_MAX_DAYS: number | null = TRIAL_MAX_DAYS_DEFAULT;
 
 /** Remote-config apply (clamped 7..365; `0` disarms; garbage restores the default). */
 export function applyTrialMaxDaysOverride(n: unknown): void {
+  if (grandfathered) return;
   if (typeof n !== 'number' || !Number.isInteger(n)) {
     TRIAL_MAX_DAYS = TRIAL_MAX_DAYS_DEFAULT;
     return;
@@ -108,6 +125,39 @@ export function applyTrialMaxDaysOverride(n: unknown): void {
     return;
   }
   TRIAL_MAX_DAYS = Math.max(7, Math.min(365, n));
+}
+
+/**
+ * ════ ⛔ A PROMISE ALREADY MADE IS KEPT (2026-09-28) ════
+ *
+ * Everyone who finished the intake before the three-workout model read, on the Ready screen, *"14
+ * workouts free — no card, no charge until they are behind you, or 30 days"*. That sentence was the
+ * deal she agreed to, and changing it under her is the one thing a trial may never do (and, in
+ * Israel, a consumer-protection question as much as a trust one). So a member whose profile does not
+ * carry the new intake's stamp (`Profile.trialModel === 'three'`) keeps fourteen and thirty — set
+ * once at boot, into the same live bindings every reader uses, and no remote word or experiment arm
+ * moves it afterwards.
+ *
+ * ⚠️ A STAMP, NOT A DATE. A cut-off date would also grandfather whoever enrols on the new build
+ * before it, and would not know which build she enrolled on. The intake that promised three is the
+ * one thing that knows it promised three.
+ */
+export const GRANDFATHER_SESSIONS = 14;
+export const GRANDFATHER_DAYS = 30;
+let grandfathered = false;
+
+export function grandfatherTrial(profile: { trialModel?: string } | null | undefined): void {
+  if (!profile || profile.trialModel === 'three') return;
+  FREE_SESSION_LIMIT = GRANDFATHER_SESSIONS;
+  TRIAL_MAX_DAYS = GRANDFATHER_DAYS;
+  grandfathered = true;
+}
+
+/** Test seam — the defaults, with no grandfathering. */
+export function __resetTrialForTest(): void {
+  grandfathered = false;
+  FREE_SESSION_LIMIT = 3;
+  TRIAL_MAX_DAYS = TRIAL_MAX_DAYS_DEFAULT;
 }
 
 /** Has the (armed) time cap run out? Pure; false while the cap is disarmed or the start unknown. */
@@ -163,4 +213,59 @@ export function isTrainingGated(
 /** Free sessions still available before the paywall (0 once spent). */
 export function freeSessionsRemaining(completedSessions: number): number {
   return Math.max(0, FREE_SESSION_LIMIT - completedSessions);
+}
+
+/**
+ * ════ ⛔ A TRAINEE LINKED TO A COACH IS PRO (the coach track, ruling 1 — founder 2026-09-17) ════
+ *
+ * *"The coach pays."* A trainee with a live link gets Pro for as long as the link lives, and the
+ * paywall is never shown to her. It is an OVERLAY on what StoreKit said, never a write: the cached
+ * entitlement stays StoreKit's truth, so the moment she leaves (law 6) the ordinary trial logic —
+ * fourteen sessions, thirty days, her own purchase — is exactly where she left it.
+ *
+ * A PAID entitlement is never replaced: she keeps her own plan's facts on screen, and it still
+ * unlocks her after she leaves. Pure, so the law can pin it without a store.
+ */
+export function withCoachLink(e: Entitlement, linked: boolean): Entitlement {
+  if (!linked || e.active) return e;
+  return { active: true, productId: null, source: 'coach', expiresAt: null };
+}
+
+/**
+ * A coach's own subscription, as StoreKit holds it. Kept HERE, beside `Entitlement`, because it is
+ * the same kind of fact and this module is the pure one — the laws read both without a store.
+ */
+export interface CoachPlan {
+  active: boolean;
+  /** The coach product backing it, or null when inactive. */
+  productId: string | null;
+  /** How many trainees the tier is sold as. 0 when inactive. ⛔ NOT what the app enforces — the
+   *  worker's `coaches.seat_limit` is, and only the worker may raise it. This is for the receipt
+   *  the coach reads on screen. */
+  seats: number;
+  expiresAt: string | null;
+}
+
+export const NO_COACH_PLAN: CoachPlan = { active: false, productId: null, seats: 0, expiresAt: null };
+
+/**
+ * ════ ⛔ A PAYING COACH IS A PAYING CUSTOMER (the coach track, ruling 1 — founder 2026-09-17) ════
+ *
+ * *"The coach pays"* is the whole ruling, and a coach who pays $19.99 a month and is then asked for
+ * $9.99 to train himself has been charged twice for one relationship. So an active FERROX Coach
+ * tier carries his OWN training as well — stated here, beside `withCoachLink`, because the two are
+ * the same shape: an overlay on what StoreKit said about Pro, never a write.
+ *
+ * ⚠️ IT IS DELIBERATELY NOT A `source: 'subscription'`. The membership row in You must be able to
+ * say which thing is paying — "your coach's plan covers you" is a different sentence from "FERROX
+ * Pro" — and a gate that cannot tell them apart cannot say the right one. The coach's own Pro is
+ * also the only entitlement in the product that ENDS when a business relationship ends rather than
+ * when a card is declined; giving it its own word is what lets that ever be said.
+ *
+ * A real Pro purchase is never replaced (`e.active` wins), exactly as with the link: he keeps his
+ * own plan's facts on screen, and it still unlocks him if he later stops coaching.
+ */
+export function withCoachPlan(e: Entitlement, plan: CoachPlan): Entitlement {
+  if (!plan.active || e.active) return e;
+  return { active: true, productId: plan.productId, source: 'coachPlan', expiresAt: plan.expiresAt };
 }

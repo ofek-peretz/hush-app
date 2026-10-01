@@ -194,20 +194,33 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     const r = draw(makeSession({ startedAtMs: 77_000, loggedSets: [{ exerciseId: 'db_shoulder_press' }] }));
     expect(texts(r)).not.toContain(tg('workout.voiceSilentNoHeadset'));
   });
+  it('⛔ the no-earbuds line belongs to her FIRST workout only — she has been told (founder 2026-09-28)', () => {
+    voiceState.silentBecause = 'no_headset';
+    (appFixture as unknown as { modeState: { completedSessions: number } }).modeState.completedSessions = 3;
+    try {
+      const r = draw(makeSession({ startedAtMs: 91_000 }));
+      expect(texts(r)).not.toContain(tg('workout.voiceSilentNoHeadset'));
+    } finally {
+      (appFixture as unknown as { modeState: { completedSessions: number } }).modeState.completedSessions = 0;
+    }
+  });
   it('⛔ the gate starts unknown — earbuds in never flash "needs earbuds" while it is read', () => {
     const hook = read('src/platform/voice/useVoiceCoach.ts');
     expect(hook).toContain('useState<VoiceSilence>(null)');
     // A "no earbuds" read is confirmed by a second read before it closes the gate or shows the notice.
     expect(hook).toMatch(/confirm = setTimeout\(\(\) => \{[\s\S]*?if \(audioSession\.headsetConnected\(\)\) return open\(\);\s*close\(\);\s*setSilentBecause\('no_headset'\);/);
     // Closing the gate closes the voice AND the pocket microphone.
-    expect(hook).toMatch(/const close = \(\) => \{\s*if \(c\.isOn\(\)\) c\.disable\(\);\s*void audioSession\.earClose\(\);/);
+    expect(hook).toMatch(/const close = \(\) => \{\s*if \(c\.isOn\(\)\) \{[\s\S]*?c\.disable\(\);[\s\S]*?\}\s*void audioSession\.earClose\(\);/);
+    // …except a workout that ENDED: its last lines are said to the end first (2026-09-27).
+    expect(hook).toMatch(/if \(c\.ended\(\)\) \{[\s\S]*?Promise\.race\(\[c\.finish\(\), new Promise\(\(r\) => setTimeout\(r, DRAIN_MS\)\)\]\)/);
   });
   it('⛔ earbuds in open the gate even when no route event ever arrives (2026-09-15)', () => {
     const hook = read('src/platform/voice/useVoiceCoach.ts');
     // The route event is a knock: the route is read again, never the payload trusted.
     expect(hook).toContain("audioSession.onRouteChange(() => apply(audioSession.headsetConnected()))");
     // While shut, the route is polled.
-    expect(hook).toMatch(/setInterval\(\(\) => \{\s*if \(!c\.isOn\(\) && !deniedRef\.current && audioSession\.headsetConnected\(\)\) apply\(true\);/);
+    // (2026-09-27: a refused microphone no longer keeps the gate shut — the coach speaks without an ear.)
+    expect(hook).toMatch(/setInterval\(\(\) => \{\s*if \(!c\.isOn\(\) && audioSession\.headsetConnected\(\)\) apply\(true\);/);
     // After the permission wait, the earbuds are asked again before the coach speaks.
     expect(hook).toMatch(/if \(!audioSession\.headsetConnected\(\)\) return apply\(false\);[\s\S]*?if \(disposed \|\| c\.isOn\(\) \|\| !audioSession\.headsetConnected\(\)\) return;\s*c\.enable\(\);/);
     const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
@@ -230,8 +243,13 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     expect(ear).toMatch(/audioSession\.prepareListening\(\)\.then\(/);
     // A failed ear is a silence to the conductor, never a coach that stops talking.
     const conductor = read('src/platform/voice/voiceConductor.ts');
-    expect(conductor).toContain("if (why === 'timeout' || why === 'error') {");
-    expect(conductor).toContain("if (why !== 'timeout' && why !== 'silence' && why !== 'error') return;");
+    // (2026-09-27: an ear that cannot hear from here — locked, refused, failing twice — is said ONCE,
+    // and the lines go on; the loading dialogue still ends in where Ready lives. Evening: and it is
+    // never a dead end — the question still comes one set later, `theVoiceSurvivesAnyAthlete` 8.)
+    expect(conductor).toMatch(/const failed = this\.earFailed\(why\);\s*void this\.speak\(\[failed \? voiceScript\.readyFallback\(\) : voiceScript\.readyNotHeard\(\)\]\);/);
+    expect(conductor).toMatch(/this\.after\(inMs, \(\) => this\.askDone\(\)\);/);
+    expect(conductor).toContain("if (why === 'heard' || why === 'closed' || why === 'unavailable') return;");
+    expect(conductor).toMatch(/if \(!this\.cantHearSaid\) \{\s*this\.cantHearSaid = true;\s*void this\.speak\(\[voiceScript\.cantHear\(\)\]\);/);
     // The profile can play a line through the real path and print what the phone reported.
     const profile = read('src/screens/profile/ProfileSheet.tsx');
     expect(profile).toMatch(/await audioSession\.duck\(\);\s*await coachVoice\.say\(/);
@@ -244,13 +262,15 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     // Opened only on glass — iOS refuses a recording started in the background.
     expect(hook).toMatch(/if \(AppState\.currentState !== 'active'\) return[\s\S]*?audioSession\.earOpen\(micRef\.current\)/);
     // Back on glass with the voice on and no ear: the one moment it can start again.
-    expect(hook).toMatch(/s === 'active' && c\.isOn\(\) && !audioSession\.earRunning\(\)\) void openPocketEar\(\)/);
+    expect(hook).toMatch(/if \(s !== 'active' \|\| !c\.isOn\(\)\) return;[\s\S]*?if \(!audioSession\.earRunning\(\)\) void openPocketEar\(\);/);
     const ear = read('src/platform/voice/voiceCapture.ts');
     // Every window goes to the pocket ear when it runs; a late sentence of an older window is refused.
     expect(ear).toContain('if (audioSession.earRunning()) return openPocketWindow(opts);');
     expect(ear).toContain('if (ended || from !== token) return;');
     // At the deadline the recognizer is flushed before the window ends.
-    expect(ear).toMatch(/void audioSession\.earStopListening\(\)\.then\(\(\) => finish\('timeout'\)\)/);
+    // (2026-09-27: its stops and starts in order — see `inPocketOrder`.)
+    // (2026-09-28: and only then, nothing understood, the second ear hears the window — `cloudEar`.)
+    expect(ear).toMatch(/void inPocketOrder\(\(\) => audioSession\.earStopListening\(\)\)\.then\(\(\) =>\s*later\(async \(\) => \{[\s\S]*?cloudEar\.rescue\([\s\S]*?finish\('timeout'\);/);
     const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
     // While the ear runs, no session change leaves record-and-play, and unduck never deactivates.
     expect(swift).toMatch(/private func applySession\(duck: Bool\) throws \{\s*if #available\(iOS 26\.0, \*\), let ear = self\.ear, ear\.running \{\s*let session = AVAudioSession\.sharedInstance\(\)\s*try session\.setCategory\(\.playAndRecord/);

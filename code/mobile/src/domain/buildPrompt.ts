@@ -86,9 +86,10 @@ import { EXERCISES, isSwapOnly } from '@/data/exercises';
  */
 import heCopy from '@/i18n/locales/he.json';
 import type { PromptBlock } from '@/domain/coachPrompt';
+import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 3;
+export const BUILD_PROMPT_VERSION = 5;
 
 /**
  * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
@@ -150,6 +151,10 @@ export const BUILD_MAX_LIFTS = 12;
  * ⚠️ NO LOAD, NO REPS, NO REST FIELD ANYWHERE — not omitted for brevity, refused. Those are the
  * engine's three jobs (S-38 opening loads, her rep band, S-17 learned rests), and a field the model
  * can fill is a field somebody downstream will eventually read.
+ *
+ * ⛔ SUPERSEDED TWICE, BY RULING: the rep RANGE joined on 2026-09-07 (`reps`), and the OPENING LOAD on
+ * 2026-09-28 (`load` — B-1 cancelled by the founder: the model is given everything she said,
+ * weights included). REST stays the engine's alone.
  */
 export const BUILD_WEEK_SCHEMA = {
   type: 'object',
@@ -226,8 +231,20 @@ export const BUILD_WEEK_SCHEMA = {
               properties: {
                 /** A catalogue id, checked by the caller. A hallucinated one is dropped. */
                 ex: { type: 'string' },
-                /** Working sets. Clamped by the caller to the builder's own bounds. */
-                sets: { type: 'integer' },
+                /*
+                 * Working sets. Clamped by the caller to the builder's own bounds.
+                 *
+                 * ⛔ THE DESCRIPTION STATES A SYSTEM BOUNDARY, NOT AN OPINION (2026-09-28, the
+                 * OpenAI prompt review). A model that does not know the app offers the warm-up and
+                 * prices every load and rest from her own sets will spend its reasoning on them —
+                 * or fold a warm-up into this number. Said once, here, where it defines the field —
+                 * and without the words `load`/`rest`, which the schema laws refuse anywhere in it.
+                 */
+                sets: {
+                  type: 'integer',
+                  description:
+                    'Working sets only. The app offers warm-up sets on the day, decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts.',
+                },
                 /*
                  * ⛔ THE ONE THING THE MODEL COULD NOT SAY, AND THE ATHLETE COULD (founder,
                  * 2026-08-31): *"וביצירת התוכנית הבינה מלאכותית יודעת להוסיף את זה בתוכנית האימון
@@ -261,6 +278,27 @@ export const BUILD_WEEK_SCHEMA = {
                   description:
                     'Run this exercise and the next one as a superset: alternate them, with no pause between the two.',
                 },
+                /*
+                 * ⛔ THE OPENING LOAD — B-1 IS CANCELLED (founder 2026-09-28: *"אין בעיה לבטל את B1 אבל
+                 * מה שאני חושב שחובה הוא לתת לבינה את כל המידע… כולל משקל, חזרות וסטים"*).
+                 *
+                 * Walked live: an athlete who wrote "לחיצת חזה 80 קילו 4 על 8" opened at 35 kg, because
+                 * the model was refused any load and the engine priced him from sex × bodyweight. The
+                 * number SHE gave is the best evidence anyone has on day one; the model can carry it to
+                 * every lift of the week (bench 80 → a close-grip bench, an incline dumbbell press). Its
+                 * load seeds only a lift she has never lifted (`Slot.startLoadKg`); her first real set
+                 * replaces it, and Loop 1 corrects it between sets as it corrects any seed.
+                 *
+                 * ⚠️ OPTIONAL, AND SAID SO: with nothing of hers to reason from, the app's own estimate
+                 * (sex, bodyweight, experience) stands — a model guessing a stranger's squat is not
+                 * better evidence than that. The description states the convention (kg; one dumbbell),
+                 * because a wrong unit is a wrong bar.
+                 */
+                load: {
+                  type: 'number',
+                  description:
+                    'Optional. The starting weight in kg for this exercise, from what the athlete told you about the weights they lift today: the total on a barbell or machine, the weight of ONE dumbbell. Omit it when nothing the athlete said lets you ground it — the app then estimates it and corrects it on the first set.',
+                },
                 /* See the note at `REPS_MIN`. Optional; the description is the whole instruction. */
                 reps: {
                   type: 'array',
@@ -282,6 +320,8 @@ export interface BuildAsk {
   daysPerWeek: number;
   sex: 'female' | 'male';
   weightKg?: number;
+  /** How long she has trained, when she said (AboutYou, 2026-09-28). One tap; absent is "not said". */
+  experience?: 'beginner' | 'intermediate' | 'advanced';
   /**
    * ⛔ WHAT SHE ACTUALLY WANTS, IN HER OWN WORDS (founder 2026-08-29: *"שתיתן לו יד חופשית לבצע מה
    * שהוא רוצה בהתאם להוראת המשתמש"*).
@@ -333,8 +373,10 @@ export interface BuildAsk {
  * yet", never handed to somebody who did not ask. A model given the bare list has no way to know
  * that, and an assisted dip in a first programme is exactly the founder's 2026-08-23 finding.
  */
-function catalogueLines(): string {
-  return EXERCISES.filter((e) => !e.id.startsWith('_') && !isSwapOnly(e.id))
+export function catalogueLines({ regressions = false }: { regressions?: boolean } = {}): string {
+  /* `regressions`: the plan review's catalogue (`reviewPrompt`) carries the swap-only lifts too —
+     there she has a week and may have asked for an easier version of a lift in it. */
+  return EXERCISES.filter((e) => !e.id.startsWith('_') && (regressions || !isSwapOnly(e.id)))
     .map((e) => {
       /* Hebrew always, never the ACTIVE locale — a string that changes with her language is a
          cached block that never hits. */
@@ -404,6 +446,13 @@ function instructions(locale: 'en' | 'he'): string {
   ].join('\n');
 }
 
+/** Her one-tap answer, as a coach would read it (AboutYou's three chips). */
+const EXPERIENCE_WORDS = {
+  beginner: 'new to training',
+  intermediate: 'about one to two years',
+  advanced: 'several years',
+} as const;
+
 /**
  * The call.
  *
@@ -414,6 +463,7 @@ export function buildWeekRequest({
   daysPerWeek,
   sex,
   weightKg,
+  experience,
   ask,
   locale = 'en',
   cache = true,
@@ -439,11 +489,21 @@ export function buildWeekRequest({
    * bill. 400 is longer than anyone types into a one-line field and short enough to be free.
    */
   const said = (ask ?? '').trim().slice(0, 400);
+  /*
+   * ⛔ HER DEFAULT RANGE IS STATED (2026-09-28, the OpenAI prompt review). `reps` is described as
+   * "when the goal calls for something other than the athlete's default range" — and until today
+   * the model was never told what that range IS, so it could not know when its own range differed.
+   * A fact about the app, not an opinion about her: every lift without a range runs on it.
+   */
+  const band = DEFAULT_REP_BAND.replace('-', '–');
   const her = [
     'ATHLETE',
-    `- days per week: ${daysPerWeek}`,
+    // ⛔ The wheel and her sentence can disagree (walked 2026-09-28: "4 פעמים בשבוע" over a wheel left on 3).
+    `- days per week: ${daysPerWeek} (if their own words below name a number of days, their words win)`,
     `- sex: ${sex}`,
     ...(weightKg != null ? [`- bodyweight: ${weightKg} kg`] : []),
+    ...(experience ? [`- training experience: ${EXPERIENCE_WORDS[experience]}`] : []),
+    `- default rep range: ${band} (every exercise you give no range runs on it)`,
     ...(said ? ['', 'WHAT THE ATHLETE ASKED FOR, in their own words:', said] : []),
   ].join('\n');
   return {
@@ -473,6 +533,10 @@ export function buildWeekRequest({
      *
      * The founder's bar for this door is *"gemini בונה לי תוכנית תוך 10 שניות"*. `low` clears it;
      * the default misses it by a factor of three for a week that is no better.
+     *
+     * ⚠️ SINCE 2026-09-28 THIS NO LONGER SETS THE MODEL'S REASONING. The Worker chooses model and
+     * effort per job (`JOB_MODEL`: GPT-6 Sol @ `high` when her wait has room, @ `low` otherwise);
+     * the table above is Gemini's, kept as history. The field still travels — it picks the lane.
      */
     think: 'low',
     schema: BUILD_WEEK_SCHEMA as unknown as Record<string, unknown>,

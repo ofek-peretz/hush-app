@@ -66,6 +66,10 @@ export interface SessionPoster {
   kcal: number | null;
   /** Tonnes moved, to one decimal. 0 on a session with no load in it. */
   tonnes: number;
+  /** The same total in kilograms, unrounded — what `massFigure` reads, so a sub-tonne session is
+   *  printed as the kilos she moved and not as a tenth of a tonne converted back. Optional only so a
+   *  poster drawn from a fixture may omit it; `sessionPoster` always sets it. */
+  movedKg?: number;
   /** Every working set logged. */
   sets: number;
   lifts: PosterLift[];
@@ -73,10 +77,9 @@ export interface SessionPoster {
 
 // Working sets only — a warm-up bridge (`isApproach`) never counts here, exactly as in
 // sessionMetrics, so the poster and the Log row state the same tonnes.
-const tonnesOf = (sets: readonly SetLog[]): number => {
-  const kg = sets.reduce((sum, s) => sum + (isEvidenceSet(s) ? (s.actualWeight ?? 0) * s.actualReps : 0), 0);
-  return Math.round(kg / 100) / 10;
-};
+const kgOf = (sets: readonly SetLog[]): number =>
+  sets.reduce((sum, s) => sum + (isEvidenceSet(s) ? (s.actualWeight ?? 0) * s.actualReps : 0), 0);
+const tonnesOf = (sets: readonly SetLog[]): number => Math.round(kgOf(sets) / 100) / 10;
 
 /**
  * The lifts, in the order she did them, each with the load she finished on.
@@ -166,6 +169,7 @@ export function sessionPoster(opts: {
     minutes: Math.max(0, Math.round(opts.durationMs / 60_000)),
     kcal: opts.kcal,
     tonnes,
+    movedKg: kgOf(sets),
     sets: sets.length,
     lifts,
   };

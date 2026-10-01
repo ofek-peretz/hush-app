@@ -86,6 +86,14 @@ const HERO_STILL = 132;
 interface Props {
   /** The day's steps, in order. Anything without a rig is dropped (see the header). */
   exerciseIds: readonly string[];
+  /**
+   * The stage's fitted frame instead of the shared 16:10 crop (`MotionFigure.fit`). For the ONE hero
+   * on a screen — Today — where there is no set of clips to keep in step, and the crop's letter-box
+   * was a third of the figure's own box (design audit 2026-09-29: "the figure is the heart of the
+   * brand and takes ~100 points with a lot of black around it"). Absent = the shared crop, which the
+   * Programme tab's column of cards keeps so every day's figure stands at one size.
+   */
+  fit?: boolean;
   /** Her own athlete — the same `figure` switch every other motion surface takes. */
   figure?: FigureSex;
   /**
@@ -103,7 +111,7 @@ interface Props {
   style?: ViewStyle;
 }
 
-export function DayInMotion({ exerciseIds, figure, paused, style }: Props) {
+export function DayInMotion({ exerciseIds, figure, paused, style, fit }: Props) {
   const reduced = useReducedMotion();
   /* De-duplicated: a day that trains a lift in two blocks is one lift to look at, and holding the
      same body twice in one cycle reads as a stall rather than as a second exercise. */
@@ -132,7 +140,7 @@ export function DayInMotion({ exerciseIds, figure, paused, style }: Props) {
   if (paused) {
     return (
       <View style={style} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <MotionThumb exerciseId={id} size={HERO_STILL} figure={figure} />
+        <MotionThumb exerciseId={id} size={HERO_STILL} figure={figure} tone="stage" />
       </View>
     );
   }
@@ -161,7 +169,12 @@ export function DayInMotion({ exerciseIds, figure, paused, style }: Props) {
         The 16:10 frame letter-boxes inside that box (`VIEWBOX`, and the Svg's default
         `preserveAspectRatio`), so a wide phone and a narrow one both get the whole body.
       */}
-      <MotionFigure key={id} rig={rig} figure={figure} style={styles.fill} fps={HERO_FPS} />
+      {/* ⛔ ON THE STAGE'S LADDER (design audit 2026-09-29). This drew with the PAPER palette — dark
+          fills, light hairlines — on a dark card, so the fills vanished into the card and only the
+          hairlines survived: the "thin line" athlete the audit saw on Today and the Programme tab,
+          a third style beside the stage's full figure. Every surface that draws her is dark now, so
+          every one draws her the stage's way (`theAthleteIsDrawnOneWay`). */}
+      <MotionFigure key={id} rig={rig} figure={figure} style={styles.fill} fps={HERO_FPS} tone="stage" fit={fit} />
     </View>
   );
 }

@@ -306,6 +306,22 @@ export interface SessionMirror {
   /** …and the same fact about the COMING step, for rest frames. */
   nextHoldSeconds?: number | null;
   nextHoldMetres?: number | null;
+  /**
+   * ⛔ THE VOICE'S LOADING DIALOGUE IS OPEN (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן
+   * אמת"*): "load the bar, and say ready". Until today only the lock card knew it — it offered Ready
+   * beside Done while the phone's stage and the wrist offered Done alone, three surfaces, three
+   * states. Every surface now offers Ready while this is true, and a tap on any of them (or her
+   * word) starts the set. Only ever true on an active set.
+   */
+  awaitingReady?: boolean;
+  /**
+   * ⛔ THE HOLD'S ONE CLOCK (2026-09-28): the instant a RUNNING hold ends (ISO). The voice counted a
+   * plank on a clock of its own, the phone's stage on another, and the wrist and the card drew a
+   * duration that never moved. One start now (`markSetStarted` — "מוכן" from any surface, or the
+   * stage's Start), one end, and every surface counts down to it. Null until it starts, while paused,
+   * and on every set. Nothing is written at zero on any surface (founder, 2026-09-09): her Done is.
+   */
+  holdEndsAt?: string | null;
 }
 
 export interface MirrorInputs {
@@ -357,6 +373,10 @@ export interface MirrorInputs {
   toLoad?: boolean;
   /** The correction Loop 1 just made, if any — see SessionMirror.correction. */
   correction?: { from: number; to: number; direction: 'up' | 'down'; reps: number } | null;
+  /** The voice waits for "מוכן" on the set on stage (`SessionMirror.awaitingReady`). */
+  awaitingReady?: boolean;
+  /** When the running hold on stage ends, epoch ms — null when none runs (`SessionMirror.holdEndsAt`). */
+  holdEndsAtMs?: number | null;
 }
 
 function isResting(phase: SessionMachine['phase']): boolean {
@@ -589,6 +609,8 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       holdMetres: null,
       nextHoldSeconds: null,
       nextHoldMetres: null,
+      awaitingReady: false,
+      holdEndsAt: null,
     };
   }
 
@@ -714,6 +736,12 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     holdMetres: cur.hold?.metres ?? null,
     nextHoldSeconds: next?.hold?.seconds ?? null,
     nextHoldMetres: next?.hold?.metres ?? null,
+    // Unconditional, like `isWarmup`, so the wire-parity contract sees both keys on every live frame.
+    awaitingReady: phase === 'active_set' && !!inp.awaitingReady,
+    holdEndsAt:
+      phase === 'active_set' && cur.hold?.seconds != null && inp.holdEndsAtMs != null && Number.isFinite(inp.holdEndsAtMs)
+        ? new Date(inp.holdEndsAtMs).toISOString()
+        : null,
   };
 }
 

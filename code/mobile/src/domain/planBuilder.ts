@@ -241,6 +241,26 @@ export function setLiftBand(p: Program, dayIdx: number, slotIdx: number, band: [
   return out;
 }
 
+/** The heaviest opening load a written week may carry — past it the number is a typo, not a lift. */
+export const START_LOAD_MAX_KG = 500;
+/**
+ * The opening load the author wrote for this lift (`Slot.startLoadKg`, 2026-09-28). `null` clears it;
+ * a value that is not a real load (not finite, not positive, past `START_LOAD_MAX_KG`) is refused.
+ */
+export function setLiftStartLoad(p: Program, dayIdx: number, slotIdx: number, kg: number | null): Program {
+  const day = p.days[dayIdx];
+  if (!day || slotIdx < 0 || slotIdx >= day.slots.length) return p;
+  const out = cloneProgram(p);
+  const slot = out.days[dayIdx].slots[slotIdx];
+  if (kg == null) {
+    delete slot.startLoadKg;
+    return out;
+  }
+  if (!Number.isFinite(kg) || kg <= 0 || kg > START_LOAD_MAX_KG) return p;
+  slot.startLoadKg = Math.round(kg * 100) / 100;
+  return out;
+}
+
 export function replaceLift(p: Program, dayIdx: number, slotIdx: number, toId: string): Program {
 
   const day = p.days[dayIdx];
@@ -251,6 +271,8 @@ export function replaceLift(p: Program, dayIdx: number, slotIdx: number, toId: s
   const slot = out.days[dayIdx].slots[slotIdx];
   slot.exerciseId = toId;
   slot.capability = ex.capability;
+  // The opening load was written for the lift that left the seat, not for this one (2026-09-28).
+  delete slot.startLoadKg;
   out.days[dayIdx].muscleGroups = musclesOf(out.days[dayIdx].slots);
   return out;
 }
@@ -341,7 +363,9 @@ const daySignature = (d: ProgramDay): string =>
  * hybrid from full ownership except the pen-back door.
  */
 export function sealSmart(draft: Program, original: Program | null | undefined): Program | null {
-  if (!original || (original.authored ?? 'engine') === 'athlete_or_coach') return sealAuthored(draft);
+  /* ⛔ ANY non-engine author seals fully — a COACH's week too (2026-09-17). Diff-stamping days
+     against a coach's week would hand back `authored: 'engine'` and let the engine rebuild it. */
+  if (!original || (original.authored ?? 'engine') !== 'engine') return sealAuthored(draft);
 
   const draftDays = draft.days.filter((d) => !d.isRest && d.slots.length > 0).map(cloneDay);
   if (draftDays.length === 0) return null;
@@ -370,7 +394,7 @@ export function sealSmart(draft: Program, original: Program | null | undefined):
 
 /** Which draft days currently read as HERS against the original — the UI's ownership chips. */
 export function ownedDayIds(draft: Program, original: Program | null | undefined): Set<string> {
-  if (!original || (original.authored ?? 'engine') === 'athlete_or_coach') return new Set(draft.days.map((d) => d.id));
+  if (!original || (original.authored ?? 'engine') !== 'engine') return new Set(draft.days.map((d) => d.id));
   const originalByld = new Map(original.days.filter((d) => !d.isRest).map((d) => [d.id, d] as const));
   const out = new Set<string>();
   for (const d of draft.days) {

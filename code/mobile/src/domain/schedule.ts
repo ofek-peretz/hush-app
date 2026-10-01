@@ -56,7 +56,11 @@ export function displayWeight(kg: number | null, units: Units): number | null {
 /** The inverse, for a figure she dialled in her units → the kilograms the record stores. Two
  *  decimals: a 2.5 lb step is 1.13 kg, and a tenth would round two adjacent detents together. */
 export function kgFromDisplay(value: number, units: Units): number {
-  return units === 'lb' ? Math.round((value / LB_PER_KG) * 100) / 100 : value;
+  /* ⚠️ EXACT, NOT TO TWO DECIMALS (2026-09-30). The engine now walks the kilogram values of POUND rungs
+     for an athlete in pounds (`engine/v5/loadGrid`): 95 lb is the rung 43.0912… kg. Rounded to 43.09 the
+     figure she typed would sit a hair off the rung it was drawn from, and every equality between a
+     prescription and a performance (held? moved? a record?) would read a change that did not happen. */
+  return units === 'lb' ? value / LB_PER_KG : value;
 }
 
 export function unitLabel(units: Units): string {

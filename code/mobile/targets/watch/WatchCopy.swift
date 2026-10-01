@@ -120,7 +120,7 @@ enum WatchCopy {
   static var liftsWord: String { L("liftsWord", "LIFTS") }
   // Calendar-primary cadence: the week rolls SATURDAY 20:30 local (founder 2026-07-13 — an update
   // nobody is awake for is not an update). Keep in step with en.json `watch.recovery`.
-  static var recovery: String { L("recovery", "Recovery — your next week opens Saturday") }
+  static var recovery: String { L("recovery", "Recovery — your next week is already waiting") }
   /// The resting week's HEADLINE — the one word over the sentence above. It was the English literal
   /// "Recovery" in the Start screen's serif, on a wrist that had already turned Hebrew (2026-09-09).
   static var recoveryTitle: String { L("recoveryTitle", "Recovery") }

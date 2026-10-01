@@ -91,6 +91,12 @@ export interface SwapSheetProps {
    */
   onAll?: () => void;
   onClose: () => void;
+  /**
+   * ⛔ THE COACH TRACK, RULING 4 (2026-09-17): on a linked coach's week the swap is FOR TODAY, and the
+   * sheet says so in its own head — the legend and the line under the lift's name — before she picks.
+   */
+  legend?: string;
+  body?: string;
 }
 
 export function SwapSheet(props: SwapSheetProps) {
@@ -104,9 +110,9 @@ export function SwapSheet(props: SwapSheetProps) {
           what she may replace it with. The choices land together — they are peers, and numbering
           them would rank them. */}
       <Arrive order={0} after={SHEET_SETTLE}>
-        <Legend style={styles.legend}>{t('swap.title')}</Legend>
+        <Legend style={styles.legend}>{props.legend ?? t('swap.title')}</Legend>
         <Text style={styles.current} numberOfLines={1}>{bidi(props.currentName)}</Text>
-        <Text style={styles.body}>{t('swap.body')}</Text>
+        <Text style={styles.body}>{props.body ?? t('swap.body')}</Text>
       </Arrive>
 
       <View style={styles.rows}>
@@ -176,7 +182,9 @@ export function SwapSheet(props: SwapSheetProps) {
 
 const styles = StyleSheet.create({
   legend: { marginBottom: 10, textAlign: 'left' },
-  current: { fontFamily: font.serif, fontSize: 27, lineHeight: 31, color: stage.ink0, textAlign: 'left' },
+  /* An exercise name is set in the UI face, as the set stage sets it (design audit 2026-09-29) —
+     the serif is the coach's voice, and a lift's name is not something the coach says. */
+  current: { fontFamily: font.sansSemibold, fontSize: 27, lineHeight: 33, color: stage.ink0, textAlign: 'left' },
   body: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: stage.ink2, marginTop: 8, textAlign: 'left' },
 
   rows: { marginTop: 20 },

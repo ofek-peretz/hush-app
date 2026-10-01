@@ -25,6 +25,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { tg } from '@/i18n';
 import type { SessionMirror } from './sessionMirror';
 import type { CardioGait } from '@/data/local/models';
+import { LB_PER_KG } from '@/domain/schedule';
 
 export type { SessionMirror };
 
@@ -94,6 +95,12 @@ export interface LiveActivityState {
    * to type. Before this the card showed the NEXT lift's load while she held a plank.
    */
   holdLabel: string | null;
+  /**
+   * ⛔ THE HOLD'S ONE CLOCK (2026-09-28): when the running hold ends, epoch ms — the instant the phone,
+   * the wrist and the voice count to. The card and the island count down to it (as they do to a rest)
+   * and stop at 0:00; nothing is written there. Null until the hold starts, and on every set.
+   */
+  holdEndsAtMs: number | null;
 }
 
 /**
@@ -309,6 +316,16 @@ export function holdLabelOf(seconds: number | null | undefined, metres: number |
   return null;
 }
 
+/*
+ * ⛔ THE CARD SPEAKS HER UNITS (found 2026-09-30). The mirror carries kilograms — the watch reads it —
+ * and the card printed them under the unit word it was handed: 60 kg on the lock screen of an athlete
+ * in pounds read "60 lb", and its steppers turned that by pound detents. The card is a phone surface
+ * in HER units now, both ways: figures converted here, and a stepped figure converted back to
+ * kilograms where the tap is replayed (`sessionStore.applyLockIntents`).
+ */
+const onCard = (kg: number | null | undefined, lock: LockExtras): number | null =>
+  kg == null ? null : lock.unitLabel === 'lb' ? Math.round(kg * LB_PER_KG) : kg;
+
 export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExtras = NO_LOCK): LiveActivityState {
   const isResting = mirror.phase === 'rest_inter' || mirror.phase === 'rest_transition';
   /*
@@ -345,13 +362,13 @@ export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExt
     setCount: isResting && mirror.nextSetNumber > 0 ? mirror.nextSetsInExercise : mirror.setsInExercise,
     liftIndex: mirror.liftIndex,
     liftCount: mirror.liftCount,
-    targetWeight: restNamesNext ? mirror.nextTargetWeight : mirror.targetWeight,
+    targetWeight: onCard(restNamesNext ? mirror.nextTargetWeight : mirror.targetWeight, lock),
     targetReps: restNamesNext ? mirror.nextTargetReps ?? mirror.targetReps : mirror.targetReps,
     restEndsAtMs: isResting && !Number.isNaN(endMs) ? endMs : null,
     restTotalS: isResting ? mirror.restTotalS ?? null : null,
     isResting,
     nextExerciseName: isTransition ? mirror.nextExerciseName : null,
-    nextTargetWeight: isTransition ? mirror.nextTargetWeight : null,
+    nextTargetWeight: isTransition ? onCard(mirror.nextTargetWeight, lock) : null,
     nextTargetReps: isTransition ? mirror.nextTargetReps : null,
     restAfterS: lock.restAfterS,
     lastSetOfSession: lock.lastSetOfSession,
@@ -370,11 +387,15 @@ export function liveActivityStateFromMirror(mirror: SessionMirror, lock: LockExt
     unitLabel: lock.unitLabel,
     weightStep: lock.weightStep,
     wordReps: lock.words.reps,
-    awaitingReady: lock.awaitingReady && phaseFromMirror(mirror.phase) === 'set',
+    // ⛔ ONE SOURCE (2026-09-28): the mirror's own flag, the one the wrist reads — so the card's Ready
+    // and the wrist's Ready are the same fact. (`lock.awaitingReady` is the older, parallel carrier.)
+    awaitingReady: (mirror.awaitingReady ?? lock.awaitingReady) === true && phaseFromMirror(mirror.phase) === 'set',
     actReady: lock.words.ready,
     wordBodyweight: lock.words.bodyweight,
     // The step the card names: the coming one on a rest (like the label and the load above), else this one.
     holdLabel: restNamesNext ? holdLabelOf(mirror.nextHoldSeconds, mirror.nextHoldMetres) : holdLabelOf(mirror.holdSeconds, mirror.holdMetres),
+    holdEndsAtMs:
+      phaseFromMirror(mirror.phase) === 'set' && mirror.holdEndsAt && !Number.isNaN(Date.parse(mirror.holdEndsAt)) ? Date.parse(mirror.holdEndsAt) : null,
   };
 }
 

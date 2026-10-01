@@ -194,6 +194,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       daysPerWeek: inputs.daysPerWeek,
       sex: inputs.sex === 'female' ? 'female' : 'male',
       ...(inputs.weightKg != null ? { weightKg: inputs.weightKg } : {}),
+      ...(inputs.experience ? { experience: inputs.experience } : {}),
       ...(coachAsk ? { ask: coachAsk } : {}),
     }).catch(() => null);
     if (!res) return { ok: false, reason: 'upstream' };

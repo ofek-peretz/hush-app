@@ -204,10 +204,17 @@ export const IMPORT_READ_SCHEMA = {
         required: ['name', 'lifts'],
         properties: {
           name: { type: 'string' },
+          /*
+           * ⛔ NO `maxItems` HERE (2026-09-17). A nested bound (14 sessions × 20 lifts) made Gemini
+           * refuse the whole schema with a bare 400 "Request contains an invalid argument" — on
+           * every model, the production one included — so every photo import failed before a
+           * single token was read. Measured in the surface bake-off: dropping this one bound is the
+           * whole fix. `readImportedWeek` re-checks every field in code, and a coach's 22-lift day
+           * is not ours to truncate anyway.
+           */
           lifts: {
             type: 'array',
             minItems: 1,
-            maxItems: 20,
             items: {
               type: 'object',
               additionalProperties: false,

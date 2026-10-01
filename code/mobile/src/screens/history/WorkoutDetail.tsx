@@ -25,7 +25,8 @@ import { db } from '@/data/local/db';
 import { exerciseDisplayName } from '@/data/exercises';
 import { durationMinutes } from '@/domain/duration';
 import { displayWeight, unitLabel, sessionDayName } from '@/domain/schedule';
-import { sessionDurationSec, sessionEnergyKcal, sessionTonnageKg, tonnesFromKg } from '@/domain/sessionMetrics';
+import { massFigure, sessionDurationSec, sessionEnergyKcal, sessionTonnageKg } from '@/domain/sessionMetrics';
+import { KCAL_SHOWN_FROM } from '@/domain/energy';
 import { correctionsByPosition } from '@/domain/liveCorrections';
 import type { ItemResult, Session, SetLog } from '@/data/local/models';
 import { color, space, font, textScale, tracking, trackingPx, press, signal, directionTone } from '@/design/tokens';
@@ -171,7 +172,8 @@ export function WorkoutDetailView({
     const kg = sessionTonnageKg(session);
     // No tonnage is not "0.0 t" — a session of holds and repeats moved no bar, and the fact simply
     // has no line. (The minutes and the calories above it still do.)
-    return kg > 0 ? tonnesFromKg(kg).toFixed(1) : null;
+    // Tonnes from one up, her unit below — `massFigure` (design audit 2026-09-29).
+    return kg > 0 ? massFigure(kg, units) : null;
   })();
   // UP = lifts whose next load the engine set ABOVE what it held before (a progression).
   const upCount = Object.values(forward).filter((f) => f.loadFrom != null && f.loadTo != null && f.loadTo > f.loadFrom).length;
@@ -204,8 +206,10 @@ export function WorkoutDetailView({
           <Arrive order={1} style={styles.facts}>
             {/* A free-form log spans no time — "0 min" is a measurement the record never took. */}
             {durationMinutes(durSec) > 0 ? <Fact value={String(durationMinutes(durSec))} label={t('common.minShort')} /> : null}
-            {kcal != null && kcal > 0 ? <Fact value={String(kcal)} label={t('complete.kcal')} /> : null}
-            {tonnes != null ? <Fact value={tonnes} label={`${t('complete.tonneUnit')} ${t('complete.moved')}`} /> : null}
+            {kcal != null && kcal >= KCAL_SHOWN_FROM ? <Fact value={String(kcal)} label={t('complete.kcal')} /> : null}
+            {tonnes != null ? (
+              <Fact value={tonnes.value} label={`${tonnes.tonnes ? t('complete.tonneUnit') : unitLabel(units)} ${t('complete.moved')}`} />
+            ) : null}
             {upCount > 0 ? <Fact value={String(upCount)} label={t('history.upLabel')} accent /> : null}
           </Arrive>
 
@@ -464,7 +468,9 @@ const styles = StyleSheet.create({
   chipMark: { fontFamily: font.monoMedium, fontSize: 17, lineHeight: 22, marginEnd: 3, textAlign: 'left' },
   /* "counted as written" beside a presumed set's figures — a word, so sans, and the chip's quietest ink. */
   chipTag: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, marginStart: 6, textAlign: 'left' },
-  amendTitle: { fontFamily: font.serif, fontSize: 24, lineHeight: 28, color: color.textPrimary, textAlign: 'left', marginBottom: 16 },
+  /* The UI face, not the coach's serif (design audit 2026-09-29): a sheet asking about an OPERATION is
+     the app speaking — the same voice as the stage's end-workout sheet. The serif is the coach's. */
+  amendTitle: { fontFamily: font.sansSemibold, fontSize: 24, lineHeight: 31, color: color.textPrimary, textAlign: 'left', marginBottom: 16 },
   amendFields: { gap: 14, marginBottom: 22 },
 
   footer: { marginTop: 'auto', paddingTop: 26, fontFamily: font.serif, fontSize: 17, lineHeight: 22, color: color.textMuted, textAlign: 'left' },

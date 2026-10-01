@@ -3,6 +3,8 @@
  *
  *   /.well-known/apple-app-site-association  → iOS opens FERROX directly for /pair links
  *   /pair?c=CODE                              → the page a phone WITHOUT the app lands on
+ *   /c/CODE  (and /c?c=CODE)                  → the coach invite's page (2026-09-17, COACH_TRACK_V1)
+ *   /k/CODE  (and /k?c=CODE)                  → an invite into a friend's circle (2026-09-29)
  *
  * Everything else is the static build in dist/ (brand/landing/build.py).
  *
@@ -12,7 +14,18 @@
 const APP_ID = 'T6ZRTBRT2U.com.hushfitness.app';
 const APP_STORE_URL = 'https://apps.apple.com/app/id6780763348';
 
-const AASA = JSON.stringify({ applinks: { details: [{ appIDs: [APP_ID], components: [{ '/': '/pair*' }] }] } });
+/* ⚠️ `/c/*` and `/c`, never `/c*` — a bare prefix would also claim any future /careers or /contact page.
+   The circle's `/k/*` and `/k` follow the same rule. */
+const AASA = JSON.stringify({
+  applinks: {
+    details: [
+      {
+        appIDs: [APP_ID],
+        components: [{ '/': '/pair*' }, { '/': '/c/*' }, { '/': '/c' }, { '/': '/k/*' }, { '/': '/k' }],
+      },
+    ],
+  },
+});
 
 /** The room code alphabet is A–Z2–9; anything else is not a code and is not echoed into HTML. */
 const safeCode = (raw) => (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
@@ -36,8 +49,55 @@ const COPY = {
   },
 };
 
+/** The coach invite (2026-09-17) — the same signpost as the pair page, opening `hush://coach`. */
+const COACH_COPY = {
+  he: {
+    dir: 'rtl',
+    title: 'המאמן שלך הזמין אותך ל־FERROX',
+    lead: 'המאמן כותב את השבוע. FERROX מנהלת את המשקלים.',
+    open: 'לפתוח ב־FERROX',
+    get: 'להוריד את FERROX',
+    code: 'או להקליד באפליקציה את הקוד',
+  },
+  en: {
+    dir: 'ltr',
+    title: 'Your coach invited you to FERROX',
+    lead: 'Your coach writes the week. FERROX runs the loads.',
+    open: 'Open in FERROX',
+    get: 'Get FERROX',
+    code: 'Or enter this code in the app',
+  },
+};
+
+/** A friend's circle (2026-09-29) — calm and adult, the routine rather than the gym floor. */
+const CIRCLE_COPY = {
+  he: {
+    dir: 'rtl',
+    title: 'הוזמנת למעגל ב־FERROX',
+    lead: 'כמה חברים ששומרים יחד על שגרת האימונים. רואים מי התאמן השבוע, בלי טבלאות ובלי זרים.',
+    open: 'להצטרף למעגל',
+    get: 'להוריד את FERROX',
+    code: 'או להקליד באפליקציה את הקוד',
+  },
+  en: {
+    dir: 'ltr',
+    title: "You're invited to a circle on FERROX",
+    lead: 'A few friends keeping the training routine together. See who trained this week, with no tables and no strangers.',
+    open: 'Join the circle',
+    get: 'Get FERROX',
+    code: 'Or enter this code in the app',
+  },
+};
+
 function pairPage(code, lang) {
-  const c = COPY[lang];
+  return invitePage(code, COPY[lang], lang, 'pair');
+}
+
+function coachPage(code, lang) {
+  return invitePage(code, COACH_COPY[lang], lang, 'coach');
+}
+
+function invitePage(code, c, lang, scheme) {
   return `<!doctype html><html lang="${lang}" dir="${c.dir}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${c.title}</title>
@@ -59,7 +119,7 @@ function pairPage(code, lang) {
 </style></head><body><main>
  <h1>${c.title}</h1>
  <p>${c.lead}</p>
- <a class="primary" href="hush://pair?c=${code}">${c.open}</a>
+ <a class="primary" href="hush://${scheme}?c=${code}">${c.open}</a>
  <a class="ghost" href="${APP_STORE_URL}">${c.get}</a>
  ${code ? `<div class="label">${c.code}</div><div class="code">${code}</div>` : ''}
 </main></body></html>`;
@@ -74,6 +134,20 @@ export default {
     if (url.pathname === '/pair' || url.pathname === '/pair/') {
       const lang = /^he|,\s*he/i.test(req.headers.get('accept-language') || '') ? 'he' : 'en';
       return new Response(pairPage(safeCode(url.searchParams.get('c')), lang), {
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+      });
+    }
+    if (url.pathname === '/c' || url.pathname.startsWith('/c/')) {
+      const lang = /^he|,\s*he/i.test(req.headers.get('accept-language') || '') ? 'he' : 'en';
+      const raw = url.pathname.length > 3 ? url.pathname.slice(3) : url.searchParams.get('c');
+      return new Response(coachPage(safeCode(raw), lang), {
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+      });
+    }
+    if (url.pathname === '/k' || url.pathname.startsWith('/k/')) {
+      const lang = /^he|,\s*he/i.test(req.headers.get('accept-language') || '') ? 'he' : 'en';
+      const raw = url.pathname.length > 3 ? url.pathname.slice(3) : url.searchParams.get('c');
+      return new Response(invitePage(safeCode(raw), CIRCLE_COPY[lang], lang, 'circle'), {
         headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
       });
     }

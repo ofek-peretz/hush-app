@@ -64,37 +64,34 @@ describe('notification payload schema (versioned, reconstructable)', () => {
 });
 
 /**
- * THE WEEK'S RECEIPT (founder 2026-07-13). The one recurring push this product sends, and it must
- * land on the roll ITSELF — Saturday 20:30 local, the instant the new week opens. If the trigger
- * ever drifts from `domain/weekCadence`, the note announces an update that has not happened yet
- * (or arrives long after the athlete has already seen it), which is worse than no note at all.
+ * THE WEEK'S RECEIPT — AND WHEN IT ARRIVES (the rotation, founder 2026-09-28).
+ *
+ * It was a repeating Saturday 20:30 note, the instant the calendar week opened. Her week closes when
+ * she finishes it now, so the repeating note is RETIRED (every install from before the rotation has
+ * it armed, so re-scheduling sweeps it) and the receipt is ONE-SHOT, armed by the roll.
  */
-describe('the weekly update note fires on the roll', () => {
-  it('is a WEEKLY trigger on the exact week-open instant — repeating by construction', async () => {
+describe('the weekly note: the Saturday slot is retired, the week-closed note is one-shot', () => {
+  it('re-scheduling the old note cancels the repeating trigger and schedules nothing', async () => {
     await notifier.scheduleWeeklyUpdate();
-    const call = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls.at(-1)![0];
-    expect(call.trigger).toEqual({
-      type: 'weekly', // never CALENDAR: that one only recurs if somebody remembers `repeats: true`
-      // iOS weekdays are 1-based from Sunday; WEEK_OPEN_DOW is a JS getDay() (0=Sun).
-      weekday: WEEK_OPEN_DOW + 1,
-      hour: WEEK_OPEN_HOUR,
-      minute: WEEK_OPEN_MINUTE,
-    });
-    expect(call.trigger.weekday).toBe(7); // Saturday
-    expect([call.trigger.hour, call.trigger.minute]).toEqual([20, 30]);
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+    await settle();
+    expect(await loggedTypes()).toContain(NOTIFICATION_EVENTS.canceled); // the sweep is recorded
   });
 
-  it('a tap on it can only lead to the Weekly Update (the payload is the routing)', async () => {
-    await notifier.scheduleWeeklyUpdate();
+  it('the week-closed note fires once, at the instant it was given, and routes to the Weekly Update', async () => {
+    const fireAt = Date.now() + 10 * 60 * 60 * 1000;
+    await notifier.scheduleWeekClosed(fireAt);
     const call = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls.at(-1)![0];
+    expect(call.trigger.type).toBe('timeInterval');
+    expect(Math.abs(call.trigger.seconds - 10 * 60 * 60)).toBeLessThanOrEqual(2);
     expect(call.content.data).toEqual(buildPayload('weekly_program_ready'));
     expect(call.content.title).toBeTruthy();
     expect(call.content.body).toBeTruthy();
   });
 
-  it('re-scheduling coalesces onto one id — a note per week, never a stack', async () => {
-    await notifier.scheduleWeeklyUpdate();
-    await notifier.scheduleWeeklyUpdate();
+  it('a second close before it fires replaces it — one id, never a stack', async () => {
+    await notifier.scheduleWeekClosed(Date.now() + 5 * 60 * 60 * 1000);
+    await notifier.scheduleWeekClosed(Date.now() + 9 * 60 * 60 * 1000);
     await settle();
     const calls = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls;
     const ids = new Set(calls.map((c) => c[0].identifier));
@@ -123,10 +120,10 @@ describe('the permission is asked once, and never at launch', () => {
     expect(Notifications.requestPermissionsAsync).toHaveBeenCalled();
   });
 
-  it('a granted install arms the note at boot without a word', async () => {
+  it('a granted install is never asked at boot — and the retired Saturday note is not re-armed', async () => {
     await notifier.scheduleWeeklyUpdate();
     expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });
 

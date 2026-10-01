@@ -116,7 +116,8 @@ describe('the chain', () => {
 
   it('⛔ and the pre-workout card’s drag edits the week on disk by day id, gated like its swap', () => {
     const card = src('screens/plan/PreWorkoutScreen.tsx');
-    expect(card).toMatch(/onReorder=\{\s*doneIds\.includes\(workout\.id\) \|\| !program\s*\? undefined/);
+    // (2026-09-17: a linked coach's week offers no drag at all — ruling 4 of the coach track.)
+    expect(card).toMatch(/onReorder=\{\s*(?:\/\*[\s\S]*?\*\/\s*)?doneIds\.includes\(workout\.id\) \|\| !program \|\| coachLocked\s*\? undefined/);
     expect(card).toContain('app.reorderExercise(day.id, from, to)');
     const store = src('state/stores/appStore.tsx');
     expect(store).toContain('const next = moveLift(program, di, fromIndex, toIndex);');

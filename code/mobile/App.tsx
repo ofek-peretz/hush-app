@@ -32,6 +32,7 @@ import { initI18n } from '@/i18n';
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
 import { PairProvider } from '@/state/stores/pairStore';
+import { CoachTrackProvider } from '@/state/stores/coachStore';
 import { ToastProvider } from '@/components/ds';
 import { Root } from '@/app/Root';
 import { syncTrace } from '@/platform/syncTrace';
@@ -114,9 +115,13 @@ export default function App() {
             {/* The pair reads the live session and publishes a count — so it sits INSIDE the
                 session it spectates, and outside nothing. See `state/stores/pairStore`. */}
             <PairProvider>
-              <ToastProvider>
-                <Root />
-              </ToastProvider>
+              {/* The coach track watches the session end (a deferred week lands after the save),
+                  so it sits inside the session too. See `state/stores/coachStore`. */}
+              <CoachTrackProvider>
+                <ToastProvider>
+                  <Root />
+                </ToastProvider>
+              </CoachTrackProvider>
             </PairProvider>
           </SessionProvider>
         </AppProvider>

@@ -1343,7 +1343,7 @@ struct WatchRootView: View {
                      onPause: model.pause, onEnd: model.endWorkout,
                      onReportPain: model.reportPain) {
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
-                        onComplete: model.completeSet)
+                        onComplete: model.completeSet, onReady: model.setReady)
       }
     case let .interRest(m):
       ExecutionPager(metrics: model.liveMetrics,
@@ -1830,6 +1830,8 @@ struct ActiveSetScreen: View {
   let draft: EditDraft?
   let onSave: (Double?, Int) -> Void
   let onComplete: () -> Void
+  /// "מוכן" — offered only while the voice's loading dialogue is open (`mirror.awaitingReady`).
+  var onReady: () -> Void = {}
   /*
    * ════ THE LIVE-SET SWAP WAS WIRED, AND DEAD ════
    *
@@ -2007,10 +2009,18 @@ struct ActiveSetScreen: View {
       if let hold = holdText(mirror.holdSeconds, mirror.holdMetres) {
         // ⛔ A HOLD (2026-09-17): its duration is the hero, and there is nothing to edit — Done
         // finishes it as prescribed. It used to show the NEXT lift's load here while she held it.
-        Text(hold)
-          .font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit()
-          .foregroundStyle(Palette.lift)
-          .lineLimit(1).minimumScaleFactor(0.5)
+        if let end = WatchWire.parseDate(mirror.holdEndsAt) {
+          /*
+           * ⛔ THE HOLD'S ONE CLOCK (2026-09-28): once it starts ("מוכן" on any surface, or the phone's
+           * Start) the wrist counts down to the end the phone, the card and the voice count to — it
+           * used to draw a duration that never moved. At 0:00 nothing is written: her Done is.
+           */
+          TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            holdFigure(holdText(Int(max(0, end.timeIntervalSince(ctx.date)).rounded(.up)), nil) ?? hold)
+          }
+        } else {
+          holdFigure(hold)
+        }
         if let wt = mirror.targetWeight {
           Text("\(fmtW(wt)) \(WatchCopy.kg)")
             .font(.system(size: Fit.s(15), design: .monospaced)).monospacedDigit()
@@ -2342,11 +2352,33 @@ struct ActiveSetScreen: View {
     .frame(maxWidth: .infinity, alignment: .center)
   }
 
+  /// A hold's figure — the duration before it starts, the countdown while it runs.
+  private func holdFigure(_ s: String) -> some View {
+    Text(s)
+      .font(.system(size: Fit.s(46), weight: .medium, design: .monospaced)).monospacedDigit()
+      .foregroundStyle(Palette.lift)
+      .lineLimit(1).minimumScaleFactor(0.5)
+  }
+
+  @ViewBuilder
   private var footer: some View {
-    // Mock WT2: a single full-width "Complete set" (cream). In Edit (WT9) it becomes a moss "Done"
-    // that commits the set — the gentle-confirm fill, distinct from the cream that advances the work.
-    StageButton(title: editing ? WatchCopy.done : WatchCopy.completeSet, kind: editing ? .moss : .primary, height: Wrist.action, fontSize: 15, seated: true) {
-      if editing { commit() } else { onComplete() }
+    if !editing && mirror.awaitingReady == true {
+      /*
+       * ⛔ READY BESIDE COMPLETE SET (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן אמת"*).
+       * The voice said "load the bar, and say ready": the lock card offered Ready beside Done, and
+       * this screen offered Complete set alone. The row is the rest screen's two-button row
+       * (`RestActions`), so both stay visible on 40 mm with nothing scrolling.
+       */
+      HStack(spacing: Fit.s(6)) {
+        StageButton(title: WatchCopy.ready, kind: .quiet, height: Wrist.action, fontSize: 15, action: onReady)
+        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, action: onComplete)
+      }
+    } else {
+      // Mock WT2: a single full-width "Complete set" (cream). In Edit (WT9) it becomes a moss "Done"
+      // that commits the set — the gentle-confirm fill, distinct from the cream that advances the work.
+      StageButton(title: editing ? WatchCopy.done : WatchCopy.completeSet, kind: editing ? .moss : .primary, height: Wrist.action, fontSize: 15, seated: true) {
+        if editing { commit() } else { onComplete() }
+      }
     }
   }
 

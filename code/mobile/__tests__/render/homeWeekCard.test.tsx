@@ -532,6 +532,18 @@ describe('⛔ the queued card carries the one number Hush decides', () => {
     expect(colors(card)).toContain(directionTone('up'));
   });
 
+  it('✦ …and says HOW FAR it moved, on its own row (founder 2026-09-28, "what is new today")', () => {
+    const moved = PLAN.map((l) => (l.exerciseId === 'bb_bench_press' ? { ...l, changedByKg: 2.5 } : l));
+    // The figure is an LTR isolate (so the sign stays in front in Hebrew); read it without the marks.
+    const plain = (x: string) => x.replace(/[\u2066-\u2069]/g, '');
+    const said = plain(texts(mount(<HomeView {...props({ plan: moved })} />)).join(' '));
+    expect(said).toContain('+2.5 kg since last time');
+    // Only the lift that moved says so — a direction with no amount stays a colour.
+    expect(said.match(/since last time/g)).toHaveLength(1);
+    const eased = PLAN.map((l) => (l.exerciseId === 'bb_bench_press' ? { ...l, changed: 'down', changedByKg: -5 } : l));
+    expect(plain(texts(mount(<HomeView {...props({ plan: eased })} />)).join(' '))).toContain('\u22125 kg since last time');
+  });
+
   it('⚠️ …and TODAY states the LIFTS, never a muscle line', () => {
     /*
      * "Back · Biceps" and "Bench Press 62.5 · Back Squat 90 · Lat Pulldown 55" say the same thing at

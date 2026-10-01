@@ -24,7 +24,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Arrive, GhostClimb, Legend, SegmentedControl } from '@/components/ds';
+import { Arrive, GhostClimb, Legend, SegmentedControl, opticalFigure } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { currentLocale } from '@/i18n';
 import { exerciseDisplayName } from '@/data/exercises';
@@ -35,6 +35,9 @@ import type { Units } from '@/data/local/models';
 import { Icon, type IconName } from '@/components/Icon';
 import { MilestoneEmblem } from '@/components/MilestoneEmblem';
 import { color, space, font, textScale, ramp, tracking, trackingPx, signal } from '@/design/tokens';
+import { KCAL_SHOWN_FROM } from '@/domain/energy';
+import { massFigure } from '@/domain/sessionMetrics';
+import { ltrIsland } from '@/i18n/bidi';
 
 /** One engraved seal on the wall — already formatted; this screen only hangs them. */
 export interface WallMark {
@@ -369,13 +372,61 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift, marks }: {
     { value: String(a.raises), unit: '', caption: t('progress.badgeRaises'), icon: 'star' },
     { value: String(a.workouts), unit: '', caption: t('progress.badgeWorkouts'), icon: 'dumbbell' },
     { value: hours >= 1 ? String(hours) : String(a.minutes), unit: hours >= 1 ? t('progress.unitHours') : t('progress.unitMinutes'), caption: t('progress.badgeTrained'), icon: 'history' },
-    { value: fmtTonnes(a.liftedKg), unit: t('progress.unitTonnes'), caption: t('progress.badgeLifted'), icon: 'plate' },
-    { value: fmtK(a.kcal), unit: t('progress.unitKcal'), caption: t('progress.badgeBurned'), icon: 'flame' },
-    { value: fmtKm(a.cardioKm), unit: t('progress.unitKm'), caption: t('progress.badgeCardio'), icon: 'runner' },
+    /* Tonnes from one up, her unit below (`massFigure`, design audit 2026-09-29): a first light
+       workout was "0.3 t" on the board and "340 kg" on the poster that sent her here. */
+    ...(() => {
+      const m = massFigure(a.liftedKg, units, (x) => fmtTonnes(x * 1000));
+      return [{ value: m.value, unit: m.tonnes ? t('progress.unitTonnes') : unitLabel(units), caption: t('progress.badgeLifted'), icon: 'plate' as IconName }];
+    })(),
+    /* A calorie total too small to mean anything, and a distance while the run door is closed
+       (Cardio hidden, founder 2026-09-29), are rows she can do nothing with — drawn only when real
+       (design audit 2026-09-29). A run inside a workout still counts, so the row returns with it. */
+    ...(a.kcal >= KCAL_SHOWN_FROM ? [{ value: fmtK(a.kcal), unit: t('progress.unitKcal'), caption: t('progress.badgeBurned'), icon: 'flame' as IconName }] : []),
+    ...(a.cardioKm > 0 ? [{ value: fmtKm(a.cardioKm), unit: t('progress.unitKm'), caption: t('progress.badgeCardio'), icon: 'runner' as IconName }] : []),
   ];
+
+  /*
+   * ════ ✦ SINCE YOU STARTED (founder 2026-09-28, approving the review: *"'מאז שהתחלת' — מאשר"*,
+   * and of this screen: *"שיהיה מרשים"*) ════
+   *
+   * The lifter this product is for trains to get stronger, and this is the one page that can SHOW
+   * it: the lifts that have moved most since her first session, start → now, the gain in moss. It
+   * is not the "TOTAL STRENGTH ADDED" head the founder deleted on 2026-08-12 — that was a sum across
+   * lifts, a number nobody lifts; these are three real bars she has actually put more on. Loaded
+   * lifts only (a rep count is not a weight), biggest gain first, and nothing at all until something
+   * has moved: on a first week this simply is not there.
+   */
+  const since = entries
+    .filter((e) => e.mode !== 'reps' && e.deltaKg > 0)
+    .slice()
+    .sort((x, y) => y.deltaKg - x.deltaKg)
+    .slice(0, 3);
 
   return (
     <>
+      {since.length > 0 ? (
+        <Arrive order={0}>
+          <View style={styles.since}>
+            <Legend tone="accent">{t('progress.sinceStart')}</Legend>
+            {since.map((e) => (
+              <Pressable
+                key={e.exerciseId}
+                accessibilityRole="button"
+                accessibilityLabel={`${exerciseDisplayName(e.exerciseId)} ${displayWeight(e.initialPeakKg, units)} ${displayWeight(e.periodPeakKg, units)} ${unitLabel(units)}`}
+                onPress={() => onLift?.(e.exerciseId)}
+                style={({ pressed }) => [styles.sinceRow, pressed && styles.liftRowPressed]}
+              >
+                <Text style={styles.sinceName} numberOfLines={2}>{exerciseDisplayName(e.exerciseId)}</Text>
+                <View style={[styles.liftFigureRow, ltrIsland()]}>
+                  <Text style={styles.sinceFrom}>{`${displayWeight(e.initialPeakKg, units)} →`}</Text>
+                  <Text style={styles.sinceTo}>{opticalFigure(String(displayWeight(e.periodPeakKg, units)))}</Text>
+                  <Text style={styles.sinceDelta}>{`+${displayWeight(e.deltaKg, units)} ${unitLabel(units)}`}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </Arrive>
+      ) : null}
       {/*
         ════════════════════════════════════════════════════════════════════════════════════════
         ⛔ THE WHOLE HEAD IS DELETED AND THE BOARD LEADS (founder, 2026-08-12)
@@ -446,7 +497,9 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift, marks }: {
               </View>
               <Legend size={ramp.body} style={styles.boardCaption}>{b.caption}</Legend>
               <View style={styles.boardValueRow}>
-                <Text style={[styles.boardValue, empty && styles.boardValueEmpty]}>{b.value}</Text>
+                {/* ⛔ AND IT IS A DASH, NOT A ZERO (design audit 2026-09-29): a 44-point "0" is still a
+                    score, however quietly it is inked — "none yet" is a dash. */}
+                <Text style={[styles.boardValue, empty && styles.boardValueEmpty]}>{empty ? '—' : opticalFigure(b.value)}</Text>
                 {/* Always drawn, even empty — see `unitColumnFor`: the numerals hang off this column. */}
                 <Text style={[styles.boardUnit, { width: unitCol }]}>{b.unit}</Text>
               </View>
@@ -511,7 +564,7 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift, marks }: {
                        rows up, and IBM Plex Mono has no Hebrew, so the word fell to a substitute
                        face. The figure is an LTR measurement (value, then unit — the FigureCells
                        rule); the word takes the sans. */
-                    <View style={styles.liftFigureRow}>
+                    <View style={[styles.liftFigureRow, ltrIsland()]}>
                       <Text style={[styles.liftFigure, styles.liftTo]}>{conv(e.periodPeakKg)}</Text>
                       <Text style={[styles.liftUnitWord, !isReps && styles.liftUnitLatin]}>{unit}</Text>
                     </View>
@@ -542,6 +595,23 @@ function AllTime({ aggregate, entries, units, onShareWeek, onLift, marks }: {
 
 const styles = StyleSheet.create({
   /* ════ the pride wall (founder 2026-08-23) ════ */
+  /* ✦ Since you started (2026-09-28) — the three lifts that moved most, big, at the head. */
+  since: {
+    marginTop: 6,
+    marginBottom: 18,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(62,87,63,0.55)',
+    gap: 2,
+  },
+  sinceRow: { paddingVertical: 12, gap: 4, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(241,238,229,0.10)' },
+  sinceName: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textSecondary, textAlign: 'left' },
+  sinceFrom: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 20, color: color.textMuted, textAlign: 'left' },
+  sinceTo: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: 34, lineHeight: 40, color: color.textPrimary, textAlign: 'left' },
+  sinceDelta: { fontFamily: font.monoMedium, fontVariant: ['tabular-nums'], fontSize: 20, color: signal[0], textAlign: 'left' },
   wall: { marginTop: 6, marginBottom: 22 },
   wallRow: { gap: 18, paddingVertical: 14, paddingHorizontal: 2 },
   wallSeal: { alignItems: 'center', width: 156, gap: 8 },
@@ -625,7 +695,7 @@ const styles = StyleSheet.create({
   liftFigure: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: 19, color: color.textMuted, textAlign: 'left' },
   liftFrom: { color: color.textMuted },
   /* The figure's own row: an LTR measurement, value then unit — same law as `FigureCells`. */
-  liftFigureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5, direction: 'ltr' }, // rtl-ok: a measurement, not text
+  liftFigureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5 }, // an LTR island via ltrIsland(): a measurement, not text
   /* The unit as a WORD ("חזרות") — sans; mono has no Hebrew glyphs. */
   liftUnitWord: { fontFamily: font.sans, fontSize: 17, color: color.textMuted, textAlign: 'left' }, // rtl-ok: inside an ltr row
   liftUnitLatin: { fontFamily: font.mono }, // rtl-ok: modifier on liftUnitWord

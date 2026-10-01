@@ -24,14 +24,20 @@
 
 import { Platform } from 'react-native';
 import { tg } from '@/i18n';
-import { NO_ENTITLEMENT, type Entitlement } from '@/domain/entitlement';
+import { NO_COACH_PLAN, NO_ENTITLEMENT, type CoachPlan, type Entitlement } from '@/domain/entitlement';
 import {
+  COACH_PLAN_SEATS,
+  COACH_PRODUCT_ORDER,
   PRODUCT_ORDER,
   PRODUCT_PERIOD,
+  isCoachProductId,
   isProductId,
+  trialDaysOf,
+  type CoachPlanProduct,
+  type CoachProductId,
   type SubscriptionProduct,
 } from './products';
-import type { Billing, PurchaseResult } from './billing';
+import type { Billing, CoachPurchaseResult, PurchaseResult, PurchaseStatus } from './billing';
 import type * as ExpoIap from 'expo-iap';
 import type { ProductSubscription, Purchase } from 'expo-iap';
 import { track } from '@/platform/telemetry';
@@ -129,11 +135,11 @@ function connect(iap: Iap): Promise<boolean> {
  * Mapping store shapes → the seam's domain shapes.
  * ==========================================================================*/
 
-function entitlementFrom(productId: string, expiresAtMs: number | null | undefined): Entitlement {
+function entitlementFrom(productId: string, expiresAtMs: number | null | undefined, trial = false): Entitlement {
   return {
     active: true,
     productId,
-    source: 'subscription',
+    source: trial ? 'trial' : 'subscription',
     expiresAt: typeof expiresAtMs === 'number' && expiresAtMs > 0 ? new Date(expiresAtMs).toISOString() : null,
   };
 }
@@ -150,6 +156,35 @@ function introTrialLabel(p: ProductSubscription): string | null {
   return tg(`paywall.trialPeriod.${unit}`, { count });
 }
 
+/** The same trial in days, for the paywall's timeline (see `trialDaysOf`). */
+function introTrialDays(p: ProductSubscription): number | null {
+  if (p.platform !== 'ios' || p.introductoryPricePaymentModeIOS !== 'free-trial') return null;
+  return trialDaysOf(p.introductoryPriceSubscriptionPeriodIOS, Math.max(1, Number(p.introductoryPriceNumberOfPeriodsIOS ?? '1') || 1));
+}
+
+/**
+ * ⛔ A TRIAL SHE CANNOT HAVE IS NOT OFFERED (2026-09-28). A product carries its introductory offer
+ * whoever is looking, and Apple gives it once per subscription group — so a returning member was
+ * shown "14 days free" over a sheet that charged her today. The paywall asks the store first; a
+ * failed ask keeps the offer on screen (Apple's own sheet states the true terms either way).
+ */
+async function introEligible(iap: Iap, list: ProductSubscription[]): Promise<boolean> {
+  const group = list.map((x) => (x as { subscriptionGroupIdIOS?: string | null }).subscriptionGroupIdIOS).find((g) => !!g);
+  if (!group) return true;
+  try {
+    return await iap.isEligibleForIntroOfferIOS(group);
+  } catch {
+    return true;
+  }
+}
+
+/** Did this purchase open Apple's free trial? StoreKit 2 stamps the offer on the transaction. */
+function startedTrial(purchase: Purchase): boolean {
+  const offer = (purchase as { offerIOS?: { type?: string | null; paymentMode?: string | null } | null }).offerIOS;
+  if (!offer) return false;
+  return /intro/i.test(offer.type ?? '') && /free/i.test(offer.paymentMode ?? '');
+}
+
 async function currentEntitlement(iap: Iap): Promise<Entitlement> {
   // Throws on store failure — see the header's error posture.
   const subs = await iap.getActiveSubscriptions([...PRODUCT_ORDER]);
@@ -163,11 +198,104 @@ async function currentEntitlement(iap: Iap): Promise<Entitlement> {
 async function entitlementAfterPurchase(iap: Iap, purchase: Purchase): Promise<Entitlement> {
   try {
     const ent = await currentEntitlement(iap);
-    if (ent.active) return ent;
+    // The period end is the trial's end when this purchase opened one — the reminder counts from it.
+    if (ent.active) return startedTrial(purchase) ? { ...ent, source: 'trial' } : ent;
   } catch {
     /* fall through to the purchase-derived entitlement */
   }
-  return entitlementFrom(purchase.productId, null);
+  return entitlementFrom(purchase.productId, null, startedTrial(purchase));
+}
+
+/* ============================================================================
+ * ONE PURCHASE FLOW, TWO PRODUCTS (the coach track, 2026-09-17).
+ *
+ * The listener choreography below was the body of `purchase()` and is unchanged; it is lifted out
+ * because the coach tiers buy through exactly the same StoreKit sequence and a second hand-rolled
+ * copy of it is how the two would drift. What the callers do differ on is the ANSWER: an athlete's
+ * plan resolves an `Entitlement`, a coach's tier resolves a `CoachPlan`. This helper stops at the
+ * transaction and hands it over — it never decides what a purchase entitles.
+ * ==========================================================================*/
+
+async function runPurchase(sku: string): Promise<{ status: PurchaseStatus; purchase: Purchase | null }> {
+  const iap = loadIap();
+  if (!iap || !(await connect(iap))) return { status: 'failed', purchase: null };
+
+  purchaseInFlight = true;
+  try {
+    return await new Promise<{ status: PurchaseStatus; purchase: Purchase | null }>((resolve) => {
+      let settled = false;
+      const settle = (r: { status: PurchaseStatus; purchase: Purchase | null }) => {
+        if (settled) return;
+        settled = true;
+        updated.remove();
+        failed.remove();
+        resolve(r);
+      };
+
+      const updated = iap.purchaseUpdatedListener((purchase) => {
+        void (async () => {
+          if (purchase.purchaseState === 'purchased') {
+            try {
+              await iap.finishTransaction({ purchase });
+            } catch {
+              /* unfinished transactions are re-delivered on next launch */
+            }
+            /*
+             * The device↔subscription bridge (audit finding 2, decided): one event, once, at the
+             * moment the transaction exists. `originalTransactionIdentifierIOS` is what App Store
+             * Server Notifications key on; falling back to `transactionId` still joins (Apple
+             * reports both on notifications). Fire-and-forget — never between her and the unlock.
+             */
+            const pIds = purchase as Purchase & { originalTransactionIdentifierIOS?: string | null };
+            const otid = pIds.originalTransactionIdentifierIOS ?? pIds.transactionId ?? null;
+            if (otid) void track(BILLING_EVENTS.purchaseTransaction, { productId: purchase.productId, originalTransactionId: String(otid).slice(0, 64) });
+            settle({ status: 'purchased', purchase });
+          } else {
+            // Ask to Buy / deferred — the approval will arrive via the persistent listener.
+            settle({ status: 'pending', purchase: null });
+          }
+        })();
+      });
+
+      const failed = iap.purchaseErrorListener((e) => {
+        settle({ status: e.code === 'user-cancelled' ? 'cancelled' : 'failed', purchase: null });
+      });
+
+      iap
+        .requestPurchase({ request: { apple: { sku } }, type: 'subs' })
+        .catch((e: unknown) => {
+          /*
+           * The error listener normally carries the outcome — but a rejection with no listener
+           * event would leave the paywall on "One moment" for ever, and a hung purchase is worse
+           * than a mislabelled one. The listener gets one tick to speak first (settle() is
+           * idempotent, so whichever answer lands first wins).
+           */
+          const code = (e as { code?: string } | null)?.code;
+          setTimeout(() => {
+            settle({ status: code === 'user-cancelled' ? 'cancelled' : 'failed', purchase: null });
+          }, 250);
+        });
+    });
+  } finally {
+    purchaseInFlight = false;
+  }
+}
+
+/** The coach tier this Apple ID holds, from StoreKit's own active-subscription answer. */
+async function currentCoachPlan(iap: Iap): Promise<CoachPlan> {
+  const subs = await iap.getActiveSubscriptions([...COACH_PRODUCT_ORDER]);
+  const live = subs.find((s) => s.isActive && isCoachProductId(s.productId));
+  if (!live) return NO_COACH_PLAN;
+  return coachPlanFrom(live.productId as CoachProductId, live.expirationDateIOS);
+}
+
+function coachPlanFrom(id: CoachProductId, expiresAtMs: number | null | undefined): CoachPlan {
+  return {
+    active: true,
+    productId: id,
+    seats: COACH_PLAN_SEATS[id],
+    expiresAt: typeof expiresAtMs === 'number' && expiresAtMs > 0 ? new Date(expiresAtMs).toISOString() : null,
+  };
 }
 
 /* ============================================================================
@@ -181,11 +309,18 @@ export const billingStoreKit: Billing = {
     try {
       const fetched = await iap.fetchProducts({ skus: [...PRODUCT_ORDER], type: 'subs' });
       const list = (fetched ?? []) as ProductSubscription[];
+      const eligible = await introEligible(iap, list);
       // Preserve the paywall's display order; a product missing in App Store Connect is simply absent.
       return PRODUCT_ORDER.flatMap((id) => {
         const p = list.find((x) => x.id === id);
         if (!p) return [];
-        return [{ id, period: PRODUCT_PERIOD[id], priceLabel: p.displayPrice, introTrialLabel: introTrialLabel(p) }];
+        return [{
+          id,
+          period: PRODUCT_PERIOD[id],
+          priceLabel: p.displayPrice,
+          introTrialLabel: eligible ? introTrialLabel(p) : null,
+          introTrialDays: eligible ? introTrialDays(p) : null,
+        }];
       });
     } catch {
       return [];
@@ -200,71 +335,11 @@ export const billingStoreKit: Billing = {
   },
 
   async purchase(productId): Promise<PurchaseResult> {
+    const out = await runPurchase(productId);
+    if (out.status !== 'purchased' || !out.purchase) return { status: out.status, entitlement: NO_ENTITLEMENT };
     const iap = loadIap();
-    if (!iap || !(await connect(iap))) return { status: 'failed', entitlement: NO_ENTITLEMENT };
-
-    purchaseInFlight = true;
-    try {
-      return await new Promise<PurchaseResult>((resolve) => {
-        let settled = false;
-        const settle = (r: PurchaseResult) => {
-          if (settled) return;
-          settled = true;
-          updated.remove();
-          failed.remove();
-          resolve(r);
-        };
-
-        const updated = iap.purchaseUpdatedListener((purchase) => {
-          void (async () => {
-            if (purchase.purchaseState === 'purchased') {
-              try {
-                await iap.finishTransaction({ purchase });
-              } catch {
-                /* unfinished transactions are re-delivered on next launch */
-              }
-              /*
-               * The device↔subscription bridge (audit finding 2, decided): one event, once, at the
-               * moment the transaction exists. `originalTransactionIdentifierIOS` is what App Store
-               * Server Notifications key on; falling back to `transactionId` still joins (Apple
-               * reports both on notifications). Fire-and-forget — never between her and the unlock.
-               */
-              const pIds = purchase as Purchase & { originalTransactionIdentifierIOS?: string | null };
-              const otid = pIds.originalTransactionIdentifierIOS ?? pIds.transactionId ?? null;
-              if (otid) void track(BILLING_EVENTS.purchaseTransaction, { productId: purchase.productId, originalTransactionId: String(otid).slice(0, 64) });
-              settle({ status: 'purchased', entitlement: await entitlementAfterPurchase(iap, purchase) });
-            } else {
-              // Ask to Buy / deferred — the approval will arrive via the persistent listener.
-              settle({ status: 'pending', entitlement: NO_ENTITLEMENT });
-            }
-          })();
-        });
-
-        const failed = iap.purchaseErrorListener((e) => {
-          settle({
-            status: e.code === 'user-cancelled' ? 'cancelled' : 'failed',
-            entitlement: NO_ENTITLEMENT,
-          });
-        });
-
-        iap
-          .requestPurchase({ request: { apple: { sku: productId } }, type: 'subs' })
-          .catch((e: unknown) => {
-            /*
-             * The error listener normally carries the outcome — but a rejection with no listener
-             * event would leave the paywall on "One moment" for ever, and a hung purchase is worse
-             * than a mislabelled one. The listener gets one tick to speak first (settle() is
-             * idempotent, so whichever answer lands first wins).
-             */
-            const code = (e as { code?: string } | null)?.code;
-            setTimeout(() => {
-              settle({ status: code === 'user-cancelled' ? 'cancelled' : 'failed', entitlement: NO_ENTITLEMENT });
-            }, 250);
-          });
-      });
-    } finally {
-      purchaseInFlight = false;
-    }
+    if (!iap) return { status: 'failed', entitlement: NO_ENTITLEMENT };
+    return { status: 'purchased', entitlement: await entitlementAfterPurchase(iap, out.purchase) };
   },
 
   async restore(): Promise<PurchaseResult> {
@@ -283,5 +358,62 @@ export const billingStoreKit: Billing = {
     } catch {
       return { status: 'failed', entitlement: NO_ENTITLEMENT };
     }
+  },
+
+  /* ── the coach track's tiers ───────────────────────────────────────────────────────────────── */
+
+  async getCoachPlans(): Promise<CoachPlanProduct[]> {
+    const iap = loadIap();
+    if (!iap || !(await connect(iap))) return [];
+    try {
+      const fetched = await iap.fetchProducts({ skus: [...COACH_PRODUCT_ORDER], type: 'subs' });
+      const list = (fetched ?? []) as ProductSubscription[];
+      /*
+       * ⛔ A TIER MISSING IN APP STORE CONNECT IS SIMPLY ABSENT — never a row with a guessed price.
+       * Until the founder creates the three products this answers `[]` on a real device too, and
+       * `CoachPlans` says so in one sentence instead of drawing three buttons that cannot be pressed.
+       */
+      return COACH_PRODUCT_ORDER.flatMap((id) => {
+        const p = list.find((x) => x.id === id);
+        if (!p) return [];
+        return [{ id, seats: COACH_PLAN_SEATS[id], priceLabel: p.displayPrice }];
+      });
+    } catch {
+      return [];
+    }
+  },
+
+  /** ⚠️ NEVER THROWS, unlike `getEntitlement`. A coach plan gates no training — it only opens seats,
+   *  and the server is the authority on those — so a store blip must read as "not known", not as an
+   *  exception the caller has to keep a cache against. */
+  async getCoachPlan(): Promise<CoachPlan> {
+    const iap = loadIap();
+    if (!iap) return NO_COACH_PLAN;
+    try {
+      if (!(await connect(iap))) return NO_COACH_PLAN;
+      return await currentCoachPlan(iap);
+    } catch {
+      return NO_COACH_PLAN;
+    }
+  },
+
+  async purchaseCoachPlan(productId): Promise<CoachPurchaseResult> {
+    const out = await runPurchase(productId);
+    if (out.status !== 'purchased' || !out.purchase) return { status: out.status, plan: NO_COACH_PLAN, transactionId: null };
+    const ids = out.purchase as Purchase & { originalTransactionIdentifierIOS?: string | null };
+    const transactionId = ids.originalTransactionIdentifierIOS ?? ids.transactionId ?? null;
+    const iap = loadIap();
+    if (!iap) return { status: 'failed', plan: NO_COACH_PLAN, transactionId };
+    try {
+      const plan = await currentCoachPlan(iap);
+      if (plan.active) return { status: 'purchased', plan, transactionId };
+    } catch {
+      /* fall through to the transaction-derived plan, as the Pro path does */
+    }
+    return {
+      status: 'purchased',
+      plan: isCoachProductId(out.purchase.productId) ? coachPlanFrom(out.purchase.productId, null) : NO_COACH_PLAN,
+      transactionId,
+    };
   },
 };

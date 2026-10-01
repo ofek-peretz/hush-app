@@ -17,9 +17,10 @@
 
 import { auditAll } from '@/motion/audit';
 import { validate } from '@/motion/formspec';
-import { drinkingRig, loggingRig, restingRig } from '@/motion/library/life';
+import { celebratingRig, drinkingRig, loggingRig, restingRig } from '@/motion/library/life';
+import { buildFrame, VIEWBOX } from '@/motion/frame';
 
-const RIGS = { life_resting: restingRig, life_drinking: drinkingRig, life_logging: loggingRig };
+const RIGS = { life_resting: restingRig, life_drinking: drinkingRig, life_logging: loggingRig, life_celebrating: celebratingRig };
 
 describe('the athlete between sets', () => {
   test('neither pose breaks a universal body law', () => {
@@ -69,5 +70,42 @@ describe('the athlete between sets', () => {
       const violations = validate(rig).violations.filter((v) => !isBreathNotARep(rig.id, v.detail));
       if (violations.length) throw new Error(`${rig.id}: ${violations.map((f) => f.detail).join(' · ')}`);
     }
+  });
+});
+
+describe('✦ the arms go up (2026-09-30)', () => {
+  const samples = Array.from({ length: 41 }, (_, i) => i / 40);
+
+  test('the whole celebration is inside the frame — hands, crown and feet, every frame', () => {
+    for (const rom of samples) {
+      const p = celebratingRig.poseAt(rom);
+      for (const [name, j] of Object.entries(p.j)) {
+        expect({ rom, name, inside: j.x >= VIEWBOX.x && j.x <= VIEWBOX.x + VIEWBOX.w && j.y >= VIEWBOX.y && j.y <= VIEWBOX.y + VIEWBOX.h })
+          .toEqual({ rom, name, inside: true });
+      }
+      expect(p.j.head.y - p.headR).toBeGreaterThan(VIEWBOX.y);
+      expect(buildFrame(celebratingRig, rom).length).toBeGreaterThan(10);
+    }
+  });
+
+  test('the elbow keeps its side of the arm for the whole sweep — it never snaps across', () => {
+    type P = { x: number; y: number };
+    const cross = (s: P, e: P, h: P) => (e.x - s.x) * (h.y - s.y) - (e.y - s.y) * (h.x - s.x);
+    let sign = 0;
+    for (const rom of samples) {
+      const { shoulderR, elbowR, handR } = celebratingRig.poseAt(rom).j;
+      const c = Math.sign(cross(shoulderR, elbowR, handR));
+      expect(c).not.toBe(0);
+      if (sign === 0) sign = c;
+      expect({ rom, c }).toEqual({ rom, c: sign });
+    }
+  });
+
+  test('she starts with her arms down and ends in the V, the two sides mirrored', () => {
+    const down = celebratingRig.poseAt(0).j;
+    const up = celebratingRig.poseAt(1).j;
+    expect(down.handR.y).toBeGreaterThan(down.hipC.y); // by her thighs
+    expect(up.handR.y).toBeLessThan(up.head.y); // over her head
+    expect(up.handR.x - up.head.x).toBeCloseTo(up.head.x - up.handL.x, 6); // a symmetric V
   });
 });

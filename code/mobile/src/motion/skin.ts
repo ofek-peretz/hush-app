@@ -102,6 +102,37 @@ function bendAt(pts: Vec2[], joint: number): Vec2 {
  * silhouette, leaning to the side the muscle actually sits on. `pad` is added to every diameter —
  * that is how the knockout seam is drawn: the same contour, fattened, in paper.
  */
+function limbLean(pts: Vec2[], hint?: Vec2): Vec2 {
+  const bend = pts.length >= 3 ? bendAt(pts, Math.min(1, pts.length - 2)) : { x: 0, y: 0 };
+  const conf = Math.min(1, Math.hypot(bend.x, bend.y));
+  const k = hint ? (1 - conf) * (1 - conf) * 0.8 : 0;
+  return hint ? { x: bend.x + hint.x * k, y: bend.y + hint.y * k } : bend;
+}
+
+/**
+ * One segment's two edges between `t0` and `t1` — the SAME contour `taperedLimb` draws (the belly,
+ * its lean), widened by `pad`. Shared so that cloth laid over a limb follows its muscle exactly:
+ * a sleeve that did its own geometry would sit off the biceps it covers on every bent-arm frame.
+ */
+function segmentEdges(a: Vec2, b: Vec2, wa: number, wb: number, belly: readonly [number, number, number?], dir: Vec2, pad: number, t0 = 0, t1 = 1): { near: Vec2[]; far: Vec2[] } {
+  const n = rot90(norm({ x: b.x - a.x, y: b.y - a.y }));
+  const [peak, mult, lean = 0] = belly;
+  const d = Math.max(-1, Math.min(1, lean * (dir.x * n.x + dir.y * n.y)));
+  const baseR = (t: number) => (wa + (wb - wa) * t) / 2;
+  const near: Vec2[] = [];
+  const far: Vec2[] = [];
+  const steps = Math.max(2, Math.round(BELLY_STEPS * (t1 - t0)));
+  for (let s = 0; s <= steps; s++) {
+    const t = t0 + ((t1 - t0) * s) / steps;
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    const base = baseR(t) + pad / 2;
+    const g = baseR(t) * (mult - 1) * hump(t, peak);
+    near.push({ x: p.x + n.x * (base + g * (1 + d)), y: p.y + n.y * (base + g * (1 + d)) });
+    far.push({ x: p.x - n.x * (base + g * (1 - d)), y: p.y - n.y * (base + g * (1 - d)) });
+  }
+  return { near, far };
+}
+
 function taperedLimb(pts: Vec2[], prof: LimbProfile, color: ColorToken, pad = 0, hint?: Vec2): Primitive[] {
   const out: Primitive[] = [];
   if (pts.length < 2) return out;
@@ -537,6 +568,165 @@ function skullPath(head: Vec2, r: number, anchor: Vec2, facing: 1 | -1, grow: nu
   return smoothClosed(pts, fill);
 }
 
+// ── the kit she trains in (2026-09-30) ───────────────────────────────────────────────
+/*
+ * ════ ✦ AN ATHLETE, NOT A MANNEQUIN (the founder, 2026-09-30: "take the figure, the machines and
+ * the equipment to the edge") ════
+ *
+ * v3 gave the body its muscle. What still said "mannequin" was that the body was all one skin: no
+ * shirt, no shorts, no shoes, no hair — a figure that could only be read as a figure. People read a
+ * PERSON off exactly those four things, at any size, before they read a single joint angle.
+ *
+ * So the athlete is dressed — and dressed inside the duotone, not against it: the kit is three more
+ * steps of the same warm ladder (`palette.ts` — cloth, clothFar, shoe, hair), no hue anywhere, the
+ * far side still dimmer than the near. Skin is the brightest thing on him; the tee is the trunk's own
+ * ink; the shorts are a step below; the shoe is the darkest thing on the near side, on a sole in
+ * skin's cream.
+ *
+ * ⚠️ THE CLOTH IS THE LIMB'S OWN CONTOUR, WIDENED (`segmentEdges`). A sleeve or a short with its own
+ * geometry would sit off the biceps and the quad on every bent frame; this is the same belly and the
+ * same lean, a little proud of the skin — and it ends in a flat hem, not a round cap, because a hem
+ * is a straight cut across the limb.
+ *
+ * ⚠️ AND IT CHANGES NO JOINT. Nothing here moves a pose; the two athletes still share one skeleton.
+ */
+const CLOTH_PAD = 1.4;
+/** How far down each garment reaches, in segments from the limb's root: 0.42 = 42 % of the first. */
+const SHORTS_HEM = 0.44;
+const SLEEVE_HEM = 0.42;
+const TIGHTS_HEM = 1.8; // the whole thigh and 80 % of the shank: a 7/8 tight
+/** Where the waistband sits on the spine (0 = hip, 1 = shoulder). */
+const WAIST_T = 0.17;
+
+/** Cloth over a limb from its root to `upTo` (segments), with a flat hem. */
+function clothOnLimb(pts: Vec2[], prof: LimbProfile, color: ColorToken, upTo: number, hint?: Vec2, pad = CLOTH_PAD): Primitive[] {
+  const out: Primitive[] = [];
+  if (pts.length < 2) return out;
+  const w = (i: number) => prof.w[Math.min(i, prof.w.length - 1)];
+  const belly = (i: number) => prof.belly[Math.min(i, prof.belly.length - 1)] ?? ([0.5, 1, 0] as const);
+  const dir = limbLean(pts, hint);
+  out.push({ kind: 'circle', c: pts[0], r: (w(0) + pad) / 2, fill: color });
+  for (let i = 0; i < pts.length - 1 && i < upTo; i++) {
+    const t1 = Math.min(1, upTo - i);
+    const { near, far } = segmentEdges(pts[i], pts[i + 1], w(i), w(i + 1), belly(i), dir, pad, 0, t1);
+    out.push({ kind: 'poly', pts: [...near, ...far.reverse()], fill: color });
+    if (t1 >= 1 && i + 1 < upTo) out.push({ kind: 'circle', c: pts[i + 1], r: (w(i + 1) + pad) / 2, fill: color });
+  }
+  return out;
+}
+
+/** Cloth over a near limb: over its own seam, like the limb, so it never melts into the trunk. */
+function nearCloth(pts: Vec2[], prof: LimbProfile, color: ColorToken, upTo: number, hint?: Vec2): Primitive[] {
+  return [...clothOnLimb(pts, prof, SEAM, upTo, hint, CLOTH_PAD + HALO * 2), ...clothOnLimb(pts, prof, color, upTo, hint)];
+}
+
+/**
+ * The shorts' seat: the trunk's own silhouette between the pelvis floor and the waistband, at any
+ * view angle (the support function of `trunkAtAngle`, which is exactly the side and the front
+ * profiles at 0° and 90°), a little proud of the body, cut straight across at the waist.
+ */
+function seatBand(
+  hip: Vec2,
+  shoulder: Vec2,
+  facing: 1 | -1,
+  bow: number,
+  side: Chain,
+  frontW: Chain,
+  viewDeg: number,
+  color: ColorToken,
+): Primitive {
+  const rad = (viewDeg * Math.PI) / 180;
+  const sinT = Math.abs(Math.sin(rad));
+  const cosT = Math.abs(Math.cos(rad));
+  const { back: backChain, front: frontChain } = splitSide(side);
+  const straightDir = norm({ x: shoulder.x - hip.x, y: shoulder.y - hip.y });
+  const nStraight = rot90(straightDir);
+  const ctrl: Vec2 = {
+    x: (hip.x + shoulder.x) / 2 - nStraight.x * facing * bow,
+    y: (hip.y + shoulder.y) / 2 - nStraight.y * facing * bow,
+  };
+  const at = (t: number): Vec2 => ({
+    x: (1 - t) * (1 - t) * hip.x + 2 * (1 - t) * t * ctrl.x + t * t * shoulder.x,
+    y: (1 - t) * (1 - t) * hip.y + 2 * (1 - t) * t * ctrl.y + t * t * shoulder.y,
+  });
+  const dirAt = (t: number): Vec2 =>
+    norm({
+      x: 2 * (1 - t) * (ctrl.x - hip.x) + 2 * t * (shoulder.x - ctrl.x),
+      y: 2 * (1 - t) * (ctrl.y - hip.y) + 2 * t * (shoulder.y - ctrl.y),
+    });
+  const extent = (t: number, sign: 1 | -1) => {
+    const W = sampleChain(frontW, t);
+    const R = sign === 1 ? sampleChain(frontChain, t) : sampleChain(backChain, t);
+    return Math.sqrt((W * sinT) ** 2 + (R * cosT) ** 2) + CLOTH_PAD / 2;
+  };
+  const edge = (t: number, sign: 1 | -1): Vec2 => {
+    const p = at(t);
+    const n = rot90(dirAt(t));
+    const off = extent(t, sign) * sign;
+    return { x: p.x + n.x * facing * off, y: p.y + n.y * facing * off };
+  };
+  const T0 = -0.12;
+  const STEPS = 7;
+  const back: Vec2[] = [];
+  const front: Vec2[] = [];
+  for (let i = 0; i <= STEPS; i++) {
+    const t = T0 + ((WAIST_T - T0) * i) / STEPS;
+    back.push(edge(t, -1));
+    front.push(edge(t, 1));
+  }
+  return { kind: 'poly', pts: [...back, ...front.reverse()], fill: color };
+}
+
+/**
+ * The shoe: the foot's own wedge as the upper, and a sole along the floor edge in skin's cream —
+ * the one stroke that turns a foot into a trainer at any size.
+ */
+function shoe(heel: Vec2, toe: Vec2, upper: ColorToken, sole: ColorToken, ankle?: Vec2): Primitive[] {
+  const span = { x: toe.x - heel.x, y: toe.y - heel.y };
+  const len = Math.hypot(span.x, span.y) || 1e-9;
+  const s = { x: span.x / len, y: span.y / len };
+  const nRaw = rot90(s);
+  const toAnkle = ankle ? { x: ankle.x - heel.x, y: ankle.y - heel.y } : { x: 0, y: -1 };
+  const sign = nRaw.x * toAnkle.x + nRaw.y * toAnkle.y >= 0 ? 1 : -1;
+  const u = { x: nRaw.x * sign, y: nRaw.y * sign };
+  const P = (t: number, up: number): Vec2 => ({ x: heel.x + s.x * len * t + u.x * up, y: heel.y + s.y * len * t + u.y * up });
+  return [
+    footWedge(heel, toe, upper, ankle),
+    // the sole: a low band under the whole foot, lifting at the toe like a trainer's
+    { kind: 'poly', pts: [P(-0.07, 0), P(-0.06, 1.9), P(0.9, 1.7), P(1.02, 1.3), P(1.03, 0.2), P(0.97, -0.2), P(0.02, -0.2)], fill: sole },
+  ];
+}
+
+/**
+ * Hair: the upper and back of the skull, in the head's own frame (the SKULL stations), so it turns
+ * with the head through every hinge and lie. A hairline at the forehead and one at the nape; the
+ * inner edge sweeps over the ear. Short and close — his cut is the silhouette the skull already has.
+ */
+const HAIR: ReadonlyArray<readonly [number, number]> = [
+  [0.8, 0.74], // hairline at the forehead
+  [1.02, 0.46], // over the brow
+  [1.16, 0.02], // the crown
+  [0.92, -0.68], // back of the crown
+  [0.4, -1.0], // occiput
+  [-0.3, -0.94], // the nape
+  [-0.34, -0.62], // the hairline behind the ear
+  [0.06, -0.36], // over the ear
+  [0.5, 0.2], // the temple
+];
+function hairSide(head: Vec2, r: number, anchor: Vec2, facing: 1 | -1, fill: ColorToken): Primitive {
+  const u = norm({ x: head.x - anchor.x, y: head.y - anchor.y });
+  const v = rot90(u);
+  const R = r + 0.5;
+  return smoothClosed(HAIR.map(([a, b]) => ({ x: head.x + u.x * a * R + v.x * facing * b * R, y: head.y + u.y * a * R + v.y * facing * b * R })), fill);
+}
+/** Face-on hair: a cap over the top of the face, the hairline a gentle arc across the forehead. */
+function hairFront(head: Vec2, r: number, anchor: Vec2, fill: ColorToken): Primitive {
+  const u = norm({ x: head.x - anchor.x, y: head.y - anchor.y });
+  const v = rot90(u);
+  const P = (a: number, b: number): Vec2 => ({ x: head.x + u.x * a * r + v.x * b * r, y: head.y + u.y * a * r + v.y * b * r });
+  return smoothClosed([P(0.35, 1.0), P(0.86, 0.78), P(1.16, 0.0), P(0.86, -0.78), P(0.35, -1.0), P(0.46, -0.5), P(0.56, 0.0), P(0.46, 0.5)], fill);
+}
+
 // ── the two athletes ─────────────────────────────────────────────────────────────
 
 /** Everything the skin may vary between the two athletes. Joints may NOT appear here. */
@@ -547,13 +737,15 @@ interface AthleteSkin {
   trunkFront: ReadonlyArray<[number, number]>;
   /** She wears her hair up — the gym bun, a silhouette-level word that survives every pose. */
   bun: boolean;
+  /** What each athlete trains in: his tee and shorts, her tank and 7/8 tights (2026-09-30). */
+  kit: { sleeve: number; legs: number };
 }
 
 const SKINS: Record<FigureSex, AthleteSkin> = {
   // his neck is 7.4, not 6.5: a trained man's neck is nearly as thick as his own jaw, and a thin
   // one under the new deltoid line reads as a head balanced on a stick
-  male: { limb: LIMB_W, neckW: 7.4, trunkSide: TRUNK_PROFILE, trunkFront: TRUNK_FRONT_PROFILE, bun: false },
-  female: { limb: LIMB_W_F, neckW: 5.6, trunkSide: TRUNK_PROFILE_F, trunkFront: TRUNK_FRONT_PROFILE_F, bun: true },
+  male: { limb: LIMB_W, neckW: 7.4, trunkSide: TRUNK_PROFILE, trunkFront: TRUNK_FRONT_PROFILE, bun: false, kit: { sleeve: SLEEVE_HEM, legs: SHORTS_HEM } },
+  female: { limb: LIMB_W_F, neckW: 5.6, trunkSide: TRUNK_PROFILE_F, trunkFront: TRUNK_FRONT_PROFILE_F, bun: true, kit: { sleeve: 0, legs: TIGHTS_HEM } },
 };
 
 /**
@@ -643,9 +835,15 @@ export function skinFigure(
    */
   const farInk: ColorToken = threeQuarter ? 'ink3' : 'ink4';
   if (!front) {
-    if (farArm) out.push(...taperedLimb(farArm, skin.limb.arm, farInk, 0, backOfArm));
-    if (farLeg) out.push(...taperedLimb(farLeg, skin.limb.leg, farInk, 0, backOfLeg(chains.farFoot)));
-    if (farFoot) out.push(footWedge(farFoot[0], farFoot[1], farInk, farAnkle));
+    if (farArm) {
+      out.push(...taperedLimb(farArm, skin.limb.arm, farInk, 0, backOfArm));
+      if (skin.kit.sleeve > 0) out.push(...clothOnLimb(farArm, skin.limb.arm, 'clothFar', skin.kit.sleeve, backOfArm));
+    }
+    if (farLeg) {
+      out.push(...taperedLimb(farLeg, skin.limb.leg, farInk, 0, backOfLeg(chains.farFoot)));
+      out.push(...clothOnLimb(farLeg, skin.limb.leg, 'clothFar', skin.kit.legs, backOfLeg(chains.farFoot)));
+    }
+    if (farFoot) out.push(...shoe(farFoot[0], farFoot[1], 'clothFar', farInk, farAnkle));
   }
 
   const hip = hipJ;
@@ -659,6 +857,8 @@ export function skinFigure(
           ? trunkFront(hip, shoulder, skin.trunkFront)
           : trunk(hip, shoulder, facing, bow, skin.trunkSide),
     );
+    // the seat of the shorts / tights — the trunk's own silhouette from the pelvis to the waistband
+    out.push(seatBand(hip, shoulder, facing, bow, skin.trunkSide, skin.trunkFront, view, 'cloth'));
   }
 
   const fistR = pose.fistR ?? skin.limb.handR;
@@ -668,9 +868,15 @@ export function skinFigure(
     // symmetric pose (a lateral raise, two dumbbells at the same height) read as a rendering
     // fault rather than as depth. There is no near side in a front view; the knockout seam, not
     // a tonal step, is what keeps the limbs apart from the trunk and from each other.
-    if (farLeg) out.push(...nearLimb(farLeg, flattenLean(skin.limb.leg), 'ink0'));
-    if (farFoot) out.push(footWedge(farFoot[0], farFoot[1], 'ink0', farAnkle));
-    if (farArm) out.push(...nearLimb(farArm, flattenLean(skin.limb.arm), 'ink0', fistR));
+    if (farLeg) {
+      out.push(...nearLimb(farLeg, flattenLean(skin.limb.leg), 'ink0'));
+      out.push(...nearCloth(farLeg, flattenLean(skin.limb.leg), 'cloth', skin.kit.legs));
+    }
+    if (farFoot) out.push(...shoe(farFoot[0], farFoot[1], 'shoe', 'ink0', farAnkle));
+    if (farArm) {
+      out.push(...nearLimb(farArm, flattenLean(skin.limb.arm), 'ink0', fistR));
+      if (skin.kit.sleeve > 0) out.push(...nearCloth(farArm, flattenLean(skin.limb.arm), 'ink1', skin.kit.sleeve));
+    }
   }
 
   const nearLeg = chainPts(pose, chains.nearLeg);
@@ -680,10 +886,15 @@ export function skinFigure(
         ? nearLimb(nearLeg, flattenLean(skin.limb.leg), 'ink0')
         : nearLimb(nearLeg, skin.limb.leg, 'ink0', undefined, backOfLeg(chains.nearFoot))),
     );
+    out.push(
+      ...(front
+        ? nearCloth(nearLeg, flattenLean(skin.limb.leg), 'cloth', skin.kit.legs)
+        : nearCloth(nearLeg, skin.limb.leg, 'cloth', skin.kit.legs, backOfLeg(chains.nearFoot))),
+    );
   }
   if (chains.nearFoot) {
     const [h, t] = chains.nearFoot;
-    if (j[h] && j[t]) out.push(footWedge(j[h], j[t], 'ink0', nearLeg?.[nearLeg.length - 1]));
+    if (j[h] && j[t]) out.push(...shoe(j[h], j[t], 'shoe', 'ink0', nearLeg?.[nearLeg.length - 1]));
   }
 
   const head = j[chains.head];
@@ -695,16 +906,19 @@ export function skinFigure(
   if (bun) out.push({ kind: 'circle', c: bun, r: BUN_R + HALO, fill: SEAM });
   if (skull) out.push(skullPath(head, pose.headR, shoulder, facing, HALO, SEAM));
   else if (head) out.push({ kind: 'circle', c: head, r: pose.headR + HALO, fill: SEAM });
-  if (bun) out.push({ kind: 'circle', c: bun, r: BUN_R, fill: 'ink1' });
+  if (bun) out.push({ kind: 'circle', c: bun, r: BUN_R, fill: 'hair' });
   if (head && shoulder) {
     out.push({ kind: 'line', a: shoulder, b: neckJoin(head, pose.headR, shoulder), w: skin.neckW, color: 'ink1', cap: 'round' });
   }
-  if (skull) out.push(skullPath(head, pose.headR, shoulder, facing, 0, 'ink1'));
-  else if (head && front) {
+  if (skull) {
+    out.push(skullPath(head, pose.headR, shoulder, facing, 0, 'ink1'));
+    out.push(hairSide(head, pose.headR, shoulder, facing, 'hair'));
+  } else if (head && front) {
     /* A face is TALLER than it is wide, as the side view's skull already is; a disc read as a ball
        on the shoulders and made the 30 front-view rigs a different person from the 106 side-view
        ones (execution pass, 2026-09-07). Same area as the disc, so no rig's headroom changes. */
     out.push({ kind: 'ellipse', c: head, rx: pose.headR * 0.94, ry: pose.headR * 1.064, fill: 'ink1' });
+    if (shoulder) out.push(hairFront(head, pose.headR, shoulder, 'hair'));
   } else if (head) out.push({ kind: 'circle', c: head, r: pose.headR, fill: 'ink1' });
 
   const nearArm = chainPts(pose, chains.nearArm);
@@ -712,6 +926,8 @@ export function skinFigure(
   if (nearArm) {
     const armProf = front ? flattenLean(skin.limb.arm) : skin.limb.arm;
     out.push(...nearLimb(nearArm, armProf, 'ink0', fistR, front ? undefined : backOfArm));
+    // the tee's sleeve, in the trunk's own ink — the shirt he is wearing reaches down his arm
+    if (skin.kit.sleeve > 0) out.push(...nearCloth(nearArm, armProf, 'ink1', skin.kit.sleeve, front ? undefined : backOfArm));
     /*
      * A FOLDED ARM IN TWO INKS (execution pass, 2026-09-03). Where a rig holds the bar on the back —
      * the good morning, the back squat — the upper arm and the forearm close to ~10° and two limbs

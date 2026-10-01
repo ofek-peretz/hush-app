@@ -9,16 +9,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18next from 'i18next';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { audioSession, type EarSource } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
+import { cloudEar } from '@/platform/voice/cloudEar';
+import { neuralVoice } from '@/platform/voice/neuralVoice';
+import { fixedLines, voiceLinesAhead } from '@/domain/voiceLinesAhead';
 import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
-import { VoiceConductor } from '@/platform/voice/voiceConductor';
+import { VoiceConductor, type VoicePersisted } from '@/platform/voice/voiceConductor';
 import { useApp } from '@/state/stores/appStore';
 import { syncTrace } from '@/platform/syncTrace';
-import type { SessionView } from '@/state/stores/sessionStore';
+import { restAfterStep, type SessionView, type Step } from '@/state/stores/sessionStore';
 
 /**
  * Why the voice is silent right now — null when it is on. `off`: her switch; `no_engine`: the
@@ -35,6 +39,10 @@ const CONFIRM_MS = 1500;
 const POLL_MS = 3000;
 /** How long the voice waits for the pocket ear before it speaks without it (a first model download is longer). */
 const EAR_OPEN_WAIT_MS = 3000;
+/** Where the voice keeps what must survive a killed app (see `VoicePersisted`). */
+const VOICE_STATE_KEY = 'hush.voice.state';
+/** The most the last lines of a workout may take to be said before the voice lets go regardless. */
+const DRAIN_MS = 20_000;
 
 export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilence } {
   const app = useApp();
@@ -51,13 +59,32 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
   const firstEverRef = useRef<boolean | null>(null);
   /** Resolves once the history was read — the opening line depends on it (§1). */
   const historyReadRef = useRef<Promise<void> | null>(null);
+  /** Resolves once the voice's state from before a relaunch was read (see below). */
+  const restoredRef = useRef<Promise<void> | null>(null);
   const conductorRef = useRef<VoiceConductor | null>(null);
   // `voiceSpec`, not the dead phase-B `voiceCoach` — see `Profile.voiceSpec` (2026-09-09).
   const switchOn = app.profile?.voiceSpec !== false;
   const units = app.profile?.units ?? 'kg';
-  const mic: EarSource = app.profile?.voiceMic ?? 'headset';
+  /*
+   * ⛔ THE PHONE'S MICROPHONE BY DEFAULT (2026-09-27, the input audit). The earbuds' microphone can
+   * only be opened on glass — iOS refuses to START a recording in the background — so with the
+   * phone in her pocket, the default ear could never hear a single answer; and every window it
+   * tried moved her music to call quality. The phone's own microphone is opened on glass once and
+   * kept (`openPocketEar`), answers from the pocket, and leaves her music whole. Where it cannot
+   * open (before iOS 26, no Hebrew model), the screen-on ear is what listens, exactly as before.
+   */
+  const mic: EarSource = app.profile?.voiceMic ?? 'phone';
   const micRef = useRef(mic);
   micRef.current = mic;
+  /*
+   * ════ THE NATURAL VOICE AND THE SECOND EAR (2026-09-27) ════
+   * Her choices from the profile, applied before anything is said: which voice the coach speaks in
+   * (`neuralVoice` — Carmit says any line not yet on the phone), and whether a number and a missed
+   * answer are heard again by the cloud recognizer (`cloudEar`). Both degrade to exactly the voice
+   * that shipped before them: offline, signed out, or out of budget, nothing changes but the sound.
+   */
+  neuralVoice.setVoice(app.profile?.coachVoiceId);
+  cloudEar.setEnabled(app.profile?.voiceCloudEar !== false);
 
   /*
    * ════ THE POCKET EAR IS OPENED ON GLASS (2026-09-15) ════
@@ -95,6 +122,7 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
           syncTrace.add('v');
         },
         interrupt: () => coachVoice.interrupt(),
+        warm: (lines, locale) => coachVoice.warm(lines, locale),
       },
       ear: voiceCapture,
       audio: audioSession,
@@ -105,7 +133,21 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       locale: () => ({ locale: i18next.language ?? 'en', units: viewRef.current ? units : units }),
       firstSessionEver: () => firstEverRef.current === true,
       track: (event, props) => void track(event, props),
+      earIsFree: () => audioSession.earRunning(),
+      persist: (p) => void AsyncStorage.setItem(VOICE_STATE_KEY, JSON.stringify(p)).catch(() => {}),
     });
+  }
+  /*
+   * What the voice said before the app was killed (2026-09-27, the conductor audit): read once, before
+   * the gate can enable it, so a relaunch mid-workout says "חזרתי" — not the opening, again, at lift four.
+   */
+  if (!restoredRef.current) {
+    restoredRef.current = AsyncStorage.getItem(VOICE_STATE_KEY)
+      .then((raw) => {
+        const p = raw ? (JSON.parse(raw) as VoicePersisted) : null;
+        if (p && p.startedAtMs === viewRef.current?.startedAtMs) conductorRef.current?.restore(p);
+      })
+      .catch(() => {});
   }
 
   // "Her first workout" is read once per mount, before the opening line can need it.
@@ -159,17 +201,26 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     let disposed = false;
     let confirm: ReturnType<typeof setTimeout> | null = null;
     let opening = false;
+    /* ⛔ A REFUSED MICROPHONE SILENCES THE EAR, NOT THE COACH (2026-09-27, the input audit). The
+       lines — the load, how to build it, the rest, the ten seconds — help without an answer, and the
+       lock screen and the wrist carry the answers; the coach says once that it cannot hear. */
+    const openWithoutEar = () => {
+      if (!audioSession.headsetConnected() || c.isOn()) return;
+      c.enable();
+      c.earRefused();
+    };
     const open = () => {
-      if (c.isOn() || deniedRef.current || opening) return;
+      if (c.isOn() || opening) return;
+      if (deniedRef.current) return openWithoutEar();
       opening = true;
-      void Promise.all([voiceCapture.ensurePermission(), historyReadRef.current]).then(([ok]) => {
+      void Promise.all([voiceCapture.ensurePermission(), historyReadRef.current, restoredRef.current]).then(([ok]) => {
         opening = false;
         if (disposed || c.isOn()) return;
         if (!ok) {
           deniedRef.current = true;
           setSilentBecause('permission');
           void track('voice_permission_denied');
-          return;
+          return openWithoutEar();
         }
         if (!audioSession.headsetConnected()) return apply(false);
         // The pocket ear first (bounded), so the first question can already be answered from a
@@ -182,7 +233,20 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       });
     };
     const close = () => {
-      if (c.isOn()) c.disable();
+      if (c.isOn()) {
+        if (c.ended()) {
+          /* ⛔ THE WORKOUT IS OVER AND THE STAGE IS LEAVING (2026-09-27): the last set's echo and
+             "סיימת את האימון" are said to the end first — the unmount used to cut both. The process
+             is held awake for them, since the workout has just let go of its own keep-alive. */
+          void audioSession.holdKeepAlive('voice');
+          void Promise.race([c.finish(), new Promise((r) => setTimeout(r, DRAIN_MS))]).then(() => {
+            c.disable();
+            void audioSession.releaseKeepAlive('voice');
+          });
+        } else {
+          c.disable();
+        }
+      }
       void audioSession.earClose();
     };
     const apply = (connected: boolean) => {
@@ -190,8 +254,13 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       if (connected) {
         if (confirm) clearTimeout(confirm);
         confirm = null;
+        // Back before the departure was confirmed: the voice picks up where the pull cut it.
+        if (c.isOn()) c.onInterruption(false);
         open();
       } else if (!confirm) {
+        // ⛔ Not one more word out of the phone's speaker while the departure is confirmed (2026-09-27,
+        // the output audit: a line went on through the speaker for a second and a half).
+        if (c.isOn()) c.onInterruption(true);
         confirm = setTimeout(() => {
           confirm = null;
           if (disposed) return;
@@ -207,19 +276,26 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     // The event is a knock, not an answer: the route is read again, on a session that is ours.
     const off = audioSession.onRouteChange(() => apply(audioSession.headsetConnected()));
     const poll = setInterval(() => {
-      if (!c.isOn() && !deniedRef.current && audioSession.headsetConnected()) apply(true);
+      if (!c.isOn() && audioSession.headsetConnected()) apply(true);
     }, POLL_MS);
     // Back on glass with the voice on and no pocket ear (it could not open, or a call stopped it in
-    // the pocket): this is the one moment iOS lets the microphone start again.
+    // the pocket): this is the one moment iOS lets the microphone start again — and the screen-on
+    // ear can hear again, so the conductor may open windows again.
     const appState = AppState.addEventListener('change', (s) => {
-      if (s === 'active' && c.isOn() && !audioSession.earRunning()) void openPocketEar();
+      if (s !== 'active' || !c.isOn()) return;
+      if (!deniedRef.current) c.earMayListen();
+      if (!audioSession.earRunning()) void openPocketEar();
     });
     const earState = audioSession.onEarState((running, error) => {
       if (!running) void track('voice_ear', { state: 'stopped', error });
+      else if (!deniedRef.current) c.earMayListen();
     });
+    // A call, Siri, an alarm: nothing is said over it; a question it cut off is asked after it (§3.9).
+    const offCall = audioSession.onInterruption((began) => c.onInterruption(began));
     return () => {
       disposed = true;
       off();
+      offCall();
       clearInterval(poll);
       appState.remove();
       earState();
@@ -238,6 +314,32 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     if (mic !== 'phone') void audioSession.earClose();
     else if (conductorRef.current?.isOn()) void openPocketEar();
   }, [mic]);
+
+  /*
+   * The lines ahead, fetched in the natural voice while nothing waits on them (2026-09-27): once as
+   * the workout starts, and again at every rest — from the step she is on to the end, so a load the
+   * verdict moved, or a lift the board brought forward, is ready before the chime.
+   */
+  const prefetchedSessionRef = useRef<string | null>(null);
+  const prefetchedRestRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!session.active || !neuralVoice.enabled()) return;
+    const resting = session.displayPhase === 'REST_INTER' || session.displayPhase === 'REST_TRANSITION';
+    const sessionKey = String(session.startedAtMs ?? 0);
+    const restKey = resting ? `${sessionKey}:${session.globalProgress?.index ?? 0}` : null;
+    const newSession = prefetchedSessionRef.current !== sessionKey;
+    if (!newSession && (!restKey || restKey === prefetchedRestRef.current)) return;
+    if (newSession) {
+      prefetchedSessionRef.current = sessionKey;
+      neuralVoice.reset(); // a network that failed last workout is tried again
+    }
+    if (restKey) prefetchedRestRef.current = restKey;
+    const l = { locale: i18next.language ?? 'en', units };
+    const from = (session.globalProgress?.index ?? 0) + (resting ? 1 : 0);
+    // The rest each step will be given — the store's own rule, so the prefetched rest line is the said one.
+    const ahead = voiceLinesAhead(session.livePlan as never[], from, (st) => restAfterStep(st as Step), l);
+    neuralVoice.prefetch([...ahead, ...fixedLines()], l.locale);
+  }, [session.active, session.startedAtMs, session.displayPhase, session.globalProgress?.index]);
 
   // Every change of the view lands on the conductor; "+15" moves the ten-seconds line.
   const lastExtraRef = useRef(session.restExtraSeconds);

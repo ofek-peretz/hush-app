@@ -34,13 +34,15 @@ import { Icon } from '@/components/Icon';
 import { Arrive, SegmentedControl, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi } from '@/i18n/bidi';
+import { dayTitle } from '@/i18n/dayTitle';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import type { CardioActivity, HistoryItem, Session } from '@/data/local/models';
-import { sessionDayName } from '@/domain/schedule';
+import { sessionDayName, unitLabel } from '@/domain/schedule';
 import { durationMinutes } from '@/domain/duration';
 import { cardioPerformed } from '@/domain/cardio';
 import {
+  massFigure,
   raisesBySession,
   sessionDurationSec,
   sessionHasLoggedWork,
@@ -110,7 +112,7 @@ function monthKeyOf(iso: string): string {
   return new Date(iso).toLocaleDateString(currentLocale(), { month: 'long', year: 'numeric' });
 }
 
-export function History({ navigation }: Props) {
+export function History({ navigation, onLifts }: Props & { onLifts?: () => void }) {
   const app = useApp();
   const { t } = useCopy();
   const [sessions, setSessions] = useState<Session[] | null>(null); // null = loading
@@ -210,8 +212,9 @@ export function History({ navigation }: Props) {
       onExportLog={recordFile.available() && (sessions?.length ?? 0) > 0 ? () => void exportLog() : undefined}
       sessions={sessions}
       cardio={cardio}
-      dayName={(s) => sessionDayName(s)}
-      onLifts={() => navigation.goBack()}
+      units={app.profile?.units ?? 'kg'}
+      dayName={(s) => dayTitle(sessionDayName(s))}
+      onLifts={onLifts ?? (() => navigation.goBack())}
       onSession={(id) => navigation.navigate('WorkoutDetail', { sessionId: id })}
       onCardio={(activity) => navigation.navigate('CardioDetail', { activity })}
       onFreeLog={() => navigation.navigate('FreeLog')}
@@ -237,9 +240,12 @@ export function HistoryView({
   onFreeLog,
   onImportLog,
   onExportLog,
+  units = 'kg',
 }: {
   sessions: Session[] | null;
   cardio: CardioActivity[];
+  /** Her units — the total above the ledger is printed in them below a tonne (`massFigure`). */
+  units?: 'kg' | 'lb';
   dayName: (s: Session) => string;
   onLifts: () => void;
   onSession: (sessionId: string) => void;
@@ -280,8 +286,11 @@ export function HistoryView({
   // Header summary — the STRENGTH work so far (cardio is never counted as "t moved").
   // The count is the number of ROWS below it, which is what a header over a list has to say.
   const totalSessions = strength.length;
-  const totalTonnes = totalTonnageKg(strength) / 1000;
-  const tonnesLabel = totalTonnes >= 10 ? String(Math.round(totalTonnes)) : String(+totalTonnes.toFixed(1));
+  // Tonnes from one up, her unit below — `massFigure` (design audit 2026-09-29).
+  const moved = massFigure(totalTonnageKg(strength), units, (x) =>
+    x >= 10 ? String(Math.round(x)) : String(+x.toFixed(1)),
+  );
+  const tonnesLabel = moved.value;
 
   const isEmpty = sessions != null && items.length === 0;
 
@@ -362,7 +371,7 @@ export function HistoryView({
                 count: totalSessions,
                 sessions: totalSessions,
                 tonnes: tonnesLabel,
-                unit: t('weekly.tonneUnit'),
+                unit: moved.tonnes ? t('weekly.tonneUnit') : unitLabel(units),
               })}
             </Text>
           ) : null}
@@ -421,8 +430,8 @@ export function HistoryView({
                   // "0 min" would be a measurement the record never took (2026-08-24).
                   const min = durationMinutes(sessionDurationSec(item));
                   return min > 0
-                    ? t('history.rowStrengthMeta', { lifts: sessionLiftCount(item), min })
-                    : t('history.rowStrengthMetaNoTime', { lifts: sessionLiftCount(item) });
+                    ? t('history.rowStrengthMeta', { count: sessionLiftCount(item), min })
+                    : t('history.rowStrengthMetaNoTime', { count: sessionLiftCount(item) });
                 })();
             const raiseN = isCardio ? 0 : raises.get(item.id) ?? 0;
 
