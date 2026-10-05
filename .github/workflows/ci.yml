@@ -70,8 +70,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      # ⛔ THE COACH WORKER IS NOT IMPORT-FREE ANY MORE (2026-10-05). Since the model bake-off it imports
+      # `probeProviders.ts`, which imports two SDKs — and this job never installed them. Every run from
+      # the commit that shipped it failed here with ERR_MODULE_NOT_FOUND before one coach test ran, on
+      # a branch whose own machine (with `server/node_modules` on disk) was green. Two packages, a lockfile.
+      - name: Install the workers' dependencies
+        run: npm ci
+        working-directory: server
+      # All five files, not two: the voice's doors, Google sign-in and the model call are the Worker too.
       - name: Worker tests (node:test, native TS)
-        run: node --test server/tests/identity.test.ts server/tests/coach.test.ts
+        run: node --test server/tests/identity.test.ts server/tests/coach.test.ts server/tests/identityGoogle.test.ts server/tests/voice.test.ts server/tests/openai.test.ts
 
   swift:
     # ════ THE NATIVE TARGETS, TYPE-CHECKED ON A MAC (2026-09-16, before build 74) ════
@@ -101,16 +109,30 @@ jobs:
         # The file names iOS 26 symbols (SpeechAnalyzer) behind availability checks, so the SDK must
         # have them: the newest Xcode 26 on the runner is chosen, and a runner without one fails
         # with that sentence — not with forty "cannot find type" errors that read like a broken file.
+        #
+        # ⚠️ macOS runners run this in bash 3.2: an apostrophe inside a "${VAR:-word}" is a syntax error
+        # there (exit 2 before one command runs — which is how this step's first run failed, with
+        # nothing in it having been checked). And every compiler error is repeated as an annotation,
+        # so a red run can be read from the run's own page.
         run: |
-          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort | tail -1 || true)
           if [ -n "$XCODE" ]; then export DEVELOPER_DIR="$XCODE/Contents/Developer"; fi
+          echo "Xcode: ${XCODE:-runner default}"
           SDK=$(xcrun --sdk iphoneos --show-sdk-version)
-          echo "iOS SDK $SDK (${DEVELOPER_DIR:-the runner's default Xcode})"
+          echo "iOS SDK: $SDK"
           case "$SDK" in
             2[6-9]*|[3-9][0-9]*) ;;
-            *) echo "::error::this runner has no iOS 26 SDK, so HushEar.swift cannot be type-checked here"; exit 1 ;;
+            *) echo "::error::this runner has no iOS 26 SDK (found $SDK), so HushEar.swift cannot be type-checked here"; exit 1 ;;
           esac
-          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 code/mobile/modules/hush-voice-audio/ios/HushEar.swift
+          FILE=code/mobile/modules/hush-voice-audio/ios/HushEar.swift
+          set +e
+          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 "$FILE" > typecheck.log 2>&1
+          status=$?
+          set -e
+          cat typecheck.log
+          grep -E ":[0-9]+:[0-9]+: error: " typecheck.log | head -10 | sed -E 's/^([^:]+):([0-9]+):([0-9]+): error: (.*)$/::error file=\1,line=\2,col=\3::\4/' || true
+          if [ "$status" -ne 0 ]; then echo "::error::swiftc exited $status type-checking $FILE"; fi
+          exit $status
       # ════ THE WRIST READS WHAT THE PHONE SAID (2026-09-17) ════
       # The sync simulator (`__tests__/sync/theSurfacesNeverDisagree`) writes the exact envelopes the
       # watch is sent beside the facts the phone's own view states. Decode each with the watch's REAL
