@@ -126,7 +126,7 @@ jobs:
           esac
           FILE=code/mobile/modules/hush-voice-audio/ios/HushEar.swift
           set +e
-          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 "$FILE" > typecheck.log 2>&1
+          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 code/mobile/modules/hush-voice-audio/ios/HushEar.swift > typecheck.log 2>&1
           status=$?
           set -e
           cat typecheck.log
