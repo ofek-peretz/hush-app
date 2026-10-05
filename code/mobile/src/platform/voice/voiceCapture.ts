@@ -19,7 +19,7 @@
 import { AppState, Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { audioSession } from '@/platform/voice/audioSession';
-import { cloudEar, LISTEN_EVERY_MS } from '@/platform/voice/cloudEar';
+import { cloudEar, LISTEN_EVERY_MS, VOICED_DB } from '@/platform/voice/cloudEar';
 import type { HearExpect } from '@/platform/voice/voiceCloud';
 
 /**
@@ -44,9 +44,11 @@ interface SpeechModule {
 /**
  * Why a window closed. `locked` (2026-09-27): the phone is not on glass and no pocket ear runs —
  * iOS will not START a recording from the background, so the window never tried, and the route
- * was never moved (her music stays whole).
+ * was never moved (her music stays whole). `deaf` (2026-10-05): the microphone ran, and nothing could
+ * have heard it — the strong ear is out of reach (`cloudEar.deaf`) and this phone has no recognizer
+ * of its own on the window. Not her silence: the coach says so, once.
  */
-export type WindowEnd = 'heard' | 'silence' | 'timeout' | 'closed' | 'error' | 'denied' | 'unavailable' | 'locked';
+export type WindowEnd = 'heard' | 'silence' | 'timeout' | 'closed' | 'error' | 'denied' | 'unavailable' | 'locked' | 'deaf';
 
 const nativeModule: SpeechModule | null =
   Platform.OS === 'ios' || Platform.OS === 'android'
@@ -82,6 +84,12 @@ export interface WindowOptions {
   /** What the open question expects — for the second ear (`cloudEar`). */
   expect?: HearExpect;
   /**
+   * Nobody is waiting on a clock for her word (a set under way; a pause past its first minute): the
+   * window is never listened to on a timer, and only a voice clearly above the room is sent anywhere.
+   * A `set` window is patient by its nature.
+   */
+  patient?: boolean;
+  /**
    * Every FINAL sentence the window hears. Return `true` to keep the window open (the sentence was
    * not an answer — noise during loading), `false` to close it as `heard`.
    */
@@ -108,7 +116,31 @@ export interface OpenWindow {
  */
 const FLUSH_MS = 1_200;
 
+/*
+ * Finding where she stopped speaking, from the microphone's level (see `openPocketWindow`).
+ * The level is read every LEVEL_POLL_MS over the last LEVEL_SECONDS; a voice is VOICED_DB above the
+ * quietest the room has been in this window; QUIET_POLLS quiet reads in a row (0.6 s — longer than
+ * the breath inside "ארבעים וחמש, עשר", shorter than a wait she would notice) end the stretch.
+ */
+const LEVEL_POLL_MS = 200;
+const LEVEL_SECONDS = 0.35;
+const QUIET_POLLS = 3;
+/** The stretch sent is the utterance and a little before it — a first syllable is never cut. */
+const STRETCH_MARGIN_S = 1;
+/** A sentence and a stretch this close together are the same utterance. */
+const SAME_UTTERANCE_MS = 2_500;
+/** A room that never goes quiet (a plate, a shout, a chorus) is not sent more often than this. */
+const MIN_BETWEEN_STRETCHES_MS = 1_200;
+
 let windowToken = 0;
+
+/**
+ * What the microphone's level read in the last pocket window: the quietest the room was, the loudest
+ * it got, and how many times the level itself found her stopping. Printed by the profile's listening
+ * test — one walk through a real gym says how far over the room a lifter's voice actually is, which
+ * no desk can (`cloudEar.worthHearing` has the measurement that could be made from one).
+ */
+let lastLevels: { roomDb: number; loudestDb: number; found: number } | null = null;
 
 /*
  * The pocket ear's stops and starts, one after another (2026-09-27, the input audit): a window's
@@ -136,6 +168,7 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
   /** A follow-up is being said on this window (`hold`) — it goes on after its line (`extend`). */
   let held = false;
   const expect: HearExpect = opts.expect ?? 'any';
+  const patient = opts.patient ?? expect === 'set';
   /** When the phone last handed over a sentence of this window — a stretch it heard is not heard twice. */
   let lastHeardAt = Date.now();
   /*
@@ -154,11 +187,26 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
         busy -= 1;
       });
   };
+  /** The strong ear is hearing an utterance it found by itself (see below): the phone's sentence for it waits. */
+  let strongHasIt = false;
+  /** The phone's sentence for the utterance the strong ear has — hers if the strong ear cannot answer. */
+  let phoneSaid: string | null = null;
+  /** Until when a sentence from the phone is the SAME utterance the strong ear has just answered. */
+  let answeredUntil = 0;
+  /** When the phone last handed over a sentence of its own (0: not yet in this window). */
+  let phoneSaidAt = 0;
   const off = audioSession.onEarResult((text, from) => {
     if (ended || from !== token) return; // a late sentence of an earlier window is not this answer
     const t = text.trim();
     if (!t) return;
+    // The strong ear heard her stop before the phone finished its sentence: one utterance, one answer.
+    if (strongHasIt) {
+      phoneSaid = t;
+      return;
+    }
+    if (Date.now() < answeredUntil) return;
     lastHeardAt = Date.now();
+    phoneSaidAt = lastHeardAt;
     later(async () => {
       if (ended) return;
       // The strong ear hears the same audio; its words decide — the phone's go on if it cannot answer.
@@ -168,20 +216,122 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
     });
   });
   /*
+   * ════ ⛔ THE STRONG EAR HEARS HER THE MOMENT SHE STOPS — IT DOES NOT WAIT FOR THE PHONE (2026-10-05) ════
+   *
+   *   > founder: *"רגע אבל אני לא מבין, מי שומע את התגובה שלי — הבינה המלאכותית או מערכת כמו סירי? כי אני
+   *   > זוכר שהוספנו את התמלול של openai."*
+   *
+   * He had: on 2026-09-28 he ruled that the strongest recognizer is the input of the workout. And it was
+   * built BEHIND the phone's own: it heard an answer only after Apple's recognizer had produced a
+   * sentence for it (`check`, above), and when Apple's produced none — which is what a Hebrew word
+   * said into a pocket in a gym mostly gets — only when the window ran out, or every four seconds of
+   * a long one. So the ear that decided whether she was heard at all was the weak one, and his own
+   * report of that workout was *"אני מדבר ואין מענה בכלל"*.
+   *
+   * Now the microphone's own level says when she has spoken and stopped — a voice above the room,
+   * then a beat of quiet — and that stretch goes to the strong ear at once. The phone's recognizer
+   * still listens and is still the answer wherever the strong ear cannot give one (no signal, no
+   * budget, a slow reply); what changed is who is waited on.
+   *
+   *   · ONE UTTERANCE, ONE ANSWER. While the strong ear has a stretch, the phone's sentence for it is
+   *     held, and used only if the strong ear understood nothing. A sentence the phone hands over
+   *     FIRST is heard the old way (`check` asks the strong ear about it) and the stretch is not sent
+   *     twice.
+   *   · A NOISE IS NOT AN ANSWER. A plate dropped is a stretch too; what comes back from it is words
+   *     the closed grammar does not know, and they change nothing.
+   *   · NOTHING NEW ON THE NATIVE SIDE: the level is read from the window's own clip, a third of a
+   *     second at a time (`earClip`), so this needed no build of its own to exist.
+   */
+  /** Apple's own recognizer is on this window too (known once the window is open) — then a lost network is not a lost ear. */
+  let own = false;
+  /** Nothing can hear this window: the strong ear is out of reach and the phone has no recognizer of its own on it. */
+  const hopeless = () => cloudEar.deaf() && !own;
+  let roomDb = Infinity;
+  let speakingSince: number | null = null;
+  let quietPolls = 0;
+  let polling = false;
+  let lastSentAt = 0;
+  const levels = { roomDb: Infinity, loudestDb: -Infinity, found: 0 };
+  lastLevels = levels;
+  const resetEndpoint = () => {
+    speakingSince = null;
+    quietPolls = 0;
+  };
+  const hearStretch = (seconds: number) => {
+    // The phone handed this utterance over a moment ago — its own `check` has asked the strong ear.
+    // (⚠️ Not `lastHeardAt`: that begins at the window's opening, and most answers come in its first seconds.)
+    if (Date.now() - phoneSaidAt < SAME_UTTERANCE_MS || Date.now() - lastSentAt < MIN_BETWEEN_STRETCHES_MS) return;
+    lastSentAt = Date.now();
+    lastHeardAt = lastSentAt; // …and the long window's own four-second listen does not send it again
+    levels.found += 1;
+    strongHasIt = true;
+    later(async () => {
+      try {
+        if (ended) return;
+        const clip = await audioSession.earClip(token, Math.min(12, seconds + STRETCH_MARGIN_S));
+        const strong = await cloudEar.rescue(clip, expect, opts.locale, 'spoken', patient);
+        if (ended) return;
+        const said = strong ?? phoneSaid;
+        if (!said) return void (hopeless() && finish('deaf'));
+        lastHeardAt = Date.now();
+        if (strong) answeredUntil = Date.now() + SAME_UTTERANCE_MS;
+        if (!opts.onSentence(said, null)) finish('heard');
+      } finally {
+        strongHasIt = false;
+        phoneSaid = null;
+      }
+    });
+  };
+  const endpoint = cloudEar.available()
+    ? setInterval(() => {
+        if (ended || polling) return;
+        // A follow-up line is being said on this window, or a sentence is being decided: not her turn.
+        if (held || busy > 0) return resetEndpoint();
+        polling = true;
+        void audioSession
+          .earClip(token, LEVEL_SECONDS)
+          .then((c) => {
+            if (ended || !c) return;
+            roomDb = Math.min(roomDb, c.floorDb);
+            levels.roomDb = roomDb;
+            levels.loudestDb = Math.max(levels.loudestDb, c.peakDb);
+            const voice = c.peakDb - roomDb >= VOICED_DB;
+            if (voice) {
+              quietPolls = 0;
+              if (speakingSince == null) speakingSince = Date.now() - LEVEL_SECONDS * 1000;
+            } else if (speakingSince != null) {
+              quietPolls += 1;
+              if (quietPolls >= QUIET_POLLS) {
+                const seconds = (Date.now() - speakingSince) / 1000;
+                resetEndpoint();
+                hearStretch(seconds);
+              }
+            }
+          })
+          .finally(() => {
+            polling = false;
+          });
+      }, LEVEL_POLL_MS)
+    : null;
+  /*
    * ⛔ A LONG WINDOW IS LISTENED TO WHILE IT IS OPEN, NOT ONLY AT ITS END (2026-09-28). The loading
    * dialogue waits up to ninety seconds for "מוכן": a word the phone did not catch used to wait for
    * the window's end — or for "מוכן?" at forty-five seconds. Every few seconds in which the phone
    * handed over nothing but the microphone heard a voice, the strong ear hears that stretch.
    */
   const longWindow = opts.ms > 12_000;
-  const during = longWindow
+  // Not in a patient window (a set under way, a long pause): that one is listened to by the level
+  // alone (above) — every four seconds of a lifter's breathing, or of his talk with a friend while
+  // the workout is paused, sent to the strong ear is forty questions that ask nothing.
+  const during = longWindow && !patient
     ? setInterval(() => {
         if (ended || held || busy > 0 || Date.now() - lastHeardAt < LISTEN_EVERY_MS - 500) return;
         later(async () => {
           if (ended) return;
           const clip = await audioSession.earClip(token, LISTEN_EVERY_MS / 1000 + 0.5);
-          const heard = await cloudEar.rescue(clip, expect, opts.locale, 'during');
-          if (ended || !heard) return;
+          const heard = await cloudEar.rescue(clip, expect, opts.locale, 'during', patient);
+          if (ended) return;
+          if (!heard) return void (hopeless() && finish('deaf'));
           lastHeardAt = Date.now();
           if (!opts.onSentence(heard, null)) finish('heard');
         });
@@ -193,6 +343,7 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
     if (deadline) clearTimeout(deadline);
     deadline = null;
     if (during) clearInterval(during);
+    if (endpoint) clearInterval(endpoint);
     off();
     void inPocketOrder(() => audioSession.earStopListening());
     opts.onEnd(why);
@@ -207,7 +358,7 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
         later(async () => {
           if (ended) return;
           const clip = await audioSession.earClip(token, longWindow ? LISTEN_EVERY_MS / 1000 + 0.5 : 12);
-          const rescued = await cloudEar.rescue(clip, expect, opts.locale, 'end');
+          const rescued = await cloudEar.rescue(clip, expect, opts.locale, 'end', patient);
           if (ended) return;
           if (rescued) {
             if (!opts.onSentence(rescued, null)) return finish('heard');
@@ -219,7 +370,7 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
               return;
             }
           }
-          finish('timeout');
+          finish(hopeless() ? 'deaf' : 'timeout');
         }),
       );
     }, Math.max(500, ms));
@@ -227,6 +378,7 @@ function openPocketWindow(opts: WindowOptions): OpenWindow {
   arm(opts.ms);
   void inPocketOrder(() => audioSession.earListen(recognizerLang(opts.locale), token)).then((error) => {
     if (error) finish('error');
+    else own = audioSession.earRecognizing();
   });
   return {
     close: () => finish('closed'),
@@ -246,6 +398,11 @@ export const voiceCapture = {
   /** Is there an ear at all in this build? False in Expo Go, on the web and under jest. */
   available(): boolean {
     return nativeModule != null;
+  },
+
+  /** The last pocket window's levels (see `lastLevels`) — null before one was read. */
+  lastLevels(): { roomDb: number; loudestDb: number; found: number } | null {
+    return lastLevels && Number.isFinite(lastLevels.roomDb) && Number.isFinite(lastLevels.loudestDb) ? { ...lastLevels } : null;
   },
 
   /** Ask for the microphone and speech permissions once, up front — at session start, not mid-set. */

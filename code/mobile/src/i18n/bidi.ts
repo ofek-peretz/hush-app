@@ -88,9 +88,31 @@ export const textEnd: TextStyle['textAlign'] = 'right';
  */
 export let rtl = I18nManager.isRTL;
 
-/** Re-read the direction after `I18nManager.forceRTL` — called by `reloadApp`, nothing else. */
+/*
+ * ⛔ RE-READING `I18nManager.isRTL` RE-READ NOTHING (found 2026-10-01 on the founder's build 75).
+ *
+ * In RN 0.81 `I18nManager.isRTL` is a CONSTANT — `NativeI18nManager.getConstants()` read once when
+ * the module loads — and `forceRTL` writes the NEXT launch's direction without touching it. So the
+ * re-latch below used to copy the launch value over itself: after `initI18n` decided Hebrew on a
+ * fresh install, `rtl` stayed false, Root's `direction` stayed 'ltr', and the whole intake ran on
+ * the left edge. The LANGUAGE decides the direction; i18n tells this module what it decided, and
+ * the latch reads that.
+ */
+let decided: boolean | null = null;
+
+/** The direction the app's language decided — set by `initI18n` and `setLocale`, nothing else. */
+export function decideDirection(next: boolean): void {
+  decided = next;
+}
+
+/** Re-read the decided direction — called by `initI18n` and `reloadApp`. */
 export function relatchDirection(): void {
-  rtl = I18nManager.isRTL;
+  rtl = decided ?? I18nManager.isRTL;
+}
+
+/** True when this process was LAUNCHED facing the other way from the direction the app decided. */
+export function launchedFacingWrongWay(): boolean {
+  return decided != null && decided !== I18nManager.isRTL;
 }
 
 /**

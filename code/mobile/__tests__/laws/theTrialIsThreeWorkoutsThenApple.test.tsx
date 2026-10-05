@@ -131,6 +131,11 @@ describe("3 · it offers Apple's free trial as a timeline, and keeps the reminde
 
   it('the paywall draws today · day 12 · day 14, and its act starts the trial', async () => {
     const { Paywall } = require('@/screens/subscription/Paywall');
+    // She trained her three workouts HERE — the count and the history agree, as they do for anyone
+    // who reached this screen by training (the other case is the law below).
+    const { db } = require('@/data/local/db');
+    await db.clearAll();
+    await db.appendCompletedSession({ id: 's1', programDayId: 'coach_0', startedAt: new Date(Date.now() - 86_400_000).toISOString(), state: 'SAVED', earlyFinish: false, sets: [] });
     let r;
     await act(async () => {
       r = renderer.create(
@@ -149,6 +154,75 @@ describe("3 · it offers Apple's free trial as a timeline, and keeps the reminde
     // timeline directly above the act since 2026-09-29 (design audit) — said once, where it is seen.
     expect(said).toContain(tg('paywall.legalTrial', { period: '14 ימים', price: '₪249.90', cadence: tg('paywall.perYear') }));
     act(() => r.unmount());
+  });
+
+  /*
+   * ⛔ THE FOUNDER'S FIRST START ON A PHONE THAT HAD TRAINED BEFORE (2026-10-05). The trial's count
+   * outlives a reinstall (`domain/trialLedger` — his own 2026-08-23 ruling against the free loop), so
+   * a fresh intake on such a phone has the free workouts spent and nothing in its history. The Ready
+   * screen promised him "3 first workouts FREE", and the paywall that met his first Start said "3
+   * workouts behind you… now I know you". Neither was true of that install.
+   */
+  it('⛔ a phone whose free workouts were spent before this install is told THAT — never "now I know you"', async () => {
+    const { Paywall } = require('@/screens/subscription/Paywall');
+    const { db } = require('@/data/local/db');
+    await db.clearAll(); // the count says three (the ledger), the history says nothing
+    let r;
+    await act(async () => {
+      r = renderer.create(
+        <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 393, height: 852 }, insets: { top: 59, left: 0, right: 0, bottom: 34 } }}>
+          <Paywall navigation={{ goBack: () => {} }} route={{ params: { source: 'gate' } }} />
+        </SafeAreaProvider>,
+      );
+    });
+    const said = r.root.findAllByType(Text).map((n) => [n.props.children].flat(Infinity).filter((x) => typeof x === 'string').join('')).join(' | ');
+    expect(said).toContain(tg('paywall.trialUsed').toUpperCase());
+    expect(said).toContain(tg('paywall.title'));
+    expect(said).not.toContain(tg('paywall.trialDone', { count: 3 }).toUpperCase());
+    expect(said).not.toContain(tg('paywall.titleSpent', { count: 3 }));
+    act(() => r.unmount());
+  });
+
+  it('⛔ the Ready screen promises only the free workouts this device still has', () => {
+    const src = read('src/screens/onboarding/ProgramCreated.tsx');
+    expect(src).toMatch(/const freeLeft = freeSessionsRemaining\(app\.modeState\.completedSessions\);/);
+    expect(src).toMatch(/\{member \? null : freeLeft > 0 \? \(/); // a member is promised nothing here
+    expect(src).toMatch(/t\('ob\.readyWorkouts', \{ count: freeLeft \}\)/);
+    expect(src).toMatch(/t\('ob\.readySpent'\)/);
+    // The limit itself is never printed there as a promise again.
+    expect(src).not.toMatch(/readyWorkouts', \{ count: FREE_SESSION_LIMIT \}/);
+    const { freeSessionsRemaining } = entitlement;
+    expect(freeSessionsRemaining(0)).toBe(3);
+    expect(freeSessionsRemaining(2)).toBe(1);
+    expect(freeSessionsRemaining(14)).toBe(0);
+  });
+
+  /*
+   * ⛔ THE DECISION THE FOUNDER HANDED OVER (2026-10-05: *"קח אותה בעצמך… את ההחלטה הטובה ביותר מבין כל
+   * האופציות"*). A phone with no free workout left is told on the Ready screen, keeps its programme
+   * either way, and is shown the offer ONCE as it lands — not first on a Start pressed in the gym
+   * (`app/intakeHandoff` lists the options and why this one).
+   */
+  it('⛔ a phone with no free workout left is shown the offer once as the intake ends — never first on Start', () => {
+    const ready = read('src/screens/onboarding/ProgramCreated.tsx');
+    // Owed only when nothing is left AND she is not a member, and before the profile is written.
+    expect(ready).toMatch(/if \(!member && freeLeft === 0\) intakeHandoff\.owePaywall\(\);\s+await app\.completeOnboarding\(/);
+    const home = read('src/screens/home/Home.tsx');
+    expect(home).toMatch(/if \(intakeHandoff\.takePaywall\(\)\) navigation\.navigate\('Paywall', \{ source: 'intake' \}\);/);
+    // The gate on Start is exactly what it was.
+    expect(home).toMatch(/if \(gated\) \{\s+navigation\.navigate\('Paywall', \{ source: 'gate' \}\);/);
+    const { intakeHandoff } = require('@/app/intakeHandoff');
+    expect(intakeHandoff.takePaywall()).toBe(false); // nothing owed by default
+    intakeHandoff.owePaywall();
+    expect(intakeHandoff.takePaywall()).toBe(true);
+    expect(intakeHandoff.takePaywall()).toBe(false); // once
+    // The sentence that announces it says both halves: what is next, and that her programme is hers.
+    const he = JSON.parse(read('src/i18n/locales/he.json')).ob.readySpent;
+    const en = JSON.parse(read('src/i18n/locales/en.json')).ob.readySpent;
+    expect(he).toMatch(/מנוי/);
+    expect(he).toMatch(/התוכנית שלך נשמרת/);
+    expect(en).toMatch(/membership/);
+    expect(en).toMatch(/programme is kept/);
   });
 
   it('the reminder is armed from the trial end, two days before it, and cancelled when there is none', async () => {

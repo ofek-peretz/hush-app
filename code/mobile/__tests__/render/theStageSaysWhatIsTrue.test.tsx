@@ -208,9 +208,12 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     const hook = read('src/platform/voice/useVoiceCoach.ts');
     expect(hook).toContain('useState<VoiceSilence>(null)');
     // A "no earbuds" read is confirmed by a second read before it closes the gate or shows the notice.
-    expect(hook).toMatch(/confirm = setTimeout\(\(\) => \{[\s\S]*?if \(audioSession\.headsetConnected\(\)\) return open\(\);\s*close\(\);\s*setSilentBecause\('no_headset'\);/);
-    // Closing the gate closes the voice AND the pocket microphone.
-    expect(hook).toMatch(/const close = \(\) => \{\s*if \(c\.isOn\(\)\) \{[\s\S]*?c\.disable\(\);[\s\S]*?\}\s*void audioSession\.earClose\(\);/);
+    expect(hook).toMatch(/confirm = setTimeout\(\(\) => \{[\s\S]*?if \(audioSession\.headsetConnected\(\)\) return open\(\);\s*close\(false\);\s*setSilentBecause\('no_headset'\);/);
+    // Closing the gate closes the voice. The pocket microphone goes with it at once when the stage
+    // LEAVES — and after a grace when only the earbuds went, so a dropped earbud does not cost her the
+    // ear for the rest of a pocketed workout (2026-10-05; walked in `theVoiceSurvivesThePhone`).
+    expect(hook).toMatch(/const close = \(leaving: boolean\) => \{\s*if \(c\.isOn\(\)\) \{[\s\S]*?c\.disable\(\);[\s\S]*?\}\s*keepEar\(\);\s*if \(leaving\) return void audioSession\.earClose\(\);\s*earGrace = setTimeout\(/);
+    expect(hook).toMatch(/applyRef\.current = \(\) => \{\};\s*close\(true\);/);
     // …except a workout that ENDED: its last lines are said to the end first (2026-09-27).
     expect(hook).toMatch(/if \(c\.ended\(\)\) \{[\s\S]*?Promise\.race\(\[c\.finish\(\), new Promise\(\(r\) => setTimeout\(r, DRAIN_MS\)\)\]\)/);
   });
@@ -262,7 +265,7 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     // Opened only on glass — iOS refuses a recording started in the background.
     expect(hook).toMatch(/if \(AppState\.currentState !== 'active'\) return[\s\S]*?audioSession\.earOpen\(micRef\.current\)/);
     // Back on glass with the voice on and no ear: the one moment it can start again.
-    expect(hook).toMatch(/if \(s !== 'active' \|\| !c\.isOn\(\)\) return;[\s\S]*?if \(!audioSession\.earRunning\(\)\) void openPocketEar\(\);/);
+    expect(hook).toMatch(/if \(s !== 'active' \|\| !c\.isOn\(\)\) return;[\s\S]*?!audioSession\.earRunning\(\)\) void openPocketEar\(\);/);
     const ear = read('src/platform/voice/voiceCapture.ts');
     // Every window goes to the pocket ear when it runs; a late sentence of an older window is refused.
     expect(ear).toContain('if (audioSession.earRunning()) return openPocketWindow(opts);');
@@ -270,14 +273,54 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     // At the deadline the recognizer is flushed before the window ends.
     // (2026-09-27: its stops and starts in order — see `inPocketOrder`.)
     // (2026-09-28: and only then, nothing understood, the second ear hears the window — `cloudEar`.)
-    expect(ear).toMatch(/void inPocketOrder\(\(\) => audioSession\.earStopListening\(\)\)\.then\(\(\) =>\s*later\(async \(\) => \{[\s\S]*?cloudEar\.rescue\([\s\S]*?finish\('timeout'\);/);
+    // (2026-10-05: and an end nothing could have heard — no network, no recognizer on the phone — is `deaf`, not her silence.)
+    expect(ear).toMatch(/void inPocketOrder\(\(\) => audioSession\.earStopListening\(\)\)\.then\(\(\) =>\s*later\(async \(\) => \{[\s\S]*?cloudEar\.rescue\([\s\S]*?finish\(hopeless\(\) \? 'deaf' : 'timeout'\);/);
     const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
     // While the ear runs, no session change leaves record-and-play, and unduck never deactivates.
-    expect(swift).toMatch(/private func applySession\(duck: Bool\) throws \{\s*if #available\(iOS 26\.0, \*\), let ear = self\.ear, ear\.running \{\s*let session = AVAudioSession\.sharedInstance\(\)\s*try session\.setCategory\(\.playAndRecord/);
+    expect(swift).toMatch(/private func applySession\(duck: Bool\) throws \{\s*if let ear = self\.ear, ear\.running \{\s*let session = AVAudioSession\.sharedInstance\(\)\s*try session\.setCategory\(\.playAndRecord/);
     expect(swift).toMatch(/AsyncFunction\("unduck"\) \{ \(\) in[\s\S]*?if self\.earRunning \{\s*try self\.applySession\(duck: false\)\s*return\s*\}/);
     expect(swift).not.toMatch(/try\??\s*Self\.setPlayback\(duck: true\)/);
     const hushEar = read('modules/hush-voice-audio/ios/HushEar.swift');
     expect(hushEar).toContain('@available(iOS 26.0, *)');
     expect(hushEar).toContain('case .phone: options.insert(.allowBluetoothA2DP)');
+  });
+
+  /*
+   * ⛔ THE MICROPHONE IS FOR EVERY PHONE; APPLE'S RECOGNIZER IS THE EXTRA (founder, 2026-10-05: *"מה
+   * זאת אומרת אין עדיין אוזן של openai? אבל אמרנו ש-openai זה מי שהמשתמש מנהל איתו את השיחה לאורך כל
+   * האימון"*). The recording the strong ear hears through stood behind iOS 26 and behind Apple's Hebrew
+   * model — three gates, in three files, none of them a decision. Each is pinned open here.
+   */
+  it('⛔ the workout\'s microphone opens on every phone — only Apple\'s own recognizer asks for iOS 26', () => {
+    const hushEar = read('modules/hush-voice-audio/ios/HushEar.swift');
+    // 1 · The class is not behind iOS 26 any more; the three functions that touch SpeechAnalyzer are.
+    expect(hushEar).toMatch(/\nfinal class HushEar \{/);
+    expect(hushEar).not.toMatch(/@available\(iOS 26\.0, \*\)\s*final class HushEar/);
+    expect(hushEar).toMatch(/@available\(iOS 26\.0, \*\)\s*static func supportedLocale/);
+    expect(hushEar).toMatch(/@available\(iOS 26\.0, \*\)\s*static func ensureModel/);
+    expect(hushEar).toMatch(/@available\(iOS 26\.0, \*\)\s*private func startRecognizer/);
+    // …and no stored property is typed by an iOS 26 symbol (that is a compile error at the app's floor).
+    expect(hushEar).not.toMatch(/private var \w+: (SpeechAnalyzer|AsyncStream<AnalyzerInput>)/);
+    // 2 · A window keeps its audio BEFORE the recognizer is asked for, and whether or not it starts.
+    const listen = hushEar.match(/func listen\(localeIdentifier: String, token: Int\) async throws \{[\s\S]*?\n  \}/)?.[0] ?? '';
+    expect(listen.indexOf('self.capturing = true')).toBeGreaterThan(0);
+    expect(listen.indexOf('self.capturing = true')).toBeLessThan(listen.indexOf('startRecognizer('));
+    expect(listen).not.toMatch(/locale not supported|no analyzer format/); // it no longer throws for want of a model
+    // The tap keeps the clip for any open window, and feeds the recognizer only inside the iOS 26 check.
+    expect(hushEar).toMatch(/guard keep else \{ return \}\s*appendClip\(buffer\)\s*if #available\(iOS 26\.0, \*\) \{/);
+    // 3 · The module's microphone functions carry no iOS 26 guard; only the two capability questions do.
+    const swift = read('modules/hush-voice-audio/ios/HushVoiceAudioModule.swift');
+    for (const fn of ['earOpen', 'earClose', 'earListen', 'earStopListening', 'earClip']) {
+      const body = swift.match(new RegExp(`AsyncFunction\\("${fn}"\\)[\\s\\S]*?\\n    \\}`))?.[0] ?? '';
+      expect({ fn, found: body.length > 0, gated: /#available\(iOS 26/.test(body) }).toEqual({ fn, found: true, gated: false });
+    }
+    expect(swift).not.toContain('requires iOS 26');
+    expect(swift.match(/guard #available\(iOS 26\.0, \*\) else \{ return false \}/g)?.length).toBe(2); // earAvailable, earPrepare
+    // 4 · The stage opens it for the strong ear without asking Apple's recognizer first.
+    const hook = read('src/platform/voice/useVoiceCoach.ts');
+    expect(hook).toMatch(/const strong = cloudEar\.available\(\);\s*if \(!strong\) \{[\s\S]*?earAvailable\(lang\)[\s\S]*?earPrepare\(lang\)[\s\S]*?\}\s*if \(AppState\.currentState !== 'active'\)/);
+    // 5 · And the file is type-checked on a Mac at the app's own floor before any build.
+    const ci = read('../../.github/workflows/ci.yml');
+    expect(ci).toMatch(/swiftc -typecheck -parse-as-library -target arm64-apple-ios15\.1 code\/mobile\/modules\/hush-voice-audio\/ios\/HushEar\.swift/);
   });
 });

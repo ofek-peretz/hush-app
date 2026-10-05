@@ -24,12 +24,17 @@ import { homePlanRows, settledPlanRows } from '@/screens/home/homePlan';
 import { TrainTogetherSheet } from '@/components/TrainTogetherSheet';
 import { usePair } from '@/state/stores/pairStore';
 import { useCopy } from '@/i18n/useCopy';
+import { currentLocale } from '@/i18n';
 import { estimateSessionMinutes } from '@/data/api/fixtureModel';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 import { circleTabShown, refreshCircleIfStale, useCircle, type CircleSnapshot } from '@/state/stores/circleStore';
 import { circleMembersView } from '@/domain/circle';
 import { useApp } from '@/state/stores/appStore';
 import { voiceCapture } from '@/platform/voice/voiceCapture';
+import { neuralVoice } from '@/platform/voice/neuralVoice';
+import { intakeHandoff } from '@/app/intakeHandoff';
+import { fixedLines } from '@/domain/voiceLinesAhead';
+import { voiceScript } from '@/domain/voiceScript';
 import { db } from '@/data/local/db';
 import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, queuedWorkout } from '@/domain/coachWeek';
@@ -214,6 +219,30 @@ export function Home({ navigation, route }: Props) {
       off();
     };
   }, [app, navigation]);
+  /*
+   * The intake ended on a phone whose free workouts were spent before this install: the offer the
+   * Ready screen announced is shown once, here, as she lands (`app/intakeHandoff`). Never again from
+   * this screen — after it, the gate on Start is the only door, as it always was.
+   */
+  useEffect(() => {
+    if (intakeHandoff.takePaywall()) navigation.navigate('Paywall', { source: 'intake' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /*
+   * ⛔ THE COACH'S VOICE IS ON THE PHONE BEFORE SHE PRESSES START (2026-10-05). A line is fetched the
+   * first time it is needed (1–4 s) and kept for good — so the first lines of a first workout were
+   * the ones nothing had fetched yet, and they were the ones Carmit said. The lines every workout
+   * says (the questions, "קדימה", the first workout's one teaching line) are fetched here, while she
+   * is still reading Today. Cache-first and bounded: after the first visit this asks for nothing.
+   */
+  const voiceOn = app.profile?.voiceSpec !== false;
+  const coachVoiceId = app.profile?.coachVoiceId;
+  useEffect(() => {
+    if (!voiceOn || !app.profile) return;
+    neuralVoice.setVoice(coachVoiceId);
+    neuralVoice.prefetch([voiceScript.openFirstSession(), ...fixedLines()], currentLocale());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceOn, coachVoiceId, app.profile?.sex]);
   /* The live pair — read here for two things only: the name stamped on the record at Begin, and
      the gate the guest's start has to answer to. Solo, both are inert. */
   const pair = usePair();

@@ -63,6 +63,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Arrive, Legend, Stage } from '@/components/ds';
 import { BodyMapFigure, viewOf } from '@/components/BodyMapFigure';
+import { DayInMotion } from '@/components/DayInMotion';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { bidi } from '@/i18n/bidi';
 import { useCopy } from '@/i18n/useCopy';
@@ -134,9 +135,43 @@ export interface BuildingProgrammeViewProps {
    * quoting one would be the app taking credit for a conversation it never had.
    */
   askedFor?: string | null;
+  /*
+   * ════ THE WAIT IS THE COACH AT WORK, SHOWN TRUE (founder, build 75, 2026-10-01) ════
+   *
+   *   > *"בזמן הטעינה של יצירת התוכנית זה פשוט מראה את המסך בתמונה של הגוף ואין חוויה של יצירת
+   *   > תוכנית ומשהו שימשוך אותך להמתין ולחכות בציפייה."*
+   *
+   * The 2026-09-14 ruling made the wait honest by making it EMPTY: a dark body breathing for the
+   * whole call. That was written against a 6–9 s call. The week is written by GPT-6 Sol at high
+   * effort now, and measured live today a build takes 18–30 s — half a minute of a body doing
+   * nothing, on the screen whose job is to make her want what is coming.
+   *
+   * What fills it now is still only what is TRUE while the model writes, in the order it happens:
+   *   1. `brief` — the facts the coach was actually handed (her days, her bodyweight, how long she
+   *      has trained), arriving one by one under her own sentence. Not a summary of her week: the
+   *      request, read back.
+   *   2. `library` — the catalogue the coach is choosing FROM, in motion, under a legend that says
+   *      so ("choosing from N exercises", N being the very list the prompt carries). It never says
+   *      a lift was chosen; the muscles still light only when the answer is in hand, and nothing on
+   *      this beat names a muscle — the 2026-09-14 law stands.
+   *   3. `waitHint` — how long this usually takes. A wait with a stated length is a shorter wait.
+   *
+   * All three are optional and the container passes them only when the model is being asked: her
+   * own sealed week and the local assembler fill in under a second and keep the dark body.
+   */
+  brief?: readonly string[];
+  library?: readonly { id: string; name: string }[];
+  /** How many lifts the coach is choosing from — the length of the catalogue it was sent. */
+  libraryCount?: number;
+  waitHint?: string | null;
 }
 
 const NOOP = () => {};
+
+/** Her sentence and her facts land first; the library takes the stage after this long. */
+export const READ_MS = 3200;
+/** One lift of the library on the stage — a little over a rep, so it reads as browsing, not a lesson. */
+export const LIBRARY_HOLD_MS = 2800;
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -238,14 +273,39 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
   }, [waiting, reduced, breath]);
   const breathStyle = useAnimatedStyle(() => ({ opacity: breath.value }));
 
+  /*
+   * The wait's two beats (see `library`): her words and her facts first, then the catalogue. The
+   * switch is a clock, not a claim — it moves the legend from "reading" to "choosing from N", which
+   * is what the call is doing for the whole of its length after the first instant.
+   */
+  const library = props.library ?? [];
+  const browsing = waiting && library.length > 0;
+  const [choosing, setChoosing] = React.useState(false);
+  React.useEffect(() => {
+    if (!browsing) return;
+    const tm = setTimeout(() => setChoosing(true), READ_MS);
+    return () => clearTimeout(tm);
+  }, [browsing]);
+  const [shownId, setShownId] = React.useState<string | null>(null);
+  const shownName = library.find((l) => l.id === shownId)?.name ?? null;
+  const libraryIds = React.useMemo(() => library.map((l) => l.id), [library]);
+  const onShow = React.useCallback((id: string) => setShownId(id), []);
+
   return (
     <View style={styles.root}>
       <Stage />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.head}>
           <Legend size={17} track={0.2}>
-            {named ? t('ob.buildYourProgramme') : props.muscles.length ? t('ob.buildChoosing') : t('ob.buildReading')}
+            {named
+              ? t('ob.buildYourProgramme')
+              : props.muscles.length
+                ? t('ob.buildChoosing')
+                : browsing && choosing
+                  ? t('ob.buildChoosingFrom', { n: props.libraryCount ?? library.length })
+                  : t('ob.buildReading')}
           </Legend>
+          {waiting && props.waitHint ? <Text style={styles.waitHint}>{props.waitHint}</Text> : null}
         </View>
 
         {/*
@@ -262,17 +322,39 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
 
         {/* See `askedFor`. Quoted, because a quotation is the one punctuation that says "these are
             not our words" without a line of prose explaining it. */}
+        {/*
+          ⛔ HER SENTENCE IS NOT ISOLATED (founder's build-75 screenshot, 2026-10-01). It was wrapped
+          in `bidi()` — a First-Strong ISOLATE — inside the quotation marks, and an isolate is skipped
+          when the paragraph's direction is found: nothing strong was left outside it, so the whole
+          paragraph fell to LTR and the closing mark and her full stop landed on the wrong ends of the
+          last line. `bidi` is for an English run inside a Hebrew sentence; a whole paragraph of her
+          own words is a paragraph, and its first letter is what should set its direction.
+        */}
         {!named && props.askedFor ? (
           <Arrive order={0} style={styles.askedRow}>
             <Legend size={17} track={0.14} style={styles.askedLegend}>{t('ob.buildingAround')}</Legend>
-            <Text style={styles.askedText} numberOfLines={3}>{`“${bidi(props.askedFor)}”`}</Text>
+            {/* Five lines, not three: the founder's own sentence was cut at "ובעל מראה" — the half that said
+                what he wanted. The words are the evidence; a truncated quote is a misquote. */}
+            <Text style={styles.askedText} numberOfLines={5}>{`“${props.askedFor.trim()}”`}</Text>
           </Arrive>
+        ) : null}
+
+        {/* The facts the coach was handed, one by one — the request read back, never the answer. */}
+        {waiting && props.brief?.length ? (
+          <View style={styles.briefRow}>
+            {props.brief.map((fact, i) => (
+              <Arrive key={fact} order={1 + i} style={styles.briefChip}>
+                <Text style={styles.briefText}>{fact}</Text>
+              </Arrive>
+            ))}
+          </View>
         ) : null}
 
         {named ? (
           <Arrive order={0} style={styles.namedHead}>
             <View style={styles.namedRule} />
-            <Text style={styles.programmeName} numberOfLines={3}>{bidi(props.programmeName!)}</Text>
+            {/* The coach's title is a whole paragraph too — same reason as her sentence above. */}
+            <Text style={styles.programmeName} numberOfLines={3}>{props.programmeName!.trim()}</Text>
             {props.summary ? <Text style={styles.summary}>{props.summary}</Text> : null}
           </Arrive>
         ) : null}
@@ -301,15 +383,40 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
           ════════════════════════════════════════════════════════════════════════════════════════
         */}
         <View style={styles.body}>
-          <Animated.View style={[styles.figureStage, breathStyle]}>
-            <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} sex={props.sex} />
-          </Animated.View>
+          {browsing ? (
+            /*
+              The catalogue, in motion — and LABELLED as the catalogue by the legend above it. The
+              name under the figure is the lift on the stage, not a lift in her week; her week's
+              lifts arrive in the body map below, the instant the answer does.
+            */
+            choosing ? (
+              <Arrive order={0} style={styles.libraryStage}>
+                <DayInMotion
+                  exerciseIds={libraryIds}
+                  figure={props.sex}
+                  holdMs={LIBRARY_HOLD_MS}
+                  onShow={onShow}
+                  fit
+                  style={styles.libraryFigure}
+                />
+                <Text style={styles.libraryName} numberOfLines={1}>{shownName ?? ''}</Text>
+              </Arrive>
+            ) : (
+              <View style={styles.libraryStage} />
+            )
+          ) : (
+            <Animated.View style={[styles.figureStage, breathStyle]}>
+              <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} sex={props.sex} />
+            </Animated.View>
+          )}
 
           {/*
             The muscle being filled, and the lifts going into it. Only the CURRENT muscle's lifts
             are on screen: the ones before it are already in the body, which is what the moss says.
           */}
-          <View style={styles.feed}>
+          {/* While the library browses, the feed's seat is empty by definition — holding it open
+              pushed the athlete above the middle of the screen. It returns with her first muscle. */}
+          <View style={[styles.feed, browsing && styles.feedAway]}>
             {/*
               ⚠️ AND THE FEED CLEARS WHEN THE PROGRAMME IS NAMED. `current` is still the last muscle
               at that moment, so the closing beat was the whole body lit — the thing she came for —
@@ -394,13 +501,25 @@ const styles = StyleSheet.create({
   figureStage: { width: '100%', maxWidth: 260, alignSelf: 'center' },
   /* A fixed seat, so the figure does not shuffle up and down as lifts come and go. */
   feed: { height: 132, alignSelf: 'stretch', alignItems: 'center', gap: 6 },
+  feedAway: { height: 0 },
   feedLift: { fontFamily: font.sansMedium, fontSize: 19, lineHeight: 25, color: stage.ink0, textAlign: 'center' },
 
   /* ── the name — a HEAD over the finished week, not a screen that replaces it ── */
   /* Quiet, above the week, and never in place of it — the same rule the name obeys. */
   /* Her sentence, above the body. `ink2` on the legend and `ink1` on the words: the quotation is
      the subject, the label over it is only saying whose it is. */
-  askedRow: { paddingHorizontal: 4, paddingBottom: 16, gap: 6 },
+  /* ⛔ ON THE GUTTER, like the legend above it — at `4` her sentence ran to the glass edge (build 75). */
+  askedRow: { paddingHorizontal: space.gutter, paddingTop: 14, paddingBottom: 12, gap: 6 },
+  waitHint: { marginTop: 6, fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: stage.ink2, textAlign: 'left' },
+  /* Her facts as quiet chips — the request read back, set smaller than her own words above them. */
+  briefRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: space.gutter, paddingBottom: 6 },
+  briefChip: { borderRadius: 999, borderWidth: 1, borderColor: 'rgba(241,238,229,0.16)', paddingHorizontal: 12, paddingVertical: 6 },
+  briefText: { fontFamily: font.sansMedium, fontSize: 17, lineHeight: 22, color: stage.ink1, textAlign: 'left' },
+  /* The library holds the body's seat. `fit` frames each lift to its own drawing (as Today's hero
+     does) inside ONE fixed box, so the athlete fills the stage and the box never jumps between lifts. */
+  libraryStage: { width: '100%', maxWidth: 360, alignSelf: 'center', alignItems: 'center', gap: 10 },
+  libraryFigure: { width: '100%', height: 250 },
+  libraryName: { fontFamily: font.sansMedium, fontSize: 19, lineHeight: 25, color: stage.ink0, textAlign: 'center' },
   askedLegend: { color: stage.ink2 },
   askedText: { fontFamily: font.serif, fontSize: 22, lineHeight: 30, color: stage.ink0, textAlign: 'left' },
   noteRow: { paddingHorizontal: 4, paddingBottom: 14 },

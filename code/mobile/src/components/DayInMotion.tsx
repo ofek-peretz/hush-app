@@ -108,10 +108,14 @@ interface Props {
    * navigator and there is nothing to be focused by.
    */
   paused?: boolean;
+  /** How long each lift holds the stage. Absent = `HOLD_MS`, Today's pace. */
+  holdMs?: number;
+  /** Told which lift is on the stage whenever it changes — for a caller that names it underneath. */
+  onShow?: (exerciseId: string) => void;
   style?: ViewStyle;
 }
 
-export function DayInMotion({ exerciseIds, figure, paused, style, fit }: Props) {
+export function DayInMotion({ exerciseIds, figure, paused, style, fit, holdMs = HOLD_MS, onShow }: Props) {
   const reduced = useReducedMotion();
   /* De-duplicated: a day that trains a lift in two blocks is one lift to look at, and holding the
      same body twice in one cycle reads as a stall rather than as a second exercise. */
@@ -127,11 +131,14 @@ export function DayInMotion({ exerciseIds, figure, paused, style, fit }: Props) 
 
   useEffect(() => {
     if (paused || reduced || rigged.length < 2) return; // off-screen, or motion is not wanted
-    const t = setInterval(() => setI((n) => (n + 1) % rigged.length), HOLD_MS);
+    const t = setInterval(() => setI((n) => (n + 1) % rigged.length), holdMs);
     return () => clearInterval(t);
-  }, [paused, reduced, rigged.length]);
+  }, [paused, reduced, rigged.length, holdMs]);
 
   const id = rigged[Math.min(i, rigged.length - 1)];
+  useEffect(() => {
+    if (id) onShow?.(id);
+  }, [id, onShow]);
   const rig = id ? exerciseMotion(id) : null;
   if (!rig) return null;
   /* Off-screen: draw the pose, stop the clock. `MotionThumb` is the same geometry pipeline frozen

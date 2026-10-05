@@ -43,6 +43,16 @@ const EAR_OPEN_WAIT_MS = 3000;
 const VOICE_STATE_KEY = 'hush.voice.state';
 /** The most the last lines of a workout may take to be said before the voice lets go regardless. */
 const DRAIN_MS = 20_000;
+/**
+ * ⛔ EARBUDS THAT DROP DO NOT COST HER THE EAR (2026-10-05). When the earbuds left, the microphone was
+ * closed with the voice — and iOS will not START a recording from the pocket. So one Bluetooth
+ * hiccup, or AirPods hopping to her laptop and back, and the coach returned saying "חזרתי" but deaf
+ * until the next time she happened to look at the phone. The microphone is now kept this long after
+ * the earbuds go (running, keeping nothing — no window is open with the voice off); if they are back
+ * inside it, she is heard at once. Past it the app lets the microphone go: it does not hold one
+ * through a workout it is not coaching.
+ */
+export const EAR_GRACE_MS = 3 * 60_000;
 
 export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilence } {
   const app = useApp();
@@ -71,7 +81,8 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
    * phone in her pocket, the default ear could never hear a single answer; and every window it
    * tried moved her music to call quality. The phone's own microphone is opened on glass once and
    * kept (`openPocketEar`), answers from the pocket, and leaves her music whole. Where it cannot
-   * open (before iOS 26, no Hebrew model), the screen-on ear is what listens, exactly as before.
+   * open (she refused the microphone, or nothing at all could listen through it), the screen-on ear
+   * is what listens, exactly as before.
    */
   const mic: EarSource = app.profile?.voiceMic ?? 'phone';
   const micRef = useRef(mic);
@@ -91,8 +102,17 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
    *   > founder: *"אם המסך דלוק זה אומר … שהמתאמן יצטרך ללחוץ על המסך … מה שהורס את כל החוויה"*
    * iOS will not start a microphone from a locked phone, and Apple's old recognizer does not run
    * there at all. So the microphone is opened here — the gate opens on the stage, which she is
-   * looking at — and kept for the workout; `voiceCapture` hands its windows to it. Without iOS 26,
-   * the Hebrew model, or on refusal, nothing changes: the screen-on ear is what listens.
+   * looking at — and kept for the workout; `voiceCapture` hands its windows to it.
+   *
+   * ⛔ IT OPENS FOR THE STRONG EAR, ON EVERY PHONE — IT DOES NOT ASK APPLE'S RECOGNIZER FIRST
+   * (founder, 2026-10-05: *"מה זאת אומרת אין עדיין אוזן של openai? אבל אמרנו ש-openai זה מי שהמשתמש
+   * מנהל איתו את השיחה לאורך כל האימון"*). It used to return before `earOpen` unless the phone had
+   * Apple's new on-device recognizer (iOS 26) AND its Hebrew model — so the recording the strong ear
+   * hears through did not exist on any other phone, and there the coach's ear was Apple's old
+   * recognizer on a lit screen. Never a decision: the order two things were built in. Now the
+   * microphone opens whenever the strong ear can listen; the phone's own recognizer is fetched
+   * behind it, for the gym with no signal. Only when NEITHER could hear a window is the microphone
+   * left closed — holding it would buy her nothing.
    *
    * ⛔ ONLY ON THE PHONE'S OWN MICROPHONE (founder, 2026-09-15: *"אי אפשר שהשמע של המוזיקה
    * תיפגע"*). A Bluetooth microphone held open for the workout keeps her earbuds on their call
@@ -104,11 +124,24 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
   const openPocketEar = async (): Promise<void> => {
     if (Platform.OS !== 'ios' || audioSession.earRunning() || micRef.current !== 'phone') return;
     const lang = recognizerLang(i18next.language ?? 'en');
-    if (!(await audioSession.earAvailable(lang))) return void track('voice_ear', { state: 'unsupported', lang });
-    if (!(await audioSession.earPrepare(lang))) return void track('voice_ear', { state: 'no_model', lang });
+    const strong = cloudEar.available();
+    if (!strong) {
+      // Only the phone's own recognizer could listen: it has to be there for the microphone to be worth holding.
+      if (!(await audioSession.earAvailable(lang))) return void track('voice_ear', { state: 'unsupported', lang });
+      if (!(await audioSession.earPrepare(lang))) return void track('voice_ear', { state: 'no_model', lang });
+    }
     if (AppState.currentState !== 'active') return void track('voice_ear', { state: 'not_on_glass' });
     const error = await audioSession.earOpen(micRef.current);
-    void track('voice_ear', { state: error ? 'failed' : 'open', error, source: micRef.current });
+    void track('voice_ear', { state: error ? 'failed' : 'open', error, source: micRef.current, strong });
+    // The phone's own recognizer, behind the strong ear: its model is fetched while she trains (a
+    // download the first time), and a window uses it from the moment it is on the phone.
+    if (strong && !error) {
+      void audioSession
+        .earAvailable(lang)
+        .then((can) => (can ? audioSession.earPrepare(lang) : false))
+        .then((own) => void track('voice_ear', { state: own ? 'own_recognizer' : 'strong_only', lang }))
+        .catch(() => {});
+    }
   };
 
   // The conductor, once per stage — built over the real mouth, ear and session.
@@ -201,6 +234,12 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     let disposed = false;
     let confirm: ReturnType<typeof setTimeout> | null = null;
     let opening = false;
+    /** The microphone's grace after the earbuds left (see `EAR_GRACE_MS`). */
+    let earGrace: ReturnType<typeof setTimeout> | null = null;
+    const keepEar = () => {
+      if (earGrace) clearTimeout(earGrace);
+      earGrace = null;
+    };
     /* ⛔ A REFUSED MICROPHONE SILENCES THE EAR, NOT THE COACH (2026-09-27, the input audit). The
        lines — the load, how to build it, the rest, the ten seconds — help without an answer, and the
        lock screen and the wrist carry the answers; the coach says once that it cannot hear. */
@@ -232,7 +271,8 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
         });
       });
     };
-    const close = () => {
+    /** `leaving`: the stage is going (the workout ended, the screen unmounted) — nothing is kept. */
+    const close = (leaving: boolean) => {
       if (c.isOn()) {
         if (c.ended()) {
           /* ⛔ THE WORKOUT IS OVER AND THE STAGE IS LEAVING (2026-09-27): the last set's echo and
@@ -247,13 +287,19 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
           c.disable();
         }
       }
-      void audioSession.earClose();
+      keepEar();
+      if (leaving) return void audioSession.earClose();
+      earGrace = setTimeout(() => {
+        earGrace = null;
+        void audioSession.earClose();
+      }, EAR_GRACE_MS);
     };
     const apply = (connected: boolean) => {
       if (disposed) return;
       if (connected) {
         if (confirm) clearTimeout(confirm);
         confirm = null;
+        keepEar(); // back inside the grace: the microphone that was kept is the one that hears her
         // Back before the departure was confirmed: the voice picks up where the pull cut it.
         if (c.isOn()) c.onInterruption(false);
         open();
@@ -265,7 +311,7 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
           confirm = null;
           if (disposed) return;
           if (audioSession.headsetConnected()) return open();
-          close();
+          close(false);
           setSilentBecause('no_headset');
           void track('voice_gate_closed', { reason: 'no_headset' });
         }, CONFIRM_MS);
@@ -277,6 +323,9 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     const off = audioSession.onRouteChange(() => apply(audioSession.headsetConnected()));
     const poll = setInterval(() => {
       if (!c.isOn() && audioSession.headsetConnected()) apply(true);
+      // The strong ear could not be reached and its wait is over (`cloudEar.deaf`): the next
+      // question is listened to again — reached, she hears as before; not, it waits again, unsaid.
+      if (c.isOn() && c.earDownBecause() === 'deaf' && !cloudEar.deaf()) c.earMayListen();
     }, POLL_MS);
     // Back on glass with the voice on and no pocket ear (it could not open, or a call stopped it in
     // the pocket): this is the one moment iOS lets the microphone start again — and the screen-on
@@ -284,7 +333,18 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     const appState = AppState.addEventListener('change', (s) => {
       if (s !== 'active' || !c.isOn()) return;
       if (!deniedRef.current) c.earMayListen();
-      if (!audioSession.earRunning()) void openPocketEar();
+      /*
+       * ⛔ AN INTERRUPTION THAT NEVER SAID IT ENDED (2026-10-05). iOS does not promise an "ended" for
+       * every "began" (Apple says so in as many words), and the conductor says nothing while one is
+       * on — so a single missed "ended" left the coach mute for the rest of the workout, with
+       * nothing on any screen to say why. She is on glass now: the audio is asked for. If it is
+       * given, the interruption is over, whatever was or was not reported; if a call still holds
+       * it, nothing changes.
+       */
+      void (async () => {
+        if (c.isInterrupted() && (await audioSession.recoverSession()) && !disposed) c.onInterruption(false);
+        if (!disposed && c.isOn() && !audioSession.earRunning()) void openPocketEar();
+      })();
     });
     const earState = audioSession.onEarState((running, error) => {
       if (!running) void track('voice_ear', { state: 'stopped', error });
@@ -301,7 +361,7 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       earState();
       if (confirm) clearTimeout(confirm);
       applyRef.current = () => {};
-      close();
+      close(true);
     };
   }, [switchOn]);
 
@@ -340,6 +400,11 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     const ahead = voiceLinesAhead(session.livePlan as never[], from, (st) => restAfterStep(st as Step), l);
     neuralVoice.prefetch([...ahead, ...fixedLines()], l.locale);
   }, [session.active, session.startedAtMs, session.displayPhase, session.globalProgress?.index]);
+
+  // A new workout: a strong ear that could not be reached last time is tried again at once.
+  useEffect(() => {
+    if (session.active) cloudEar.reset();
+  }, [session.active, session.startedAtMs]);
 
   // Every change of the view lands on the conductor; "+15" moves the ten-seconds line.
   const lastExtraRef = useRef(session.restExtraSeconds);

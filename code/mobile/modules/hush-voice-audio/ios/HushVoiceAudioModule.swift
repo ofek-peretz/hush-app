@@ -63,18 +63,14 @@ public class HushVoiceAudioModule: Module {
   private var keepAliveWanted = false
   private var routeObserver: NSObjectProtocol?
   private var interruptionObserver: NSObjectProtocol?
-  /// The pocket ear (`HushEar`, iOS 26). Held untyped: a stored property cannot be marked iOS 26.
-  private var earBox: AnyObject?
-
-  @available(iOS 26.0, *)
-  private var ear: HushEar? { earBox as? HushEar }
+  /// The pocket ear (`HushEar`): the workout's microphone and each window's audio, on every iOS
+  /// this app runs on — only Apple's on-device recognizer inside it asks for iOS 26 (2026-10-05).
+  private var ear: HushEar?
 
   private var earRunning: Bool {
-    if #available(iOS 26.0, *) { return ear?.running ?? false }
-    return false
+    return ear?.running ?? false
   }
 
-  @available(iOS 26.0, *)
   private func makeEar() -> HushEar {
     let ear = HushEar()
     ear.onResult = { [weak self] text, token in
@@ -83,7 +79,7 @@ public class HushVoiceAudioModule: Module {
     ear.onState = { [weak self] state in
       self?.sendEvent("onEarState", state)
     }
-    earBox = ear
+    self.ear = ear
     return ear
   }
 
@@ -123,6 +119,8 @@ public class HushVoiceAudioModule: Module {
         self.sendEvent("onInterruption", ["began": type == .began])
         guard type == .ended, self.keepAliveWanted else { return }
         try? self.applySession(duck: false)
+        // The interruption stopped the microphone's engine too, and nothing else starts it again.
+        self.ear?.resume()
         if let p = self.keepAlive, !p.isPlaying { p.play() }
       }
     }
@@ -142,9 +140,9 @@ public class HushVoiceAudioModule: Module {
     }
 
     /// Open the microphone for the workout — ON GLASS ONLY (iOS refuses a recording started from
-    /// the background). Null when it runs; the reason when it does not.
+    /// the background). Null when it runs; the reason when it does not. Any iOS: the strong ear
+    /// hears through this microphone whether or not the phone has a recognizer of its own.
     AsyncFunction("earOpen") { (source: String) async -> String? in
-      guard #available(iOS 26.0, *) else { return "requires iOS 26" }
       let ear = self.ear ?? self.makeEar()
       do {
         try ear.open(source: HushEar.Source(rawValue: source) ?? .headset)
@@ -156,7 +154,7 @@ public class HushVoiceAudioModule: Module {
     }
 
     AsyncFunction("earClose") { () in
-      guard #available(iOS 26.0, *), let ear = self.ear, ear.running else { return }
+      guard let ear = self.ear, ear.running else { return }
       ear.close()
       if self.keepAliveWanted {
         try? Self.setPlayback(duck: false)
@@ -166,13 +164,38 @@ public class HushVoiceAudioModule: Module {
       }
     }
 
+    /// What the phone is told: the microphone is really running — not only meant to be (a call can
+    /// stop it; see `HushEar.resume`). The session's own decisions above keep reading the intent.
     Function("earRunning") { () -> Bool in
-      self.earRunning
+      self.ear?.alive ?? false
     }
 
-    /// Hand the microphone to the recognizer until `earStopListening`. Null when listening.
+    /// Is Apple's on-device recognizer listening to the open window too? (False is not a fault: the
+    /// window's audio is kept either way, and the strong ear hears it.)
+    Function("earRecognizing") { () -> Bool in
+      self.ear?.recognizing ?? false
+    }
+
+    /// ⛔ AN INTERRUPTION THAT NEVER SAID IT ENDED (2026-10-05). iOS does not promise an "ended" for
+    /// every "began", and the voice says nothing while one is on — one missed "ended" and the coach
+    /// was mute for the rest of the workout. Asked by the phone when she is back on glass: the
+    /// session is taken again, the microphone's engine restarted, the silent loop resumed. True
+    /// when the audio is ours; false while a call still holds it (activating then fails).
+    AsyncFunction("recoverSession") { () -> Bool in
+      do {
+        try self.applySession(duck: false)
+      } catch {
+        return false
+      }
+      self.ear?.resume()
+      if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
+      return true
+    }
+
+    /// Open a window: keep the microphone's audio until `earStopListening`, and hand it to Apple's
+    /// recognizer where the phone has one. Null when the window is open.
     AsyncFunction("earListen") { (locale: String, token: Int) async -> String? in
-      guard #available(iOS 26.0, *), let ear = self.ear else { return "ear not open" }
+      guard let ear = self.ear else { return "ear not open" }
       do {
         try await ear.listen(localeIdentifier: locale, token: token)
         return nil
@@ -183,14 +206,14 @@ public class HushVoiceAudioModule: Module {
 
     /// Stop listening; resolves after the last sentence she was saying has been reported.
     AsyncFunction("earStopListening") { () async in
-      guard #available(iOS 26.0, *), let ear = self.ear else { return }
+      guard let ear = self.ear else { return }
       await ear.stopListening()
     }
 
     /// The window's audio (16 kHz mono WAV, base64) for the second ear — nil when it is not that
     /// window's, or the ear does not run (2026-09-27, `platform/voice/cloudEar`).
     AsyncFunction("earClip") { (token: Int, maxSeconds: Double) -> [String: Any]? in
-      guard #available(iOS 26.0, *), let ear = self.ear else { return nil }
+      guard let ear = self.ear else { return nil }
       return ear.clip(token: token, maxSeconds: maxSeconds)
     }
 
@@ -357,7 +380,7 @@ public class HushVoiceAudioModule: Module {
   /// once held her music at a quarter for the rest of the workout. With the ear running the coach
   /// speaks over the music at full level; `duck` applies to the playback session only.
   private func applySession(duck: Bool) throws {
-    if #available(iOS 26.0, *), let ear = self.ear, ear.running {
+    if let ear = self.ear, ear.running {
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(ear.source, duck: false))
       try session.setActive(true)

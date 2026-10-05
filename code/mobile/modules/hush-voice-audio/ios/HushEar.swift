@@ -15,9 +15,29 @@ import Speech
 // `audio` background mode covers it, as it covers any recorder.
 //
 // So this ear is opened once, on glass (the gate opens on the stage, which she is looking at), and
-// runs for the workout. Nothing is transcribed until the conductor asks a question: only then is
-// the microphone's audio handed to SpeechAnalyzer (iOS 26, on-device, he_IL supported), and only
-// until the window closes. The wiring follows the verified shape of
+// runs for the workout. Nothing is kept or transcribed until the conductor asks a question: only
+// then is the microphone's audio kept — and only until the window closes.
+//
+// ════ ⛔ THE MICROPHONE IS FOR EVERY PHONE; APPLE'S RECOGNIZER IS THE EXTRA (2026-10-05) ════
+//
+//   > founder: *"מה זאת אומרת אין עדיין אוזן של openai? אבל אמרנו ש-openai זה מי שהמשתמש מנהל איתו
+//   > את השיחה לאורך כל האימון."*
+//
+// He had said it, on 2026-09-28: the strongest recognizer is the input of the workout. And this
+// whole class stood behind `@available(iOS 26.0, *)`, and `listen` threw before it kept a single
+// sample unless Apple's on-device recognizer (SpeechAnalyzer) had a model for her language — so the
+// recording the strong ear needs existed only where Apple's NEW recognizer did. On an iPhone that
+// cannot run iOS 26, or one without the Hebrew model, the coach's ear was Apple's old recognizer on
+// a lit screen and nothing else. That was never a decision; it was the order two things were built
+// in.
+//
+// Now there are two layers, and only one of them asks anything of the phone:
+//   · THE MICROPHONE AND THE WINDOW'S AUDIO — AVAudioEngine, a tap, 16 kHz PCM. Every iOS this app
+//     runs on. This is what the strong ear hears (`platform/voice/cloudEar`).
+//   · APPLE'S ON-DEVICE RECOGNIZER — iOS 26 and a model for the locale. When both are there it
+//     listens to the same window and reports its sentences; it is the answer in a gym with no
+//     signal. When either is missing the window simply has no second listener.
+// The wiring of the recognizer follows the verified shape of
 // github.com/simplememofast/ios26-speechanalyzer-live-mic (SpeechSession / AudioBufferConverter).
 //
 // Two sources:
@@ -31,7 +51,6 @@ import Speech
 // `.playback` (the keep-alive's, the duck's) removes the input and stops the engine, and a stopped
 // engine can only be restarted on glass. The audio module asks `sessionOptions` for every change.
 
-@available(iOS 26.0, *)
 final class HushEar {
   enum Source: String {
     case headset
@@ -40,22 +59,29 @@ final class HushEar {
 
   private let engine = AVAudioEngine()
   private let lock = NSLock()
-  private var builder: AsyncStream<AnalyzerInput>.Continuation?
   private var target: AVAudioFormat?
   private var token: Int = 0
   private var converter: AVAudioConverter?
-  private var analyzer: SpeechAnalyzer?
   private var resultsTask: Task<Void, Never>?
   private var configObserver: NSObjectProtocol?
+  /// Apple's on-device recognizer for the open window (`SpeechAnalyzer`) and the stream it reads
+  /// (`AsyncStream<AnalyzerInput>.Continuation`). Held untyped: a stored property cannot be marked
+  /// iOS 26, and this class must exist on every iOS the app runs on.
+  private var analyzerBox: AnyObject?
+  private var builderBox: Any?
+  /// A window is open: what the microphone hears is being kept.
+  private var capturing = false
 
   private(set) var running = false
   private(set) var source: Source = .headset
+  /// Apple's recognizer is listening to the open window too (iOS 26, the locale's model installed).
+  private(set) var recognizing = false
 
-  // ── The window's own audio, for the second ear (2026-09-27) ─────────────────────────────────────
-  // While a window listens, what the microphone hears is also kept as 16 kHz mono 16-bit PCM — the
-  // shape a cloud recognizer takes — so an answer the on-device model missed or mis-heard can be
-  // heard again by a stronger one. Capped at the last `clipMaxSeconds`; cleared when the next
-  // window opens; read by `clip(token:)` after the window ends. Never written anywhere but memory.
+  // ── The window's own audio, for the strong ear (2026-09-27) ─────────────────────────────────────
+  // While a window listens, what the microphone hears is kept as 16 kHz mono 16-bit PCM — the shape
+  // a cloud recognizer takes. Capped at the last `clipMaxSeconds`; cleared when the next window
+  // opens; read by `clip(token:)` during the window and after it ends. Never written anywhere but
+  // memory.
   static let clipRate: Double = 16_000
   static let clipMaxSeconds: Double = 20
   private let clipFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: HushEar.clipRate, channels: 1, interleaved: true)
@@ -63,18 +89,20 @@ final class HushEar {
   private var clipData = Data()
   private var clipToken: Int = -1
 
-  /// A final sentence heard inside a window, with the window's token.
+  /// A final sentence Apple's recognizer heard inside a window, with the window's token.
   var onResult: ((String, Int) -> Void)?
   /// The engine stopped or failed to restart — the JS side falls back to the screen-on ear.
   var onState: (([String: Any]) -> Void)?
 
-  // MARK: - Capability
+  // MARK: - Apple's on-device recognizer: can this phone, for this locale?
 
+  @available(iOS 26.0, *)
   static func supportedLocale(_ identifier: String) async -> Locale? {
     await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: identifier))
   }
 
   /// The on-device model for the locale, downloaded on first use (needs a network once).
+  @available(iOS 26.0, *)
   static func ensureModel(_ identifier: String) async throws -> Bool {
     guard let locale = await supportedLocale(identifier) else { return false }
     let installed = await Set(SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) })
@@ -101,8 +129,33 @@ final class HushEar {
 
   // MARK: - The engine (opened on glass, kept for the workout)
 
+  /// The microphone is really running. `running` is the intent — the workout holds the ear — and
+  /// this is the fact: an interruption stops the engine without a word to anyone (see `resume`).
+  var alive: Bool {
+    return running && engine.isRunning
+  }
+
+  /// ⛔ A CALL ENDS, AND THE MICROPHONE COMES BACK (2026-10-05). A phone call, Siri or an alarm
+  /// interrupts the session and stops the engine; iOS posts no configuration change for it, so
+  /// nothing restarted it — `running` stayed true over a microphone that heard nothing, and every
+  /// window for the rest of the workout was silence. Called when the interruption ends: the app is
+  /// the one that was interrupted, which is the one case iOS lets a recording start again from the
+  /// pocket. If it will not, the JS side is told, and the next time she is on glass it reopens.
+  func resume() {
+    guard running, !engine.isRunning else { return }
+    do {
+      try startEngine()
+      onState?(["running": true, "restarted": true])
+    } catch {
+      running = false
+      onState?(["running": false, "error": "resume: \(error.localizedDescription)"])
+    }
+  }
+
   func open(source: Source) throws {
-    if running && self.source == source { return }
+    // Asked to open what is already open AND alive: nothing to do. An engine an interruption left
+    // stopped is not "open" — it is closed and opened again, below.
+    if running && self.source == source && engine.isRunning { return }
     if running { close() }
     self.source = source
     let session = AVAudioSession.sharedInstance()
@@ -149,16 +202,21 @@ final class HushEar {
 
   func close() {
     lock.lock()
-    let b = builder
-    builder = nil
+    let b = builderBox
+    builderBox = nil
     target = nil
+    capturing = false
     clipData = Data()
     clipToken = -1
     lock.unlock()
-    b?.finish()
-    if let a = analyzer {
-      analyzer = nil
-      Task { try? await a.finalizeAndFinishThroughEndOfInput() }
+    let a = analyzerBox
+    analyzerBox = nil
+    recognizing = false
+    if #available(iOS 26.0, *) {
+      (b as? AsyncStream<AnalyzerInput>.Continuation)?.finish()
+      if let analyzer = a as? SpeechAnalyzer {
+        Task { try? await analyzer.finalizeAndFinishThroughEndOfInput() }
+      }
     }
     resultsTask?.cancel()
     resultsTask = nil
@@ -173,23 +231,42 @@ final class HushEar {
 
   // MARK: - A window
 
-  /// Start handing the microphone to the recognizer. Results carry `token`, so a late sentence from
-  /// a window already closed is never taken for the next one's answer.
+  /// Open a window: from here the microphone's audio is kept (for the strong ear), and — where this
+  /// phone has Apple's recognizer and a model for the locale — handed to it as well. Results carry
+  /// `token`, so a late sentence from a window already closed is never taken for the next one's
+  /// answer. Throws only when the microphone itself is not running.
   func listen(localeIdentifier: String, token: Int) async throws {
     await stopListening()
     guard running else {
       throw NSError(domain: "HushEar", code: 2, userInfo: [NSLocalizedDescriptionKey: "ear not running"])
     }
-    guard let locale = await Self.supportedLocale(localeIdentifier) else {
-      throw NSError(domain: "HushEar", code: 3, userInfo: [NSLocalizedDescriptionKey: "locale not supported"])
+    lock.lock()
+    self.token = token
+    // A new window, a new clip: nothing of the last answer is ever sent as this one's.
+    self.clipData = Data()
+    self.clipToken = token
+    self.capturing = true
+    lock.unlock()
+    if #available(iOS 26.0, *) {
+      recognizing = await startRecognizer(localeIdentifier: localeIdentifier, token: token)
+    } else {
+      recognizing = false
     }
+  }
+
+  /// Apple's on-device recognizer on this window. False — and nothing else changes — when the locale
+  /// is not supported, its model is not on the phone (a window never waits on a download), or the
+  /// recognizer would not start.
+  @available(iOS 26.0, *)
+  private func startRecognizer(localeIdentifier: String, token: Int) async -> Bool {
+    guard let locale = await Self.supportedLocale(localeIdentifier) else { return false }
+    let installed = await Set(SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) })
+    guard installed.contains(locale.identifier(.bcp47)) else { return false }
     let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
     let analyzer = SpeechAnalyzer(modules: [transcriber])
     let bestFormat: AVAudioFormat? = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
-    guard let format = bestFormat else {
-      throw NSError(domain: "HushEar", code: 4, userInfo: [NSLocalizedDescriptionKey: "no analyzer format"])
-    }
-    resultsTask = Task { [weak self] in
+    guard let format = bestFormat else { return false }
+    let results = Task { [weak self] in
       do {
         for try await result in transcriber.results {
           guard result.isFinal else { continue }
@@ -201,16 +278,19 @@ final class HushEar {
       }
     }
     let (sequence, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-    try await analyzer.start(inputSequence: sequence)
-    self.analyzer = analyzer
+    do {
+      try await analyzer.start(inputSequence: sequence)
+    } catch {
+      results.cancel()
+      return false
+    }
+    resultsTask = results
+    analyzerBox = analyzer
     lock.lock()
-    self.token = token
     self.target = format
-    self.builder = continuation
-    // A new window, a new clip: nothing of the last answer is ever sent as this one's.
-    self.clipData = Data()
-    self.clipToken = token
+    self.builderBox = continuation
     lock.unlock()
+    return true
   }
 
   /// The audio this window heard (the last `maxSeconds` of it) as a 16 kHz mono WAV, base64 — and how
@@ -222,7 +302,7 @@ final class HushEar {
       lock.unlock()
       return nil
     }
-    let maxBytes = Int(HushEar.clipRate * max(0.5, maxSeconds)) * 2
+    let maxBytes = Int(HushEar.clipRate * max(0.1, maxSeconds)) * 2
     let pcm = clipData.count > maxBytes ? Data(clipData.suffix(maxBytes)) : Data(clipData)
     lock.unlock()
     let (peak, floor) = HushEar.loudness(pcm)
@@ -274,17 +354,23 @@ final class HushEar {
     return data
   }
 
-  /// Stop handing audio over; what she was mid-way through saying is finalized and still reported.
+  /// Close the window: nothing more is kept (what was kept stays readable until the next window),
+  /// and what she was mid-way through saying is finalized by Apple's recognizer and still reported.
   func stopListening() async {
     lock.lock()
-    let b = builder
-    builder = nil
+    let b = builderBox
+    builderBox = nil
     target = nil
+    capturing = false
     lock.unlock()
-    b?.finish()
-    if let a = analyzer {
-      analyzer = nil
-      try? await a.finalizeAndFinishThroughEndOfInput()
+    let a = analyzerBox
+    analyzerBox = nil
+    recognizing = false
+    if #available(iOS 26.0, *) {
+      (b as? AsyncStream<AnalyzerInput>.Continuation)?.finish()
+      if let analyzer = a as? SpeechAnalyzer {
+        try? await analyzer.finalizeAndFinishThroughEndOfInput()
+      }
     }
     if let t = resultsTask {
       resultsTask = nil
@@ -296,16 +382,20 @@ final class HushEar {
 
   private func feed(_ buffer: AVAudioPCMBuffer) {
     lock.lock()
-    let b = builder
+    let keep = capturing
+    let b = builderBox
     let t = target
     lock.unlock()
-    guard let b, let t else { return }
+    guard keep else { return }
     appendClip(buffer)
-    guard let converted = convert(buffer, to: t) else { return }
-    b.yield(AnalyzerInput(buffer: converted))
+    if #available(iOS 26.0, *) {
+      guard let continuation = b as? AsyncStream<AnalyzerInput>.Continuation, let t else { return }
+      guard let converted = convert(buffer, to: t) else { return }
+      continuation.yield(AnalyzerInput(buffer: converted))
+    }
   }
 
-  /// The window's audio, kept for the second ear: 16 kHz mono 16-bit, the last `clipMaxSeconds`.
+  /// The window's audio, kept for the strong ear: 16 kHz mono 16-bit, the last `clipMaxSeconds`.
   private func appendClip(_ buffer: AVAudioPCMBuffer) {
     guard let format = clipFormat, let out = convertClip(buffer, to: format), let channels = out.int16ChannelData else { return }
     let frames = Int(out.frameLength)

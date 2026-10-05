@@ -11,8 +11,10 @@ import {
   LIFT_RISE_MS,
   LIFT_HOLD_MS,
   LIFT_TRAVEL_MS,
+  READ_MS,
 } from '@/screens/onboarding/BuildingProgrammeView';
 import { BodyMapFigure } from '@/components/BodyMapFigure';
+import { DayInMotion } from '@/components/DayInMotion';
 import { initI18n, tg } from '@/i18n';
 
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', rel), 'utf8');
@@ -253,5 +255,85 @@ describe('⚠️ and it is honest about what it is doing', () => {
     const view = read('src/screens/onboarding/BuildingProgrammeView.tsx');
     expect(view).toContain('const NOOP = () => {};');
     expect(view).toContain('onSelect={NOOP}');
+  });
+});
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ THE WAIT IS THE COACH AT WORK, SHOWN TRUE (founder, build 75, 2026-10-01).
+ *
+ *   > *"בזמן הטעינה של יצירת התוכנית זה פשוט מראה את המסך בתמונה של הגוף ואין חוויה של יצירת
+ *   > תוכנית ומשהו שימשוך אותך להמתין ולחכות בציפייה."*
+ *
+ * The 2026-09-14 ruling above made the wait honest by making it empty — written against a 6–9 s
+ * call. The week takes 18–30 s now (measured live today), and half a minute of a breathing body is
+ * the screen failing at its one job. What may fill it is still only what is TRUE while the model
+ * writes: the facts it was handed, and the catalogue it is choosing FROM, labelled as such. The
+ * 09-14 core stands and is re-asserted here: no muscle named, none lit, until the answer is in hand.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+describe('⛔ the wait shows the coach at work — and still describes nothing that has not arrived', () => {
+  const LIB = [
+    { id: 'bb_back_squat', name: 'Back Squat' },
+    { id: 'bb_bench_press', name: 'Bench Press' },
+  ];
+  const waitProps = {
+    muscles: [],
+    askedFor: 'בלי אימון רגליים',
+    brief: ['3 אימונים בשבוע', '78 kg'],
+    library: LIB,
+    libraryCount: 128,
+    waitHint: 'זה לוקח בדרך כלל כחצי דקה',
+  };
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('her sentence and the facts the coach was handed come first, with how long it takes', () => {
+    const said = texts(draw(waitProps)).join(' | ');
+    expect(said).toContain('בלי אימון רגליים');
+    expect(said).toContain('3 אימונים בשבוע');
+    expect(said).toContain('78 kg');
+    expect(said).toContain('זה לוקח בדרך כלל כחצי דקה');
+    expect(said).toContain(tg('ob.buildReading').toUpperCase()); // a Legend speaks in capitals
+  });
+
+  it('⛔ then the catalogue takes the stage, under a legend that says it is the catalogue', () => {
+    const r = draw(waitProps);
+    act(() => {
+      jest.advanceTimersByTime(READ_MS + 10);
+    });
+    expect(r.root.findAllByType(DayInMotion)).toHaveLength(1);
+    expect(r.root.findAllByType(BodyMapFigure)).toHaveLength(0);
+    expect(texts(r).join(' | ')).toContain(tg('ob.buildChoosingFrom', { n: 128 }).toUpperCase());
+  });
+
+  it('⛔ …and through all of it NO muscle is named and none is lit (the 2026-09-14 core)', () => {
+    const r = draw(waitProps);
+    act(() => {
+      jest.advanceTimersByTime(READ_MS + 10);
+    });
+    const said = texts(r).join(' | ');
+    for (const muscle of ['Quads', 'Glutes', 'Hamstrings', 'Chest', 'Back']) {
+      expect({ muscle, named: said.includes(tg(`muscle.${muscle}`).toUpperCase()) }).toEqual({ muscle, named: false });
+    }
+  });
+
+  it('the moment the answer lands, the catalogue leaves and HER week lights the body', () => {
+    const r = draw({ ...waitProps, muscles: [CHEST] });
+    expect(r.root.findAllByType(DayInMotion)).toHaveLength(0);
+    expect(figure(r).props.map.Chest).toBe('emphasis');
+    const said = texts(r).join(' | ');
+    expect(said).not.toContain('3 אימונים בשבוע'); // the request read back belongs to the wait only
+    expect(said).not.toContain('זה לוקח בדרך כלל כחצי דקה');
+  });
+
+  it('⛔ her sentence is not wrapped in an isolate — it is a paragraph, and its first letter sets its direction', () => {
+    const quote = texts(draw(waitProps)).find((x) => x.includes('בלי אימון רגליים'))!;
+    expect(quote).not.toMatch(/[\u2066-\u2069]/);
+    expect(quote.startsWith('“')).toBe(true);
+  });
+
+  it('⚠️ without a library (her own sealed week, the local assembler) the dark body still holds the wait', () => {
+    expect(figure(draw({ muscles: [] }))).toBeDefined();
   });
 });

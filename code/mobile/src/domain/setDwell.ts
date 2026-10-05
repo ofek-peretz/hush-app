@@ -115,6 +115,20 @@ export function voiceAskAfterS(exerciseId: string | null | undefined, reps: numb
 }
 
 /**
+ * The soonest a set can honestly be OVER, in seconds from its start (2026-10-05) — the moment the
+ * voice begins to listen for her own report ("עשר"), without waiting to ask. Half the stage figure's
+ * own tempo: a lifter in a hurry moves about twice as fast as the figure does, and nobody finishes
+ * sooner. Before it, a number said aloud is a count on the way to the last rep, a word to a friend,
+ * or the bar ("ten a side") — never her reps.
+ */
+export const VOICE_REPORT_FLOOR_S = 8;
+
+export function voiceReportFromS(exerciseId: string | null | undefined, reps: number): number {
+  const n = Number.isFinite(reps) && reps > 0 ? reps : 8;
+  return Math.max(VOICE_REPORT_FLOOR_S, Math.round((n * repSeconds(exerciseId)) / 2));
+}
+
+/**
  * Is a nudge legal for this step at all?
  *
  * ⛔ ONLY A SET. A hold, a distance and an open item are all steps whose whole point is that they

@@ -28,7 +28,7 @@ export interface VoiceKeys {
 
 /** What the question on the phone expects — steers the recognizer toward the few things she can say. */
 export interface HearContext {
-  /** 'ready' (the loading dialogue), 'reps' (a number of reps), 'confirm', 'resume', 'any'. */
+  /** 'ready' (the loading dialogue), 'reps' (a number of reps), 'confirm', 'resume', 'set' (a set under way), 'any'. */
   expect?: string;
   /** 'he' | 'en'. */
   lang?: string;
@@ -78,6 +78,7 @@ function hearPrompt(ctx: HearContext): string {
     : ctx.expect === 'reps' ? 'המאמן שאל "כמה חזרות עשית?" — התשובה היא בדרך כלל מספר, לפעמים משקל ואז חזרות.'
     : ctx.expect === 'confirm' ? 'המאמן שאל "נכון?" — התשובה היא "כן", "לא", או מספר.'
     : ctx.expect === 'resume' ? 'האימון מושהה — התשובה היא "המשך".'
+    : ctx.expect === 'set' ? 'המתאמן באמצע סט או בסופו. אם הוא פונה למאמן הוא אומר "מוכן", "סיימתי", או את מספר החזרות שעשה. נשימות, מאמץ, מוזיקה ואנשים אחרים אינם דיבור: אם לא נאמר משפט ברור, החזר טקסט ריק.'
     : 'התשובה קצרה: מילה או מספר.';
   return `מתאמן בחדר כושר רועש עונה למאמן קולי בעברית, במשפט קצר. ${expect} כתוב מספרים בספרות. אל תוסיף מילים שלא נאמרו.`;
 }
@@ -169,10 +170,16 @@ function hearOpenAI(keys: VoiceKeys, wavBase64: string, ctx: HearContext, model:
 
 /**
  * How the coach sounds. One sentence of direction, the same for every line, so a workout is one
- * voice — clear before warm, and never rushed (numbers said slowly enough to act on).
+ * voice — clear before warm.
+ *
+ * ⛔ A COACH'S PACE, NOT A NARRATOR'S (2026-10-05). The direction asked for "slightly slow", and the
+ * voice took it at its word: eleven seconds for the first workout's opening, eight for a lift's.
+ * The founder's verdict on the workout was that the talking was the friction. Brisk and natural now;
+ * the one thing still asked to be distinct is a number.
  */
-const STYLE_HE = 'מאמנת כושר אישית ישראלית: ברורה, רגועה ובטוחה, חמה אבל לא מתלהבת; קצב מעט איטי, ומספרים נאמרים בבירור.';
-const STYLE_EN = 'A personal trainer in a gym: clear, calm and confident, warm but not excited; slightly slow, numbers said clearly.';
+const STYLE_HE = 'מאמנת כושר אישית ישראלית באמצע אימון: ברורה, בטוחה ועניינית, חמה אבל לא מתלהבת. קצב דיבור טבעי וזריז, בלי הפסקות ארוכות בין המשפטים; מספרים נאמרים בבירור.';
+const SPEED = 1.15;
+const STYLE_EN = 'A personal trainer mid-workout in a gym: clear, confident and to the point, warm but not excited. A natural, brisk pace with no long pauses between sentences; numbers said clearly.';
 
 export async function say(keys: VoiceKeys, text: string, lang: string, voice = DEFAULT_VOICE, deadlineMs = 12_000): Promise<SayResult> {
   const [provider, model, voiceName] = voice.split(':');
@@ -198,6 +205,7 @@ function sayOpenAI(keys: VoiceKeys, text: string, lang: string, model: string, v
         voice: voiceName,
         instructions: lang.startsWith('he') ? `דבר בעברית ישראלית טבעית, במבטא ישראלי. ${STYLE_HE}` : STYLE_EN,
         response_format: 'wav',
+        speed: SPEED,
       }),
       signal,
     });

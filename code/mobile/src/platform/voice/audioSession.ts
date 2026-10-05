@@ -30,11 +30,13 @@ interface AudioModule {
   earOpen?(source: EarSource): Promise<string | null>;
   earClose?(): Promise<void>;
   earRunning?(): boolean;
+  earRecognizing?(): boolean;
   earListen?(locale: string, token: number): Promise<string | null>;
   earStopListening?(): Promise<void>;
   earClip?(token: number, maxSeconds: number): Promise<EarClip | null>;
   playFile?(path: string): Promise<boolean>;
   stopFile?(): void;
+  recoverSession?(): Promise<boolean>;
   addListener(event: 'onRouteChange', cb: (e: { connected: boolean }) => void): { remove(): void };
   addListener(event: 'onEarResult', cb: (e: { text: string; token: number }) => void): { remove(): void };
   addListener(event: 'onEarState', cb: (e: { running: boolean; error?: string; restarted?: boolean }) => void): { remove(): void };
@@ -195,6 +197,18 @@ export const audioSession = {
     }
   },
   earClose: () => quiet(() => native?.earClose?.()),
+  /**
+   * The audio taken back after an interruption nothing reported as ended (see the Swift): true when
+   * the session is ours again — the microphone restarted, the silent loop playing. False while a
+   * call still holds it, and in a build without the function.
+   */
+  async recoverSession(): Promise<boolean> {
+    try {
+      return (await native?.recoverSession?.()) === true;
+    } catch {
+      return false;
+    }
+  },
   earRunning(): boolean {
     try {
       return native?.earRunning?.() ?? false;
@@ -211,6 +225,14 @@ export const audioSession = {
     }
   },
   earStopListening: () => quiet(() => native?.earStopListening?.()),
+  /** Is the phone's own recognizer listening to the open window too? (The strong ear hears it either way.) */
+  earRecognizing(): boolean {
+    try {
+      return native?.earRecognizing?.() ?? false;
+    } catch {
+      return false;
+    }
+  },
   /** The audio the window `token` heard, for the second ear — null without it (`cloudEar`). */
   async earClip(token: number, maxSeconds = 12): Promise<EarClip | null> {
     try {

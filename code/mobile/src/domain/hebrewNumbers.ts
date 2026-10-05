@@ -48,6 +48,16 @@ export function hebrewWhole(n: number, gender: NumberGender): string {
   return parts.join(' ');
 }
 
+const HE_ORDINAL_M = ['', 'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שביעי', 'שמיני', 'תשיעי', 'עשירי'];
+
+/**
+ * "ראשון" / "שני" / "שלישי" — a masculine ordinal, for a set ("סט שני מתוך ארבעה"). Past the tenth
+ * Hebrew has no ordinal of its own and says the number ("הסט האחד עשר").
+ */
+export function hebrewOrdinal(n: number): string {
+  return HE_ORDINAL_M[n] ?? hebrewWhole(n, 'm');
+}
+
 /** The quarter words: a fraction is said the way it is said in a gym, never as a decimal. */
 function hebrewFraction(frac: number): string | null {
   if (Math.abs(frac - 0.5) < 1e-9) return 'וחצי';

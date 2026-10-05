@@ -121,6 +121,18 @@ export interface Env {
   DAILY_VOICE_HEAR?: string;
   DAILY_VOICE_SAY?: string;
   DAILY_VOICE_GLOBAL?: string;
+  /**
+   * ════ THE VOICE FOR AN ATHLETE WITH NO ACCOUNT YET (2026-10-05) ════
+   * An install with no session is given the voice out of its own pool: a day's hears and lines per
+   * install (defaults 1200 and 300 — one workout, with room: the strong ear hears every stretch she
+   * speaks, and a loud gym makes stretches of its own), and ONE ceiling for all such installs
+   * together (default 20 000). The pool is separate on purpose: an install id is minted by whoever
+   * sends it, so the per-install numbers are a speed bump and the anonymous ceiling is the wall —
+   * and a wall that can only ever shut the anonymous door, never a signed-in athlete's.
+   */
+  DAILY_VOICE_ANON_HEAR?: string;
+  DAILY_VOICE_ANON_SAY?: string;
+  DAILY_VOICE_ANON_GLOBAL?: string;
 }
 
 /**
@@ -481,19 +493,33 @@ function sameSecret(a: string, b: string): boolean {
 /**
  * ════ /voice/hear AND /voice/say (2026-09-27) ════
  *
- * Reached only past the shared token and the session lookup above. A workout is signed in by
- * construction (sign-in is a wall at onboarding), so a call with no session is refused — except on
- * a PROBE preview, where the bake-off drives it from a script. Never throws: every failure is a
+ * Reached only past the shared token and the session lookup above. Never throws: every failure is a
  * small JSON the phone reads as "use the on-device ear / Carmit".
+ *
+ * ⛔ A WORKOUT IS NOT SIGNED IN BY CONSTRUCTION — THIS SAID IT WAS, AND IT COST THE FOUNDER'S FIRST
+ * WORKOUT WITH THE VOICE (2026-10-05: *"הקול של האימון לא נשמע טוב זה כמו סירי… היא לא שומעת אותי"*).
+ * The route refused every call with no session, on the reasoning that sign-in is a wall at
+ * onboarding. It is not: half of all installs meet the account AFTER their first workout (the
+ * `signInAfterFirstWorkout` arm), the exchange that mints a session is one fire-and-forget request
+ * at sign-in, and a native sign-in that fails degrades to a local stub by design. On that morning the
+ * shared KV held not one session — for anyone — so the coach spoke in the phone's own voice and the
+ * strong ear heard nothing, and nothing on the phone or here said why.
+ *
+ * So an install with no session is served from its own, smaller pool (`DAILY_VOICE_ANON_*`), keyed
+ * by the install id the app already sends. A signed-in athlete is counted exactly as before.
  */
 async function voiceRoute(request: Request, env: Env, path: string, sub: string | null): Promise<Response> {
   const probing = env.PROBE === '1';
-  if (!sub && !probing) return json({ error: 'unauthorized' }, 401);
+  // An install id is a UUID-shaped token the app mints; anything else is not an install.
+  const sentInstall = (request.headers.get('x-hush-install') ?? '').trim();
+  const install = /^[A-Za-z0-9_-]{8,64}$/.test(sentInstall) ? sentInstall : '';
+  if (!sub && !install && !probing) return json({ error: 'unauthorized' }, 401);
+  const who = sub ?? `a:${install}`;
   const declared = Number(request.headers.get('content-length') ?? '0');
   if (declared > 1_500_000) return json({ error: 'too_large' }, 413);
   const limiter = env.VOICE_LIMIT ?? env.COACH_LIMIT;
   if (limiter && !probing) {
-    const { success } = await limiter.limit({ key: `v:${sub}` }).catch(() => ({ success: true }));
+    const { success } = await limiter.limit({ key: `v:${who}` }).catch(() => ({ success: true }));
     if (!success) return json({ error: 'rate_limited' }, 429);
   }
   let body: { audio?: string; text?: string; expect?: string; lang?: string; voice?: string };
@@ -525,8 +551,12 @@ async function voiceRoute(request: Request, env: Env, path: string, sub: string 
       return true;
     };
     if (!(await spend(`quota:vg:${day}`, n(env.DAILY_VOICE_GLOBAL, 60_000)))) return json({ error: 'budget' }, 503);
-    const mine = hearing ? `quota:vh:${sub}:${day}` : `quota:vs:${sub}:${day}`;
-    const ceiling = hearing ? n(env.DAILY_VOICE_HEAR, 3000) : n(env.DAILY_VOICE_SAY, 2000);
+    // No session: the anonymous pool's own wall first, then this install's own day.
+    if (!sub && !(await spend(`quota:vag:${day}`, n(env.DAILY_VOICE_ANON_GLOBAL, 20_000)))) return json({ error: 'budget' }, 503);
+    const mine = hearing ? `quota:vh:${who}:${day}` : `quota:vs:${who}:${day}`;
+    const ceiling = sub
+      ? (hearing ? n(env.DAILY_VOICE_HEAR, 3000) : n(env.DAILY_VOICE_SAY, 2000))
+      : (hearing ? n(env.DAILY_VOICE_ANON_HEAR, 1200) : n(env.DAILY_VOICE_ANON_SAY, 300));
     if (!(await spend(mine, ceiling))) return json({ error: 'rate_limited' }, 429);
   }
   const keys = { OPENAI_API_KEY: env.OPENAI_API_KEY };
@@ -612,7 +642,8 @@ export default {
      */
     const authRequired = env.REQUIRE_AUTH === '1';
 
-    // The voice's two doors (`voice.ts`): a signed-in athlete only, counted apart from the coach.
+    // The voice's two doors (`voice.ts`): an athlete by her session, or — before she has an account —
+    // by her install, each out of its own pool; counted apart from the coach either way.
     const path = new URL(request.url).pathname;
     if (path === '/voice/hear' || path === '/voice/say') return voiceRoute(request, env, path, sub);
 

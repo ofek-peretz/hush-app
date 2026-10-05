@@ -38,6 +38,8 @@ const SURVIVES_A_WIPE: Record<string, string> = {
   // Remote config (2026-09-01, audit 03): a fact about the BUILD's tuning, not about the athlete —
   // an account wipe must not reset an experiment arm mid-flight (its own header says so).
   'hush.config.cache': 'the remote-config cache — build tuning, deliberately not athlete data',
+  // 2026-10-01: the one restart a wrong-way first launch is allowed (`app/reload.relaunchIntoDirection`).
+  'hush.direction.relaunch': 'a DEVICE fact tied to `hush.locale` — which direction this phone was last restarted into',
 };
 
 /**

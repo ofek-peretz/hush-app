@@ -91,6 +91,26 @@ jobs:
         run: xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios17.0 code/mobile/targets/widget/*.swift
       - name: Watch complication (watchOS 10)
         run: xcrun --sdk watchos swiftc -typecheck -parse-as-library -target arm64_32-apple-watchos10.0 code/mobile/targets/watch-widget/*.swift
+      # ════ THE WORKOUT'S MICROPHONE COMPILES FOR EVERY iOS THE APP RUNS ON (2026-10-05) ════
+      # `HushEar.swift` is the microphone the strong ear hears through. It used to be one class behind
+      # `@available(iOS 26.0, *)`; now only Apple's on-device recognizer inside it is — so the file must
+      # type-check at the app's own floor (15.1), where one ungated use of an iOS 26 symbol is an error.
+      # It imports nothing but AVFoundation and Speech, so it checks alone. (The module beside it needs
+      # ExpoModulesCore and is compiled by the build.)
+      - name: Voice coach microphone (iOS 15.1 — the app's floor)
+        # The file names iOS 26 symbols (SpeechAnalyzer) behind availability checks, so the SDK must
+        # have them: the newest Xcode 26 on the runner is chosen, and a runner without one fails
+        # with that sentence — not with forty "cannot find type" errors that read like a broken file.
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then export DEVELOPER_DIR="$XCODE/Contents/Developer"; fi
+          SDK=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $SDK (${DEVELOPER_DIR:-the runner's default Xcode})"
+          case "$SDK" in
+            2[6-9]*|[3-9][0-9]*) ;;
+            *) echo "::error::this runner has no iOS 26 SDK, so HushEar.swift cannot be type-checked here"; exit 1 ;;
+          esac
+          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 code/mobile/modules/hush-voice-audio/ios/HushEar.swift
       # ════ THE WRIST READS WHAT THE PHONE SAID (2026-09-17) ════
       # The sync simulator (`__tests__/sync/theSurfacesNeverDisagree`) writes the exact envelopes the
       # watch is sent beside the facts the phone's own view states. Decode each with the watch's REAL

@@ -17,7 +17,7 @@
  *   6. Ready on the lock card only while the voice is in the loading dialogue (a button someone answers).
  *   7. Her music is never left ducked once nothing is said and nothing listens.
  *   8. No dead end: a set on stage with nothing asking and nothing listening, while the ear can hear.
- *   9. A finished workout ends with "כל הכבוד. סיימת את האימון…" — once.
+ *   9. A finished workout ends with "כל הכבוד. …" — once.
  *
  * On 2026-09-27 the first run of 40 workouts found 113 dead ends and six other holes; the last run of
  * 80 found none. CI runs three; `FUZZ_SEEDS=1-80 npx jest theVoiceSurvivesAnyAthlete` runs the lot, and
@@ -159,8 +159,8 @@ describe('⛔ the voice survives any athlete — every door, in any order', () =
           log.push(`${st()}  🔊 ${text}`);
           if (!(c as any).on) fail('spoke while the voice is off');
           if ((c as any).interrupted) fail('spoke during a call');
-          // A hold's echo names the hold, not a reps row (items are not `loggedSets`).
-          if (/נרשם\.$/.test(text) && !text.startsWith('פלאנק,')) pendingEchoes.push(text);
+          // A hold's echo says its time, not a reps row (items are not `loggedSets`).
+          if (/נרשם\.$/.test(text) && /חזר/.test(text)) pendingEchoes.push(text);
         },
         interrupt: () => {},
       };
@@ -216,6 +216,14 @@ describe('⛔ the voice survives any athlete — every door, in any order', () =
         getView: V,
         locale: () => ({ locale: 'he', units: 'kg' }),
         firstSessionEver: () => seed % 2 === 0,
+        /*
+         * ⛔ THE PHONE'S OWN MICROPHONE, HELD FOR THE WORKOUT — on two seeds in three (2026-10-05). It is
+         * what the app ships with by default, and it is the only world in which every set is called and
+         * started the same way and her own report is heard without the question (`nextSet`,
+         * `armSetWindow`). The third seed keeps the earbuds' microphone, where a set after a rest runs
+         * as it did before — both roads stay walked.
+         */
+        earIsFree: () => seed % 3 !== 0,
       });
       const settle = async () => {
         await act(async () => {
@@ -273,7 +281,8 @@ describe('⛔ the voice survives any athlete — every door, in any order', () =
       for (let step = 0; step < STEPS && V().active; step++) {
         const before = rowsKey();
         const beforeLen = V().loggedSets.length;
-        const roundBefore = !!(c as any).roundWrite || !!(c as any).writing;
+        // A number she said a step ago and the coach is holding a beat (`REPORT_SETTLE_MS`) is her word too.
+        const roundBefore = !!(c as any).roundWrite || !!(c as any).writing || !!(c as any).pendingReport;
         let writer = false;
         const r = rnd();
         if (!earbudsIn) {
@@ -376,7 +385,8 @@ describe('⛔ the voice survives any athlete — every door, in any order', () =
         if (pendingEchoes.length && v.active) {
           const rows = v.loggedSets;
           const l = { locale: 'he', units: 'kg' } as const;
-          const cands: string[] = rows.slice(-3).map((r) => voiceScript.echo(r.actualWeight, r.actualReps, l));
+          // A set done at the plan's load is said back by its reps alone; any other, with its load (2026-10-05).
+          const cands: string[] = rows.slice(-3).flatMap((r) => [voiceScript.echo(r.actualWeight, r.actualReps, l), voiceScript.echo(r.actualWeight, r.actualReps, l, r.actualWeight)]);
           for (const k of [2, 3]) {
             if (rows.length >= k) cands.push(voiceScript.echoRound(rows.slice(-k).map((r) => ({ exerciseId: r.exerciseId, kg: r.actualWeight, reps: r.actualReps })), l));
           }
@@ -408,7 +418,7 @@ describe('⛔ the voice survives any athlete — every door, in any order', () =
           } else deadSince = null;
         } else deadSince = null;
       }
-      const endLines = log.filter((x) => x.includes('כל הכבוד. סיימת את האימון')).length;
+      const endLines = log.filter((x) => x.includes('🔊 כל הכבוד.')).length;
       if (!V().active && earbudsIn && !onCall && endLines !== 1) fail(`the end line was said ${endLines} times`);
       const deads = log.filter((x) => x.includes('💤')).length;
       const tail = log.slice(-60).join('\n');

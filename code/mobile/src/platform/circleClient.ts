@@ -159,22 +159,49 @@ async function call<T>(path: string, init: { method: 'GET' | 'POST'; body?: unkn
  * against a different JWKS with a different audience — see `server/hush-identity`.
  */
 export async function circleExchange(identityToken: string | null, provider: 'apple' | 'google' = 'apple'): Promise<boolean> {
-  if (!circleAvailable() || !identityToken) return false;
-  try {
-    const res = await fetch(`${CIRCLE_URL}/auth/${provider === 'google' ? 'google' : 'apple'}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ identityToken }),
-    });
-    if (!res.ok) return false;
-    const body = (await res.json()) as { token?: string };
-    if (!body.token) return false;
-    await SecureStore.setItemAsync(TOKEN_KEY, body.token);
-    void track('circle_session_opened');
-    return true;
-  } catch {
+  if (!circleAvailable()) return false;
+  /*
+   * ⛔ A SIGN-IN THAT MINTED NO SESSION SAYS SO (2026-10-05). On that morning the worker's KV held
+   * not one session, for anyone — and nothing anywhere had recorded a failed exchange, because every
+   * way of failing returned `false` into a `void`. The circle, the pair, the coach track and (then)
+   * the voice all stood behind this one request. So: no token to trade is recorded (a native sign-in
+   * that fell back to the local stub), a refusal is recorded with its status, and a request that
+   * never arrived is tried again — the identity token is good for minutes, a dropped packet is not
+   * a reason to stay signed out for ever.
+   */
+  if (!identityToken) {
+    void track('circle_session_failed', { provider, why: 'no_identity_token' });
     return false;
   }
+  const waits = [0, 2_000, 8_000];
+  let why = 'offline';
+  for (const wait of waits) {
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try {
+      const res = await fetch(`${CIRCLE_URL}/auth/${provider === 'google' ? 'google' : 'apple'}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ identityToken }),
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { token?: string };
+        if (!body.token) {
+          why = 'no_token';
+          break;
+        }
+        await SecureStore.setItemAsync(TOKEN_KEY, body.token);
+        void track('circle_session_opened');
+        return true;
+      }
+      why = `http_${res.status}`;
+      // A refusal is an answer (the token was not ours, or was malformed): asking again changes nothing.
+      if (res.status < 500) break;
+    } catch {
+      why = 'offline';
+    }
+  }
+  void track('circle_session_failed', { provider, why });
+  return false;
 }
 
 /** Does a circle session exist on this phone? (Gates the Together section, never a screen.) */

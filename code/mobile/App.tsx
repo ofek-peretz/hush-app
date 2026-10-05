@@ -29,6 +29,7 @@ import {
   IBMPlexMono_600SemiBold,
 } from '@expo-google-fonts/ibm-plex-mono';
 import { initI18n } from '@/i18n';
+import { relaunchIntoDirection } from '@/app/reload';
 import { AppProvider } from '@/state/stores/appStore';
 import { SessionProvider } from '@/state/stores/sessionStore';
 import { PairProvider } from '@/state/stores/pairStore';
@@ -71,7 +72,13 @@ export default function App() {
   useEffect(() => {
     installCrashHandler(); // capture JS crashes → telemetry (observability)
     void loadRemoteConfig(); // tunables (trial length…) — cached word applies now, fresh word lands quietly
-    initI18n().then(() => setI18nReady(true));
+    /* A first launch facing the wrong way restarts once, before anything is drawn (`reload.ts`). */
+    initI18n()
+      .then(() => relaunchIntoDirection())
+      .then((restarting) => {
+        if (!restarting) setI18nReady(true);
+      })
+      .catch(() => setI18nReady(true));
     /*
      * ════ THE HEARTBEAT, AND THE FLUSH THAT CATCHES THE ONE WHO LEAVES ════
      *

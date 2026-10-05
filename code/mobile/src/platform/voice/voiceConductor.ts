@@ -32,7 +32,7 @@
 
 import { exerciseById, exerciseDisplayName, loadStyleOf } from '@/data/exercises';
 import { snapToStock } from '@/domain/startingLoad';
-import { voiceAskAfterS } from '@/domain/setDwell';
+import { VOICE_BUFFER_S, voiceAskAfterS, voiceReportFromS } from '@/domain/setDwell';
 import { isRecordSet } from '@/domain/setRecord';
 import { MAX_VOICE_REPS, parseVoiceAnswer, toKg, VOICE_HINTS, type VoiceAnswer } from '@/domain/voiceGrammar';
 import { voiceScript, type VoiceLocale } from '@/domain/voiceScript';
@@ -60,6 +60,8 @@ export interface Ear {
     hints?: readonly string[];
     /** What the question expects — the second ear is told (`cloudEar`). */
     expect?: HearExpect;
+    /** Nobody is waiting on a clock for her word: only a voice clearly above the room is sent anywhere (`voiceCapture`). */
+    patient?: boolean;
     onSentence: (text: string, confidence: number | null) => boolean;
     onEnd: (why: WindowEnd) => void;
   }): EarWindow;
@@ -75,10 +77,20 @@ export interface Session {
   unduck(): Promise<void>;
   playChime(): Promise<void>;
 }
-/** What survives the app being killed mid-workout: whether the opening was said, and the loads she confirmed. */
+/**
+ * What survives the app being killed mid-workout: whether the opening was said, the loads she
+ * confirmed — and (2026-10-05) where the set on stage stood: begun or still being loaded, when its
+ * question is due and from when her own report counts.
+ *
+ * ⛔ WITHOUT THE SET, A KILL STARTED IT OVER. The voice came back with "חזרתי" and called the set
+ * he was in the middle of as if it had not begun: "סט ראשון מתוך שלושה", its clock from zero — so
+ * the reps he said as he racked the bar, seconds after reopening the app, were "too soon for a set"
+ * and dropped without a word (`theVoiceSurvivesThePhone`).
+ */
 export interface VoicePersisted {
   startedAtMs: number;
   confirmed: [string, number | null][];
+  set?: { key: string; started: boolean; askDueMs: number | null; reportFromMs: number | null; soft?: boolean } | null;
 }
 export interface ConductorDeps {
   mouth: Mouth;
@@ -125,6 +137,17 @@ export const WINDOWS = {
  */
 export const MAX_REMINDERS = 2;
 
+/**
+ * ⛔ A PAUSE IS NOT LISTENED TO FOR EVER (2026-10-05). On the phone's own microphone the pause was
+ * listened to "for as long as it lasts", a minute at a time — written when a window cost nothing.
+ * Since the strong ear hears every window, a ten-minute pause was ten minutes of whatever was said
+ * near the phone, sent on every few seconds: his call, his talk with a friend, at his cost. Now:
+ * the first minute as attentive as any question; after it only a voice clearly above the room is
+ * sent anywhere (`patient`); and past this, nothing listens — he comes back by a button (the stage,
+ * the lock screen, the wrist), and the voice is whole the moment he does.
+ */
+export const PAUSE_LISTEN_MS = 5 * 60_000;
+
 /** A hold longer than this is a block of work (a ten-minute bike), announced and never counted aloud. */
 const HOLD_COUNTED_MAX_S = 180;
 
@@ -140,6 +163,14 @@ const MAX_REPS_IN_LOADING = 30;
 export const CONFIDENCE_FLOOR = 0.6;
 /** An unrecognisable sentence this soon after a line ended is the line — not her (see `isBleed`). */
 const BLEED_MS = 1_000;
+/**
+ * A bare number said while a set is under way waits this long before it is her report: a count on
+ * the way to the last rep ("שש… שבע… שמונה") is replaced by the number after it, and only the last
+ * one is written. A number said AS a report ("עשר חזרות", "סיימתי") does not wait.
+ */
+export const REPORT_SETTLE_MS = 2_000;
+/** The set's own window stays open this much past the moment the question is due, so the two never leave a gap. */
+const SET_WINDOW_TAIL_MS = 3_000;
 
 type Mode = 'off' | 'idle' | 'loading' | 'set' | 'asking' | 'rest' | 'paused' | 'ended';
 
@@ -220,6 +251,8 @@ export class VoiceConductor {
   private lastActive = false;
   private lastActiveView: SessionView | null = null;
   private lastAwaiting = false;
+  /** When the loading dialogue on stage was opened — a number said sooner than a set takes cannot be its reps. */
+  private loadingSinceMs = 0;
   private window: EarWindow | null = null;
   private timers = new Set<unknown>();
   private ask: AskState | null = null;
@@ -239,7 +272,18 @@ export class VoiceConductor {
   /** Re-entering the phase she is in (earbuds back, resume, a call): nothing already said is said again (§3.9). */
   private reentry = false;
   /** The set on stage and where it stands: started, or still loading; when its question is due; how often it was re-asked. */
-  private setState: { key: string; started: boolean; askDueMs: number | null; reminders?: number } | null = null;
+  private setState: {
+    key: string;
+    started: boolean;
+    askDueMs: number | null;
+    reminders?: number;
+    /** From when a number she says can be her reps (`voiceReportFromS`) — null where a set is not reported unprompted (a round, a hold). */
+    reportFromMs?: number | null;
+    /** A set the coach has ASSUMED will begin at the rest's end if she does not say "מוכן" (see `nextSet`). */
+    soft?: boolean;
+  } | null = null;
+  /** A bare number she said during the set, held a beat in case the next number replaces it (`REPORT_SETTLE_MS`). */
+  private pendingReport: { key: string; weight: number | null; reps: number; conf: number | null } | null = null;
   /** The lifts that struck a record today — said at the set, counted at the end. */
   private records = new Set<string>();
   /** What the stage showed last: the exercise, and whether it was an item (a hold, a distance). */
@@ -251,6 +295,7 @@ export class VoiceConductor {
   private voiceRows = new Set<string>();
   /** The ear cannot hear her (a locked phone, a refused microphone): lines go on, no window opens. */
   private earDown = false;
+  private earDownWhy: WindowEnd | null = null;
   private earErrors = 0;
   private cantHearSaid = false;
   /** The last write in flight — the end of the workout is said after it, never before. */
@@ -303,6 +348,7 @@ export class VoiceConductor {
     this.clearTimers();
     this.d.mouth.interrupt();
     this.ask = null;
+    this.pendingReport = null;
     this.roundWrite = null;
     this.heldRest = null;
     this.interrupted = false;
@@ -338,17 +384,30 @@ export class VoiceConductor {
     if (this.on) this.earWentDown('denied');
   }
 
-  /** Mid-workout after the app was killed: whether the opening was said, and the loads she stood at. */
+  /** Mid-workout after the app was killed: whether the opening was said, the loads she stood at, and the set she was in. */
   restore(p: VoicePersisted | null): void {
     if (!p) return;
     this.announcedStart = p.startedAtMs;
     this.confirmedLoad = new Map(p.confirmed);
+    // The set on stage as it stood: `enable` re-enters it (`resumeSet`) if it is still the one on stage.
+    if (p.set) this.setState = { ...p.set };
   }
 
-  /** Back on glass, or the phone's microphone opened: windows may be tried again. */
+  /** A call, Siri or an alarm holds the audio — and nothing has said it ended (see `useVoiceCoach`). */
+  isInterrupted(): boolean {
+    return this.interrupted;
+  }
+
+  /** Why the ear is down right now — null while it listens. `deaf` is the one that heals by itself (`useVoiceCoach`). */
+  earDownBecause(): WindowEnd | null {
+    return this.earDown ? this.earDownWhy : null;
+  }
+
+  /** Back on glass, the phone's microphone opened, or the strong ear's wait is over: windows may be tried again. */
   earMayListen(): void {
     if (!this.earDown) return;
     this.earDown = false;
+    this.earDownWhy = null;
     this.earErrors = 0;
     this.d.track?.('voice_ear_back');
   }
@@ -387,6 +446,7 @@ export class VoiceConductor {
       this.openLoading(v, [voiceScript.readyPrompt()]);
     } else if (this.mode === 'set' && this.setState?.askDueMs != null) {
       this.after(Math.max(1_500, this.setState.askDueMs - this.d.now()), () => this.askDone());
+      this.armSetWindow();
     } else if (this.mode === 'rest') {
       this.scheduleTenSeconds(v);
     }
@@ -446,8 +506,10 @@ export class VoiceConductor {
     this.calibrating = null;
     this.lastLoggedEx = null;
     this.setState = null;
+    this.pendingReport = null;
     // A new workout tries to listen again, and says so again if it cannot.
     this.earDown = false;
+    this.earDownWhy = null;
     this.earErrors = 0;
     this.cantHearSaid = false;
     this.persist();
@@ -455,7 +517,7 @@ export class VoiceConductor {
     const lines: string[] = [];
     if (this.d.firstSessionEver()) lines.push(voiceScript.openFirstSession());
     const first = v.sessionExerciseIds[0] ?? v.currentExerciseId;
-    if (first) lines.push(voiceScript.openSession(v.workoutName ?? '', v.sessionExerciseIds.length, this.estimateMinutes(v), first, l));
+    if (first) lines.push(voiceScript.openSession(v.workoutName ?? '', v.sessionExerciseIds.length, this.estimateMinutes(v), l));
     void this.speak(lines);
   }
 
@@ -486,7 +548,18 @@ export class VoiceConductor {
 
   private persist(): void {
     if (this.announcedStart == null || this.announcedStart < 0) return;
-    this.d.persist?.({ startedAtMs: this.announcedStart, confirmed: [...this.confirmedLoad] });
+    const s = this.setState;
+    this.d.persist?.({
+      startedAtMs: this.announcedStart,
+      confirmed: [...this.confirmedLoad],
+      set: s ? { key: s.key, started: s.started, askDueMs: s.askDueMs, reportFromMs: s.reportFromMs ?? null, ...(s.soft ? { soft: true } : {}) } : null,
+    });
+  }
+
+  /** The set on stage, where it stands — and written down, so a killed app comes back into it. */
+  private setSet(s: NonNullable<VoiceConductor['setState']>): void {
+    this.setState = s;
+    this.persist();
   }
 
   // ── The set ───────────────────────────────────────────────────────────────────────────────────
@@ -509,6 +582,7 @@ export class VoiceConductor {
     this.closeWindow();
     this.clearTimers();
     this.ask = null;
+    this.pendingReport = null;
     // A set arrived while an echo's tail was still open (a rest shorter than the tail): its move lands.
     this.releaseHeldRest(false);
     const ex = v.currentExerciseId;
@@ -540,7 +614,7 @@ export class VoiceConductor {
       }
       // A distance, or a block of work longer than a hold: announced, never counted (spec §3.9).
       this.mode = 'set';
-      this.setState = { key: key ?? '', started: true, askDueMs: null };
+      this.setSet({ key: key ?? '', started: true, askDueMs: null });
       const line =
         item.kind === 'distance' && item.metres != null
           ? voiceScript.distanceItem(exerciseDisplayName(ex), item.metres, l)
@@ -577,10 +651,8 @@ export class VoiceConductor {
         this.openLoading(v, [voiceScript.roundLoading(chain.steps, l)], fromRest);
         return;
       }
-      this.mode = 'set';
-      if (setChanged) void this.speak([voiceScript.roundStart(n, m, chain.steps.map((s) => s.exerciseId), l)], false, fromRest);
-      this.scheduleAsk(v, this.d.now());
-      return;
+      // Rounds 2+ at the loads already out: announced, and — like every set — hers to start.
+      return this.nextSet(v, setChanged ? [voiceScript.roundStart(n, m, l)] : [], fromRest);
     }
 
     /*
@@ -601,7 +673,7 @@ export class VoiceConductor {
       // A warm-up is announced as one — the lift, the ramp step, the load, the count — never as a
       // "load change" down from the working weight (2026-09-27, the voice fuzz).
       else if (warmup) line = voiceScript.warmupStart(ex, kg, v.currentTarget.recommendedReps, n, m, l);
-      else if (loadChanged && confirmed != null && kg != null) line = voiceScript.loadChanged(ex, confirmed, kg, n, m, warmup, l);
+      else if (loadChanged && confirmed != null && kg != null) line = voiceScript.loadChanged(ex, kg, n, m, warmup, l);
       else if (firstTime && !known) line = voiceScript.loadFirstTime(ex, kg, lo, hi, l);
       else line = voiceScript.loadCalibrated(ex, kg, lo, hi, l);
       this.skipFrom = null;
@@ -609,9 +681,37 @@ export class VoiceConductor {
       return;
     }
 
-    // Sets 2+ at the same load: the rest's end was the start (spec §3.6 / §3.3).
+    // Sets 2+ at the same load.
+    this.nextSet(v, setChanged ? [voiceScript.setStart(n, m, warmup, l)] : [], fromRest);
+  }
+
+  /**
+   * ════ ⛔ EVERY SET IS THE SAME FIVE BEATS (founder, 2026-10-05) ════
+   *   > *"אני מרגיש שזה מבוצע בצורה חפיפניקית ואני רוצה שזה יהיה הכי מסודר ומתוכנן שיש. אני רוצה לעשות
+   *   > את זה ממש כמו waze של חדר הכושר + הקלט שהאפליקציה מקבלת מהמתאמן."*
+   *
+   *     the set is called → "מוכן" → the set → her reps → said back, and what comes next
+   *
+   * Until this, only a lift's FIRST set (and a set after the load moved) had the second beat: every
+   * other set was called at the rest's end and simply presumed begun — no "מוכן", no "קדימה", no
+   * Ready on any surface. One workout taught her two protocols, and which one she was in depended on
+   * arithmetic she could not see. Now every set is called the same way and started the same way.
+   *
+   * ⚠️ AND A SET SHE DOES NOT ANNOUNCE STILL RUNS. On a set she is simply continuing — the same lift,
+   * the load already on the bar — the coach does not stand waiting for a word she forgot: if no
+   * "מוכן" comes, the set is taken to have begun at the rest's end, exactly as it always was (the
+   * question at its usual time, her own report heard before it). Her word is the start whenever she
+   * gives it; its absence is never a dead end. A lift's first set, and a bar she has to change, do
+   * wait for her — there the coach cannot know when she is under it.
+   *
+   * Only on a microphone that costs her music nothing (the phone's, held for the workout): the
+   * earbuds' microphone open for a whole set would hold her music at call quality. Without it — or
+   * with no ear at all — the set after a rest runs as it did before this.
+   */
+  private nextSet(v: SessionView, lines: string[], fromRest: boolean): void {
+    if (!this.earDown && this.d.earIsFree?.()) return this.openLoading(v, lines, fromRest, true);
     this.mode = 'set';
-    if (setChanged) void this.speak([voiceScript.setStart(ex, kg, lo, hi, n, m, warmup, l)], false, fromRest);
+    void this.speak(lines, false, fromRest);
     this.scheduleAsk(v, this.d.now());
   }
 
@@ -639,10 +739,12 @@ export class VoiceConductor {
     const hold = this.holdOnStage(v);
     if (hold && v.holdEndsAtMs != null) {
       s.askDueMs = v.holdEndsAtMs;
+      this.persist();
       this.scheduleHoldTen(v.holdEndsAtMs, hold.seconds);
     }
     if (s.askDueMs == null) return this.settleAudio();
     this.after(Math.max(1_500, s.askDueMs - this.d.now()), () => this.askDone());
+    this.armSetWindow();
   }
 
   /** The lifts of the round still to be done from the one on stage — null when one lift (or none) is left. */
@@ -668,10 +770,12 @@ export class VoiceConductor {
     return { at: idx - s, steps: plan.slice(s, e + 1).map(roundStepOf) };
   }
 
-  private openLoading(v: SessionView, lines: string[], chime = false): void {
+  private openLoading(v: SessionView, lines: string[], chime = false, soft = false): void {
     this.mode = 'loading';
+    this.loadingSinceMs = this.d.now();
     const key = stepKeyOf(v) ?? '';
-    this.setState = { key, started: false, askDueMs: null };
+    this.setSet({ key, started: false, askDueMs: null });
+    this.pendingReport = null;
     /*
      * The set has not started (spec §3.2: "הסט לא מתחיל עד שיש אות"): EVERY surface offers Ready, and
      * "מוכן" from any of them — or her word — moves the set's stamp to the signal (`markSetStarted`).
@@ -683,6 +787,8 @@ export class VoiceConductor {
     this.lastAwaiting = true;
     void this.speak(lines, true, chime).then(() => {
       if (this.mode !== 'loading') return this.settleAudio();
+      // A set she is simply continuing: "מוכן" is hers to say, and the set runs without it (`nextSet`).
+      if (soft && this.openNextSetWindow(v, key)) return;
       this.openWindow(WINDOWS.loading, (a, text, conf) => this.onLoadingAnswer(v, a, text, conf), 'ready', (why) => {
         if (this.mode !== 'loading' || this.setState?.key !== key) return;
         if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
@@ -699,7 +805,7 @@ export class VoiceConductor {
         const now = this.d.getView();
         const inMs = now ? this.askDelayMs(now) : null;
         if (inMs != null) {
-          this.setState = { key, started: false, askDueMs: this.d.now() + inMs };
+          this.setSet({ key, started: false, askDueMs: this.d.now() + inMs });
           this.after(inMs, () => this.askDone());
         }
       });
@@ -707,6 +813,211 @@ export class VoiceConductor {
         if (this.mode === 'loading' && this.window) void this.speak([voiceScript.readyPrompt()], true);
       });
     });
+  }
+
+  /**
+   * The window of a set she is continuing (`nextSet`): open from the moment it is called until its
+   * question is due. Until a set could be over, what she says is about its START ("מוכן") or the
+   * bar; from then on it is her REPORT — whether or not she ever said "מוכן".
+   */
+  private openNextSetWindow(v0: SessionView, key: string): boolean {
+    const v = this.d.getView() ?? v0;
+    const ex = v.currentExerciseId;
+    const inMs = this.askDelayMs(v);
+    if (this.setState?.key !== key || !ex || inMs == null) return false;
+    const now = this.d.now();
+    const reportIn = this.reportDelayMs(v);
+    const reportFromMs = reportIn == null ? null : now + reportIn;
+    this.setSet({ key, started: false, askDueMs: now + inMs, reportFromMs, soft: true });
+    this.after(inMs, () => this.askDone());
+    this.openWindow(inMs + SET_WINDOW_TAIL_MS, (a, text, conf) => this.onNextSetAnswer(key, a, text, conf), 'set', (why) => {
+      if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
+      // The question still comes at its time; an ear that failed says so once, and the question
+      // becomes where to mark the set (`askDone`).
+      this.earFailed(why);
+    });
+    return true;
+  }
+
+  private onNextSetAnswer(key: string, a: VoiceAnswer | null, text: string, conf: number | null): boolean {
+    const v = this.d.getView();
+    const s = this.setState;
+    if (!v || !s || s.key !== key || this.mode !== 'loading') return false;
+    if (!a) return true;
+    // "מוכן": her start, said aloud — the same word, the same "קדימה", as on a lift's first set.
+    if (a.kind === 'ready' || a.kind === 'yes') {
+      this.onReady(v, 'voice');
+      return false;
+    }
+    if (a.kind === 'skip' || a.kind === 'pause' || a.kind === 'finish') return this.onLoadingAnswer(v, a, text, conf);
+    if (s.reportFromMs != null && this.d.now() >= s.reportFromMs) return this.onSetReport(key, a, conf);
+    // Too soon for a set to be over: whatever she says is about the bar — the loading dialogue's own rules.
+    return this.onLoadingAnswer(v, a, text, conf);
+  }
+
+  /**
+   * ════ ⛔ SHE REPORTS; THE COACH DOES NOT MAKE HER WAIT TO BE ASKED (founder, 2026-10-05) ════
+   *
+   * "כמה חזרות?" was fired by an estimate — her reps at the stage figure's tempo, plus fifteen
+   * seconds. The coach cannot see the bar go back on the rack; a set done in twenty-five seconds
+   * waited twenty more for the question, and a slow one was asked mid-rep. Waze knows where the car
+   * is. The gym's version of that is her own voice: she racks the bar and says "עשר", and the coach
+   * answers at once. The question stays — as what it should have been all along, the fallback for a
+   * set she finished and said nothing about.
+   *
+   *   · NOT BEFORE A SET COULD BE OVER. The window opens at `voiceReportFromS` — before it nothing
+   *     listens at all, so a count started aloud, a word to a friend, a breath, are never even heard.
+   *   · A COUNT IS NOT A REPORT. A bare number waits `REPORT_SETTLE_MS`; the number after it replaces
+   *     it ("שש… שבע… שמונה" writes eight, once). Said as a report — "עשר חזרות", a load and reps,
+   *     "סיימתי" — it does not wait.
+   *   · NOTHING ELSE CHANGES: the write, the echo, the three seconds for "לא, תשע", the verdict and
+   *     the rest are the asked answer's own road (`complete`). An unsure hearing is still said back
+   *     with "נכון?" before anything is written.
+   *   · A NOISE IS NOT AN ANSWER, and here it is not even a "לא הבנתי": she is lifting.
+   */
+  private armSetWindow(): void {
+    const s = this.setState;
+    if (!s || !s.started || s.askDueMs == null || s.reportFromMs == null) return;
+    // Only a microphone that costs her music nothing listens through a set.
+    if (this.earDown || !this.d.earIsFree?.()) return;
+    const key = s.key;
+    this.after(Math.max(0, s.reportFromMs - this.d.now()), () => {
+      const cur = this.setState;
+      if (!this.on || this.interrupted || this.mode !== 'set' || !cur || cur.key !== key || cur.askDueMs == null) return;
+      const ms = cur.askDueMs - this.d.now() + SET_WINDOW_TAIL_MS;
+      if (ms < 2_000) return;
+      this.openWindow(ms, (a, _text, conf) => this.onSetReport(key, a, conf), 'set', (why) => {
+        if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
+        this.earFailed(why);
+      });
+    });
+  }
+
+  private onSetReport(key: string, a: VoiceAnswer | null, conf: number | null): boolean {
+    const v = this.d.getView();
+    const s = this.setState;
+    if (!v || !s || s.key !== key || (this.mode !== 'set' && this.mode !== 'loading')) return false;
+    if (!a) return true; // an effort, a plate, the next rack: she is lifting
+    const ahead = this.roundAhead(v);
+    if (ahead) return this.onRoundReport(v, ahead, a);
+    const planned = v.currentTarget?.recommendedWeight ?? null;
+    switch (a.kind) {
+      case 'figures': {
+        const two = a.numbers.length >= 2;
+        const reps = two ? a.numbers[1] : a.numbers[0];
+        // A load alone, or "ten a side", is not a report of a set; a number that cannot be reps is noise.
+        if (!validReps(reps) || a.perSide || (!two && a.saysKg && !a.saysReps)) return true;
+        const weight = two ? toKg(a.numbers[0], a.lb) : planned;
+        if (two || a.saysReps) return this.takeReport(v, weight, reps, conf);
+        this.holdReport(key, weight, reps, conf);
+        return true;
+      }
+      case 'done': {
+        // "סיימתי" after a number is that number; alone, it is the cue for the one question left.
+        const held = this.pendingReport;
+        if (held && held.key === key) return this.takeReport(v, held.weight, held.reps, held.conf);
+        if (v.setLabel?.warmup) return this.takeReport(v, planned, v.currentTarget?.recommendedReps ?? 0, 1);
+        this.clearTimers();
+        this.askDone();
+        return false;
+      }
+      case 'as_written':
+        return this.takeReport(v, planned, v.currentTarget?.repBandLo ?? v.currentTarget?.recommendedReps ?? 0, 1);
+      case 'skip':
+        return this.onSkip(v, false);
+      case 'pause':
+        v.pause();
+        return false;
+      case 'finish':
+        void this.speak([voiceScript.finishOnPhone()], true);
+        return true;
+      default:
+        return true; // "כן", "לא", "מוכן" in the middle of a set answer nothing
+    }
+  }
+
+  /**
+   * A round reported before its question (2026-10-05): every lift's number at once ("חמש עשרה ושתים
+   * עשרה"), or "סיימתי" — which brings the round's one question now instead of at its estimate. A
+   * lone number in the middle of a round is a count, or the first lift's own; it waits for the
+   * question, which asks for them in order.
+   */
+  private onRoundReport(v: SessionView, ahead: RoundStep[], a: VoiceAnswer): boolean {
+    switch (a.kind) {
+      case 'figures':
+        if (a.saysKg || a.perSide || a.numbers.filter(validReps).length < ahead.length) return true;
+        break;
+      case 'done':
+        this.clearTimers();
+        this.askDone();
+        return false;
+      case 'skip':
+        return this.onSkip(v, false);
+      case 'pause':
+        v.pause();
+        return false;
+      case 'finish':
+        void this.speak([voiceScript.finishOnPhone()], true);
+        return true;
+      default:
+        return true;
+    }
+    // The round's own answer, taken exactly as if its question had just been asked.
+    this.closeWindow();
+    this.clearTimers();
+    if (v.awaitingReady) v.setAwaitingReady(false);
+    this.lastAwaiting = false;
+    this.mode = 'asking';
+    this.ask = { question: 'round', silences: 0, noes: 0, round: { steps: ahead, reps: [] } };
+    this.d.track?.('voice_set_reported', { asked: false, round: ahead.length });
+    this.onRoundAnswer(v, a);
+    return false;
+  }
+
+  /** Her report is the answer: the due question is not asked, and the set is written the asked answer's own way. */
+  private takeReport(v: SessionView, weight: number | null, reps: number, conf: number | null): boolean {
+    this.pendingReport = null;
+    this.clearTimers();
+    // A set reported is a set begun, with or without "מוכן": the Ready it still offered goes.
+    if (v.awaitingReady) v.setAwaitingReady(false);
+    this.lastAwaiting = false;
+    this.mode = 'asking';
+    this.ask = { question: 'done', silences: 0 };
+    this.d.track?.('voice_set_reported', { asked: false });
+    void this.complete(v, weight, reps, conf);
+    return false;
+  }
+
+  /** A bare number during the set: held a beat — the next number replaces it, silence makes it hers. */
+  private holdReport(key: string, weight: number | null, reps: number, conf: number | null): void {
+    const mine = { key, weight, reps, conf };
+    this.pendingReport = mine;
+    this.after(REPORT_SETTLE_MS, () => {
+      if (this.pendingReport !== mine) return; // a later number took its place: she was counting
+      const v = this.d.getView();
+      const s = this.setState;
+      if (!v || !s || s.key !== key || (this.mode !== 'set' && this.mode !== 'loading') || v.displayPhase !== 'SET_PRESENTED' || v.paused) {
+        this.pendingReport = null;
+        return;
+      }
+      this.closeWindow();
+      this.takeReport(v, weight, reps, conf);
+    });
+  }
+
+  /** A load said back in the loading dialogue: the window listens on for "מוכן" (or another load). */
+  private loadSaid(v0: SessionView, line: string): boolean {
+    if (this.setState?.soft) {
+      // She changed the bar on a set the coach had taken to be simply continuing: now it waits for
+      // her word, like any set whose load she has to set up.
+      this.closeWindow();
+      this.clearTimers();
+      this.openLoading(this.d.getView() ?? v0, [line]);
+      return false;
+    }
+    void this.speak([line], true);
+    this.relisten(WINDOWS.loading);
+    return true;
   }
 
   private onLoadingAnswer(v0: SessionView, a: VoiceAnswer | null, _text: string, _conf: number | null): boolean {
@@ -754,22 +1065,67 @@ export class VoiceConductor {
          */
         const n = a.numbers[0];
         const two = a.numbers.length >= 2 && validReps(a.numbers[1]);
-        const loadless = cur == null || loadStyleOf(ex) === 'bodyweight' || loadStyleOf(ex) === 'band';
-        const asKg = toKg(n, a.lb);
-        const plausibleLoad = cur != null && cur > 0 && asKg >= cur * LOAD_PLAUSIBLE.below && asKg <= cur * LOAD_PLAUSIBLE.above;
+        const style = loadStyleOf(ex);
+        const loadless = cur == null || style === 'bodyweight' || style === 'band';
+        const plausible = (kg: number) => cur != null && cur > 0 && kg >= cur * LOAD_PLAUSIBLE.below && kg <= cur * LOAD_PLAUSIBLE.above;
+        /*
+         * ⛔ ON A BAR, HER NUMBER MAY BE ONE SIDE OF IT (2026-10-05). The coach now says a bar by what
+         * goes on each side ("עשרה קילו בכל צד"), so that is how she answers: "חמש עשרה בכל צד" is the
+         * bar plus thirty. And a number with no "בכל צד" is read the way that makes sense of it — the
+         * total if only the total could be this bar, a side if only a side could, and when both could,
+         * the smaller change from what is loaded (people move a bar by a plate, not by half). Whichever
+         * it was, the echo says both figures, so a wrong reading is heard and corrected in one word.
+         */
+        const plated = !!exo && (style === 'barbell' || style === 'plate_loaded');
+        const asTotal = toKg(n, a.lb);
+        const asSide = plated ? emptyBarKg(exo!.equipment) + 2 * toKg(n, a.lb) : null;
+        const away = (kg: number) => (cur != null && cur > 0 && kg > 0 ? Math.abs(Math.log(kg / cur)) : Infinity);
+        const readAsSide =
+          asSide != null && !two && !a.saysReps &&
+          (a.perSide === true || (plausible(asSide) && (!plausible(asTotal) || away(asSide) < away(asTotal))));
+        const asKg = asTotal;
+        const plausibleLoad = plausible(asTotal);
         const repsLike = validReps(n) && n <= MAX_REPS_IN_LOADING;
+        /*
+         * A bare number that fits ONLY as a side — is it a load, or the reps of a set she did without
+         * saying "מוכן"? The clock says: a set cannot be over sooner than `voiceReportFromS`. Inside
+         * that time since the set was called, the number is the bar. (A number that fits as a total
+         * too is a load either way — the only question was which.) ⚠️ The same instant from which a
+         * number is heard as her report everywhere else — with "מוכן" asked of every set, a set begun
+         * without the word and reported with one ("עשר") must never move the bar instead.
+         */
+        const tooSoonForASet = this.d.now() - this.loadingSinceMs < voiceReportFromS(ex, v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps) * 1000;
+        /*
+         * …and a side is made of plates: a bare number no plates add up to ("שמונה", "שתים עשרה" on a
+         * bar that moves by a kilo and a quarter a side) is not a side at all — it is reps, or noise,
+         * and it goes on to the question below, which writes nothing without her "כן".
+         */
+        const loadable = readAsSide && Math.abs(snapToStock(asSide!, exo!) - asSide!) < 1e-6;
+        if (readAsSide && (a.perSide === true || a.saysKg || (loadable && (plausibleLoad || tooSoonForASet || !repsLike)))) {
+          const snapped = snapToStock(asSide!, exo!);
+          v.setLiftLoad(snapped);
+          return this.loadSaid(v, voiceScript.loadEcho(ex, snapped, l));
+        }
         if (two || (!a.saysKg && repsLike && (a.saysReps || loadless || !plausibleLoad))) {
-          const weight = two ? toKg(n, a.lb) : cur;
-          const reps = two ? a.numbers[1] : n;
-          return this.confirmFromLoading(v, weight, reps);
+          if (!tooSoonForASet) {
+            const weight = two ? toKg(n, a.lb) : cur;
+            const reps = two ? a.numbers[1] : n;
+            return this.confirmFromLoading(v, weight, reps);
+          }
+          /*
+           * ⛔ SOONER THAN A SET CAN BE DONE, IT IS NOT A SET (2026-10-05). The same instant from which
+           * her report is heard everywhere else: seconds after a lift is called nobody has lifted it,
+           * so "שמעתי שמונים קילו, שמונה חזרות. נכון?" asked a question no honest answer to which is
+           * yes — it was a plate, the next rack, the strong ear making a word of a noise. A lone number
+           * that is no load and no side is let go; a load said with a number is the load.
+           */
+          if (!two || !plausibleLoad) return true;
         }
         if (loadless && !a.saysKg) return true;
         if (!(asKg >= 0) || !exo) return true;
         const snapped = snapToStock(asKg, exo);
         v.setLiftLoad(snapped);
-        void this.speak([voiceScript.loadEcho(ex, snapped, l)], true);
-        this.relisten(WINDOWS.loading);
-        return true;
+        return this.loadSaid(v, voiceScript.loadEcho(ex, snapped, l));
       }
       case 'easier':
       case 'harder': {
@@ -786,9 +1142,7 @@ export class VoiceConductor {
         next = Math.max(emptyBarKg(exo.equipment), next);
         if (next === cur) return true;
         v.setLiftLoad(next);
-        void this.speak([voiceScript.loadEcho(ex, next, l)], true);
-        this.relisten(WINDOWS.loading);
-        return true;
+        return this.loadSaid(v, voiceScript.loadEcho(ex, next, l));
       }
       case 'dont_know': {
         if (round || !exo) return true;
@@ -798,9 +1152,7 @@ export class VoiceConductor {
         const light = Math.max(emptyBarKg(exo.equipment), snapToStock(cur * 0.75, exo));
         v.setLiftLoad(light);
         this.calibrating = ex;
-        void this.speak([voiceScript.calibrationStart(ex, light, l)], true);
-        this.relisten(WINDOWS.loading);
-        return true;
+        return this.loadSaid(v, voiceScript.calibrationStart(ex, light, l));
       }
       case 'skip':
         return this.onSkip(v, true);
@@ -895,21 +1247,38 @@ export class VoiceConductor {
     const ex = v.currentExerciseId;
     if (!ex || !v.currentTarget) return null;
     // A round is asked once, after all of it — or all that is left of it: each lift's own time, in turn.
+    // ⛔ ONE margin for the round, not one per lift (2026-10-05): a superset of two was asked about
+    // a hundred and eighteen seconds after "קדימה" — thirty of them the same fifteen, counted twice.
     const ahead = this.roundAhead(v);
-    if (ahead) return ahead.reduce((t, s) => t + voiceAskAfterS(s.exerciseId, s.lo) * 1000, 0);
+    if (ahead) return (ahead.reduce((t, s) => t + voiceAskAfterS(s.exerciseId, s.lo) - VOICE_BUFFER_S, 0) + VOICE_BUFFER_S) * 1000;
     const lo = v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps;
     return voiceAskAfterS(ex, lo) * 1000;
+  }
+
+  /** From how long after its start the step on stage can be reported unprompted — null for a hold, which the clock counts. */
+  private reportDelayMs(v: SessionView): number | null {
+    if (this.holdOnStage(v)) return null;
+    const ex = v.currentExerciseId;
+    if (!ex || !v.currentTarget) return null;
+    const ahead = this.roundAhead(v);
+    if (ahead) return ahead.reduce((t, s) => t + voiceReportFromS(s.exerciseId, s.lo), 0) * 1000;
+    return voiceReportFromS(ex, v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps) * 1000;
   }
 
   private scheduleAsk(v: SessionView, startMs: number): void {
     const inMs = this.askDelayMs(v);
     if (inMs == null) {
-      if (v.currentTarget || this.holdOnStage(v)) this.setState = { key: stepKeyOf(v) ?? '', started: true, askDueMs: null };
+      if (v.currentTarget || this.holdOnStage(v)) this.setSet({ key: stepKeyOf(v) ?? '', started: true, askDueMs: null });
       return;
     }
     const dueMs = startMs + inMs;
-    this.setState = { key: stepKeyOf(v) ?? '', started: true, askDueMs: dueMs };
+    // Her own report is heard from the moment the set — or the whole round — could be over. Not a
+    // hold: that is counted by the clock.
+    const reportIn = this.reportDelayMs(v);
+    const reportFromMs = reportIn == null ? null : startMs + reportIn;
+    this.setSet({ key: stepKeyOf(v) ?? '', started: true, askDueMs: dueMs, reportFromMs });
     this.after(Math.max(0, dueMs - this.d.now()), () => this.askDone());
+    this.armSetWindow();
   }
 
   // ── The ask ───────────────────────────────────────────────────────────────────────────────────
@@ -921,6 +1290,13 @@ export class VoiceConductor {
     if (v.currentItem && v.currentItem.kind !== 'reps' && !hold) return;
     if (this.interrupted) {
       this.callCut = 'ask';
+      return;
+    }
+    // She said a number a moment ago and the beat it was held for ran into the question: it is her answer.
+    const held = this.pendingReport;
+    if (held && !reminder && this.setState?.key === held.key) {
+      this.closeWindow();
+      this.takeReport(v, held.weight, held.reps, held.conf);
       return;
     }
     // A question means the set is under way — begun without the word the ear missed, if it was
@@ -942,7 +1318,7 @@ export class VoiceConductor {
     if (hold) {
       // "זהו, ארבעים וחמש שניות. סיימת?" — then, if she is still holding, only "סיימת?".
       this.ask = { question: 'done', silences: prev?.silences ?? 0, noes: prev?.noes ?? 0, hold };
-      line = prev ? voiceScript.askDoneHoldAgain() : voiceScript.askDoneHold(hold.seconds, l);
+      line = prev ? voiceScript.askDoneHoldAgain() : voiceScript.askDoneHold();
     } else if (ahead) {
       this.ask = { question: 'round', silences: prev?.silences ?? 0, noes: prev?.noes ?? 0, round: { steps: ahead, reps: [] } };
       const ids = ahead.map((s) => s.exerciseId);
@@ -1070,6 +1446,17 @@ export class VoiceConductor {
           return true;
         }
         return this.stillLifting();
+      case 'ready':
+        // "מוכן" to the question of a set the coach had only ASSUMED was under way — she never said it,
+        // and she was still resting: it begins now. Her word is the start whenever she gives it.
+        if (!inEcho && (q === 'done' || q === 'reps') && this.setState && !this.setState.started) {
+          this.ask = null;
+          this.closeWindow();
+          this.mode = 'loading';
+          this.onReady(v, 'voice');
+          return false;
+        }
+        return true;
       case 'skip':
         return this.onSkip(v, false);
       case 'pause':
@@ -1412,17 +1799,19 @@ export class VoiceConductor {
 
   private async completeNow(v: SessionView, weight: number | null, reps: number, conf: number | null): Promise<void> {
     const l = this.d.locale();
+    const idx = v.globalProgress?.index ?? 0;
+    const before = v.livePlan[idx] as Step | undefined;
+    // The load the plan held for this set: at it, the set is said back by its reps alone (2026-10-05).
+    const planned = before?.target?.recommendedWeight;
     if (conf != null && conf < CONFIDENCE_FLOOR && this.ask?.question !== 'confirm') {
       // Not sure what was heard: say it back with a question before writing anything.
       this.ask = { question: 'confirm', silences: this.ask?.silences ?? 0, noes: this.ask?.noes, unconfirmed: { weight, reps } };
-      await this.speak([voiceScript.confirmHeard(weight, reps, l)], true);
+      await this.speak([voiceScript.confirmHeard(weight, reps, l, planned)], true);
       this.reopen(WINDOWS.confirm);
       return;
     }
     this.closeWindow();
     const ex = v.currentExerciseId!;
-    const idx = v.globalProgress?.index ?? 0;
-    const before = v.livePlan[idx] as Step | undefined;
     // Asked of the plan, not of `lastSetOfExercise` (a coach plan marks every superset half, and a lift
     // the board split comes back later): does this lift appear again today?
     const lastOfLift = !(v.livePlan as Step[]).slice(idx + 1).some((s) => s.exerciseId === ex && !s.warmup);
@@ -1473,12 +1862,12 @@ export class VoiceConductor {
      */
     if (ctx.warmup) {
       this.ask = null;
-      await this.speak([voiceScript.echo(weight, reps, l)]);
+      await this.speak([voiceScript.echo(weight, reps, l, planned)]);
       return;
     }
     this.ask = { question: 'echo', silences: 0, echoed: { weight, reps } };
     const mine = this.ask;
-    await this.speak([voiceScript.echo(weight, reps, l), ...(record ? [voiceScript.record()] : []), ...verdict.lines], true);
+    await this.speak([voiceScript.echo(weight, reps, l, planned), ...(record ? [voiceScript.record()] : []), ...verdict.lines], true);
     if (this.ask === mine && this.on && this.d.getView()?.active) {
       this.openWindow(WINDOWS.echoTail, (a, text, conf2) => this.onDoneAnswer(a, text, conf2), 'reps', (why) => this.onDoneWindowEnd(why));
     } else if (this.ask === mine) {
@@ -1507,7 +1896,7 @@ export class VoiceConductor {
     }
     this.d.track?.('voice_hold_logged', { exerciseId: ex, seconds });
     if (ex) this.lastLoggedEx = ex;
-    if (ex) await this.speak([voiceScript.holdEcho(exerciseDisplayName(ex), seconds, l)]);
+    if (ex) await this.speak([voiceScript.holdEcho(seconds, l)]);
   }
 
   /** The verdict — Loop 1, under the voice only (founder 2026-09-08; the stage stays a logger). */
@@ -1525,7 +1914,6 @@ export class VoiceConductor {
           // A calibration set has no range to be over or under — it is what taught the load.
           return { lines: [voiceScript.verdictCalibrated(ex, weight, next, l)], move: { exerciseId: ex, kg: next } };
         }
-        if (ctx.lastOfLift) lines.push(voiceScript.learnedLift());
       } else if (!ctx.lastOfLift) {
         const prevReps = this.previousWorkingReps(after, ex, before.exerciseSetIndex);
         // One detent above last time, in KILOGRAMS — the detent is in her units (see "harder" above).
@@ -1537,16 +1925,14 @@ export class VoiceConductor {
         } else {
           this.corrections.set(ex, ctx.correctionsBefore);
         }
-      } else if (ctx.firstTime) {
-        /*
-         * ⛔ NO PROMISE ABOUT NEXT TIME (2026-09-27, the voice walk). "בפעם הבאה נתחיל בשישים ושתיים
-         * וחצי" was the last set's weight, and the next workout's load is the engine's fold of ALL her
-         * sets (Loop 2: the median of the sets that reached the band, held, raised by her headroom, or
-         * backed off) — 62.5×9, 62.5×8, 57.5×10 was promised 57.5 and would open at 62.5. What is true
-         * at the end of a first lift is that it was learned.
-         */
-        lines.push(voiceScript.learnedLift());
       }
+      /*
+       * ⛔ NOTHING IS SAID AT THE END OF A LIFT MET FOR THE FIRST TIME — and never a promise about
+       * next time (2026-09-27, the voice walk): "בפעם הבאה נתחיל בשישים ושתיים וחצי" was the last
+       * set's weight, and the next workout's load is the engine's fold of ALL her sets (Loop 2).
+       * "למדתי את המשקל שלך בתרגיל הזה" stood here until 2026-10-05: true, and two and a half seconds
+       * she could do nothing with, before the line that tells her where to walk.
+       */
     }
     if (moved != null) {
       lines.push(moved > weight! ? voiceScript.verdictUp(ex, weight!, moved, l) : voiceScript.verdictDown(ex, weight!, moved, l));
@@ -1575,7 +1961,7 @@ export class VoiceConductor {
     v.amendSet(row.exerciseId, row.setIndex, { weight, reps });
     this.confirmedLoad.set(row.exerciseId, weight);
     this.persist();
-    const lines = [voiceScript.echo(weight, reps, l)];
+    const lines = [voiceScript.echo(weight, reps, l, this.echoCtx?.before?.target?.recommendedWeight)];
     if (this.echoCtx && this.echoCtx.ex === row.exerciseId) {
       // "נעלה לארבעים ושתיים וחצי", then "לא, עשר": the move said a moment ago is replaced, aloud.
       const verdict = this.verdictFor(this.echoCtx, weight, reps, this.d.getView() ?? v);
@@ -1607,6 +1993,7 @@ export class VoiceConductor {
       this.ask = null;
     }
     this.clearTimers();
+    this.pendingReport = null;
     this.mode = 'rest';
     const l = this.d.locale();
     const row = v.loggedSets[v.loggedSets.length - 1];
@@ -1630,7 +2017,9 @@ export class VoiceConductor {
     // stage, and never after a hold or a distance — those write no reps row (2026-09-27: after a
     // plank the voice read back a set of an earlier lift).
     if (row && !this.stageItem && row.exerciseId === this.stageEx && !this.voiceRows.has(rowKey(row.exerciseId, row.setIndex))) {
-      lines.push(voiceScript.echo(row.actualWeight, row.actualReps, l));
+      const stepDone = (v.livePlan as Step[])[v.globalProgress?.index ?? -1];
+      const planned = stepDone?.exerciseId === row.exerciseId ? stepDone.target?.recommendedWeight : undefined;
+      lines.push(voiceScript.echo(row.actualWeight, row.actualReps, l, planned));
       // A record pressed on the lock screen or the wrist is a record all the same (the store's beat
       // asked the question before the write, against the same baseline the voice uses).
       const beat = v.watchLoggedSet;
@@ -1652,7 +2041,7 @@ export class VoiceConductor {
       // The next lift and its load, while she walks to it — and whether it is the day's last.
       const ahead = new Set(plan.slice(doneAt + 1).map((s) => s.exerciseId));
       const nextKg = v.nextItem && v.nextItem.kind !== 'reps' ? null : (v.nextTarget?.recommendedWeight ?? null);
-      lines.push(voiceScript.liftDone(v.currentExerciseId, v.nextExerciseId, nextKg, ahead.size === 1, v.restSeconds, l));
+      lines.push(voiceScript.liftDone(v.nextExerciseId, nextKg, ahead.size === 1, v.restSeconds, l));
     } else {
       lines.push(voiceScript.rest(v.restSeconds, l));
     }
@@ -1721,14 +2110,17 @@ export class VoiceConductor {
   }
 
   /**
-   * "המשך" — one minute of the earbuds' microphone at most (it holds her music at call quality);
-   * the phone's own microphone costs nothing and listens for as long as the pause lasts.
+   * "המשך" — one minute of the earbuds' microphone at most (it holds her music at call quality). On
+   * the phone's own: a minute as attentive as any question, then only a clear voice, and nothing at
+   * all past `PAUSE_LISTEN_MS` — a pause is not listened to for ever.
    */
   private listenForResume(first: boolean): void {
     if (this.mode !== 'paused') return;
     if (this.earDown || (!first && !this.d.earIsFree?.())) return this.settleAudio();
+    const left = this.pausedAtMs == null ? 0 : this.pausedAtMs + PAUSE_LISTEN_MS - this.d.now();
+    if (!first && left < 1_000) return this.settleAudio();
     this.openWindow(
-      WINDOWS.paused,
+      first ? WINDOWS.paused : Math.min(WINDOWS.paused, left),
       (a) => {
         if (a?.kind === 'resume' || a?.kind === 'ready') {
           this.d.getView()?.resume();
@@ -1742,6 +2134,7 @@ export class VoiceConductor {
         if (why === 'timeout' || why === 'silence') this.listenForResume(false);
         else this.settleAudio();
       },
+      !first,
     );
   }
 
@@ -1751,7 +2144,9 @@ export class VoiceConductor {
     // A pause freezes the set: its question moves by the pause, so she is not asked "סיימת?" the
     // moment she picks the bar back up (2026-09-27).
     if (this.pausedAtMs != null && this.setState?.askDueMs != null) this.setState.askDueMs += this.d.now() - this.pausedAtMs;
+    if (this.pausedAtMs != null && this.setState?.reportFromMs != null) this.setState.reportFromMs += this.d.now() - this.pausedAtMs;
     this.pausedAtMs = null;
+    this.persist();
     this.mode = 'idle';
     this.lastPhase = null; // re-enter the phase she is in
     this.reentry = true;
@@ -1766,7 +2161,7 @@ export class VoiceConductor {
    * כרגע…"), and from then on the lines go on and no window is tried until the ear may listen again.
    */
   private earFailed(why: WindowEnd): boolean {
-    if (why === 'locked' || why === 'denied') return this.earWentDown(why);
+    if (why === 'locked' || why === 'denied' || why === 'deaf') return this.earWentDown(why);
     if (why === 'error') {
       this.earErrors += 1;
       if (this.earErrors >= 2) return this.earWentDown(why);
@@ -1777,6 +2172,7 @@ export class VoiceConductor {
   private earWentDown(why: WindowEnd): true {
     if (!this.earDown) this.d.track?.('voice_ear_down', { why });
     this.earDown = true;
+    this.earDownWhy = why;
     if (!this.cantHearSaid) {
       this.cantHearSaid = true;
       void this.speak([voiceScript.cantHear()]);
@@ -1849,6 +2245,7 @@ export class VoiceConductor {
     onAnswer: (a: VoiceAnswer | null, text: string, confidence: number | null) => boolean,
     expect: HearExpect,
     onEnd: (why: WindowEnd) => void,
+    patient = false,
   ): void {
     if (!this.on || this.interrupted) return;
     // Nothing can hear her from here: the question's own end, at once — never a window that moves
@@ -1862,6 +2259,7 @@ export class VoiceConductor {
       ms,
       hints: VOICE_HINTS,
       expect,
+      ...(patient ? { patient: true } : {}),
       onSentence: (text, confidence) => {
         const a = parseVoiceAnswer(text);
         if (this.isBleed(text, a)) return true;

@@ -54,7 +54,7 @@
  * label and a moss FREE pill; a moss check carries "Cancel anytime — one tap, no questions asked.";
  * a band ("HOW YOUR FOURTEEN WORK") draws the trial arc as fourteen ticks over two phases — I LEARN
  * YOU (1–4, cream) then I KNOW YOU (5–14 · set from your reps, moss); an italic "— hush" signs it.
- * The count is FREE_SESSION_LIMIT, so the promise and the paywall gate can never drift apart. "Show
+ * The count is what is left of FREE_SESSION_LIMIT (`freeSessionsRemaining`), so the promise and the paywall gate can never drift apart. "Show
  * my program" runs completeOnboarding and leads straight into the first session — conversion is the
  * trial-complete paywall (§4.3), not here.
  */
@@ -86,7 +86,8 @@ import { dayTitle } from '@/i18n/dayTitle';
 import type { OnboardingInputs } from '@/data/local/models';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
-import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { freeSessionsRemaining } from '@/domain/entitlement';
+import { intakeHandoff } from '@/app/intakeHandoff';
 import { PRO_TRIAL_DAYS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
 import { useReducedMotion } from '@/platform/reducedMotion';
@@ -108,6 +109,10 @@ export function ProgramCreated({ route, navigation }: Props) {
     void track(FUNNEL_EVENTS.readyReached);
   }, []);
   const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
+  /* What this device still has of the free workouts — the ledger outlives a reinstall (see the deal below). */
+  const freeLeft = freeSessionsRemaining(app.modeState.completedSessions);
+  /* A member is promised nothing here and owed no offer: her membership already opens every workout. */
+  const member = app.entitlement.active;
   /*
    * The profile the CTA is about to write, in memory. `generateProgram` is pure and reads only these
    * four, so the week previewed here is byte-for-byte the week she will train.
@@ -317,6 +322,9 @@ export function ProgramCreated({ route, navigation }: Props) {
        * words, it reaches every later review as `trainingFor` (`coachFacts`).
        */
       const said = coachAsk?.trim().slice(0, 400);
+      // No free workout left on this device and no membership: the offer is shown once as she lands,
+      // not sprung on her first Start (`app/intakeHandoff` — the options, and why this one).
+      if (!member && freeLeft === 0) intakeHandoff.owePaywall();
       await app.completeOnboarding(said && !inputs.goalText ? { ...inputs, goalText: said } : inputs);
     } catch {
       // A storage failure here used to reject into the void, leaving `busy` true forever —
@@ -374,21 +382,37 @@ export function ProgramCreated({ route, navigation }: Props) {
             {/* THE DEAL (founder 2026-09-28): the first workouts stand huge, FREE beside them — and
                 the line under them says what follows, because a free that hides its sequel is not
                 free, it is a hook. */}
-            <View style={styles.freeRow}>
-              <Text style={styles.bigNum}>{FREE_SESSION_LIMIT}</Text>
-              <View style={styles.freeCol}>
-                <Legend size={17} track={0.22}>{t('ob.readyWorkouts', { count: FREE_SESSION_LIMIT })}</Legend>
-                <View style={styles.freePill}>
-                  <Legend size={textScale.md} track={0.18} weight="semibold" align="center" style={styles.freePillText}>
-                    {t('ob.readyFree')}
-                  </Legend>
+            {/*
+              ⛔ AND ONLY THE WORKOUTS THIS DEVICE STILL HAS (2026-10-05). The number was the limit
+              itself, whoever was reading — and the trial's ledger outlives a reinstall by design
+              (`domain/trialLedger`). So the founder finished a fresh intake on a phone that had
+              trained before, read "3 first workouts FREE" here, pressed Start on the first of them
+              and met the paywall saying three were behind him. A promise this screen makes is one
+              the gate keeps: it counts what is LEFT, and with none left it says so plainly instead.
+            */}
+            {member ? null : freeLeft > 0 ? (
+              <>
+                <View style={styles.freeRow}>
+                  <Text style={styles.bigNum}>{freeLeft}</Text>
+                  <View style={styles.freeCol}>
+                    <Legend size={17} track={0.22}>{t('ob.readyWorkouts', { count: freeLeft })}</Legend>
+                    <View style={styles.freePill}>
+                      <Legend size={textScale.md} track={0.18} weight="semibold" align="center" style={styles.freePillText}>
+                        {t('ob.readyFree')}
+                      </Legend>
+                    </View>
+                  </View>
                 </View>
+                <View style={styles.cancelRow}>
+                  <Icon name="check" size={15} color={color.accent} strokeWidth={2.4} />
+                  <Text style={styles.cancelText}>{t('ob.readyCancel', { count: freeLeft, days: PRO_TRIAL_DAYS })}</Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.cancelRow}>
+                <Text style={styles.cancelText}>{t('ob.readySpent')}</Text>
               </View>
-            </View>
-            <View style={styles.cancelRow}>
-              <Icon name="check" size={15} color={color.accent} strokeWidth={2.4} />
-              <Text style={styles.cancelText}>{t('ob.readyCancel', { count: FREE_SESSION_LIMIT, days: PRO_TRIAL_DAYS })}</Text>
-            </View>
+            )}
 
             {/* ✦ THE WEEK — every day, every lift, every weight. See `week` above. */}
             {week && week.length > 0 ? (

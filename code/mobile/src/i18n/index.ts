@@ -13,7 +13,7 @@
 
 // 
 
-import { relatchDirection } from './bidi';
+import { decideDirection, relatchDirection } from './bidi';
 import { I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Localization from 'expo-localization';
@@ -79,6 +79,8 @@ export async function setLocale(locale: Locale): Promise<void> {
     I18nManager.allowRTL(rtl);
     I18nManager.forceRTL(rtl);
   }
+  // the caller's `reloadApp` re-latches from this — `I18nManager.isRTL` cannot tell it (see `bidi`)
+  decideDirection(rtl);
 }
 
 export async function initI18n(): Promise<typeof i18next> {
@@ -103,6 +105,7 @@ export async function initI18n(): Promise<typeof i18next> {
    *
    * `reloadApp` has re-latched at its own seam since 2026-08-23; this is the same seam at boot.
    */
+  decideDirection(rtl);
   relatchDirection();
 
   await i18next.use(initReactI18next).init({

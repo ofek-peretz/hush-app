@@ -23,7 +23,8 @@
  * page once the headline has spoken.
  *
  * Surfaced two ways: as the free-trial GATE when the athlete tries to start a session past the free
- * limit (`source: 'gate'`), and from Profile → Membership (`source: 'profile'`). Dismissible — Apple
+ * limit (`source: 'gate'`), from Profile → Membership (`source: 'profile'`), and once as the intake ends on a
+ * phone whose free workouts were already spent (`source: 'intake'`, `app/intakeHandoff`). Dismissible — Apple
  * requires a paywall be closeable; on the gate path, closing simply returns Home where Start stays
  * blocked, which is why "Maybe later" says so in words rather than being only an X in a corner.
  *
@@ -91,12 +92,23 @@ export function Paywall({ navigation, route }: Props) {
   const [fileFacts, setFileFacts] = useState(0);
   /** The fixed-plan counterfactual (audit M2) — the middle close. See `domain/engineReceipt`. */
   const [receipt, setReceipt] = useState<EngineReceipt['counterfactual']>(null);
+  /*
+   * ⛔ "NOW I KNOW YOU" IS SAID ONLY TO SOMEONE WHO TRAINED HERE (2026-10-05). The trial's count
+   * outlives a reinstall (`domain/trialLedger`), so a phone that trained before reaches this screen
+   * with the free workouts spent and a brand-new programme — and the founder, on exactly that phone,
+   * pressed Start on his first workout and read "3 workouts behind you. From here every week is
+   * written from what you did." Nothing was behind him on this install. With no workout in this
+   * install's history the headline is the membership's own, and the line above it says the one true
+   * thing: the free workouts on this device have been used.
+   */
+  const [trainedHere, setTrainedHere] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
     void db
       .loadHistory()
       .then((h) => {
         if (!alive) return;
+        setTrainedHere(h.length > 0);
         setPersonalCase(paywallCase(h, app.profile?.units ?? 'kg'));
         setFileFacts(athleteFile(h).totalFacts);
         setReceipt(engineReceipt(h).counterfactual);
@@ -107,6 +119,8 @@ export function Paywall({ navigation, route }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /** The free workouts are spent on this device, and none of them was trained on this install. */
+  const returning = trialSpent && trainedHere === false;
   const [selected, setSelected] = useState<ProductId>(PRODUCT_IDS.annual);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -243,7 +257,9 @@ export function Paywall({ navigation, route }: Props) {
         <Legend tone="accent" track={0.16} style={styles.eyebrow}>
           {/* Before her first workout there is nothing spent to count — "session 0 of 3" read as a
               debt on the profile's door into this screen (design audit 2026-09-29). */}
-          {trialSpent
+          {returning
+            ? t('paywall.trialUsed')
+            : trialSpent
             ? t('paywall.trialDone', { count: FREE_SESSION_LIMIT })
             : sessionsDone === 0
               ? t('paywall.trialFirst', { count: FREE_SESSION_LIMIT })
@@ -256,7 +272,7 @@ export function Paywall({ navigation, route }: Props) {
               it thanked her for workouts that never happened. Spent trial: what the next weeks do
               with what she did. Otherwise: what the membership is. */}
           <Text style={styles.title} accessibilityRole="header">
-            {trialSpent ? t('paywall.titleSpent', { count: FREE_SESSION_LIMIT }) : t('paywall.title')}
+            {trialSpent && !returning ? t('paywall.titleSpent', { count: FREE_SESSION_LIMIT }) : t('paywall.title')}
           </Text>
         </Arrive>
 

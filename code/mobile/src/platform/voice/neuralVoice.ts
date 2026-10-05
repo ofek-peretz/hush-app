@@ -21,8 +21,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { track } from '@/platform/telemetry';
 import { audioSession } from '@/platform/voice/audioSession';
-import { cloudSay, voiceCloudReachable } from '@/platform/voice/voiceCloud';
+import { cloudSay, voiceCloudLastFailure, voiceCloudReachable } from '@/platform/voice/voiceCloud';
 
 /**
  * The voices offered in the profile — the same list the Worker accepts (`server/voice.ts` VOICES).
@@ -89,8 +90,24 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 const inflight = new Map<string, Promise<string | null>>();
 let prefetchQueue: { text: string; locale: string; voice: string }[] = [];
 let prefetchRunning = 0;
-/** Consecutive failed syntheses — past three, stop trying until the next workout (a dead network). */
+/** Consecutive failed syntheses. */
 let failures = 0;
+/**
+ * ⛔ THREE FAILURES PAUSE THE NATURAL VOICE — THEY DO NOT END IT (2026-10-05).
+ *
+ *   > founder: *"הקול של האימון לא נשמע טוב זה כמו 'סירי'"* … *"ובדקת בקוד שזה אמור לעבוד?"*
+ *
+ * Past three failed fetches this stopped trying "until the next workout". Three lines are fetched at
+ * once as a workout opens — so one dead corner of a gym, for the few seconds it takes to walk
+ * through it, was three failures at the same instant, and every line for the rest of that hour was
+ * the phone's own voice: the exact sound he reported, from a cause the next room would have cured.
+ * Now three in a row pause the fetching for `PAUSE_MS`, and then it is tried again — a few requests
+ * every half-minute while the network is gone, and her voice back within half a minute of its return.
+ */
+const PAUSE_AFTER_FAILURES = 3;
+export const PAUSE_MS = 30_000;
+let pausedUntil = 0;
+const paused = () => failures >= PAUSE_AFTER_FAILURES && Date.now() < pausedUntil;
 
 const dir = () => (fs?.documentDirectory ? `${fs.documentDirectory}coach-voice/` : null);
 const uriOf = (key: string) => `${dir()}${key}.wav`;
@@ -145,6 +162,10 @@ async function fetchClip(text: string, locale: string, v: string): Promise<strin
     const r = await cloudSay(text, locale, v, FETCH_TIMEOUT_MS);
     if (!r.ok || !fs) {
       failures += 1;
+      if (failures >= PAUSE_AFTER_FAILURES) pausedUntil = Date.now() + PAUSE_MS;
+      // ⛔ WHY, WRITTEN DOWN (2026-10-05): a natural voice that could not be fetched was Carmit with no
+      // trace anywhere — the founder heard "Siri" for a whole workout and nothing recorded the reason.
+      void track('voice_neural_failed', { why: r.ok ? 'no_files' : r.why, failures });
       return null;
     }
     failures = 0;
@@ -179,9 +200,10 @@ export const neuralVoice = {
     return voice !== DEVICE_VOICE && !!fs && !!dir() && audioSession.canPlayFile() && voiceCloudReachable();
   },
 
-  /** A new workout: a network that failed last time is tried again. */
+  /** A new workout: a network that failed last time is tried again at once. */
   reset(): void {
     failures = 0;
+    pausedUntil = 0;
   },
 
   /** Already on the phone? — a file to play at once, or null (no waiting, no network). */
@@ -205,14 +227,14 @@ export const neuralVoice = {
     if (!neuralVoice.enabled()) return null;
     const hit = await neuralVoice.cached(text, locale);
     if (hit) return hit;
-    if (failures >= 3) return null;
+    if (paused()) return null;
     const job = fetchClip(text, locale, voice);
     return Promise.race([job, new Promise<null>((r) => setTimeout(() => r(null), waitMs))]);
   },
 
   /** Lines the workout is about to need — fetched in the background, a few at a time, cache-first. */
   prefetch(lines: readonly string[], locale: string): void {
-    if (!neuralVoice.enabled() || failures >= 3) return;
+    if (!neuralVoice.enabled() || paused()) return;
     const v = voice;
     const seen = new Set(prefetchQueue.map((q) => q.text));
     for (const text of lines) {
@@ -223,7 +245,7 @@ export const neuralVoice = {
       }
     }
     const pump = async () => {
-      while (prefetchQueue.length > 0 && failures < 3) {
+      while (prefetchQueue.length > 0 && !paused()) {
         const next = prefetchQueue.shift()!;
         if (next.voice !== voice) continue;
         await loadIndex();
@@ -239,8 +261,8 @@ export const neuralVoice = {
     }
   },
 
-  /** For the profile's voice row: how many lines are kept, and whether the last fetches failed. */
-  stats(): { clips: number; failing: boolean } {
-    return { clips: index ? Object.keys(index).length : 0, failing: failures >= 3 };
+  /** For the profile's voice row: how many lines are kept, whether the last fetches failed — and why. */
+  stats(): { clips: number; failing: boolean; why: string | null } {
+    return { clips: index ? Object.keys(index).length : 0, failing: failures >= PAUSE_AFTER_FAILURES, why: voiceCloudLastFailure().say };
   },
 };

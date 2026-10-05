@@ -59,8 +59,11 @@ import { draftFromCoachWeek } from '@/domain/coachDraft';
 import { sealAuthored } from '@/domain/planBuilder';
 import { requestPlanBuild, type PlanBuildFailure } from '@/platform/coach/planBuild';
 import { color, font } from '@/design/tokens';
-import type { Profile, Program } from '@/data/local/models';
+import type { Experience, Profile, Program } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
+import { offeredLiftIds } from '@/domain/buildPrompt';
+import { LB_PER_KG } from '@/engine/v5/loadGrid';
+import { unitLabel } from '@/domain/schedule';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
 
@@ -118,6 +121,37 @@ const REVEAL_MS = 2600;
  * measured against rows nobody is looking at. `BuildingProgrammeView` draws exactly one lift list:
  * `props.muscles[props.muscles.length - 1]`. The beat has to be the beat of the thing being drawn.
  */
+/** Her one-tap experience answer, as the wait reads it back (`ob.briefExp*`). */
+const BRIEF_EXPERIENCE: Record<Experience, string> = {
+  beginner: 'ob.briefExpNew',
+  intermediate: 'ob.briefExpSome',
+  advanced: 'ob.briefExpYears',
+};
+
+/**
+ * The catalogue's tour while the coach writes — upper and lower alternating, so it reads as a
+ * library being browsed and never as a split being drawn. Filtered at render to what the coach was
+ * actually offered (`offeredLiftIds`), so a lift that leaves the catalogue leaves the tour.
+ */
+const LIBRARY_TOUR = [
+  'bb_back_squat',
+  'bb_bench_press',
+  'lat_pulldown',
+  'bb_rdl',
+  'db_shoulder_press',
+  'hip_thrust',
+  'cable_row',
+  'walking_lunge',
+  'lateral_raise',
+  'leg_press',
+  'incline_db_press',
+  'standing_calf_raise',
+  'pull_up',
+  'db_curl',
+  'rope_pushdown',
+  'face_pull',
+] as const;
+
 function fillHold(muscles: readonly BuildMuscle[]): number {
   return beatFor(muscles[muscles.length - 1]?.lifts.length ?? 1);
 }
@@ -730,6 +764,23 @@ export function BuildingProgramme({ navigation, route }: Props) {
    * on 2026-08-12, when the founder replaced the beat with the body. Nothing failed, because
    * nothing checks; that is what `@ts-nocheck` costs.
    */
+  /*
+   * ⛔ THE WAIT, FILLED WITH WHAT IS TRUE (founder, build 75, 2026-10-01 — see `brief` on the view).
+   * Only on the road where the coach is writing: her own sealed week and the local assembler are
+   * done in under a second and keep the dark body.
+   */
+  const askingTheCoach = !authored && coachAsk != null && !withoutCoach;
+  /* Exactly the facts `buildWeekRequest` hands the coach (days, bodyweight, experience) — her
+     sentence is already quoted above them. Bodyweight in HER units. */
+  const waitBrief = [
+    t('ob.briefDays', { n: inputs.daysPerWeek }),
+    ...(inputs.weightKg != null
+      ? [`${Math.round(inputs.units === 'lb' ? inputs.weightKg * LB_PER_KG : inputs.weightKg)} ${unitLabel(inputs.units)}`]
+      : []),
+    ...(inputs.experience ? [t(BRIEF_EXPERIENCE[inputs.experience])] : []),
+  ];
+  const offered = new Set(offeredLiftIds());
+  const waitLibrary = LIBRARY_TOUR.filter((id) => offered.has(id)).map((id) => ({ id, name: exerciseDisplayName(id) }));
   return (
     <BuildingProgrammeView
       muscles={muscles}
@@ -747,6 +798,11 @@ export function BuildingProgramme({ navigation, route }: Props) {
       /* Only when she wrote one — an empty ask is still the coach path, and there is nothing to
          quote. See `askedFor` on the view for why this is the AI signature and a badge is not. */
       askedFor={coachAsk?.trim() && !withoutCoach ? coachAsk.trim() : null}
+      /* The wait's three true things (see the view) — only while the coach is actually writing. */
+      brief={askingTheCoach ? waitBrief : undefined}
+      library={askingTheCoach ? waitLibrary : undefined}
+      libraryCount={askingTheCoach ? offeredLiftIds().length : undefined}
+      waitHint={askingTheCoach ? t('ob.buildUsually') : null}
     />
   );
 }

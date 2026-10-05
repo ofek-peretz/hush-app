@@ -50,8 +50,14 @@ const WATCHDOG_BASE_MS = 4000;
 /**
  * How long a line not yet on the phone is waited on in the natural voice before Carmit says it
  * instead (2026-09-27). Most lines are cached or prefetched; this is the price of a surprise.
+ *
+ * ⛔ FOUR SECONDS, NOT 1.8 (2026-10-05, measured through the Worker: a line takes 1.2–3.7 s to come
+ * back, five of nine over 1.8). At 1.8 most lines heard for the first time lost the race, so even a
+ * phone that could reach the natural voice spoke a workout in two voices — and the founder's verdict
+ * on the other one was *"כמו סירי"*. A moment of quiet before a line is a smaller fault than a second
+ * voice; Carmit is for a network that is gone, not for one that is a second slow.
  */
-const NEURAL_WAIT_MS = 1_800;
+const NEURAL_WAIT_MS = 4_000;
 /** How long a line may take to START before it is tried once more on the default voice. */
 const START_BUDGET_MS = 2500;
 const WATCHDOG_PER_CHAR_MS = 150;

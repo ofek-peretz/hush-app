@@ -40,6 +40,8 @@ import { nativeWatchPairing, lastWatchPublish } from '@/platform/watch/watchTran
 import { audioSession, type EarSource } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
 import { DEFAULT_COACH_VOICE, DEVICE_VOICE, NEURAL_VOICES, neuralVoice } from '@/platform/voice/neuralVoice';
+import { cloudEar } from '@/platform/voice/cloudEar';
+import { voiceCloudLastFailure } from '@/platform/voice/voiceCloud';
 import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
 
 /** The locked-phone test: time to lock the phone, then the window that asks for a number. */
@@ -760,7 +762,12 @@ function VoiceGateLine({
     reread();
     const ok = !!lastLine && lastLine.started && lastLine.how === 'done';
     setTest(ok ? 'heard' : 'failed');
-    setTestDetail(lastLine ? `${lastLine.how} · ${lastLine.engine}${lastLine.started ? '' : ' · never started'}${lastLine.voice ? ` · ${lastLine.voice}` : ''}` : 'no line');
+    /* ⛔ AND WHY IT WAS CARMIT (2026-10-05). A natural voice was chosen and the phone's own spoke: the
+       line prints the reason the fetch gave (`http_401`, `timeout`, `offline`…) — the founder heard
+       "Siri" for a whole workout with nothing on any screen to say what had refused. */
+    const fellBack = lastLine?.engine === 'device' && neuralVoice.voice() !== DEVICE_VOICE;
+    const why = fellBack ? ` · natural voice: ${neuralVoice.stats().why ?? (neuralVoice.enabled() ? 'not fetched' : 'unavailable in this build')}` : '';
+    setTestDetail(lastLine ? `${lastLine.how} · ${lastLine.engine}${lastLine.started ? '' : ' · never started'}${lastLine.voice ? ` · ${lastLine.voice}` : ''}${why}` : 'no line');
     void track('voice_test', { ok, how: lastLine?.how ?? null, started: lastLine?.started ?? false, outputs: route?.outputs.map((o) => o.type).join(',') ?? null });
   };
   /*
@@ -798,7 +805,7 @@ function VoiceGateLine({
     };
     const ask = async (n: number, label: string) => {
       await say(t('profile.voiceProbeAsk', { n }));
-      note(`${n} · ${label} · app: ${AppState.currentState} · microphone held: ${audioSession.earRunning()}`);
+      note(`${n} · ${label} · app: ${AppState.currentState} · microphone held: ${audioSession.earRunning()} · strong ear: ${cloudEar.available() ? 'on' : 'OFF'}`);
       const heard = await new Promise<string | null>((resolve) => {
         let text: string | null = null;
         voiceCapture.open({
@@ -808,8 +815,14 @@ function VoiceGateLine({
             text = s;
             return false;
           },
+          expect: 'reps',
           onEnd: (why) => {
-            note(`${n} · window ended: ${why}${text ? ` · heard "${text}"` : ''}`);
+            // Which ears this window had, and — when nothing was heard — why the strong one was silent.
+            const strongWhy = text ? '' : ` · strong ear said: ${voiceCloudLastFailure().hear ?? 'nothing to hear'}`;
+            // How far over the room her voice was, as the microphone read it — the number a gym has and a desk does not.
+            const lv = voiceCapture.lastLevels?.();
+            const levels = lv ? ` · room ${lv.roomDb.toFixed(0)} dB · loudest ${lv.loudestDb.toFixed(0)} dB (${(lv.loudestDb - lv.roomDb).toFixed(0)} over) · found by level: ${lv.found}` : '';
+            note(`${n} · window ended: ${why}${text ? ` · heard "${text}"` : ''}${strongWhy}${levels}`);
             resolve(text);
           },
         });
@@ -828,21 +841,22 @@ function VoiceGateLine({
       note(`new recognizer (${lang}): ${available ? 'available' : 'NOT available'}`);
       const model = available && (await audioSession.earPrepare(lang));
       if (available) note(`model: ${model ? 'installed' : 'NOT installed'}`);
-      if (kind === 'continuous' && model) note(`phone microphone held: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
+      // The microphone opens with or without the phone's own recognizer — the strong ear hears through it (2026-10-05).
+      if (kind === 'continuous') note(`phone microphone held: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
       await say(t('profile.voiceProbeLock'));
       await new Promise((r) => setTimeout(r, PROBE_LOCK_MS));
       if (kind === 'continuous') {
         await ask(1, 'held phone microphone');
       } else {
         await ask(1, "today's ear · earbuds");
-        if (model) {
-          note(`2 · open earbuds microphone from here: ${(await audioSession.earOpen('headset')) ?? 'open'}`);
-          if (audioSession.earRunning()) await ask(2, 'new recognizer · earbuds');
-          await audioSession.earClose();
-          note(`3 · open phone microphone from here: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
-          if (audioSession.earRunning()) await ask(3, 'new recognizer · phone');
-          await audioSession.earClose();
-        }
+        // Steps 2 and 3 run on every phone now: the microphone opens with or without Apple's own
+        // recognizer, and each line says which ears the window had.
+        note(`2 · open earbuds microphone from here: ${(await audioSession.earOpen('headset')) ?? 'open'}`);
+        if (audioSession.earRunning()) await ask(2, 'held microphone · earbuds');
+        await audioSession.earClose();
+        note(`3 · open phone microphone from here: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
+        if (audioSession.earRunning()) await ask(3, 'held microphone · phone');
+        await audioSession.earClose();
       }
       const spoke = coachVoice.lastLine();
       note(`last line: ${spoke ? `${spoke.how}${spoke.started ? '' : ' · never started'}` : 'none'}`);

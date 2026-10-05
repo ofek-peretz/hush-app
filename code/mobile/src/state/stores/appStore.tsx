@@ -979,6 +979,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         let m = athleteModeReducer(initialAthleteModeState, { type: 'AUTH_SUCCESS' });
         m = athleteModeReducer(m, { type: 'ENTER_ONBOARDING' });
         m = athleteModeReducer(m, { type: 'PROGRAM_GENERATED' }); // -> CALIBRATING
+        /*
+         * ⛔ THE TRIAL THIS DEVICE HAS ALREADY USED COMES WITH HER (2026-10-05). `m` starts from nought,
+         * and the ledger was read at boot only — so a phone that had spent its free workouts finished a
+         * fresh intake counting zero until its next launch: the Ready screen had just told her nothing
+         * was left, and Start stood open (delete, reinstall, train before the app is ever relaunched —
+         * the free loop the ledger exists to close, one workout at a time). The same rule as boot, in
+         * the same direction: the furthest along of the three counts.
+         */
+        const usedBefore = trialUsed(await readTrialLedger(), m.completedSessions, cloud.ledgerGet());
+        if (usedBefore > m.completedSessions) m = { ...m, completedSessions: usedBefore };
 
         // A snapshot is stored at each program construction (§8.4) — this is the
         // week-one baseline used later by Compare. It is NOT surfaced now

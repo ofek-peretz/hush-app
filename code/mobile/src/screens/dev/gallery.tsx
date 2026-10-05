@@ -51,6 +51,7 @@ import { WheelPicker } from '@/components/ds';
 import { TimeStage, DistanceStage } from '@/screens/session/ItemStage';
 import { coachFacts } from '@/domain/coachFacts';
 import { coachRequest } from '@/domain/coachPrompt';
+import { offeredLiftIds } from '@/domain/buildPrompt';
 import { COACH_PLAN_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
 import { askCoach } from '@/platform/coach/coachClient';
 import { fixtureModel } from '@/data/api/fixtureModel';
@@ -695,9 +696,18 @@ function OnStage({ children }: { children: React.ReactNode }) {
   return <View style={{ flex: 1, backgroundColor: stage[0] }}>{children}</View>;
 }
 
-function InApp({ children, session = sessionFixture }: { children: React.ReactNode; session?: React.ContextType<typeof SessionContext> }) {
+function InApp({
+  children,
+  session = sessionFixture,
+  app = appFixture,
+}: {
+  children: React.ReactNode;
+  session?: React.ContextType<typeof SessionContext>;
+  /** The app state the screen reads — the handoff's athlete unless an entry is ABOUT another state. */
+  app?: typeof appFixture;
+}) {
   return (
-    <AppContext.Provider value={appFixture}>
+    <AppContext.Provider value={app}>
       <SessionContext.Provider value={session}>
         <ToastProvider>{children}</ToastProvider>
       </SessionContext.Provider>
@@ -1569,6 +1579,17 @@ const mount = (Screen: unknown, params?: Record<string, unknown>, session?: Reac
   return <InApp session={session}>{React.createElement(S as never, nav(params) as never)}</InApp>;
 };
 
+/**
+ * A phone whose free workouts were spent before this install (2026-10-05): the trial's count outlives
+ * a reinstall, so a fresh intake lands here with a new programme and nothing left. The founder's own
+ * phone was exactly this, and neither screen that meets it had ever been drawn in that state.
+ */
+const spentPhone = { ...appFixture, modeState: { completedSessions: 14 } } as typeof appFixture;
+const mountSpent = (Screen: unknown, params?: Record<string, unknown>) => {
+  const S = Screen as AnyScreen;
+  return <InApp app={spentPhone}>{React.createElement(S as never, nav(params) as never)}</InApp>;
+};
+
 /** 2.1 · TODAY — the handoff's own Tuesday: Upper A, three changes, six lifts, ~55 min. */
 const todayView = (over: Partial<React.ComponentProps<typeof HomeView>> = {}) => (
   <HomeView
@@ -1988,6 +2009,7 @@ export const GALLERY: GalleryEntry[] = [
   // 1.4 · ABOUT YOU + YOUR WEEK — deleted 2026-08-01. Two wheel pickers asking a coach's
   // questions one screen before a coach; the intake prompt asks for both now.
   { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
+  { id: '1.5s', label: 'Ready — no free workout left on this phone', of: '1.5', status: 'live', note: 'a phone that trained before this install: the promise counts what is LEFT, and with none it says what comes next', render: () => mountSpent(ProgramCreated, { inputs: onboardingInputs }) },
   /*
    * ⛔ 1.5 READS THE PLAN FROM THE DB, WHICH THE HARNESS DOES NOT HAVE — so the week it exists to
    * present has never been visible in here. This is the same blind spot that hid the coach disc and
@@ -2472,12 +2494,16 @@ export const GALLERY: GalleryEntry[] = [
    * absence). Her words are not a claim. They are evidence — the only thing that could put
    * *"דגש על ישבן, בלי מוט ישר"* over a body filling with glute work is something that read it.
    */
-  { id: '0.0f', label: 'the model is writing it — the wait', of: '0.0e', status: 'live', note: '⛔ 2026-09-14 — THE WAIT NAMES NOTHING: a dark body breathing under her own sentence. It used to light the canonical ten, so a week asked with "no legs" lit quads while the model was obeying her.', render: () => (
+  { id: '0.0f', label: 'the model is writing it — the wait', of: '0.0e', status: 'live', note: '⛔ 2026-10-01 (build 75) — THE WAIT IS THE COACH AT WORK, SHOWN TRUE: her sentence, the facts the coach was handed, then the catalogue it is choosing FROM in motion, and how long it usually takes. Still names no muscle and lights none until the answer lands (2026-09-14).', render: () => (
     <InApp>
       <BuildingProgrammeView
-        sex="female"
-        askedFor="דגש על ישבן, בלי אימון רגליים"
+        sex="male"
+        askedFor="אני מתחתן ב4.11.26 ולכן אני רוצה שתבנה לי את התוכנית הטובה ביותר כך שאגיע כמה שיותר שרירי ובעל מראה אתלטי לחתונה."
         muscles={[]}
+        brief={['3 אימונים בשבוע', '78 kg', 'מתאמן שנה־שנתיים']}
+        library={['bb_back_squat', 'bb_bench_press', 'lat_pulldown', 'bb_rdl', 'db_shoulder_press', 'hip_thrust'].map((id) => ({ id, name: exerciseDisplayName(id) }))}
+        libraryCount={offeredLiftIds().length}
+        waitHint="זה לוקח בדרך כלל כחצי דקה"
       />
     </InApp>
   ) },
@@ -3278,6 +3304,7 @@ export const GALLERY: GalleryEntry[] = [
     </InApp>
   ) },
   { id: '4.3', label: 'Paywall', status: 'live', note: 'stub store prices — the real ones come from App Store Connect', render: () => mount(Paywall, { source: 'gate' }) },
+  { id: '4.3r', label: 'Paywall — a phone that trained before this install', of: '4.3', status: 'live', note: 'shown once as the intake ends: the free workouts are spent and nothing was trained HERE, so it never says "now I know you"', render: () => mountSpent(Paywall, { source: 'intake' }) },
 
   // ── 06–11 · SURFACES ───────────────────────────────────────────────────────────────────────
   // §06 IS BUILT, and none of it is a React screen: it is ActivityKit. The RN seam that projects

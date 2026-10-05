@@ -51,25 +51,64 @@ function fakeProviders(): Seen[] {
 }
 
 const BASE = 'https://hush-coach.test';
-const post = (route: string, body: unknown, withSession = true) =>
+const INSTALL = 'a1b2c3d4e5f64a7b8c9d0e1f2a3b4c5d';
+const post = (route: string, body: unknown, withSession = true, install: string | null = null) =>
   new Request(BASE + route, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-hush-token': TOKEN,
       ...(withSession ? { authorization: `Bearer ${SESSION}` } : {}),
+      ...(install != null ? { 'x-hush-install': install } : {}),
     },
     body: JSON.stringify(body),
   });
 const AUDIO = btoa('RIFF'.padEnd(400, 'x'));
 
-test('the voice doors are for a signed-in athlete — no session, no call', async () => {
+test('a stranger — no session and no install — is refused, and no provider is asked', async () => {
   const seen = fakeProviders();
   const hear = await worker.fetch(post('/voice/hear', { audio: AUDIO }, false), env());
   const say = await worker.fetch(post('/voice/say', { text: 'קדימה.' }, false), env());
   assert.equal(hear.status, 401);
   assert.equal(say.status, 401);
+  // …and a header that is not an install id is not an install.
+  assert.equal((await worker.fetch(post('/voice/say', { text: 'קדימה.' }, false, 'x y'), env())).status, 401);
   assert.equal(seen.length, 0);
+});
+
+/*
+ * ⛔ THE FOUNDER'S FIRST WORKOUT WITH THE VOICE (2026-10-05): "כמו סירי", and "היא לא שומעת אותי". The
+ * route refused every call with no session — and that morning the KV held no session for anyone:
+ * half of all installs sign in AFTER their first workout, and the exchange that mints a session is
+ * one fire-and-forget request. The first workout is the one that decides whether she stays.
+ */
+test('⛔ an athlete with no account yet is given the voice — out of the anonymous pool, never out of an account', async () => {
+  const seen = fakeProviders();
+  const e = env();
+  const kv = (e as { HUSH_KV: ReturnType<typeof memKv> }).HUSH_KV;
+  const say = await worker.fetch(post('/voice/say', { text: 'קדימה.', lang: 'he' }, false, INSTALL), e);
+  const hear = await worker.fetch(post('/voice/hear', { audio: AUDIO, expect: 'reps', lang: 'he' }, false, INSTALL), e);
+  assert.equal(say.status, 200);
+  assert.equal(hear.status, 200);
+  assert.equal(seen.length, 2);
+  const keys = [...kv.store.keys()];
+  assert.equal(keys.some((k) => k.startsWith(`quota:vs:a:${INSTALL}:`)), true);
+  assert.equal(keys.some((k) => k.startsWith(`quota:vh:a:${INSTALL}:`)), true);
+  assert.equal(keys.some((k) => k.startsWith('quota:vag:')), true); // the anonymous wall counted both
+  assert.equal(kv.store.get(keys.find((k) => k.startsWith('quota:vag:'))!), '2');
+});
+
+test('⛔ the anonymous pool has its own day per install and its own wall — and neither can shut a signed-in athlete out', async () => {
+  fakeProviders();
+  const e = env({ DAILY_VOICE_ANON_SAY: '2', DAILY_VOICE_ANON_GLOBAL: '3' });
+  const anon = (install: string) => worker.fetch(post('/voice/say', { text: 'קדימה.' }, false, install), e);
+  assert.equal((await anon(INSTALL)).status, 200);
+  assert.equal((await anon(INSTALL)).status, 200);
+  assert.equal((await anon(INSTALL)).status, 429); // this install's day is spent (the wall counted the try)
+  // Another install id: the wall — every anonymous install together — is what stops a minted id.
+  assert.equal((await anon('ffffffffffff4fffbfffffffffffffff')).status, 503);
+  // A signed-in athlete is counted in her own pool and never sees the anonymous wall.
+  assert.equal((await worker.fetch(post('/voice/say', { text: 'קדימה.' }), e)).status, 200);
 });
 
 test('a body too large, or empty, is refused before any provider is asked', async () => {

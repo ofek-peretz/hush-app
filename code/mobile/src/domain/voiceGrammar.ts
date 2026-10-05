@@ -40,8 +40,10 @@ export type VoiceAnswer =
   /**
    * The numbers heard, in order. `correction` when the sentence opened with "לא," / "תקן" — the
    * echo's three-second tail. `saysKg` / `saysReps` when a unit word disambiguates a lone number.
+   * `perSide` (present only when true) when she named a side — "חמש עשרה בכל צד": the coach says a
+   * bar by what goes on each side (2026-10-05), so that is how she answers it.
    */
-  | { kind: 'figures'; numbers: number[]; saysKg: boolean; saysReps: boolean; correction: boolean; lb: boolean };
+  | { kind: 'figures'; numbers: number[]; saysKg: boolean; saysReps: boolean; correction: boolean; lb: boolean; perSide?: true };
 
 export const MAX_VOICE_REPS = 100;
 export const MAX_VOICE_KG = 400;
@@ -178,6 +180,8 @@ const KNOWN = new Set<string>([
   'קילו', 'קג', 'kg', 'kilo', 'kilos', 'kilograms', 'pound', 'pounds', 'lb', 'lbs', 'פאונד', 'חזרות', 'חזרה', 'rep', 'reps',
   'עשיתי', 'עשינו', 'הרמתי', 'עם', 'על', 'אני', 'זה', 'רק', 'בערך', 'כן', 'לא', 'תקן', 'תקני', 'תיקון', 'סיימתי', 'גמרתי',
   'i', 'did', 'made', 'with', 'at', 'of', 'just', 'about', 'yes', 'no', 'correction', 'actually', 'done', 'ו', 'ב', 'ה', 'ל',
+  // "…בכל צד" / "…a side" — how the coach names a bar's load, and so how she names it back.
+  'כל', 'מכל', 'צד', 'per', 'each', 'side', 'on',
 ]);
 /** Words outside the grammar, a label like "בלחיצה" (ב + a lift) excepted — the spec's superset answer. */
 function strangers(s: string): number {
@@ -246,6 +250,8 @@ const RE = {
   repsWord: /(חזרות|חזרה|reps?|repetitions?)/,
   weightWord: /(קילו|ק"ג|קג|kg|kilo|kilos|kilograms?|pounds?|lbs?|משקל|weight)/,
   lb: /(pounds?|lbs?)/,
+  /** "בכל צד", "לכל צד", "מכל צד", "בצד" / "a side", "per side", "each side". */
+  perSide: /(^|\s)((ב|ל|מ)?כל צד|בצד|לצד|(a|per|each) side)(\s|$)/,
 };
 
 /**
@@ -287,6 +293,7 @@ export function parseVoiceAnswer(text: string): VoiceAnswer | null {
       saysReps: corrected ? RE.repsWord.test(kept) : saysReps,
       correction: corrected || RE.correction.test(s),
       lb: RE.lb.test(kept),
+      ...(RE.perSide.test(kept) ? { perSide: true as const } : {}),
     };
   }
   if (RE.asWritten.test(s)) return { kind: 'as_written' };

@@ -392,7 +392,7 @@ export type MainParamList = {
   // Paywall (Subscription + Apple Payments) — free-trial gate before further sessions,
   // also opened from Profile → Membership. `source` records what surfaced it.
   /** `trial_end` (2026-09-28): pushed by Well Done on the workout that spent the free ones. */
-  Paywall: { source: 'gate' | 'profile' | 'trial_end' } | undefined;
+  Paywall: { source: 'gate' | 'profile' | 'trial_end' | 'intake' } | undefined;
   // §11.4 / 11.5 — a plan travels as an opaque link and nothing else leaves the phone
   // (domain/planShare is an allow-list). `SharePlan` is opened from You; `PlanReceived` is opened
   // by the link itself, and carries the encoded token rather than a decoded plan so the screen

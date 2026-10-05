@@ -147,8 +147,8 @@ describe('5 · what the Hebrew voice is given to read', () => {
     expect(rangeLine(8, 10, 100, HE)).toBe('שמונה עד עשר חזרות');
     expect(rangeLine(8, 10, null, HE)).toBe('שמונה עד עשר חזרות, בלי משקל');
   });
-  it('a warm-up names the lift, the ramp step, the load, the COUNT — and asks for "מוכן"', () => {
+  it('a warm-up names the lift, the ramp step, the load and the COUNT', () => {
     const line = voiceScript.warmupStart('bb_bench_press', 20, 8, 1, 2, HE);
-    expect(line).toBe('לחיצת חזה במוט. חימום, אחת מתוך שתיים. עשרים קילו: המוט בלבד. שמונה חזרות. כשהמוט טעון, תגיד: מוכן.');
+    expect(line).toBe('לחיצת חזה במוט. חימום ראשון מתוך שניים: המוט בלבד, שמונה חזרות.');
   });
 });

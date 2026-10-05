@@ -61,9 +61,9 @@ describe('the live week for the wedding ask', () => {
       }
       const s = scoreWeek(res.week);
       rows.push(
-        `run ${i + 1}: ${ms}ms NAME=${JSON.stringify(res.week.name)} lifts=${s.lifts}\n` +
+        `run ${i + 1}: ${ms}ms NAME=${JSON.stringify(res.week.name)} lifts=${s.lifts} MISSING=${JSON.stringify(res.week.missing ?? [])}\n` +
           `   weekly sets: ${JSON.stringify(s.sets)}\n   days hit:    ${JSON.stringify(s.freq)}\n   once-a-week big muscles: ${s.once.join(', ') || 'none'}\n` +
-          res.week.days.map((d) => `   ${d.name}: ` + d.lifts.map((l) => `${exerciseById(l.ex)?.name ?? l.ex}×${l.sets}${l.reps ? `(${l.reps.join('-')})` : ''}`).join(', ')).join('\n'),
+          res.week.days.map((d) => `   [legs ${d.lifts.filter((l) => ['Quads', 'Hamstrings', 'Glutes', 'Calves'].includes(exerciseById(l.ex)?.muscle)).length}/${d.lifts.length}] ${d.name}: ` + d.lifts.map((l) => `${exerciseById(l.ex)?.name ?? l.ex}×${l.sets}${l.reps ? `(${l.reps.join('-')})` : ''}`).join(', ')).join('\n'),
       );
     }
     // eslint-disable-next-line no-console

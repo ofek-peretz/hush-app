@@ -89,7 +89,7 @@ import type { PromptBlock } from '@/domain/coachPrompt';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 5;
+export const BUILD_PROMPT_VERSION = 6;
 
 /**
  * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
@@ -207,8 +207,27 @@ export const BUILD_WEEK_SCHEMA = {
         additionalProperties: false,
         required: ['name', 'lifts'],
         properties: {
-          /** What she reads at the top of the day, in her language. What it says is the model's. */
-          name: { type: 'string' },
+          /*
+           * What she reads at the top of the day, in her language. What it says is the model's —
+           * but it has to be TRUE OF THE DAY (founder, device QA 2026-10-01, on build 75).
+           *
+           * ⛔ FOUND ON HIS OWN WEEK: "יום ראשון — חזה וגב" over seven lifts, one of them a lateral
+           * raise and one a rope pushdown. He read it as a broken generator, and the generator was
+           * fine; the NAME was the defect. Three live runs of his exact sentence (2026-10-01) showed
+           * the pattern every time: the model titles a day by its two or three headline lifts —
+           * "סקוואט, חזה וגב" over a leg curl, a lateral raise, a pushdown, a curl and a crunch — and
+           * the accessories, which are most of the day's muscles, are nowhere in what she reads.
+           *
+           * His standing ruling on names (2026-09-09, `name` above): *"התוכנית צריכה להיות מדויקת לפי
+           * מה שקורה בפועל"*. So the field's meaning says what a name owes the day. It is a
+           * SYSTEM BOUNDARY, not coaching: it decides nothing about which lifts go in, only that the
+           * label over them may not contradict them. No examples, per his ruling on the prompt.
+           */
+          name: {
+            type: 'string',
+            description:
+              'The day’s name as the athlete reads it at the top of the day, in the athlete’s language. It must be true of everything in the day: name every muscle group the day trains, or name the day by a scope that covers all of them. A name that leaves out muscle groups trained that day is wrong.',
+          },
           lifts: {
             type: 'array',
             /*
@@ -373,6 +392,15 @@ export interface BuildAsk {
  * yet", never handed to somebody who did not ask. A model given the bare list has no way to know
  * that, and an assisted dip in a first programme is exactly the founder's 2026-08-23 finding.
  */
+/**
+ * The ids the week's coach is offered — exactly the lines `catalogueLines()` sends. The build
+ * screen's "choosing from N exercises" counts THIS, so the number she reads is the list the model
+ * was handed, not a figure kept beside it (2026-10-01).
+ */
+export function offeredLiftIds(): string[] {
+  return EXERCISES.filter((e) => !e.id.startsWith('_') && !isSwapOnly(e.id)).map((e) => e.id);
+}
+
 export function catalogueLines({ regressions = false }: { regressions?: boolean } = {}): string {
   /* `regressions`: the plan review's catalogue (`reviewPrompt`) carries the swap-only lifts too —
      there she has a week and may have asked for an easier version of a lift in it. */

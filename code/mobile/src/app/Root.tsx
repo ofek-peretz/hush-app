@@ -16,7 +16,8 @@
 // 
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Linking, I18nManager } from 'react-native';
+import { View, StyleSheet, Linking } from 'react-native';
+import { rtl } from '@/i18n/bidi';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -579,9 +580,15 @@ export function Root() {
      * An explicit `direction` style on our outermost View is the fix RN itself provides: every
      * node under it resolves against IT rather than the host, and it is re-read on every render —
      * so the remount applies it, and a first launch on a Hebrew phone is right regardless of who
-     * won the boot race. Read straight off `I18nManager` (not the bidi latch): render-time truth.
+     * won the boot race.
+     *
+     * ⛔ READ FROM THE DECIDED DIRECTION, NOT `I18nManager.isRTL` (2026-10-01, build 75). This line
+     * said "render-time truth" of a value that is a launch-time CONSTANT in RN 0.81, so on a fresh
+     * install's first launch it said 'ltr' under a Hebrew app and the intake ran on the left edge.
+     * `bidi.rtl` is what the language decided; `relaunchIntoDirection` restarts a wrong-way first
+     * launch, and this keeps the layout right if that restart is not available.
      */
-    <View style={[styles.direction, { direction: I18nManager.isRTL ? 'rtl' : 'ltr' }]} key={reloadKey}>
+    <View style={[styles.direction, { direction: rtl ? 'rtl' : 'ltr' }]} key={reloadKey}>
     <NavigationContainer
       ref={navigationRef}
       theme={navTheme}
