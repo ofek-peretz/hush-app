@@ -91,6 +91,8 @@ export interface VoicePersisted {
   startedAtMs: number;
   confirmed: [string, number | null][];
   set?: { key: string; started: boolean; askDueMs: number | null; reportFromMs: number | null; soft?: boolean } | null;
+  /** The workout was paused at this instant when it was written: the set's clocks stood still from here. */
+  pausedAtMs?: number | null;
 }
 export interface ConductorDeps {
   mouth: Mouth;
@@ -109,6 +111,12 @@ export interface ConductorDeps {
   earIsFree?: () => boolean;
   /** Keep what must survive a killed app (see `VoicePersisted`). */
   persist?: (p: VoicePersisted) => void;
+  /**
+   * The verdict after a set — Loop 1 moving the NEXT set's load inside the workout, and the line that
+   * says so ("אותו משקל.", "תוסיף קילו ורבע בכל צד."). ⛔ OFF unless set (founder, 2026-10-06 — see
+   * `verdictFor`): the app ships without it, and the laws that still walk it pass `true`.
+   */
+  verdictInWorkout?: boolean;
 }
 
 /** The spec's windows, in milliseconds. */
@@ -147,6 +155,40 @@ export const MAX_REMINDERS = 2;
  * the lock screen, the wrist), and the voice is whole the moment he does.
  */
 export const PAUSE_LISTEN_MS = 5 * 60_000;
+
+/**
+ * ════ ⛔ HER WORD ENDS A REST (founder, 2026-10-06: *"אי אפשר לקצר את המנוחה במלל במידה ואני רוצה?"*) ════
+ *
+ * Nothing listened during a rest at all — the one stretch of the workout where "מוכן" had no ear, and
+ * the only way to start early was the phone. Now, on a microphone that costs her music nothing, the
+ * rest is listened to: "מוכן" / "קדימה" / "דלג" ends it and the next set is called at once (a set she
+ * is continuing STARTS on that word — "קדימה." — with no second "מוכן"); "עצור" pauses.
+ *
+ * ⚠️ PATIENT, AND ONLY PATIENT. A rest is when people talk. This window is never sent anywhere on a
+ * timer — only a voice clearly above the room is (`voiceCapture`'s patient window) — so a quiet
+ * "מוכן" in a loud room may not be heard, and then the rest simply ends when it ends. It closes a
+ * little before the rest's own end, so the chime and the call are never said into an open question.
+ */
+const REST_EAR_LEAD_MS = 2_000;
+const REST_EAR_MIN_MS = 6_000;
+
+/**
+ * ════ ⛔ NO "מוכן" — THE SET IS CALLED, SHE LIFTS, SHE SAYS HER REPS (founder, 2026-10-06) ════
+ *
+ *   > *"אני לא חושב שצריך לחכות למוכן, אלא רק להגיד בתחילת האימון הראשון בלבד שצריך לומר רק את מספר
+ *   > החזרות בסוף כל סט והבינה תרשום וזהו. בלי להגיד מוכן ובלי להוסיף פקד של מוכן במסכים. … הסוד הוא
+ *   > כמה שפחות מלל. בדיוק כמו ב-WAZE — בעוד X מטרים פנה ימינה וזהו."*
+ *
+ * One day after "מוכן" was put before every set, he trained with it: a word to say to a coach who
+ * could not always hear it, a second voice line in answer ("קדימה."), a Ready button on three
+ * surfaces — all so the coach could know when a set began. Waze does not ask whether you have
+ * pulled out of the parking spot. So a set is called and is simply hers: the coach takes it to have
+ * begun when the call ends (plus, on a lift's first set, a moment to get under the bar), listens for
+ * her number from the time a set could be over, and asks "כמה חזרות?" only if none came.
+ *
+ * The one step that still has a start is a HOLD: a plank counted aloud needs an instant to count from.
+ */
+export const FIRST_SET_SETUP_S = 20;
 
 /** A hold longer than this is a block of work (a ten-minute bike), announced and never counted aloud. */
 const HOLD_COUNTED_MAX_S = 180;
@@ -313,6 +355,8 @@ export class VoiceConductor {
   private callCut: 'ask' | 'loading' | null = null;
   /** When the workout was paused — the set's question is due that much later after "המשך". */
   private pausedAtMs: number | null = null;
+  /** She ended the rest with her own word: the set after it is called without the bell. */
+  private restCut = false;
 
   constructor(private readonly d: ConductorDeps) {}
 
@@ -391,6 +435,18 @@ export class VoiceConductor {
     this.confirmedLoad = new Map(p.confirmed);
     // The set on stage as it stood: `enable` re-enters it (`resumeSet`) if it is still the one on stage.
     if (p.set) this.setState = { ...p.set };
+    /*
+     * ⛔ KILLED WHILE PAUSED (2026-10-06, found by `theVoiceSurvivesThePhone`). Reopening the app
+     * un-freezes the workout (the store's own rule) — but "המשך" never ran, so the set's question
+     * was still due where it stood before the pause: two minutes after pausing five seconds into a
+     * set, the coach came back with "חזרתי." and, a second later, "כמה חזרות?". The time the workout
+     * stood still is given back to the set here, exactly as "המשך" gives it.
+     */
+    if (p.pausedAtMs != null && this.setState) {
+      const stoodStill = Math.max(0, this.d.now() - p.pausedAtMs);
+      if (this.setState.askDueMs != null) this.setState.askDueMs += stoodStill;
+      if (this.setState.reportFromMs != null) this.setState.reportFromMs += stoodStill;
+    }
   }
 
   /** A call, Siri or an alarm holds the audio — and nothing has said it ended (see `useVoiceCoach`). */
@@ -449,6 +505,7 @@ export class VoiceConductor {
       this.armSetWindow();
     } else if (this.mode === 'rest') {
       this.scheduleTenSeconds(v);
+      this.listenInRest();
     }
   }
 
@@ -553,6 +610,7 @@ export class VoiceConductor {
       startedAtMs: this.announcedStart,
       confirmed: [...this.confirmedLoad],
       set: s ? { key: s.key, started: s.started, askDueMs: s.askDueMs, reportFromMs: s.reportFromMs ?? null, ...(s.soft ? { soft: true } : {}) } : null,
+      pausedAtMs: this.pausedAtMs,
     });
   }
 
@@ -568,8 +626,11 @@ export class VoiceConductor {
     // A round the voice is writing, half by half: the next half is on stage — write it now.
     if (this.roundWrite) return void this.continueRound(v);
     // The rest just ended: the chime sounds before whatever is said next (spec §3.6) — the next
-    // set's line, or the loading dialogue of a lift or a changed load.
-    const fromRest = this.mode === 'rest';
+    // set's line, or the loading dialogue of a lift or a changed load. Not when SHE ended it: her own
+    // word needs no bell, and a set she is simply continuing starts on it (`listenInRest`).
+    const cut = this.restCut && this.mode === 'rest';
+    this.restCut = false;
+    const fromRest = this.mode === 'rest' && !cut;
     const key = stepKeyOf(v);
     // ⛔ Re-entering the set she is IN (earbuds back, resume, after a call) says nothing already said
     // and keeps the question's own time (2026-09-27, the conductor audit): it used to replay the set
@@ -648,11 +709,13 @@ export class VoiceConductor {
       const needsLoading = chain.steps.some((s) => !this.confirmedLoad.has(s.exerciseId) || this.confirmedLoad.get(s.exerciseId) !== s.kg);
       if (needsLoading) {
         this.skipFrom = null;
-        this.openLoading(v, [voiceScript.roundLoading(chain.steps, l)], fromRest);
-        return;
+        // Said once: these are the loads the round now stands at.
+        for (const st of chain.steps) this.confirmedLoad.set(st.exerciseId, st.kg);
+        this.persist();
+        return this.callSet(v, [voiceScript.roundLoading(chain.steps, l)], fromRest, FIRST_SET_SETUP_S);
       }
-      // Rounds 2+ at the loads already out: announced, and — like every set — hers to start.
-      return this.nextSet(v, setChanged ? [voiceScript.roundStart(n, m, l)] : [], fromRest);
+      // Rounds 2+ at the loads already out.
+      return this.callSet(v, setChanged ? [voiceScript.roundStart(n, m, l)] : [], fromRest, 0);
     }
 
     /*
@@ -677,42 +740,34 @@ export class VoiceConductor {
       else if (firstTime && !known) line = voiceScript.loadFirstTime(ex, kg, lo, hi, l);
       else line = voiceScript.loadCalibrated(ex, kg, lo, hi, l);
       this.skipFrom = null;
-      this.openLoading(v, [line], fromRest);
-      return;
+      // Said once: this is the load the lift now stands at (it used to be "מוכן" that wrote it down).
+      this.confirmedLoad.set(ex, kg);
+      this.persist();
+      return this.callSet(v, [line], fromRest, FIRST_SET_SETUP_S);
     }
 
     // Sets 2+ at the same load.
-    this.nextSet(v, setChanged ? [voiceScript.setStart(n, m, warmup, l)] : [], fromRest);
+    this.callSet(v, setChanged ? [voiceScript.setStart(n, m, warmup, l)] : [], fromRest, 0);
   }
 
   /**
-   * ════ ⛔ EVERY SET IS THE SAME FIVE BEATS (founder, 2026-10-05) ════
-   *   > *"אני מרגיש שזה מבוצע בצורה חפיפניקית ואני רוצה שזה יהיה הכי מסודר ומתוכנן שיש. אני רוצה לעשות
-   *   > את זה ממש כמו waze של חדר הכושר + הקלט שהאפליקציה מקבלת מהמתאמן."*
+   * A set, called (see `FIRST_SET_SETUP_S`): its line, and from the end of that line it is under way —
+   * her report is listened for from the time a set could be over (`armSetWindow`, on a microphone
+   * that costs her music nothing), and "כמה חזרות?" comes at the set's own time if she said nothing.
    *
-   *     the set is called → "מוכן" → the set → her reps → said back, and what comes next
-   *
-   * Until this, only a lift's FIRST set (and a set after the load moved) had the second beat: every
-   * other set was called at the rest's end and simply presumed begun — no "מוכן", no "קדימה", no
-   * Ready on any surface. One workout taught her two protocols, and which one she was in depended on
-   * arithmetic she could not see. Now every set is called the same way and started the same way.
-   *
-   * ⚠️ AND A SET SHE DOES NOT ANNOUNCE STILL RUNS. On a set she is simply continuing — the same lift,
-   * the load already on the bar — the coach does not stand waiting for a word she forgot: if no
-   * "מוכן" comes, the set is taken to have begun at the rest's end, exactly as it always was (the
-   * question at its usual time, her own report heard before it). Her word is the start whenever she
-   * gives it; its absence is never a dead end. A lift's first set, and a bar she has to change, do
-   * wait for her — there the coach cannot know when she is under it.
-   *
-   * Only on a microphone that costs her music nothing (the phone's, held for the workout): the
-   * earbuds' microphone open for a whole set would hold her music at call quality. Without it — or
-   * with no ear at all — the set after a rest runs as it did before this.
+   * (2026-10-05, for one day: every set waited to be started with "מוכן" — "the same five beats". The
+   * founder trained with it and struck the second beat the next morning.)
    */
-  private nextSet(v: SessionView, lines: string[], fromRest: boolean): void {
-    if (!this.earDown && this.d.earIsFree?.()) return this.openLoading(v, lines, fromRest, true);
+  private callSet(v: SessionView, lines: string[], chime: boolean, setupS: number): void {
+    const key = stepKeyOf(v) ?? '';
     this.mode = 'set';
-    void this.speak(lines, false, fromRest);
-    this.scheduleAsk(v, this.d.now());
+    // Hers from the first word of the call: a killed app, a call, earbuds coming back all re-enter THIS set.
+    this.setSet({ key, started: true, askDueMs: null });
+    void this.speak(lines, false, chime).then(() => {
+      const now = this.d.getView();
+      if (!now || !this.on || this.mode !== 'set' || this.setState?.key !== key || stepKeyOf(now) !== key) return;
+      this.scheduleAsk(now, this.d.now() + setupS * 1000);
+    });
   }
 
   /** The hold on stage that the voice counts — a timed item of a plank's length; null for anything else. */
@@ -729,9 +784,9 @@ export class VoiceConductor {
     this.clearTimers();
     this.ask = null;
     if (!s.started) {
-      // The loading line was said; the window opens again under a short prompt.
-      this.openLoading(v, [voiceScript.readyPrompt()]);
-      return;
+      // A hold still waiting for its start: its line was said; the window opens again under a short prompt.
+      if (this.holdOnStage(v)) return this.openLoading(v, [voiceScript.readyPrompt()]);
+      s.started = true; // a set is hers from its call — there is nothing left to wait for
     }
     this.mode = 'set';
     // A hold back from a pause: its question and its ten seconds follow the store's clock, which
@@ -742,7 +797,11 @@ export class VoiceConductor {
       this.persist();
       this.scheduleHoldTen(v.holdEndsAtMs, hold.seconds);
     }
-    if (s.askDueMs == null) return this.settleAudio();
+    if (s.askDueMs == null) {
+      // Called, and cut off before its clock was set (the app killed mid-line): the clock starts here.
+      if (!hold && v.currentTarget) return this.scheduleAsk(v, this.d.now());
+      return this.settleAudio();
+    }
     this.after(Math.max(1_500, s.askDueMs - this.d.now()), () => this.askDone());
     this.armSetWindow();
   }
@@ -770,7 +829,8 @@ export class VoiceConductor {
     return { at: idx - s, steps: plan.slice(s, e + 1).map(roundStepOf) };
   }
 
-  private openLoading(v: SessionView, lines: string[], chime = false, soft = false): void {
+  /** The one step that waits for a start: a hold (see `FIRST_SET_SETUP_S`). */
+  private openLoading(v: SessionView, lines: string[], chime = false): void {
     this.mode = 'loading';
     this.loadingSinceMs = this.d.now();
     const key = stepKeyOf(v) ?? '';
@@ -787,8 +847,6 @@ export class VoiceConductor {
     this.lastAwaiting = true;
     void this.speak(lines, true, chime).then(() => {
       if (this.mode !== 'loading') return this.settleAudio();
-      // A set she is simply continuing: "מוכן" is hers to say, and the set runs without it (`nextSet`).
-      if (soft && this.openNextSetWindow(v, key)) return;
       this.openWindow(WINDOWS.loading, (a, text, conf) => this.onLoadingAnswer(v, a, text, conf), 'ready', (why) => {
         if (this.mode !== 'loading' || this.setState?.key !== key) return;
         if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
@@ -813,46 +871,6 @@ export class VoiceConductor {
         if (this.mode === 'loading' && this.window) void this.speak([voiceScript.readyPrompt()], true);
       });
     });
-  }
-
-  /**
-   * The window of a set she is continuing (`nextSet`): open from the moment it is called until its
-   * question is due. Until a set could be over, what she says is about its START ("מוכן") or the
-   * bar; from then on it is her REPORT — whether or not she ever said "מוכן".
-   */
-  private openNextSetWindow(v0: SessionView, key: string): boolean {
-    const v = this.d.getView() ?? v0;
-    const ex = v.currentExerciseId;
-    const inMs = this.askDelayMs(v);
-    if (this.setState?.key !== key || !ex || inMs == null) return false;
-    const now = this.d.now();
-    const reportIn = this.reportDelayMs(v);
-    const reportFromMs = reportIn == null ? null : now + reportIn;
-    this.setSet({ key, started: false, askDueMs: now + inMs, reportFromMs, soft: true });
-    this.after(inMs, () => this.askDone());
-    this.openWindow(inMs + SET_WINDOW_TAIL_MS, (a, text, conf) => this.onNextSetAnswer(key, a, text, conf), 'set', (why) => {
-      if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
-      // The question still comes at its time; an ear that failed says so once, and the question
-      // becomes where to mark the set (`askDone`).
-      this.earFailed(why);
-    });
-    return true;
-  }
-
-  private onNextSetAnswer(key: string, a: VoiceAnswer | null, text: string, conf: number | null): boolean {
-    const v = this.d.getView();
-    const s = this.setState;
-    if (!v || !s || s.key !== key || this.mode !== 'loading') return false;
-    if (!a) return true;
-    // "מוכן": her start, said aloud — the same word, the same "קדימה", as on a lift's first set.
-    if (a.kind === 'ready' || a.kind === 'yes') {
-      this.onReady(v, 'voice');
-      return false;
-    }
-    if (a.kind === 'skip' || a.kind === 'pause' || a.kind === 'finish') return this.onLoadingAnswer(v, a, text, conf);
-    if (s.reportFromMs != null && this.d.now() >= s.reportFromMs) return this.onSetReport(key, a, conf);
-    // Too soon for a set to be over: whatever she says is about the bar — the loading dialogue's own rules.
-    return this.onLoadingAnswer(v, a, text, conf);
   }
 
   /**
@@ -886,10 +904,17 @@ export class VoiceConductor {
       if (!this.on || this.interrupted || this.mode !== 'set' || !cur || cur.key !== key || cur.askDueMs == null) return;
       const ms = cur.askDueMs - this.d.now() + SET_WINDOW_TAIL_MS;
       if (ms < 2_000) return;
-      this.openWindow(ms, (a, _text, conf) => this.onSetReport(key, a, conf), 'set', (why) => {
-        if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
-        this.earFailed(why);
-      });
+      // Patient from its first second: she is under the bar, and nobody asked anything.
+      this.openWindow(
+        ms,
+        (a, _text, conf) => this.onSetReport(key, a, conf),
+        'set',
+        (why) => {
+          if (why === 'heard' || why === 'closed' || why === 'unavailable') return;
+          this.earFailed(why);
+        },
+        true,
+      );
     });
   }
 
@@ -1901,6 +1926,23 @@ export class VoiceConductor {
 
   /** The verdict — Loop 1, under the voice only (founder 2026-09-08; the stage stays a logger). */
   private verdictFor(ctx: EchoCtx, weight: number | null, reps: number, after: SessionView): { lines: string[]; move: { exerciseId: string; kg: number } | null } {
+    /*
+     * ════ ⛔ NO VERDICT INSIDE THE WORKOUT — FOR NOW (founder, 2026-10-06) ════
+     *
+     *   > *"אני לא חושב שצריך לומר 'אותו משקל' או הורד משקל או הרם משקל. לפחות לא כרגע. כרגע המנוע
+     *   > שמעלה ומוריד משקל מחוץ לאימון עד כמה שאני זוכר נכון, לכן רק צריך להשמיע צליל של LOGGED."*
+     *
+     * His first workout with a voice he could hear, and after every set it said one more line he had
+     * no use for. And his memory is the product's own rule everywhere but here: the stage is a
+     * logger, and the load is the engine's between workouts (Loop 2). Under the voice alone a set
+     * also MOVED the next one (Loop 1, his ruling of 2026-09-08) — which is what those lines were
+     * announcing. A move with nobody saying it would be a bar that changes behind her back, so both
+     * go together: after a set the coach says what was written, and the plan's load stands.
+     *
+     * The one exception is the set she asked for by saying "לא יודע": a calibration set has no load
+     * to stand at — its whole purpose is the next one — so its line and its move stay.
+     */
+    if (!this.d.verdictInWorkout && !ctx.wasCalibration) return { lines: [], move: null };
     const l = this.d.locale();
     const { ex, before } = ctx;
     const lines: string[] = [];
@@ -2009,6 +2051,7 @@ export class VoiceConductor {
       this.reentry = false;
       this.pendingMove = null;
       if (v.restEndsAtMs != null) this.scheduleTenSeconds(v);
+      this.listenInRest();
       return;
     }
     const lines: string[] = [];
@@ -2042,9 +2085,9 @@ export class VoiceConductor {
       const ahead = new Set(plan.slice(doneAt + 1).map((s) => s.exerciseId));
       const nextKg = v.nextItem && v.nextItem.kind !== 'reps' ? null : (v.nextTarget?.recommendedWeight ?? null);
       lines.push(voiceScript.liftDone(v.nextExerciseId, nextKg, ahead.size === 1, v.restSeconds, l));
-    } else {
-      lines.push(voiceScript.rest(v.restSeconds, l));
     }
+    // ⛔ Between two sets of one lift NOTHING is said (founder, 2026-10-06: "כמה שפחות מלל"): the rest's
+    // length is the same every time and on every screen; ten seconds out and the bell are the news.
     // The verdict's move lands on the fresh plan: the completed row is written, so the change
     // begins with the next set — and the loading dialogue at the rest's end names it (spec §3.2).
     const move = this.pendingMove && this.pendingMove.exerciseId === v.currentExerciseId ? this.pendingMove : null;
@@ -2055,10 +2098,50 @@ export class VoiceConductor {
       // rest's lines and the move wait until the tail has closed.
       this.heldRest = { lines, move };
     } else {
-      void this.speak(lines);
+      void this.speak(lines).then(() => this.listenInRest());
       if (move) v.setLiftLoad(move.kg);
     }
     this.scheduleTenSeconds(v);
+  }
+
+  /** The rest, listened to for the word that ends it (see `REST_EAR_LEAD_MS`). */
+  private listenInRest(): void {
+    if (!this.on || this.interrupted || this.mode !== 'rest' || this.window) return;
+    // Only a microphone that costs her music nothing — and one that can hear at all.
+    if (this.earDown || !this.d.earIsFree?.()) return;
+    const v = this.d.getView();
+    if (!v?.active || v.paused || v.restEndsAtMs == null) return;
+    if (v.displayPhase !== 'REST_INTER' && v.displayPhase !== 'REST_TRANSITION') return;
+    const ms = v.restEndsAtMs - this.d.now() - REST_EAR_LEAD_MS;
+    if (ms < REST_EAR_MIN_MS) return;
+    this.openWindow(
+      ms,
+      (a) => this.onRestAnswer(a),
+      'ready',
+      (why) => {
+        if (why === 'locked' || why === 'denied' || why === 'deaf' || why === 'error') this.earFailed(why);
+      },
+      true,
+    );
+  }
+
+  private onRestAnswer(a: VoiceAnswer | null): boolean {
+    const v = this.d.getView();
+    if (!v || this.mode !== 'rest') return false;
+    if (!a) return true; // a rest is when people talk: whatever it was, it was not for the coach
+    switch (a.kind) {
+      case 'ready':
+      case 'skip':
+        this.restCut = true;
+        this.d.track?.('voice_rest_cut', { leftS: v.restEndsAtMs != null ? Math.round((v.restEndsAtMs - this.d.now()) / 1000) : null });
+        v.endRest();
+        return false;
+      case 'pause':
+        v.pause();
+        return false;
+      default:
+        return true;
+    }
   }
 
   /** The echo's tail closed: the move lands, and the rest's own lines are said while it is still a rest. */
@@ -2069,8 +2152,11 @@ export class VoiceConductor {
     const v = this.d.getView();
     if (h.move && v) v.setLiftLoad(h.move.kg);
     const resting = v?.active && (v.displayPhase === 'REST_INTER' || v.displayPhase === 'REST_TRANSITION');
-    if (sayLines && resting && h.lines.length > 0) void this.speak(h.lines);
-    else this.settleAudio();
+    if (sayLines && resting && h.lines.length > 0) void this.speak(h.lines).then(() => this.listenInRest());
+    else {
+      this.settleAudio();
+      if (resting) this.listenInRest();
+    }
   }
 
   scheduleTenSeconds(v: Pick<SessionView, 'restSeconds' | 'restExtraSeconds' | 'restEndsAtMs'>): void {
@@ -2095,6 +2181,12 @@ export class VoiceConductor {
     if (this.mode !== 'rest') return;
     this.clearTimers();
     this.scheduleTenSeconds(v);
+    // The rest's own window was cut to the OLD end: it is opened again to the new one. (Never the
+    // echo's three seconds — those are a question still open.)
+    if (!this.ask) {
+      this.closeWindow();
+      this.listenInRest();
+    }
   }
 
   // ── Pause ─────────────────────────────────────────────────────────────────────────────────────
@@ -2104,6 +2196,7 @@ export class VoiceConductor {
     this.clearTimers();
     this.heldRest = null;
     this.pausedAtMs = this.d.now();
+    this.persist();
     this.ask = { question: 'paused', silences: 0 };
     this.mode = 'paused';
     void this.speak([voiceScript.paused()], true).then(() => this.listenForResume(true));

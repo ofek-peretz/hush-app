@@ -861,18 +861,11 @@ describe('⛔ the voice is one of the surfaces — what it does, every other sur
     await settle();
     check(h, log, 'start');
 
-    // A lift she has never lifted: the voice opens the loading dialogue, and Ready is offered.
-    expect(mode(h)).toBe('loading');
-    expect(h.view().awaitingReady).toBe(true);
-    const planned = h.view().currentTarget!.recommendedWeight!;
-    expect(await untilListening(h)).toBe(true); check(h, log, 'voice listens for "מוכן"');
-    await doVoice(h, 'easier');                check(h, log, 'voice: "קל יותר"');
-    const lighter = h.view().currentTarget!.recommendedWeight!;
-    expect(lighter).toBeLessThan(planned);
-    expect(lastEnvelope().mirror.targetWeight).toBe(lighter);
-    await doVoice(h, 'ready');                 check(h, log, 'voice: "מוכן"');
-    expect(h.view().awaitingReady).toBe(false);
+    // ⛔ 2026-10-06 (founder: *"בלי להגיד מוכן ובלי להוסיף פקד של מוכן במסכים"*): a lift she has never
+    // lifted is simply called — the set is hers, and no surface offers a Ready.
     expect(mode(h)).toBe('set');
+    expect(h.view().awaitingReady).toBe(false);
+    expect(lastEnvelope().mirror.awaitingReady).toBe(false);
 
     // The question comes; she answers with her reps; every surface has the set.
     expect(await untilListening(h)).toBe(true); check(h, log, 'voice asks');
@@ -936,11 +929,13 @@ describe('⛔ the voice is one of the surfaces — what it does, every other sur
     await doVoice(h, 'yes');                   check(h, log, 'voice: "כן" — the hold is done');
     expect(h.view().displayPhase).toBe('REST_TRANSITION');
 
-    // The row: a new lift — Ready from the LOCK SCREEN starts it, and the voice hears the tap.
+    // The row: a new lift — called, and hers: no Ready on any surface. A Ready tapped on a lock card
+    // that still shows the old button starts nothing and changes nothing.
     await doEndRest(h, 'phone');               check(h, log, 'to the row · phone');
-    expect(mode(h)).toBe('loading');
+    expect(mode(h)).toBe('set');
+    expect(h.view().awaitingReady).toBe(false);
     await act(async () => h.view().applyLockIntents([{ id: 'ready-1', type: 'set_ready', atMs: now }]));
-    await settle();                            check(h, log, 'Ready · lock screen');
+    await settle();                            check(h, log, 'a stray Ready · lock screen');
     expect(h.view().awaitingReady).toBe(false);
     expect(mode(h)).toBe('set');
     expect(await untilListening(h)).toBe(true);
@@ -954,23 +949,24 @@ describe('⛔ the voice is one of the surfaces — what it does, every other sur
     expect(mode(h)).toBe('ended');
   });
 
-  it('Ready on the WRIST starts the set on every surface; the stage’s Start starts a hold’s one clock, and zero writes nothing', async () => {
+  it('no Ready before a set, on any surface; the stage’s Start starts a hold’s one clock, and zero writes nothing', async () => {
     const h = mount();
     const log: string[] = [];
     await act(async () => h.view().startCoach(PLAN, 'coach_0'));
     await settle();
-    expect(await untilListening(h)).toBe(true); check(h, log, 'the bench waits for "מוכן"');
-    expect(lastEnvelope().mirror.awaitingReady).toBe(true);
-    await act(async () => wrist('set_ready'));
-    await settle();                            check(h, log, 'Ready · wrist');
+    act(() => h.feedVoice());
+    await settle();                            check(h, log, 'the bench is called');
     expect(h.view().awaitingReady).toBe(false);
     expect(lastEnvelope().mirror.awaitingReady).toBe(false);
     expect(mode(h)).toBe('set');
-    // A second Ready from the wrist, late: refused by the gate, never a second start.
-    const started = (h.voice.c as any).setState.askDueMs;
+    // A Ready from a wrist that still has the old button: refused by the gate, and it starts nothing —
+    // the set's question stays due where the call put it.
+    const due = (h.voice.c as any).setState.askDueMs;
+    expect(due).not.toBeNull();
     await act(async () => wrist('set_ready'));
-    await settle();                            check(h, log, 'a late second Ready · wrist');
-    expect((h.voice.c as any).setState.askDueMs).toBe(started);
+    await settle();                            check(h, log, 'a stray Ready · wrist');
+    expect(h.view().awaitingReady).toBe(false);
+    expect((h.voice.c as any).setState.askDueMs).toBe(due);
 
     for (let i = 0; i < 3; i++) {
       await doSet(h, 'phone');

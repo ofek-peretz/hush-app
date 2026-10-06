@@ -49,6 +49,8 @@ const mockPhone = {
   micCutByCall: false,
   /** The strong ear cannot be reached — and this phone has no recognizer of its own (`cloudEar.deaf`). */
   noNetwork: false,
+  /** What the rest-over alert was last told: the voice will say it (true) or nobody will (false). */
+  voiceCallsTheSet: false,
   earOpenTries: 0,
   window: null as any,
   route: new Set<any>(),
@@ -69,7 +71,8 @@ jest.mock('@/platform/restHaptics', () => ({
   REST_WARNING_LEAD_S: 7,
   phoneOwnsRestHaptics: () => true,
   restAlertDelays: () => ({ warnInS: null, doneInS: null }),
-  restHaptics: { arm: jest.fn(async () => {}), disarm: jest.fn(async () => {}) },
+  // Who says the rest is over: the hook tells the alert whenever the voice comes on or goes quiet.
+  restHaptics: { arm: jest.fn(async () => {}), disarm: jest.fn(async () => {}), voiceCallsTheSet: (on: boolean) => void (mockPhone.voiceCallsTheSet = on) },
 }));
 jest.mock('@/platform/coach/afterSession', () => ({ askAfterSession: jest.fn(async () => ({ ok: false, reason: 'offline' })) }));
 jest.mock('@/platform/voice/coachVoice', () => ({
@@ -388,13 +391,24 @@ const untilMic = async (maxS = 400) => {
   if (!mockPhone.window) throw new Error(`nothing ever listened (${mockStamp()})\n${mockLog.slice(-16).join('\n')}`);
 };
 const rows = () => V().loggedSets.map((r) => `${exerciseDisplayName(r.exerciseId)} ${r.actualWeight}×${r.actualReps}`);
-/** One whole set by voice from wherever the coach stands: "מוכן", the set, the reps. */
+/** The coach is listening for the SET — his report, or the answer to "כמה חזרות?" — not for a rest's word, and not for a correction. */
+const untilSetMic = async (maxS = 400) => {
+  const forTheSet = () => {
+    const o = mockPhone.window?.opts;
+    return !!o && (o.expect === 'set' || (o.expect === 'reps' && o.ms > 3_000));
+  };
+  for (let i = 0; i < maxS * 2 && !forTheSet(); i++) await run(500);
+  if (!forTheSet()) throw new Error(`nothing ever listened for the set (${mockStamp()})\n${mockLog.slice(-16).join('\n')}`);
+};
+/** One whole set by voice from wherever the coach stands: he lifts, and says his reps. (Nobody says "מוכן" — 2026-10-06.) */
 const aSetByVoice = async (reps: string) => {
-  await untilMic();
-  await says('מוכן');
-  await wait(26);
-  await untilMic();
+  await untilSetMic();
   await says(`${reps} חזרות`);
+};
+/** The echo's three seconds pass, and the rest is under way (nothing is said to mark it any more). */
+const intoTheRest = async () => {
+  await wait(4);
+  expect(V().displayPhase).toMatch(/^REST_/);
 };
 
 const transcripts: string[] = [];
@@ -408,7 +422,8 @@ beforeEach(async () => {
   jest.setSystemTime(new Date('2026-10-05T07:00:00Z'));
   mockT0 = Date.now();
   mockLog.length = 0;
-  Object.assign(mockPhone, { onGlass: true, headset: true, permission: true, micHeld: false, inCall: false, micCutByCall: false, noNetwork: false, earOpenTries: 0, window: null });
+  Object.assign(mockPhone, { onGlass: true, headset: true, permission: true, micHeld: false, inCall: false, micCutByCall: false, noNetwork: false, voiceCallsTheSet: false, earOpenTries: 0, window: null });
+  appFixture.profile.voiceMic = undefined;
   for (const set of [mockPhone.route, mockPhone.earState, mockPhone.interruption, mockPhone.appState, mockPhone.keepAlive]) set.clear();
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_t: string, cb: any) => {
     mockPhone.appState.add(cb);
@@ -428,11 +443,12 @@ afterAll(() => {
 });
 
 const CANT_HEAR = 'אני לא שומעת אותך כרגע. תסמן את הסטים במסך הנעילה או בשעון.';
+const MARK_IT = 'סיימת? תסמן במסך הנעילה או בשעון.';
 
 describe('⛔ the screen goes dark, the app is minimised', () => {
   it('the microphone was opened at Start: a whole set, its rest and the next set run from the pocket — and the microphone is never opened twice', async () => {
     await start();
-    await untilMic();
+    await wait(2);
     expect(mockPhone.micHeld).toBe(true);
     await lock();
     await aSetByVoice('עשר');
@@ -452,23 +468,23 @@ describe('⛔ the screen goes dark, the app is minimised', () => {
     expect(mockPhone.earOpenTries).toBe(1);
     expect(mockPhone.micHeld).toBe(true);
     expect(coachSaid()).not.toContain(CANT_HEAR);
+    expect(coachSaid().some((l) => l.includes('מוכן') || l === 'קדימה.')).toBe(false); // nobody is asked for a word, or given one
     expect([...mockPhone.keepAlive]).toContain('workout'); // the silent loop that keeps the process awake
   });
 
-  it('the screen went dark BEFORE the microphone could open: the coach says once that she cannot hear, the lock screen carries the set — and on glass she hears again', async () => {
+  it('the screen went dark BEFORE the microphone could open: the set is still called; at its end she says once that she cannot hear, the lock screen carries it — and on glass she hears again', async () => {
     await launch();
     await drive(() => V().startCoach(PLAN, 'coach_0'));
     mockPhone.onGlass = false; // Start, and the phone straight into the pocket
     await stage();
     await wait(5);
     expect(mockPhone.micHeld).toBe(false);
-    expect(coachSaid().filter((l) => l === CANT_HEAR)).toHaveLength(1);
-    expect(V().awaitingReady).toBe(true); // the lock screen offers Ready
-    await press('Ready on the lock screen', { type: 'set_ready' });
-    await wait(60);
+    expect(coachSaid().slice(-1)).toEqual(['לחיצת חזה במוט. משקל פתיחה: עשרים קילו בכל צד. שמונה עד עשר חזרות.']);
+    expect(V().awaitingReady).toBe(false); // nothing to press before a set, on any surface
+    // The set's end: the question cannot be heard from here — said once, and it becomes where to mark the set.
+    await untilCoach(CANT_HEAR, 120);
     await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
-    expect(coachSaid().filter((l) => l === CANT_HEAR)).toHaveLength(1); // once a workout, not once a set
     // He takes the phone out during the rest: the microphone opens, and the next set is by voice.
     await unlock();
     expect(mockPhone.micHeld).toBe(true);
@@ -476,6 +492,7 @@ describe('⛔ the screen goes dark, the app is minimised', () => {
     await untilCoach('סט שני מתוך שלושה');
     await aSetByVoice('תשע');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10', 'לחיצת חזה במוט 60×9']);
+    expect(coachSaid().filter((l) => l === CANT_HEAR)).toHaveLength(1); // once a workout, not once a set
   });
 });
 
@@ -489,34 +506,29 @@ describe('⛔ the app is killed and opened again', () => {
     expect(lines.filter((l) => l.startsWith('אני המאמנת שלך')).length).toBe(0); // never the opening again
     expect(mockPhone.micHeld).toBe(true);
     expect([...mockPhone.keepAlive]).toContain('workout');
+    return lines;
   };
 
-  it('while the bar is being loaded — "מוכן" was never said: she is back, asks "מוכן?", and the set runs', async () => {
+  it('in a set\'s first seconds — he was still loading the bar: she is back, says only that, and the set is still his', async () => {
     await start();
-    await untilMic();
     await wait(8);
     kill();
     await wait(40);
-    const before = mockLog.length;
-    await comesBack('loading');
-    expect(coachSaid(before)).toEqual(['חזרתי.', 'מוכן?']); // not the whole load line again
+    expect(await comesBack('first seconds')).toEqual(['חזרתי.']); // the lift is not called a second time
     await aSetByVoice('עשר');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
   });
 
-  it('in the middle of a set — after "מוכן": she is back and the set is still his to report; nothing was written by the kill', async () => {
+  it('in the middle of a set: she is back and the set is still his to report — at once; nothing was written by the kill', async () => {
     await start();
-    await untilMic();
-    await says('מוכן');
-    await wait(10);
+    await wait(25);
     kill();
-    await wait(30);
-    const before = mockLog.length;
-    await comesBack('mid-set');
-    expect(coachSaid(before)).toEqual(['חזרתי.']); // the set he is in is not called a second time
+    await wait(12);
+    expect(await comesBack('mid-set')).toEqual(['חזרתי.']);
     expect(rows()).toEqual([]);
-    // He racks the bar five seconds after reopening the app and says his reps: they are his reps.
-    await untilMic();
+    // He racks the bar seconds after reopening the app and says his reps: they are his reps.
+    await wait(2);
+    expect(mockPhone.window?.opts.expect).toBe('set');
     await says('תשע חזרות');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×9']);
   });
@@ -524,7 +536,7 @@ describe('⛔ the app is killed and opened again', () => {
   it('during a rest — and again after the rest ran out while the app was dead: the set he logged is there once, and the next one is called', async () => {
     await start();
     await aSetByVoice('עשר');
-    await untilCoach('מנוחה');
+    await intoTheRest();
     await wait(20);
     kill();
     await wait(15);
@@ -532,7 +544,7 @@ describe('⛔ the app is killed and opened again', () => {
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
     await untilCoach('סט שני מתוך שלושה');
     await aSetByVoice('תשע');
-    await untilCoach('מנוחה');
+    await intoTheRest();
     kill();
     await wait(240); // long past the rest's end
     await comesBack('after the rest');
@@ -540,18 +552,19 @@ describe('⛔ the app is killed and opened again', () => {
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10', 'לחיצת חזה במוט 60×9', 'לחיצת חזה במוט 60×8']);
   });
 
-  it('while paused: opening the app again IS coming back — the workout is live, and she picks the set up where it stood', async () => {
+  it('while paused: opening the app again IS coming back — the workout is live, and the set is where it stood', async () => {
     await start();
-    await untilMic();
     await wait(5);
-    await says('עצור');
+    mockNote('HE', '👆 Pause');
+    await act(async () => V().pause());
+    await run(10);
     expect(V().paused).toBe(true);
     kill();
     await wait(120);
-    const before = mockLog.length;
-    await comesBack('paused');
+    // ⛔ "חזרתי." and nothing else: the two minutes the workout stood still are not charged to the set —
+    // "כמה חזרות?" a second after reopening a set he had paused five seconds in was this walk's finding.
+    expect(await comesBack('paused')).toEqual(['חזרתי.']);
     expect(V().paused).toBe(false); // the store's own rule (`reconcileResume`): reopening un-freezes a pause
-    expect(coachSaid(before)).toEqual(['חזרתי.', 'מוכן?']); // the load was said before the pause; only the word is asked for
     await aSetByVoice('עשר');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
   });
@@ -560,9 +573,7 @@ describe('⛔ the app is killed and opened again', () => {
 describe('⛔ pause, and back', () => {
   it('in the middle of a set (the pause button; "המשך" by voice): the question waits out the pause, and the set is written only by his word', async () => {
     await start();
-    await untilMic();
-    await says('מוכן');
-    await wait(10);
+    await wait(30);
     mockNote('HE', '👆 Pause');
     await act(async () => V().pause());
     await run(10);
@@ -577,15 +588,14 @@ describe('⛔ pause, and back', () => {
     expect(coachSaid(before)).toEqual(['ממשיכים.']);
     await wait(20);
     expect(coachSaid(before)).toEqual(['ממשיכים.']); // …and "כמה חזרות?" does not land the moment he is back
-    await untilMic();
-    await says('עשר חזרות');
+    await aSetByVoice('עשר');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
   });
 
   it('by a button, during a rest: the rest stands still, and comes back where it was — ten seconds out and all', async () => {
     await start();
     await aSetByVoice('עשר');
-    await untilCoach('מנוחה');
+    await intoTheRest();
     await wait(20);
     const left = V().restEndsAtMs! - Date.now();
     await act(async () => V().pause());
@@ -608,10 +618,12 @@ describe('⛔ pause, and back', () => {
 
   it('a long pause is not listened to for ever: a minute of full attention, a clear voice until five, then a button — and the voice is whole when he is back', async () => {
     await start();
-    await untilMic();
     await wait(5);
-    await says('עצור'); // by voice, while the bar is being loaded and she is listening
+    mockNote('HE', '👆 Pause');
+    await act(async () => V().pause());
+    await run(10);
     await untilMic();
+    expect(mockPhone.window.opts.expect).toBe('resume');
     expect(mockPhone.window.opts.patient).toBeFalsy(); // the first minute: as attentive as any question
     await wait(70);
     expect(mockPhone.window?.opts.patient).toBe(true); // after it: only a clear voice is sent anywhere
@@ -624,7 +636,7 @@ describe('⛔ pause, and back', () => {
     mockNote('HE', '👆 Resume');
     await act(async () => V().resume());
     await run(10);
-    expect(coachSaid(before)).toEqual(['ממשיכים.', 'מוכן?']);
+    expect(coachSaid(before)).toEqual(['ממשיכים.']);
     await aSetByVoice('עשר');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
   });
@@ -633,10 +645,9 @@ describe('⛔ pause, and back', () => {
 describe('⛔ earbuds that drop, a call', () => {
   it('an earbud drops out and comes back with the phone in the pocket: silent while it is out, "חזרתי" — and she still HEARS, because the microphone was kept', async () => {
     await start();
-    await untilMic();
+    await wait(2);
     await lock();
-    await says('מוכן');
-    await wait(8);
+    await wait(25); // mid-set
     const before = mockLog.length;
     await earbuds(false);
     await wait(20);
@@ -645,15 +656,14 @@ describe('⛔ earbuds that drop, a call', () => {
     await earbuds(true);
     await wait(5);
     expect(coachSaid(before)).toEqual(['חזרתי.']);
-    await untilMic();
-    await says('עשר חזרות');
+    await aSetByVoice('עשר');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
     expect(coachSaid()).not.toContain(CANT_HEAR);
   });
 
   it('earbuds gone for good: the microphone is let go after the grace — the app does not hold it through a workout it is not coaching', async () => {
     await start();
-    await untilMic();
+    await wait(2);
     await earbuds(false);
     await wait(60);
     expect(mockPhone.micHeld).toBe(true);
@@ -669,9 +679,8 @@ describe('⛔ earbuds that drop, a call', () => {
 
   it('a call in the pocket, mid-question: silence over the call, the microphone back when it ends, and the question asked once more', async () => {
     await start();
-    await untilMic();
+    await wait(2);
     await lock();
-    await says('מוכן');
     await untilCoach('כמה חזרות?');
     await callBegins();
     const before = mockLog.length;
@@ -687,9 +696,8 @@ describe('⛔ earbuds that drop, a call', () => {
 
   it('a call iOS never reports as ended: the coach is not left mute for the workout — back on glass she takes the audio back', async () => {
     await start();
-    await untilMic();
+    await wait(2);
     await lock();
-    await says('מוכן');
     await untilCoach('כמה חזרות?');
     await callBegins();
     await wait(60);
@@ -710,15 +718,14 @@ describe('⛔ earbuds that drop, a call', () => {
 describe('⛔ the network goes — a basement gym, a dead corner', () => {
   it('she says ONCE that she cannot hear, the lock screen carries the sets — and when the network is back she hears again, by herself, in the pocket', async () => {
     await start();
-    await untilMic();
+    await wait(2);
     await lock();
-    await says('מוכן');
     mockPhone.noNetwork = true;
     mockNote('PHONE', 'no network');
-    await untilMic();
+    await untilSetMic();
     await says('עשר חזרות'); // he reports his set — and nothing can hear it
-    await untilCoach(CANT_HEAR, 60);
-    await untilCoach('סיימת? תסמן במסך הנעילה או בשעון.', 60); // the question becomes where to mark it
+    await untilCoach(CANT_HEAR, 120);
+    await untilCoach(MARK_IT, 120); // the question becomes where to mark it
     await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
     // The next set, still with no network: called and marked from the lock screen — and not one more "I cannot hear".
@@ -735,5 +742,77 @@ describe('⛔ the network goes — a basement gym, a dead corner', () => {
     await aSetByVoice('שמונה');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10', 'לחיצת חזה במוט 60×9', 'לחיצת חזה במוט 60×8']);
     expect(mockPhone.earOpenTries).toBe(1);
+  });
+});
+
+/*
+ * ════ THE FOUNDER'S NOTES AFTER HIS FIRST WORKOUT WITH A VOICE HE COULD HEAR (2026-10-06) ════
+ *   2 · *"אי אפשר לקצר את המנוחה במלל במידה ואני רוצה?"*
+ *   3 · *"מזערתי את מסך האפליקציה … והמנוחה הסתיימה ולא היה לי התראה."*
+ */
+describe('⛔ a rest, with the phone away', () => {
+  it('minimised through a whole rest with the voice on: ten seconds out, the bell and the set are said in his ears — and the alert knows the voice says it', async () => {
+    await start();
+    await aSetByVoice('עשר');
+    await intoTheRest();
+    expect(mockPhone.voiceCallsTheSet).toBe(true);
+    await minimise();
+    const before = mockLog.length;
+    await wait(95);
+    expect(coachSaid(before)).toEqual(['עוד עשר שניות.', 'סט שני מתוך שלושה.']);
+    expect(mockLog.slice(before).some((l) => l.includes('CHIME'))).toBe(true);
+    // He comes back to the app: nothing is said twice, and nobody says "חזרתי" — she never left.
+    const back = mockLog.length;
+    await unlock();
+    await wait(2);
+    expect(coachSaid(back)).toEqual([]);
+  });
+
+  it('the rest is cut short from the pocket: "מוכן" — the set is called at once, with no bell', async () => {
+    await start();
+    await lock();
+    await aSetByVoice('עשר');
+    await intoTheRest();
+    await untilMic(); // the rest listens — for a clear voice only
+    expect(mockPhone.window.opts).toMatchObject({ expect: 'ready', patient: true });
+    await wait(20);
+    const before = mockLog.length;
+    await says('מוכן');
+    expect(coachSaid(before)).toEqual(['סט שני מתוך שלושה.']);
+    expect(mockLog.slice(before).some((l) => l.includes('CHIME'))).toBe(false);
+    await aSetByVoice('תשע');
+    expect(rows()).toEqual(['לחיצת חזה במוט 60×10', 'לחיצת חזה במוט 60×9']);
+  });
+
+  it('earbuds out: the voice will not say the rest is over — and the alert is told, so the banner is left to', async () => {
+    await start();
+    await aSetByVoice('עשר');
+    await intoTheRest();
+    await earbuds(false);
+    await wait(3);
+    expect(mockPhone.voiceCallsTheSet).toBe(false);
+    await earbuds(true);
+    await wait(5);
+    expect(mockPhone.voiceCallsTheSet).toBe(true);
+  });
+});
+
+/*
+ * ════ ⛔ THERE IS NO MICROPHONE TO CHOOSE (2026-10-06) ════
+ * Build 76's profile offered "earbuds", and there it meant no held microphone at all — a coach deaf
+ * from a pocket. For one afternoon it meant moving the held engine to the earbuds for each answer; the
+ * research the founder asked for found nothing that says a locked phone may, and it left the workout
+ * the same day (`theMeasurementAsksThePhone`). A profile that still carries the old choice is a
+ * profile like any other.
+ */
+describe('⛔ a stored "earbuds" choice changes nothing', () => {
+  it('the workout\'s microphone is the phone\'s, held from Start, and hears him from his pocket', async () => {
+    appFixture.profile.voiceMic = 'headset';
+    await start();
+    await wait(2);
+    expect(mockPhone.micHeld).toBe(true);
+    await lock();
+    await aSetByVoice('עשר');
+    expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
   });
 });

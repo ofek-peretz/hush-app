@@ -11,10 +11,10 @@
 
 // 
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
 // the programme can never disagree about what she chose.
-import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform, AppState } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
@@ -37,16 +37,12 @@ import { setLocale, currentLocale } from '@/i18n';
 import { notifier } from '@/platform/notifications';
 import { reloadApp } from '@/app/reload';
 import { nativeWatchPairing, lastWatchPublish } from '@/platform/watch/watchTransportNative';
-import { audioSession, type EarSource } from '@/platform/voice/audioSession';
+import { audioSession } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
 import { DEFAULT_COACH_VOICE, DEVICE_VOICE, NEURAL_VOICES, neuralVoice } from '@/platform/voice/neuralVoice';
-import { cloudEar } from '@/platform/voice/cloudEar';
-import { voiceCloudLastFailure } from '@/platform/voice/voiceCloud';
-import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
-
-/** The locked-phone test: time to lock the phone, then the window that asks for a number. */
-const PROBE_LOCK_MS = 15_000;
-const PROBE_LISTEN_MS = 8_000;
+import { readVoiceJournal } from '@/platform/voice/voiceJournal';
+import { voiceCapture } from '@/platform/voice/voiceCapture';
+import { factLine, measurePhone, runMeasure, type MeasureAsk, type MeasureLines } from '@/platform/voice/voiceMeasure';
 import { track } from '@/platform/telemetry';
 import { syncTrace } from '@/platform/syncTrace';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
@@ -523,8 +519,6 @@ export function ProfileSheet({ navigation }: Props) {
         />
         {p?.voiceSpec !== false ? (
           <VoiceGateLine
-            mic={p?.voiceMic ?? 'phone'}
-            onMic={(m) => void app.updateProfileInfo({ voiceMic: m })}
             voiceId={p?.coachVoiceId ?? DEFAULT_COACH_VOICE}
             onVoice={(v) => void app.updateProfileInfo({ coachVoiceId: v })}
             cloudEarOn={p?.voiceCloudEar !== false}
@@ -714,16 +708,53 @@ const VOICE_CHOICES: { id: string; key: string }[] = [
   { id: DEVICE_VOICE, key: 'profile.coachVoiceDevice' },
 ];
 
+/**
+ * The measurement's questions for her ears (`platform/voice/voiceMeasure`): each was asked aloud by
+ * its number while the phone was in her pocket, and is answered here with one tap when it is out.
+ */
+const YES_NO = [
+  { value: 'yes', key: 'profile.measureYes' },
+  { value: 'no', key: 'profile.measureNo' },
+  { value: 'unsure', key: 'profile.measureUnsure' },
+];
+const MEASURE_QUESTIONS: Record<MeasureAsk, { key: string; answers: { value: string; key: string }[] }> = {
+  q1: {
+    key: 'profile.measureAsk1',
+    answers: [
+      { value: 'earbuds', key: 'profile.measureFromEarbuds' },
+      { value: 'phone', key: 'profile.measureFromPhone' },
+      { value: 'none', key: 'profile.measureNotHeard' },
+    ],
+  },
+  q2: { key: 'profile.measureAsk2', answers: YES_NO },
+  q3: { key: 'profile.measureAsk3', answers: YES_NO },
+  earbuds: {
+    key: 'profile.measureAskEarbuds',
+    answers: [
+      { value: 'fine', key: 'profile.measureMusicFine' },
+      { value: 'dipped', key: 'profile.measureMusicDipped' },
+      { value: 'cut', key: 'profile.measureMusicCut' },
+    ],
+  },
+  q4: {
+    key: 'profile.measureAsk4',
+    answers: [
+      { value: 'yes', key: 'profile.measureYes' },
+      { value: 'weaker', key: 'profile.measureMusicWeaker' },
+      { value: 'call', key: 'profile.measureMusicCall' },
+    ],
+  },
+  q5: { key: 'profile.measureAsk5', answers: YES_NO },
+  q6: { key: 'profile.measureAsk6', answers: YES_NO },
+  q7: { key: 'profile.measureAsk7', answers: YES_NO },
+};
+
 function VoiceGateLine({
-  mic,
-  onMic,
   voiceId,
   onVoice,
   cloudEarOn,
   onCloudEar,
 }: {
-  mic: EarSource;
-  onMic: (m: EarSource) => void;
   voiceId: string;
   onVoice: (id: string) => void;
   cloudEarOn: boolean;
@@ -770,102 +801,77 @@ function VoiceGateLine({
     setTestDetail(lastLine ? `${lastLine.how} · ${lastLine.engine}${lastLine.started ? '' : ' · never started'}${lastLine.voice ? ` · ${lastLine.voice}` : ''}${why}` : 'no line');
     void track('voice_test', { ok, how: lastLine?.how ?? null, started: lastLine?.started ?? false, outputs: route?.outputs.map((o) => o.type).join(',') ?? null });
   };
+  /** What the voice did on this phone, as the phone wrote it down (`voiceJournal`) — null until asked for. */
+  const [journal, setJournal] = useState<string[] | null>(null);
   /*
-   * ════ THE LOCKED-PHONE TEST (founder, 2026-09-15: *"אי אפשר שהמיקרופון יפתח רק בחלקים ספציפיים
-   * באימון? זה היה החזון שלי"*) ════
-   * Whether a question can be answered from a pocket was, until this, a reading of Apple's forums —
-   * and those forums are old and not about an app that is already playing audio in the background,
-   * which is what a Hush workout is. So the phone is asked.
+   * ════ ⛔ THE MEASUREMENT (founder, 2026-10-06: *"אתה לא יכול לבדוק את זה … אם זה אמור או יכול לעבוד
+   * … אני לא רוצה שישר תתחיל לעשות מבלי לתכנן לפני"*) ════
+   * The coach could not be heard over his music, and two fixes were built on a guess. The search he
+   * asked for found the conflict in Apple's own pages — the microphone that hears from a pocket may
+   * never be closed, and the documented way to lower music closes it — and found no page and no app
+   * that settles the way out. So the phone is asked, once: `platform/voice/voiceMeasure` walks it,
+   * earbuds in and music on, the phone in his pocket twice. What iOS reported is printed below as it
+   * arrives (and written to the voice journal); what only his ears can say is asked aloud by number
+   * and answered here with a tap. A screenshot of this block is the whole report.
    *
-   * `windows` — the founder's design, exactly: nothing is opened on glass; she locks the phone; then
-   * three short windows are opened FROM THE LOCKED PHONE, one after another, each asking for a
-   * number and saying back what it heard:
-   *   1 · today's ear (Apple's older recognizer, the earbuds' microphone)
-   *   2 · the new on-device recognizer, the earbuds' microphone, opened for this window only
-   *   3 · the new on-device recognizer, the phone's microphone, opened for this window only
-   * `continuous` — the fallback: the phone's microphone opened on glass and held (music untouched).
-   * Every step is written below with its second, so when she unlocks the page says which held.
+   * It replaced two older tests on this row (windows opened from a locked phone, and a held
+   * microphone): what they asked is answered — Apple says a recording cannot be started from the
+   * background, and build 76 heard him from his pocket through the held one.
    */
-  const [probe, setProbe] = useState<'idle' | 'running' | 'done'>('idle');
-  const [probeLog, setProbeLog] = useState<string[]>([]);
-  const runProbe = async (kind: 'windows' | 'continuous') => {
-    setProbe('running');
+  const [measure, setMeasure] = useState<'idle' | 'running' | 'done'>('idle');
+  const [measureLog, setMeasureLog] = useState<string[]>([]);
+  const [measureHint, setMeasureHint] = useState<string | null>(null);
+  const [asked, setAsked] = useState<MeasureAsk[]>([]);
+  const [answers, setAnswers] = useState<Partial<Record<MeasureAsk, string>>>({});
+  const musicWarnedRef = useRef(false);
+  const startMeasure = async () => {
+    setMeasureHint(null);
+    // A workout (or a run) owns the session and the microphone; the measurement would take both from it.
+    if (audioSession.keepAliveHeld()) return setMeasureHint(t('profile.measureInWorkout'));
+    if (!audioSession.headsetConnected()) return setMeasureHint(t('profile.measureNoHeadset'));
+    if (!(await voiceCapture.ensurePermission())) return setMeasureHint(t('profile.measureNoMic'));
+    // Every question is about her music. Said once; a second press runs it anyway.
+    if (audioSession.sessionReport()?.otherAudio === false && !musicWarnedRef.current) {
+      musicWarnedRef.current = true;
+      return setMeasureHint(t('profile.measureNoMusic'));
+    }
+    setMeasure('running');
+    setAsked([]);
+    setAnswers({});
     const log: string[] = [];
     const t0 = Date.now();
-    const note = (s: string) => {
-      log.push(`${((Date.now() - t0) / 1000).toFixed(1)}s · ${s}`);
-      setProbeLog([...log]);
+    const lines: MeasureLines = {
+      lock: t('profile.measureLock'),
+      q1: t('profile.measureSay1'),
+      number: t('profile.measureNumber'),
+      heard: (text) => t('profile.measureHeard', { text }),
+      nothing: t('profile.measureNothing'),
+      q2: t('profile.measureSay2'),
+      q3: t('profile.measureSay3'),
+      numberEarbuds: t('profile.measureNumberEarbuds'),
+      half: t('profile.measureHalf'),
+      lockAgain: t('profile.measureLockAgain'),
+      q4: t('profile.measureSay4'),
+      q5: t('profile.measureSay5'),
+      q6: t('profile.measureSay6'),
+      q7: t('profile.measureSay7'),
+      numberAgain: t('profile.measureNumberAgain'),
+      done: t('profile.measureDone'),
     };
-    const locale = currentLocale();
-    const lang = recognizerLang(locale);
-    const say = async (text: string) => {
-      await audioSession.duck();
-      await coachVoice.say(text, locale);
-      await audioSession.unduck();
-    };
-    const ask = async (n: number, label: string) => {
-      await say(t('profile.voiceProbeAsk', { n }));
-      note(`${n} · ${label} · app: ${AppState.currentState} · microphone held: ${audioSession.earRunning()} · strong ear: ${cloudEar.available() ? 'on' : 'OFF'}`);
-      const heard = await new Promise<string | null>((resolve) => {
-        let text: string | null = null;
-        voiceCapture.open({
-          locale,
-          ms: PROBE_LISTEN_MS,
-          onSentence: (s) => {
-            text = s;
-            return false;
-          },
-          expect: 'reps',
-          onEnd: (why) => {
-            // Which ears this window had, and — when nothing was heard — why the strong one was silent.
-            const strongWhy = text ? '' : ` · strong ear said: ${voiceCloudLastFailure().hear ?? 'nothing to hear'}`;
-            // How far over the room her voice was, as the microphone read it — the number a gym has and a desk does not.
-            const lv = voiceCapture.lastLevels?.();
-            const levels = lv ? ` · room ${lv.roomDb.toFixed(0)} dB · loudest ${lv.loudestDb.toFixed(0)} dB (${(lv.loudestDb - lv.roomDb).toFixed(0)} over) · found by level: ${lv.found}` : '';
-            note(`${n} · window ended: ${why}${text ? ` · heard "${text}"` : ''}${strongWhy}${levels}`);
-            resolve(text);
-          },
-        });
-      });
-      await say(heard ? t('profile.voiceProbeHeard', { text: heard }) : t('profile.voiceProbeNothing'));
-    };
-    if (audioSession.earRunning()) {
-      note('a workout holds the microphone — end it first');
-      setProbe('done');
-      return;
-    }
-    await audioSession.holdKeepAlive('voiceTest');
-    try {
-      note(`kind: ${kind} · permission: ${(await voiceCapture.ensurePermission()) ? 'granted' : 'REFUSED'}`);
-      const available = await audioSession.earAvailable(lang);
-      note(`new recognizer (${lang}): ${available ? 'available' : 'NOT available'}`);
-      const model = available && (await audioSession.earPrepare(lang));
-      if (available) note(`model: ${model ? 'installed' : 'NOT installed'}`);
-      // The microphone opens with or without the phone's own recognizer — the strong ear hears through it (2026-10-05).
-      if (kind === 'continuous') note(`phone microphone held: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
-      await say(t('profile.voiceProbeLock'));
-      await new Promise((r) => setTimeout(r, PROBE_LOCK_MS));
-      if (kind === 'continuous') {
-        await ask(1, 'held phone microphone');
-      } else {
-        await ask(1, "today's ear · earbuds");
-        // Steps 2 and 3 run on every phone now: the microphone opens with or without Apple's own
-        // recognizer, and each line says which ears the window had.
-        note(`2 · open earbuds microphone from here: ${(await audioSession.earOpen('headset')) ?? 'open'}`);
-        if (audioSession.earRunning()) await ask(2, 'held microphone · earbuds');
-        await audioSession.earClose();
-        note(`3 · open phone microphone from here: ${(await audioSession.earOpen('phone')) ?? 'open'}`);
-        if (audioSession.earRunning()) await ask(3, 'held microphone · phone');
-        await audioSession.earClose();
-      }
-      const spoke = coachVoice.lastLine();
-      note(`last line: ${spoke ? `${spoke.how}${spoke.started ? '' : ' · never started'}` : 'none'}`);
-      void track('voice_probe', { kind, log: log.join(' | ') });
-    } finally {
-      await audioSession.earClose();
-      await audioSession.releaseKeepAlive('voiceTest');
-      setProbe('done');
-    }
+    const outcome = await runMeasure(measurePhone(currentLocale()), lines, (fact) => {
+      log.push(`${Math.round((Date.now() - t0) / 1000)}s ${factLine(fact)}`);
+      setMeasureLog([...log]);
+      void track('voice_measure', fact);
+    });
+    log.push(`ended: ${outcome.ended}`);
+    setMeasureLog([...log]);
+    void track('voice_measure', { step: 'ended', how: outcome.ended, asked: outcome.asked.join(',') });
+    setAsked(outcome.asked);
+    setMeasure('done');
+  };
+  const answer = (q: MeasureAsk, a: string) => {
+    setAnswers((was) => ({ ...was, [q]: a }));
+    void track('voice_measure', { step: 'answer', q, a });
   };
   const line = !capable ? t('profile.voiceGateMissing') : headset ? t('profile.voiceGateOn') : t('profile.voiceGateNoHeadset');
   const routeLine = route
@@ -915,32 +921,39 @@ function VoiceGateLine({
             </View>
             <Switch checked={cloudEarOn} onChange={() => onCloudEar(!cloudEarOn)} accessibilityLabel={t('profile.cloudEarRow')} />
           </View>
-          <Text style={styles.voiceGate}>{t('profile.voiceMicLabel')}</Text>
-          <SegmentedControl
-            size="pill"
-            options={[
-              { value: 'headset', label: t('profile.voiceMicHeadset') },
-              { value: 'phone', label: t('profile.voiceMicPhone') },
-            ]}
-            value={mic}
-            onChange={(v) => onMic(v === 'phone' ? 'phone' : 'headset')}
-          />
-          <Text style={styles.voiceGate}>{t('profile.voiceMicSub')}</Text>
+          {/* The measurement: one run, and its report (see `startMeasure`). */}
           <Button
             variant="secondary"
             size="sm"
-            label={probe === 'running' ? t('profile.voiceProbeRunning') : t('profile.voiceProbe')}
-            onPress={() => void runProbe('windows')}
-            disabled={probe === 'running' || test === 'playing'}
+            label={measure === 'running' ? t('profile.measureRunning') : t('profile.measure')}
+            onPress={() => void startMeasure()}
+            disabled={measure === 'running' || test === 'playing'}
           />
+          <Text style={styles.voiceGate}>{measureHint ?? t('profile.measureSub')}</Text>
+          {measureLog.length > 0 ? <Text style={styles.voiceGateRoute}>{measureLog.join('\n')}</Text> : null}
+          {measure === 'done' && asked.length > 0 ? (
+            <View style={styles.voiceGateTest}>
+              {asked.map((q) => (
+                <View key={q} style={styles.voiceGateTest}>
+                  <Text style={styles.voiceGate}>{t(MEASURE_QUESTIONS[q].key)}</Text>
+                  <SegmentedControl
+                    size="pill"
+                    options={MEASURE_QUESTIONS[q].answers.map((a) => ({ value: a.value, label: t(a.key) }))}
+                    value={answers[q] ?? ''}
+                    onChange={(a) => answer(q, a)}
+                  />
+                </View>
+              ))}
+              <Text style={styles.voiceGate}>{t('profile.measureShot')}</Text>
+            </View>
+          ) : null}
           <Button
             variant="quiet"
             size="sm"
-            label={t('profile.voiceProbeContinuous')}
-            onPress={() => void runProbe('continuous')}
-            disabled={probe === 'running' || test === 'playing'}
+            label={t('profile.voiceJournal')}
+            onPress={() => void (journal ? Promise.resolve(setJournal(null)) : readVoiceJournal().then(setJournal))}
           />
-          {probeLog.length > 0 ? <Text style={styles.voiceGateRoute}>{probeLog.join('\n')}</Text> : null}
+          {journal ? <Text style={styles.voiceGateRoute}>{journal.length > 0 ? journal.join('\n') : t('profile.voiceJournalEmpty')}</Text> : null}
         </View>
       ) : null}
     </View>

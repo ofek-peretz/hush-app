@@ -35,6 +35,7 @@
 //
 
 import React from 'react';
+import { AccessibilityInfo } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { AppContext } from '@/state/stores/appStore';
 import { SessionProvider, useSession, type SessionView } from '@/state/stores/sessionStore';
@@ -130,6 +131,21 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await db.clearAll();
+});
+
+/*
+ * ⛔ THE FIGURE STANDS STILL HERE, THROUGH THE PRODUCT'S OWN DOOR (2026-10-06). A rest draws the
+ * resting athlete, whose figure redraws on every frame for as long as it is on the stage — by
+ * design. Under real timers `act` waits for React to go quiet, and a figure that never stops gave it
+ * a wait that ended only by a race between two timers, or 27 seconds later at the figure's first
+ * drink (`RestingAthlete`). Measured at the commit that shipped build 76: the second walk below took
+ * 6.8 s on one run and 27.8 s on the next, against a 5 s limit — it passed or failed by the machine's
+ * mood, and failed two full runs in a row on the day this was written. Reduce Motion is what stills
+ * the figure in the app (`MotionFigure` reads it), so that is what stills it here: the stage still
+ * draws its figure, and the walk takes the time the walk takes.
+ */
+beforeEach(() => {
+  jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
 });
 
 describe('leaving a workout at its very beginning', () => {

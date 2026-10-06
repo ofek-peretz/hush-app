@@ -69,7 +69,7 @@
     },
     "lobby": null,
     "plan": null,
-    "authoritySeq": 4,
+    "authoritySeq": 2,
     "authorityEpoch": 1800000000000,
     "sentAt": "2027-01-15T08:00:00.000Z"
   }

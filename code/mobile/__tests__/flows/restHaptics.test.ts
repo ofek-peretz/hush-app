@@ -47,6 +47,7 @@ jest.mock('@/platform/telemetry', () => ({ track: () => {} }));
 
 jest.mock('@/platform/liveActivity', () => ({ liveActivityRunning: () => mockState.liveActivity }));
 
+import { AppState } from 'react-native';
 import { restHaptics, restAlertDelays, phoneOwnsRestHaptics, REST_WARNING_LEAD_S } from '@/platform/restHaptics';
 
 const NOW = 1_700_000_000_000;
@@ -59,6 +60,7 @@ beforeEach(() => {
   mockState.granted = true;
   mockState.liveActivity = false;
   jest.spyOn(Date, 'now').mockReturnValue(NOW);
+  restHaptics.voiceCallsTheSet(false);
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -217,6 +219,73 @@ describe('⛔ a delivered alert is litter the moment the rest moves on (founder,
     await restHaptics.arm(at(90));
     mockDismissed.length = 0;
     await restHaptics.disarm();
+    expect(mockDismissed).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+});
+
+/*
+ * ════ ⛔ THE APP WAS CANCELLING ITS OWN ALERT (founder, 2026-10-06) ════
+ *   > *"מזערתי את מסך האפליקציה … והמנוחה הסתיימה ולא היה לי התראה."*
+ * The in-app rest reaching zero disarmed the OS alert — written when a pocketed phone's JS slept and
+ * "in-app" meant on glass. Since the silent loop keeps the process awake, the rest reaches zero in
+ * the background too, and the backstop cancelled itself at the instant it was the only thing left.
+ */
+describe('⛔ the rest-over alert survives the rest ending with her eyes elsewhere', () => {
+  const away = (state: string) => Object.defineProperty(AppState, 'currentState', { configurable: true, get: () => state });
+  afterEach(() => away('active'));
+
+  it('minimised, the rest runs out, the app tidies up: the rest-over alert is left alone — it is the alert', async () => {
+    await restHaptics.arm(at(90));
+    mockCanceled.length = 0;
+    mockDismissed.length = 0;
+    away('background');
+    (Date.now as jest.Mock).mockReturnValue(at(90)); // the rest's end, to the second
+    await restHaptics.disarm(); // the rest screen reaching zero
+    await restHaptics.disarm(); // …the screen tearing down
+    await restHaptics.disarm(); // …the store presenting the next set
+    expect(mockCanceled).not.toContain('hush.rest_done');
+    expect(mockDismissed).not.toContain('hush.rest_done');
+    // The seven-second warning is over either way.
+    expect(mockCanceled).toContain('hush.rest_warn');
+  });
+
+  it('the same instant ON glass: cancelled and cleared, as it always was — she is looking at the ring', async () => {
+    await restHaptics.arm(at(90));
+    mockCanceled.length = 0;
+    mockDismissed.length = 0;
+    (Date.now as jest.Mock).mockReturnValue(at(90));
+    await restHaptics.disarm();
+    expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+    expect(mockDismissed).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+
+  it('a rest cut short from the lock screen is not "the rest ran out": nothing may fire later', async () => {
+    await restHaptics.arm(at(90));
+    mockCanceled.length = 0;
+    away('background');
+    (Date.now as jest.Mock).mockReturnValue(at(40)); // fifty seconds still to go
+    await restHaptics.disarm();
+    expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+
+  it('with the voice coach on, she is told in her ears at that instant — a banner on top would be the pile', async () => {
+    restHaptics.voiceCallsTheSet(true);
+    await restHaptics.arm(at(90));
+    mockCanceled.length = 0;
+    away('background');
+    (Date.now as jest.Mock).mockReturnValue(at(90));
+    await restHaptics.disarm();
+    expect(mockCanceled).toEqual(['hush.rest_warn', 'hush.rest_done']);
+  });
+
+  it('…and a card that was left for her is gone by the next rest, never stacked under it', async () => {
+    await restHaptics.arm(at(90));
+    away('background');
+    (Date.now as jest.Mock).mockReturnValue(at(90));
+    await restHaptics.disarm();
+    mockDismissed.length = 0;
+    (Date.now as jest.Mock).mockReturnValue(at(140));
+    await restHaptics.arm(at(230)); // the set after it is logged from the lock screen: the next rest
     expect(mockDismissed).toEqual(['hush.rest_warn', 'hush.rest_done']);
   });
 });

@@ -96,6 +96,8 @@ export interface Profile {
    * those seconds Bluetooth drops her music to call quality, never longer. `phone`: the phone's own
    * microphone, held for the workout so a locked phone can answer; her music is never touched.
    * ⛔ The earbuds' microphone is never held open for the workout (founder: the music must not suffer).
+   * ⛔ NOT READ since 2026-10-06: the workout's microphone is the phone's, and the profile offers no
+   * choice — "earbuds" meant a coach deaf from a pocket (`useVoiceCoach`). Kept for stored profiles.
    */
   voiceMic?: 'headset' | 'phone';
   /**

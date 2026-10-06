@@ -325,7 +325,7 @@ interface AppApi extends AppState {
     weekOpensDow?: number;
     /** The voice coach (docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md). Absent = on; it still speaks only with earbuds. */
     voiceSpec?: boolean;
-    /** The pocket ear's microphone. Absent = headset. */
+    /** The pocket ear's microphone. Not read since 2026-10-06 — the workout's microphone is the phone's (`useVoiceCoach`). */
     voiceMic?: 'headset' | 'phone';
     /** The coach's voice — a natural voice id or `'device'` (Carmit). Absent = the first natural voice. */
     coachVoiceId?: string;

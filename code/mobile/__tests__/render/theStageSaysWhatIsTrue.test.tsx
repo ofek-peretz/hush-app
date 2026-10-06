@@ -212,7 +212,7 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     // Closing the gate closes the voice. The pocket microphone goes with it at once when the stage
     // LEAVES — and after a grace when only the earbuds went, so a dropped earbud does not cost her the
     // ear for the rest of a pocketed workout (2026-10-05; walked in `theVoiceSurvivesThePhone`).
-    expect(hook).toMatch(/const close = \(leaving: boolean\) => \{\s*if \(c\.isOn\(\)\) \{[\s\S]*?c\.disable\(\);[\s\S]*?\}\s*keepEar\(\);\s*if \(leaving\) return void audioSession\.earClose\(\);\s*earGrace = setTimeout\(/);
+    expect(hook).toMatch(/const close = \(leaving: boolean\) => \{[\s\S]*?if \(c\.isOn\(\)\) \{[\s\S]*?c\.disable\(\);[\s\S]*?\}\s*keepEar\(\);\s*if \(leaving\) return void audioSession\.earClose\(\);\s*earGrace = setTimeout\(/);
     expect(hook).toMatch(/applyRef\.current = \(\) => \{\};\s*close\(true\);/);
     // …except a workout that ENDED: its last lines are said to the end first (2026-09-27).
     expect(hook).toMatch(/if \(c\.ended\(\)\) \{[\s\S]*?Promise\.race\(\[c\.finish\(\), new Promise\(\(r\) => setTimeout\(r, DRAIN_MS\)\)\]\)/);
@@ -261,9 +261,12 @@ describe('4 · the silent-voice notice is said once per workout, before it begin
     const hook = read('src/platform/voice/useVoiceCoach.ts');
     // ⛔ The founder: the music must not suffer. The workout only ever HOLDS the phone's microphone;
     // the earbuds' microphone opens only in a question's short window.
-    expect(hook).toMatch(/const openPocketEar = async \(\): Promise<void> => \{\s*if \(Platform\.OS !== 'ios' \|\| audioSession\.earRunning\(\) \|\| micRef\.current !== 'phone'\) return;/);
+    // (2026-10-06: and ALWAYS the phone's — whichever microphone hears her answers, it is the phone's
+    // that holds the right to listen from a pocket. "Earbuds" used to mean no held microphone at all.)
+    expect(hook).toMatch(/const openPocketEar = async \(\): Promise<void> => \{[\s\S]*?if \(Platform\.OS !== 'ios' \|\| audioSession\.earRunning\(\)\) return;/);
+    expect(hook).not.toMatch(/earOpen\((?!'phone'\))/);
     // Opened only on glass — iOS refuses a recording started in the background.
-    expect(hook).toMatch(/if \(AppState\.currentState !== 'active'\) return[\s\S]*?audioSession\.earOpen\(micRef\.current\)/);
+    expect(hook).toMatch(/if \(AppState\.currentState !== 'active'\) return[\s\S]*?audioSession\.earOpen\('phone'\)/);
     // Back on glass with the voice on and no ear: the one moment it can start again.
     expect(hook).toMatch(/if \(s !== 'active' \|\| !c\.isOn\(\)\) return;[\s\S]*?!audioSession\.earRunning\(\)\) void openPocketEar\(\);/);
     const ear = read('src/platform/voice/voiceCapture.ts');

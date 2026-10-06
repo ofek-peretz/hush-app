@@ -25,6 +25,7 @@
 
 // 
 
+import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { tg } from '@/i18n';
 import { hasNotificationPermission } from '@/platform/notifications';
@@ -63,7 +64,45 @@ export function restAlertDelays(
   return { warnInS: warn >= 1 ? warn : null, doneInS: done >= 1 ? done : null };
 }
 
+/*
+ * ════ ⛔ THE APP WAS CANCELLING ITS OWN ALERT (founder, 2026-10-06) ════
+ *
+ *   > *"מזערתי את מסך האפליקציה … והמנוחה הסתיימה ולא היה לי התראה."*
+ *
+ * The header above is from the days a pocketed phone's JS slept: the OS alert was the only thing
+ * that could fire, and the in-app rest reaching zero `disarm`ed it because in-app meant ON GLASS.
+ * Since 2026-09-09 a silent loop keeps the process awake for the whole workout — so with the app
+ * minimised or the phone locked, the in-app rest still reaches zero, and at that instant it
+ * cancelled the alert that was a few hundred milliseconds from firing (and, since 2026-09-14, swept
+ * it out of the tray if it had). The backstop removed itself exactly when it was the only thing
+ * left: a rest could end with her eyes elsewhere and nothing on the phone said so.
+ *
+ * So a `disarm` that arrives AT the rest's end, with the app not on glass, leaves the rest-over
+ * alert alone — it is the alert. Every other disarm (a rest cut short, a pause, the workout left)
+ * cancels as before. The one case with nothing to add is the voice coach: it chimes and calls the
+ * set in her ears at that same instant (`voiceCallsTheSet`), and a banner on top would be the pile.
+ * Back on glass the card is litter, and goes.
+ */
+const REST_OVER_IS_NOW_MS = 1_500;
+/** The end of the rest the alerts are armed for — null when nothing is armed. */
+let armedEndAtMs: number | null = null;
+/** The voice coach is on: at the rest's end it chimes and calls the set — that is the alert. */
+let voiceCalls = false;
+const restOverIsNow = () => armedEndAtMs != null && Date.now() >= armedEndAtMs - REST_OVER_IS_NOW_MS;
+
+try {
+  AppState.addEventListener('change', (s) => {
+    if (s !== 'active' || !restOverIsNow()) return;
+    armedEndAtMs = null;
+    void clearDelivered();
+  });
+} catch {
+  /* no app state to listen to (a test, the web): the next arm or disarm clears the card */
+}
+
 export interface RestHaptics {
+  /** The voice coach came on or went quiet: while it is on, IT says the rest is over (see above). */
+  voiceCallsTheSet(on: boolean): void;
   /** (Re)arm the locked/background rest alerts for a rest ending at `endAtMs`. Idempotent
    *  — cancels any prior pair first. A no-op (after cancel) when a watch workout owns. */
   arm(endAtMs: number, done?: { title: string; body: string }): Promise<void>;
@@ -95,8 +134,13 @@ async function clearDelivered(): Promise<void> {
 }
 
 export const restHaptics: RestHaptics = {
+  voiceCallsTheSet(on) {
+    voiceCalls = on;
+  },
+
   async arm(endAtMs, done) {
     syncTrace.add('A', syncTrace.rel(endAtMs));
+    armedEndAtMs = null;
     try {
       // Re-arm is idempotent: always clear the prior pair first (+15s / resume reschedule) —
       // scheduled AND delivered, so the tray never carries the last rest's card into this one.
@@ -162,6 +206,7 @@ export const restHaptics: RestHaptics = {
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: doneInS, repeats: false },
         });
+        armedEndAtMs = endAtMs;
       }
       void track(NOTIFICATION_EVENTS.scheduled, { kind: 'rest_alerts', warnInS, doneInS, sound, laOwnsTheWarning });
     } catch {
@@ -171,6 +216,13 @@ export const restHaptics: RestHaptics = {
 
   async disarm() {
     try {
+      // The rest ran out with her eyes elsewhere and nothing else to tell her: this alert is the telling.
+      if (AppState.currentState !== 'active' && restOverIsNow() && !voiceCalls) {
+        await Notifications.cancelScheduledNotificationAsync(WARN_ID).catch(() => {});
+        await Notifications.dismissNotificationAsync(WARN_ID).catch(() => {});
+        return;
+      }
+      armedEndAtMs = null;
       await cancelBoth();
       await clearDelivered();
     } catch {

@@ -133,10 +133,10 @@ describe('⛔ the load line — a bar by what goes on each side (spec §2)', () 
 
 describe('⛔ the lines, word for word (spec §3)', () => {
   it('the first workout teaches the dialogue ONCE — in her gender', () => {
-    expect(voiceScript.openFirstSession()).toBe('אני המאמנת שלך. לפני כל סט, תגיד: מוכן. אחרי הסט, תגיד כמה חזרות. אם המשקל לא מתאים, תגיד משקל אחר.');
+    expect(voiceScript.openFirstSession()).toBe('אני המאמנת שלך. בסוף כל סט, תגיד כמה חזרות עשית.');
     expect(voiceScript.openSession('חזה וגב', 6, 50, HE)).toBe('חזה וגב. שישה תרגילים, בערך חמישים דקות.');
     setGender('female');
-    expect(voiceScript.openFirstSession()).toBe('אני המאמנת שלך. לפני כל סט, תגידי: מוכנה. אחרי הסט, תגידי כמה חזרות. אם המשקל לא מתאים, תגידי משקל אחר.');
+    expect(voiceScript.openFirstSession()).toBe('אני המאמנת שלך. בסוף כל סט, תגידי כמה חזרות עשית.');
     expect(voiceScript.readyPrompt()).toBe('מוכנה?');
   });
   it('the loading dialogue, calibrated and first time: the lift, its load, its range', () => {
@@ -194,10 +194,10 @@ describe('⛔ the lines, word for word (spec §3)', () => {
     expect(voiceScript.setStart(2, 4, false, HE)).toBe('סט שני מתוך ארבעה.');
     expect(voiceScript.setStart(4, 4, false, HE)).toBe('סט אחרון.');
     // The crossing names the next lift AND its load — she fetches it during this rest (2026-09-27).
-    expect(voiceScript.liftDone(CABLE, 45, false, 120, HE)).toBe('התרגיל הבא: חתירה בפולי בישיבה, ארבעים וחמישה קילו. מנוחה: שתי דקות.');
-    expect(voiceScript.liftDone(DB, 20, true, 90, HE)).toBe('התרגיל האחרון: לחיצת חזה במשקולות יד, עשרים קילו בכל יד. מנוחה: דקה וחצי.');
-    expect(voiceScript.liftDone('pull_up', null, false, 60, HE)).toBe('התרגיל הבא: מתח באחיזה רחבה. מנוחה: דקה.');
-    expect(voiceScript.liftDone(BENCH, 40, false, 120, HE)).toBe('התרגיל הבא: לחיצת חזה במוט, עשרה קילו בכל צד. מנוחה: שתי דקות.');
+    expect(voiceScript.liftDone(CABLE, 45, false, 120, HE)).toBe('התרגיל הבא: חתירה בפולי בישיבה, ארבעים וחמישה קילו.');
+    expect(voiceScript.liftDone(DB, 20, true, 90, HE)).toBe('התרגיל האחרון: לחיצת חזה במשקולות יד, עשרים קילו בכל יד.');
+    expect(voiceScript.liftDone('pull_up', null, false, 60, HE)).toBe('התרגיל הבא: מתח באחיזה רחבה.');
+    expect(voiceScript.liftDone(BENCH, 40, false, 120, HE)).toBe('התרגיל הבא: לחיצת חזה במוט, עשרה קילו בכל צד.');
     expect(voiceScript.sessionDone(5, 42, 0, HE)).toBe('כל הכבוד. חמישה תרגילים, ארבעים ושתיים דקות.');
     expect(voiceScript.sessionDone(5, 42, 1, HE)).toBe('כל הכבוד. חמישה תרגילים, ארבעים ושתיים דקות, ושיא אישי חדש.');
     expect(voiceScript.sessionDone(5, 42, 3, HE)).toBe('כל הכבוד. חמישה תרגילים, ארבעים ושתיים דקות, ושלושה שיאים אישיים חדשים.');

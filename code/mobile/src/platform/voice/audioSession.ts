@@ -37,6 +37,18 @@ interface AudioModule {
   playFile?(path: string): Promise<boolean>;
   stopFile?(): void;
   recoverSession?(): Promise<boolean>;
+  earReroute?(source: EarSource): Promise<string | null>;
+  setDuckUnderEar?(on: boolean): void;
+  sessionReport?(): SessionReport;
+  earProcessedOpen?(): Promise<string | null>;
+  earProcessedClose?(): Promise<void>;
+  earProcessedAlive?(): boolean;
+  earProcessedDuck?(level: number, advanced: boolean): string;
+  earProcessedSay?(path: string): Promise<boolean>;
+  earProcessedKeep?(): void;
+  earProcessedClip?(): Promise<EarClip | null>;
+  earProcessedPreferPhoneMic?(): string;
+  earProcessedRestate?(): string;
   addListener(event: 'onRouteChange', cb: (e: { connected: boolean }) => void): { remove(): void };
   addListener(event: 'onEarResult', cb: (e: { text: string; token: number }) => void): { remove(): void };
   addListener(event: 'onEarState', cb: (e: { running: boolean; error?: string; restarted?: boolean }) => void): { remove(): void };
@@ -71,7 +83,10 @@ export interface EarClip {
   floorDb: number;
 }
 
-/** Which microphone the pocket ear records from — her choice (see `HushEar.swift`). */
+/**
+ * Which microphone an ear records from (see `HushEar.swift`). The workout's is always `phone`
+ * (2026-10-06); `headset` is opened only by the profile's measurement.
+ */
 export type EarSource = 'headset' | 'phone';
 
 export type KeepAliveOwner = 'workout' | 'indoorRun' | 'voiceTest' | 'voice';
@@ -79,6 +94,25 @@ export type KeepAliveOwner = 'workout' | 'indoorRun' | 'voiceTest' | 'voice';
 /** The chime's half second (`toneWav(seconds: 0.5)` in the Swift) and a breath after it. */
 const CHIME_SOUNDS_MS = 650;
 const keepAliveOwners = new Set<KeepAliveOwner>();
+
+/**
+ * The audio session as iOS has it this instant — what the profile's measurement prints
+ * (`platform/voice/voiceMeasure`): the ports it records from and plays to, the hardware's sample rate
+ * (a Bluetooth call profile is 8–24 kHz; music is 44.1–48), the mode iOS chose, and whether another
+ * app's audio is playing.
+ */
+export interface SessionReport {
+  inputs: string[];
+  outputs: string[];
+  outputNames: string[];
+  category: string;
+  mode: string;
+  rate: number;
+  hfpAllowed: boolean;
+  a2dpAllowed: boolean;
+  ducking: boolean;
+  otherAudio: boolean;
+}
 
 const quiet = async (f: () => Promise<void> | void) => {
   try {
@@ -120,6 +154,10 @@ export const audioSession = {
     const first = keepAliveOwners.size === 0;
     keepAliveOwners.add(owner);
     return first ? quiet(() => native?.startKeepAlive()) : Promise.resolve();
+  },
+  /** Is anything holding the loop right now — a workout (from Start to its end), a run, the voice, a test? */
+  keepAliveHeld(): boolean {
+    return keepAliveOwners.size > 0;
   },
   releaseKeepAlive(owner: KeepAliveOwner): Promise<void> {
     if (!keepAliveOwners.delete(owner) || keepAliveOwners.size > 0) return Promise.resolve();
@@ -197,6 +235,112 @@ export const audioSession = {
     }
   },
   earClose: () => quiet(() => native?.earClose?.()),
+  /*
+   * ════ ⛔ THE MEASUREMENT'S CALLS — NEVER A WORKOUT'S (2026-10-06) ════
+   *
+   *   > founder: *"אתה לא יכול לבדוק את זה באינטרנט … אם זה אמור או יכול לעבוד והאם יש תקדים לזה
+   *   > שהצליחו? … אני לא רוצה שישר תתחיל לעשות מבלי לתכנן לפני"*
+   *
+   * For one afternoon the workout lowered her music by flipping an option on the live session, and
+   * moved its held microphone to the earbuds for each answer. Apple's own page says a duck "begins
+   * when you activate your app's audio session and ends when you deactivate" it, and nothing Apple
+   * has written says a recorder may be restarted on a new route from a locked phone. Both left the
+   * workout the same day. What follows are the same moves — and the one Apple does document, voice
+   * processing with its own ducking (iOS 17) — as steps of the profile's measurement
+   * (`platform/voice/voiceMeasure`), which asks the phone itself. `theMeasurementAsksThePhone` pins
+   * that nothing else calls them.
+   */
+  /** The session as iOS has it now — null without the module. */
+  sessionReport(): SessionReport | null {
+    try {
+      const r = native?.sessionReport?.();
+      return r && Array.isArray(r.inputs) && Array.isArray(r.outputs) ? r : null;
+    } catch {
+      return null;
+    }
+  },
+  /** Step: `.duckOthers` put on and taken off the LIVE session by `duck`/`unduck` while the microphone is held. */
+  setDuckUnderEar(on: boolean): void {
+    try {
+      native?.setDuckUnderEar?.(on);
+    } catch {
+      /* not in this build */
+    }
+  },
+  /** Step: the held engine moved to the other microphone. Null when it records there; otherwise why not. */
+  async earReroute(source: EarSource): Promise<string | null> {
+    if (!native?.earReroute) return 'not in this build';
+    try {
+      return (await native.earReroute(source)) ?? null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'earReroute threw';
+    }
+  },
+  /** Step: the phone's microphone opened WITH Apple's voice processing — on glass only. Null when it runs. */
+  async processedOpen(): Promise<string | null> {
+    if (!native?.earProcessedOpen) return 'not in this build';
+    try {
+      return (await native.earProcessedOpen()) ?? null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'earProcessedOpen threw';
+    }
+  },
+  processedClose: () => quiet(() => native?.earProcessedClose?.()),
+  processedAlive(): boolean {
+    try {
+      return native?.earProcessedAlive?.() ?? false;
+    } catch {
+      return false;
+    }
+  },
+  /** How far everything that is not the processed voice is lowered: 0 default, 10 min, 20 mid, 30 max. "ok", or why not. */
+  processedDuck(level: 0 | 10 | 20 | 30, advanced: boolean): string {
+    try {
+      return native?.earProcessedDuck?.(level, advanced) ?? 'not in this build';
+    } catch (e) {
+      return e instanceof Error ? e.message : 'earProcessedDuck threw';
+    }
+  },
+  /** A cached line played THROUGH the processed output — the one sound the processing does not lower. */
+  async processedSay(path: string): Promise<boolean> {
+    try {
+      return (await native?.earProcessedSay?.(path)) === true;
+    } catch {
+      return false;
+    }
+  },
+  /** From here what the processed microphone hears is kept, until `processedClip` reads it. */
+  processedKeep(): void {
+    try {
+      native?.earProcessedKeep?.();
+    } catch {
+      /* not in this build */
+    }
+  },
+  async processedClip(): Promise<EarClip | null> {
+    try {
+      const c = await native?.earProcessedClip?.();
+      return c && typeof c.wav === 'string' && c.wav.length > 0 ? c : null;
+    } catch {
+      return null;
+    }
+  },
+  /** Asks iOS for the phone's own microphone again, on the live processed session. "ok", or why not. */
+  processedPreferPhoneMic(): string {
+    try {
+      return native?.earProcessedPreferPhoneMic?.() ?? 'not in this build';
+    } catch (e) {
+      return e instanceof Error ? e.message : 'threw';
+    }
+  },
+  /** States the category again (no call profile, the phone's microphone) on the live processed session. */
+  processedRestate(): string {
+    try {
+      return native?.earProcessedRestate?.() ?? 'not in this build';
+    } catch (e) {
+      return e instanceof Error ? e.message : 'threw';
+    }
+  },
   /**
    * The audio taken back after an interruption nothing reported as ended (see the Swift): true when
    * the session is ours again — the microphone restarted, the silent loop playing. False while a
