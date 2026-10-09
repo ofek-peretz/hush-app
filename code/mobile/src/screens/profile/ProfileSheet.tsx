@@ -42,7 +42,8 @@ import { coachVoice } from '@/platform/voice/coachVoice';
 import { DEFAULT_COACH_VOICE, DEVICE_VOICE, NEURAL_VOICES, neuralVoice } from '@/platform/voice/neuralVoice';
 import { readVoiceJournal } from '@/platform/voice/voiceJournal';
 import { voiceCapture } from '@/platform/voice/voiceCapture';
-import { factLine, measurePhone, runMeasure, type MeasureAsk, type MeasureLines } from '@/platform/voice/voiceMeasure';
+import { factLine, measurePhone, runMeasure, type MeasureAsk } from '@/platform/voice/voiceMeasure';
+import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 import { track } from '@/platform/telemetry';
 import { syncTrace } from '@/platform/syncTrace';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
@@ -709,44 +710,25 @@ const VOICE_CHOICES: { id: string; key: string }[] = [
 ];
 
 /**
- * The measurement's questions for her ears (`platform/voice/voiceMeasure`): each was asked aloud by
- * its number while the phone was in her pocket, and is answered here with one tap when it is out.
+ * The measurement's questions for her ears (`platform/voice/voiceMeasure`). The phone reads for
+ * itself whether her music is still PLAYING; whether it was lowered is the one thing only she hears.
  */
-const YES_NO = [
-  { value: 'yes', key: 'profile.measureYes' },
-  { value: 'no', key: 'profile.measureNo' },
-  { value: 'unsure', key: 'profile.measureUnsure' },
+const WHAT_THE_MUSIC_DID = [
+  { value: 'lowered', key: 'profile.measureLowered' },
+  { value: 'stopped', key: 'profile.measureStopped' },
+  { value: 'same', key: 'profile.measureSame' },
 ];
 const MEASURE_QUESTIONS: Record<MeasureAsk, { key: string; answers: { value: string; key: string }[] }> = {
-  q1: {
-    key: 'profile.measureAsk1',
+  last: { key: 'profile.measureAskLast', answers: WHAT_THE_MUSIC_DID },
+  during: { key: 'profile.measureAskDuring', answers: WHAT_THE_MUSIC_DID },
+  after: {
+    key: 'profile.measureAskAfter',
     answers: [
-      { value: 'earbuds', key: 'profile.measureFromEarbuds' },
-      { value: 'phone', key: 'profile.measureFromPhone' },
-      { value: 'none', key: 'profile.measureNotHeard' },
+      { value: 'back', key: 'profile.measureBack' },
+      { value: 'low', key: 'profile.measureStayedLow' },
+      { value: 'stopped', key: 'profile.measureStayedStopped' },
     ],
   },
-  q2: { key: 'profile.measureAsk2', answers: YES_NO },
-  q3: { key: 'profile.measureAsk3', answers: YES_NO },
-  earbuds: {
-    key: 'profile.measureAskEarbuds',
-    answers: [
-      { value: 'fine', key: 'profile.measureMusicFine' },
-      { value: 'dipped', key: 'profile.measureMusicDipped' },
-      { value: 'cut', key: 'profile.measureMusicCut' },
-    ],
-  },
-  q4: {
-    key: 'profile.measureAsk4',
-    answers: [
-      { value: 'yes', key: 'profile.measureYes' },
-      { value: 'weaker', key: 'profile.measureMusicWeaker' },
-      { value: 'call', key: 'profile.measureMusicCall' },
-    ],
-  },
-  q5: { key: 'profile.measureAsk5', answers: YES_NO },
-  q6: { key: 'profile.measureAsk6', answers: YES_NO },
-  q7: { key: 'profile.measureAsk7', answers: YES_NO },
 };
 
 function VoiceGateLine({
@@ -806,17 +788,14 @@ function VoiceGateLine({
   /*
    * ════ ⛔ THE MEASUREMENT (founder, 2026-10-06: *"אתה לא יכול לבדוק את זה … אם זה אמור או יכול לעבוד
    * … אני לא רוצה שישר תתחיל לעשות מבלי לתכנן לפני"*) ════
-   * The coach could not be heard over his music, and two fixes were built on a guess. The search he
-   * asked for found the conflict in Apple's own pages — the microphone that hears from a pocket may
-   * never be closed, and the documented way to lower music closes it — and found no page and no app
-   * that settles the way out. So the phone is asked, once: `platform/voice/voiceMeasure` walks it,
-   * earbuds in and music on, the phone in his pocket twice. What iOS reported is printed below as it
-   * arrives (and written to the voice journal); what only his ears can say is asked aloud by number
-   * and answered here with a tap. A screenshot of this block is the whole report.
-   *
-   * It replaced two older tests on this row (windows opened from a locked phone, and a held
-   * microphone): what they asked is answered — Apple says a recording cannot be started from the
-   * background, and build 76 heard him from his pocket through the held one.
+   * What a search cannot settle is asked of his phone, here. The first run (build 77) found that a
+   * locked phone refuses to change its session, that Apple's voice processing throws the sound out
+   * of the earbuds — and that his music STOPS the moment the coach speaks with the microphone held,
+   * where with no microphone it is only lowered. So the workout holds none now, and this run asks
+   * which act it is that stops the music: ten ways of holding the session, one at a time, on glass,
+   * the phone itself answering after each whether another app is still playing; then the workout's
+   * own duck, and two questions for his ears. What iOS reported is printed below as it arrives (and
+   * written to the voice journal). A screenshot of this block is the whole report.
    */
   const [measure, setMeasure] = useState<'idle' | 'running' | 'done'>('idle');
   const [measureLog, setMeasureLog] = useState<string[]>([]);
@@ -840,29 +819,16 @@ function VoiceGateLine({
     setAnswers({});
     const log: string[] = [];
     const t0 = Date.now();
-    const lines: MeasureLines = {
-      lock: t('profile.measureLock'),
-      q1: t('profile.measureSay1'),
-      number: t('profile.measureNumber'),
-      heard: (text) => t('profile.measureHeard', { text }),
-      nothing: t('profile.measureNothing'),
-      q2: t('profile.measureSay2'),
-      q3: t('profile.measureSay3'),
-      numberEarbuds: t('profile.measureNumberEarbuds'),
-      half: t('profile.measureHalf'),
-      lockAgain: t('profile.measureLockAgain'),
-      q4: t('profile.measureSay4'),
-      q5: t('profile.measureSay5'),
-      q6: t('profile.measureSay6'),
-      q7: t('profile.measureSay7'),
-      numberAgain: t('profile.measureNumberAgain'),
-      done: t('profile.measureDone'),
-    };
-    const outcome = await runMeasure(measurePhone(currentLocale()), lines, (fact) => {
-      log.push(`${Math.round((Date.now() - t0) / 1000)}s ${factLine(fact)}`);
-      setMeasureLog([...log]);
-      void track('voice_measure', fact);
-    });
+    const outcome = await runMeasure(
+      // Her music did not come back by itself after a trial: she is asked to start it, right here.
+      measurePhone(currentLocale(), (on) => setMeasureHint(on ? t('profile.measurePressPlay') : null)),
+      { duckLine: t('profile.measureDuckLine') },
+      (fact) => {
+        log.push(`${Math.round((Date.now() - t0) / 1000)}s ${factLine(fact)}`);
+        setMeasureLog([...log]);
+        void track('voice_measure', fact);
+      },
+    );
     log.push(`ended: ${outcome.ended}`);
     setMeasureLog([...log]);
     void track('voice_measure', { step: 'ended', how: outcome.ended, asked: outcome.asked.join(',') });
@@ -913,14 +879,18 @@ function VoiceGateLine({
             />
           ))}
           <Text style={styles.voiceGate}>{t('profile.coachVoiceSub')}</Text>
-          {/* The second ear (`platform/voice/cloudEar`): on unless she turns it off. */}
-          <View style={styles.voiceEarRow}>
-            <View style={styles.rowText}>
-              <Text style={styles.voiceGate}>{t('profile.cloudEarRow')}</Text>
-              <Text style={styles.voiceGateRoute}>{t('profile.cloudEarSub')}</Text>
+          {/* The second ear (`platform/voice/cloudEar`): on unless she turns it off — and not offered
+              at all while the workout holds no microphone (`workoutMicrophone`): a switch for an ear
+              that listens to nothing is a control that could never matter. */}
+          {workoutHoldsMicrophone() ? (
+            <View style={styles.voiceEarRow}>
+              <View style={styles.rowText}>
+                <Text style={styles.voiceGate}>{t('profile.cloudEarRow')}</Text>
+                <Text style={styles.voiceGateRoute}>{t('profile.cloudEarSub')}</Text>
+              </View>
+              <Switch checked={cloudEarOn} onChange={() => onCloudEar(!cloudEarOn)} accessibilityLabel={t('profile.cloudEarRow')} />
             </View>
-            <Switch checked={cloudEarOn} onChange={() => onCloudEar(!cloudEarOn)} accessibilityLabel={t('profile.cloudEarRow')} />
-          </View>
+          ) : null}
           {/* The measurement: one run, and its report (see `startMeasure`). */}
           <Button
             variant="secondary"

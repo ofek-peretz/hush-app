@@ -192,17 +192,6 @@ export const cloudEar = {
     void track('voice_strong_ear', { moment, ok: r.ok, why: r.ok ? null : r.why, strong: r.ok ? r.text.slice(0, 40) : null });
     return r.ok && r.text.length > 0 ? r.text : null;
   },
-
-  /**
-   * The profile's measurement hearing one clip (`voiceMeasure`): sent whatever its level — how a
-   * microphone's audio reads to the strong ear is the thing being measured — and leaving no mark on
-   * the workout's ear (a measurement on a bad network must not make the next workout's ear "deaf").
-   */
-  async hearNow(clip: EarClip, expect: HearExpect, locale: string, waitMs = 8_000): Promise<{ text: string | null; why: string | null }> {
-    if (!voiceCloudReachable()) return { text: null, why: 'unreachable' };
-    const r = await cloudHear(clip.wav, expect, locale, waitMs);
-    return r.ok ? { text: r.text.length > 0 ? r.text : null, why: null } : { text: null, why: r.why };
-  },
 };
 
 function sameAnswer(a: string, b: string): boolean {

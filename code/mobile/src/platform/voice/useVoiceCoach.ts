@@ -20,6 +20,7 @@ import { neuralVoice } from '@/platform/voice/neuralVoice';
 import { fixedLines, voiceLinesAhead } from '@/domain/voiceLinesAhead';
 import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
 import { VoiceConductor, type VoicePersisted } from '@/platform/voice/voiceConductor';
+import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 import { useApp } from '@/state/stores/appStore';
 import { syncTrace } from '@/platform/syncTrace';
 import { restAfterStep, type SessionView, type Step } from '@/state/stores/sessionStore';
@@ -130,6 +131,9 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     // ⛔ ALWAYS the phone's own microphone (2026-10-06): it is what holds the right to listen from a
     // pocket. Until today choosing "earbuds" meant no held microphone at all — and so nothing heard
     // from a locked phone.
+    // ⛔ AND NONE AT ALL while the workout holds no microphone (2026-10-10, `workoutMicrophone`):
+    // every road that would open it — the gate, the return to glass — ends here.
+    if (!workoutHoldsMicrophone()) return;
     if (Platform.OS !== 'ios' || audioSession.earRunning()) return;
     const lang = recognizerLang(i18next.language ?? 'en');
     const strong = cloudEar.available();
@@ -163,7 +167,20 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
           syncTrace.add('v');
           // Written down (`voiceJournal`): the line's first words, which mouth said it, and how it ended.
           const last = coachVoice.lastLine();
-          void track('voice_said', { line: text.slice(0, 22), by: last?.engine ?? null, end: last?.how ?? null });
+          /*
+           * …and, since 2026-10-10, what the duck before it did and where the phone was. The profile's
+           * measurement hears the duck on glass; a workout is in a pocket, and whether her music is
+           * lowered THERE is read from these rows after any workout — `let/took/on` is a duck that
+           * let the session go, took it again, and has the option on it.
+           */
+          const duck = audioSession.duckReport?.() ?? null;
+          void track('voice_said', {
+            line: text.slice(0, 22),
+            by: last?.engine ?? null,
+            end: last?.how ?? null,
+            glass: AppState.currentState === 'active',
+            duck: duck ? `${duck.letGo === 'ok' ? 'let' : (duck.letGo ?? '?')}/${duck.taken === 'ok' ? 'took' : (duck.taken ?? '?')}/${duck.option ? 'on' : 'OFF'}` : null,
+          });
         },
         interrupt: () => coachVoice.interrupt(),
         warm: (lines, locale) => coachVoice.warm(lines, locale),
@@ -190,6 +207,7 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       firstSessionEver: () => firstEverRef.current === true,
       track: (event, props) => void track(event, props),
       earIsFree: () => audioSession.earRunning(),
+      hearsHer: () => workoutHoldsMicrophone(),
       persist: (p) => void AsyncStorage.setItem(VOICE_STATE_KEY, JSON.stringify(p)).catch(() => {}),
     });
   }
@@ -279,6 +297,19 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     };
     const open = () => {
       if (c.isOn() || opening) return;
+      if (!workoutHoldsMicrophone()) {
+        // No microphone to open and none to ask her for: the coach speaks (the conductor's ear is
+        // down by design, `hearsHer`), and the lock screen, the wrist and the stage carry the sets.
+        opening = true;
+        void Promise.all([historyReadRef.current, restoredRef.current]).then(() => {
+          opening = false;
+          if (disposed || c.isOn() || !audioSession.headsetConnected()) return;
+          c.enable();
+          setSilentBecause(null);
+          voiceIs(true, 'earbuds');
+        });
+        return;
+      }
       if (deniedRef.current) return openWithoutEar();
       opening = true;
       void Promise.all([voiceCapture.ensurePermission(), historyReadRef.current, restoredRef.current]).then(([ok]) => {

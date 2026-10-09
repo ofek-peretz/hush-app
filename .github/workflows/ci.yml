@@ -108,6 +108,7 @@ jobs:
       # 2026-10-06: `HushProcessedEar.swift` — the profile's measurement, voice processing — is checked
       # with it: it is AVFoundation only, uses the first file's helpers, and names an iOS 17 symbol
       # that must stay behind its availability check at this floor.
+      # 2026-10-10: and `HushSessionTrial.swift`, the measurement's trials, which uses both.
       - name: Voice coach microphone (iOS 15.1 — the app's floor)
         # The file names iOS 26 symbols (SpeechAnalyzer) behind availability checks, so the SDK must
         # have them: the newest Xcode 26 on the runner is chosen, and a runner without one fails
@@ -129,7 +130,7 @@ jobs:
           esac
           FILE=code/mobile/modules/hush-voice-audio/ios/HushEar.swift
           set +e
-          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 code/mobile/modules/hush-voice-audio/ios/HushEar.swift code/mobile/modules/hush-voice-audio/ios/HushProcessedEar.swift > typecheck.log 2>&1
+          xcrun --sdk iphoneos swiftc -typecheck -parse-as-library -target arm64-apple-ios15.1 code/mobile/modules/hush-voice-audio/ios/HushEar.swift code/mobile/modules/hush-voice-audio/ios/HushProcessedEar.swift code/mobile/modules/hush-voice-audio/ios/HushSessionTrial.swift > typecheck.log 2>&1
           status=$?
           set -e
           cat typecheck.log

@@ -322,6 +322,8 @@ export const voiceScript = {
    * repeat all three; now none of them does.
    */
   openFirstSession: () => tg('voice.openFirstSession'),
+  /** The same sentence when the workout holds no microphone (2026-10-10): a set is marked, not said. */
+  openFirstSessionMark: () => tg('voice.openFirstSessionMark'),
   /** The day in one breath. The first lift is not named here — its own opening names it a moment later. */
   openSession: (workout: string, lifts: number, minutes: number, l: VoiceLocale) =>
     tg('voice.openSession', { workout: spokenName(workout, l), lifts: liftsPhrase(lifts, l), minutes: minutesPhrase(minutes, l) }),

@@ -1,34 +1,30 @@
 import AVFoundation
 import Foundation
 
-// ════ ⛔ THE MEASUREMENT'S EAR — VOICE PROCESSING, ASKED OF THE PHONE (2026-10-06) ════
+// ════ ⛔ VOICE PROCESSING — ONE OF THE TRIALS, NEVER THE WORKOUT'S EAR (2026-10-06 → 2026-10-10) ════
 //
 //   > founder: *"אתה לא יכול לבדוק את זה באינטרנט או בכלי חיפוש כלשהו אם זה אמור או יכול לעבוד והאם
-//   > יש תקדים לזה שהצליחו? … בסוף יש פתרון אלגנטי ונכון בהרבה יותר משאתה עושה. אני לא רוצה שישר
-//   > תתחיל לעשות מבלי לתכנן לפני … אנחנו בונים פה סטארטאפ לא צעצוע."*
+//   > יש תקדים לזה שהצליחו? … אני לא רוצה שישר תתחיל לעשות מבלי לתכנן לפני … אנחנו בונים פה סטארטאפ
+//   > לא צעצוע."*
 //
-// THE CONFLICT, from Apple's own pages. The workout hears her from a pocket only because its
-// microphone was opened on glass and is never closed. And the one documented way to lower her music
-// for a line — `.duckOthers` — "begins when you activate your app's audio session and ends when you
-// deactivate the session". Deactivating closes the microphone. So with the microphone held, the coach
-// has spoken over music at full volume.
+// THE CANDIDATE, from Apple (WWDC23 "What's new in voice processing", iOS 17): the engine a call uses
+// lowers "other audio", other apps' included, by itself, by a level the app sets
+// (`voiceProcessingOtherAudioDuckingConfiguration`). No activation, no deactivation — which is what a
+// microphone that may never be closed needs. A line played THROUGH the processed output is the voice;
+// everything else is what gets lowered.
 //
-// THE CANDIDATE, also from Apple (WWDC23 "What's new in voice processing", iOS 17): the engine a
-// call uses — voice processing — lowers "other audio", other apps' included, by itself, by a level
-// the app sets (`voiceProcessingOtherAudioDuckingConfiguration`: min / mid / max, and an "advanced"
-// style that lowers it only while someone speaks). No activation, no deactivation. A line played
-// THROUGH the processed output is the voice; everything else is what gets lowered.
+// WHAT HIS PHONE SAID (build 77, Spotify · Sony WH-1000XM5 · iOS 26.3.1):
+//   · opened with the phone's microphone, voice processing set the mode to `VoiceChat` by itself and
+//     threw the sound OUT of the earbuds — `out=PHONE SPEAKER`;
+//   · asking for the phone's microphone again changed nothing;
+//   · stating the category again (mode `.default`) gave the earbuds back at full quality, the engine
+//     still alive — but the session no longer in the call mode.
+// So voice processing as designed is not a way to keep her music whole. What nobody could tell from
+// that run is whether, in that restated state, it lowers her music at all — her music had already
+// stopped (see `HushSessionTrial`, which is what asks now).
 //
-// WHAT NO PAGE SAYS, and so this class exists: voice processing sets the session's mode to
-// `voiceChat` by itself, and that mode allows the earbuds' call profile by itself — which on
-// Bluetooth is her music at phone-call quality. Whether the phone's own microphone can be kept with
-// the earbuds on their music profile under voice processing, whether the level changes on a live
-// engine, and whether the music comes back — a phone answers, in her pocket, with her music on.
-//
-// ⛔ THIS IS NOT THE WORKOUT'S EAR and shares no engine with it (`HushEar`). It is opened only by
-// the profile's measurement (`src/platform/voice/voiceMeasure.ts`), on glass, with no workout
-// running; `theMeasurementAsksThePhone` pins that nothing else reaches it. If the phone says yes,
-// the workout's ear is rebuilt on what was measured — not on this file.
+// ⛔ This class shares no engine with the workout's ear (`HushEar`) and is reached only from
+// `HushSessionTrial`, i.e. from the profile's measurement. `theMeasurementAsksThePhone` pins that.
 
 final class HushProcessedEar {
   private var engine: AVAudioEngine?
@@ -36,15 +32,10 @@ final class HushProcessedEar {
   /// phone that the processing does not lower.
   private var mouth: AVAudioPlayerNode?
   private var configObserver: NSObjectProtocol?
-  private let lock = NSLock()
-  private var keeping = false
-  private var kept = Data()
-  private var converter: AVAudioConverter?
-  private let clipFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: HushEar.clipRate, channels: 1, interleaved: true)
 
   private(set) var running = false
-  /// How many times iOS reconfigured the engine under the measurement (a route change) and it was
-  /// started again — and the last time it could not be.
+  /// How many times iOS reconfigured the engine under the trial (a route change) and it was started
+  /// again — and the last time it could not be.
   private(set) var restarts = 0
   private(set) var lastError: String?
 
@@ -87,8 +78,8 @@ final class HushProcessedEar {
     running = true
     restarts = 0
     lastError = nil
-    // A route change (the earbuds moved to their call profile, or back) reconfigures the engine and
-    // stops it. Started again here; the count is part of what the measurement prints.
+    // A route change (the sound moved to the speaker, or back to the earbuds) reconfigures the
+    // engine and stops it. Started again here; the count is part of what the trial prints.
     configObserver = NotificationCenter.default.addObserver(
       forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
     ) { [weak self] _ in
@@ -109,10 +100,9 @@ final class HushProcessedEar {
     guard heard.sampleRate > 0, heard.channelCount > 0 else { throw Self.fault("microphone input is busy") }
     let played = engine.outputNode.outputFormat(forBus: 0)
     guard played.sampleRate > 0, played.channelCount > 0 else { throw Self.fault("no output to play to") }
+    // The microphone is pulled (a tap that keeps nothing): an input nobody reads is not a held one.
     input.removeTap(onBus: 0)
-    input.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
-      self?.feed(buffer)
-    }
+    input.installTap(onBus: 0, bufferSize: 4096, format: nil) { _, _ in }
     // The line's player into the mixer; the mixer is connected to the output by the engine itself.
     engine.connect(mouth, to: engine.mainMixerNode, format: nil)
     engine.prepare()
@@ -124,10 +114,6 @@ final class HushProcessedEar {
       NotificationCenter.default.removeObserver(o)
       configObserver = nil
     }
-    lock.lock()
-    keeping = false
-    kept = Data()
-    lock.unlock()
     if let engine {
       mouth?.stop()
       engine.inputNode.removeTap(onBus: 0)
@@ -136,7 +122,6 @@ final class HushProcessedEar {
     }
     engine = nil
     mouth = nil
-    converter = nil
     running = false
   }
 
@@ -161,7 +146,7 @@ final class HushProcessedEar {
 
   // MARK: - A line through the processed output
 
-  /// Plays one cached line. `done(true)` when it was played to its end; false when it could not be
+  /// Plays one sound file. `done(true)` when it was played to its end; false when it could not be
   /// (no engine, an unreadable file) or did not end within its own length and three seconds.
   func speak(url: URL, done: @escaping (Bool) -> Void) {
     let ending = OneShotEnd(done)
@@ -184,75 +169,19 @@ final class HushProcessedEar {
     }
   }
 
-  // MARK: - What the processed microphone heard
+  // MARK: - Asked of the live session, after voice processing has shaped it
 
-  /// From here the microphone's audio is kept (16 kHz mono, at most `HushEar.clipMaxSeconds`).
-  func keep() {
-    lock.lock()
-    kept = Data()
-    keeping = true
-    lock.unlock()
-  }
-
-  /// What was kept since `keep()`, in the shape `HushEar.clip` gives — and nothing more is kept.
-  func clip() -> [String: Any]? {
-    lock.lock()
-    keeping = false
-    let pcm = kept
-    kept = Data()
-    lock.unlock()
-    guard !pcm.isEmpty else { return nil }
-    let (peak, floor) = HushEar.loudness(pcm)
-    return [
-      "wav": HushEar.wav(pcm: pcm, rate: Int(HushEar.clipRate)).base64EncodedString(),
-      "seconds": Double(pcm.count) / 2 / HushEar.clipRate,
-      "peakDb": HushEar.decibels(peak),
-      "floorDb": HushEar.decibels(floor),
-    ]
-  }
-
-  private func feed(_ buffer: AVAudioPCMBuffer) {
-    lock.lock()
-    let keep = keeping
-    lock.unlock()
-    guard keep, let format = clipFormat, let out = convert(buffer, to: format), let channels = out.int16ChannelData else { return }
-    let frames = Int(out.frameLength)
-    guard frames > 0 else { return }
-    let bytes = Data(bytes: channels[0], count: frames * 2)
-    let cap = Int(HushEar.clipRate * HushEar.clipMaxSeconds) * 2
-    lock.lock()
-    if kept.count < cap { kept.append(bytes) }
-    lock.unlock()
-  }
-
-  /// The tap's format is the processing's own; the clip's is 16 kHz mono (see `HushEar.convertClip`).
-  private func convert(_ buffer: AVAudioPCMBuffer, to format: AVAudioFormat) -> AVAudioPCMBuffer? {
-    let inputFormat = buffer.format
-    if converter == nil || converter?.inputFormat != inputFormat || converter?.outputFormat != format {
-      converter = AVAudioConverter(from: inputFormat, to: format)
-      converter?.primeMethod = .none
-    }
-    guard let converter else { return nil }
-    let ratio = converter.outputFormat.sampleRate / converter.inputFormat.sampleRate
-    let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 16
-    guard let output = AVAudioPCMBuffer(pcmFormat: converter.outputFormat, frameCapacity: capacity) else { return nil }
-    var nsError: NSError?
-    let once = OneShotInput(buffer)
-    let status = converter.convert(to: output, error: &nsError) { _, statusPtr in
-      let next = once.take()
-      statusPtr.pointee = next == nil ? .noDataNow : .haveData
-      return next
-    }
-    return status == .error ? nil : output
-  }
-
-  // MARK: - Two things asked of the live session, after voice processing has shaped it
-
-  /// The phone's own microphone asked for again — voice processing allows the earbuds' call profile
-  /// by itself, and iOS may have taken it. "ok" when the request was accepted (what the route then
-  /// IS, `report()` says); otherwise why not.
-  func preferPhoneMic() -> String {
+  /// The category stated again as the workout's ear states it — no call profile, the default mode —
+  /// on the live session, then the phone's microphone asked for. Never a deactivation. On his phone
+  /// this is what brought the sound back from the speaker to the earbuds.
+  func restate() -> String {
     let session = AVAudioSession.sharedInstance()
+    do {
+      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(.phone, duck: false))
+      try session.setActive(true)
+    } catch {
+      return error.localizedDescription
+    }
     guard let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) else {
       return "no built-in microphone offered"
     }
@@ -264,24 +193,11 @@ final class HushProcessedEar {
     }
   }
 
-  /// The category stated again as the workout's ear states it — no call profile, the default mode —
-  /// on the live session, then the phone's microphone asked for. Never a deactivation.
-  func restate() -> String {
-    let session = AVAudioSession.sharedInstance()
-    do {
-      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(.phone, duck: false))
-      try session.setActive(true)
-    } catch {
-      return error.localizedDescription
-    }
-    return preferPhoneMic()
-  }
-
   // MARK: - What iOS says the session is
 
   /// The route's ports in iOS's own words, the hardware's sample rate (a Bluetooth call profile is
-  /// 8–24 kHz, her music 44.1–48), the mode and options iOS has NOW — which voice processing changes
-  /// without being asked — and whether another app is playing.
+  /// 8–24 kHz, her music 44.1–48), the mode and options iOS has NOW, and whether another app is
+  /// playing — the one reading of her music that needs nobody's ears.
   static func report() -> [String: Any] {
     let session = AVAudioSession.sharedInstance()
     let route = session.currentRoute
@@ -296,12 +212,13 @@ final class HushProcessedEar {
       "hfpAllowed": options.contains(.allowBluetooth),
       "a2dpAllowed": options.contains(.allowBluetoothA2DP),
       "ducking": options.contains(.duckOthers),
+      "mixing": options.contains(.mixWithOthers),
       "otherAudio": session.isOtherAudioPlaying,
     ]
   }
 }
 
-/// A line's ending, said once: played to its end, or not — whichever is known first.
+/// A sound's ending, said once: played to its end, or not — whichever is known first.
 final class OneShotEnd: @unchecked Sendable {
   private let lock = NSLock()
   private var callback: ((Bool) -> Void)?

@@ -109,6 +109,12 @@ export interface ConductorDeps {
   track?: (event: string, props?: Record<string, unknown>) => void;
   /** The phone's own microphone is open for the workout: listening costs her music nothing. */
   earIsFree?: () => boolean;
+  /**
+   * ⛔ `false`: the workout holds no microphone at all (`platform/voice/workoutMicrophone`). The coach
+   * speaks, no window is ever opened, and NOTHING IS SAID ABOUT IT — it is how the workout is held,
+   * not a fault to apologise for. Absent = it listens (every law that walks the ear).
+   */
+  hearsHer?: () => boolean;
   /** Keep what must survive a killed app (see `VoicePersisted`). */
   persist?: (p: VoicePersisted) => void;
   /**
@@ -366,6 +372,7 @@ export class VoiceConductor {
   enable(): void {
     if (this.on) return;
     this.on = true;
+    this.shutEarByDesign();
     const v = this.d.getView();
     if (v?.active) {
       this.mode = 'idle';
@@ -428,6 +435,25 @@ export class VoiceConductor {
     if (this.on) this.earWentDown('denied');
   }
 
+  /** The workout holds no microphone (`ConductorDeps.hearsHer`). */
+  private earless(): boolean {
+    return this.d.hearsHer?.() === false;
+  }
+
+  /**
+   * ⛔ NO MICROPHONE, AND NOT A WORD ABOUT IT (2026-10-10). The ear is down exactly as it is when she
+   * refuses the microphone — the lines go on, a set's question becomes where to mark it — but "אני
+   * לא שומעת אותך כרגע" is never said: nothing is wrong, and a coach that opens every workout with an
+   * apology is the opposite of *"כמה שפחות מלל"*.
+   */
+  private shutEarByDesign(): void {
+    if (!this.earless()) return;
+    if (!this.earDown) this.d.track?.('voice_ear_down', { why: 'no_microphone' });
+    this.earDown = true;
+    this.earDownWhy = 'denied';
+    this.cantHearSaid = true;
+  }
+
   /** Mid-workout after the app was killed: whether the opening was said, the loads she stood at, and the set she was in. */
   restore(p: VoicePersisted | null): void {
     if (!p) return;
@@ -461,7 +487,7 @@ export class VoiceConductor {
 
   /** Back on glass, the phone's microphone opened, or the strong ear's wait is over: windows may be tried again. */
   earMayListen(): void {
-    if (!this.earDown) return;
+    if (!this.earDown || this.earless()) return;
     this.earDown = false;
     this.earDownWhy = null;
     this.earErrors = 0;
@@ -569,10 +595,12 @@ export class VoiceConductor {
     this.earDownWhy = null;
     this.earErrors = 0;
     this.cantHearSaid = false;
+    this.shutEarByDesign();
     this.persist();
     const l = this.d.locale();
     const lines: string[] = [];
-    if (this.d.firstSessionEver()) lines.push(voiceScript.openFirstSession());
+    // The one sentence of the first workout says where a set is told: aloud, or — with no microphone — marked.
+    if (this.d.firstSessionEver()) lines.push(this.earless() ? voiceScript.openFirstSessionMark() : voiceScript.openFirstSession());
     const first = v.sessionExerciseIds[0] ?? v.currentExerciseId;
     if (first) lines.push(voiceScript.openSession(v.workoutName ?? '', v.sessionExerciseIds.length, this.estimateMinutes(v), l));
     void this.speak(lines);

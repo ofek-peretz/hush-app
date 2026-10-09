@@ -129,75 +129,6 @@ final class HushEar {
 
   // MARK: - The engine (opened on glass, kept for the workout)
 
-  // MARK: - ⛔ Two moves on the live session — STEPS OF THE MEASUREMENT, never a workout's (2026-10-06)
-  //
-  //   > founder: *"חייב שהשמע יהיה מהאוזניות ולא מהפלאפון, כי בגלל שזה מהפלאפון המתאמן שומע בפול ווליום
-  //   > את המוזיקה ולא שומעים את המאמן. ואני חושב שגם מהאוזניות הקלט יהיה הרבה יותר טוב כי זה ממש על
-  //   > הפה. … גם אם זה ינמיך לרגע את המוזיקה."*
-  //
-  // Built into the workout that afternoon, and taken out of it the same day:
-  //
-  //   > founder: *"אתה לא יכול לבדוק את זה באינטרנט … אם זה אמור או יכול לעבוד והאם יש תקדים לזה
-  //   > שהצליחו? … אנחנו בונים פה סטארטאפ לא צעצוע."*
-  //
-  // What the search found, from Apple's own pages: a duck "begins when you activate your app's audio
-  // session and ends when you deactivate the session" — and this engine cannot be deactivated (a
-  // recording cannot be started again from a pocket). And nothing Apple has written says a recorder
-  // may be restarted on a new route from a locked phone; the earbuds' microphone is a call profile,
-  // always both ways, so her music is at call quality for as long as it is open.
-  //
-  // So neither is the workout's. They stay as two steps of the profile's measurement
-  // (`platform/voice/voiceMeasure`), which asks the phone, in her pocket, with her music on:
-  //   · the duck — `.duckOthers` put on and taken off the running session (the audio module's
-  //     `applySession`, behind `duckUnderEar`, which only the measurement turns on).
-  //   · `reroute` — the input moved to the earbuds and back; a route change, after which the engine
-  //     is restarted (as it already is when earbuds are pulled out mid-set).
-  // The third step is the one Apple documents — voice processing, in `HushProcessedEar.swift`.
-
-  /// The measurement's duck is on right now — set by the audio module, which puts `.duckOthers` on
-  /// and off the live session; kept here so a reroute carries it across.
-  var ducking = false
-
-  /// Move the running engine to the other microphone. `done(nil)` when it records there; otherwise
-  /// why not — and then the ear is no longer running (the JS side is told, and reopens on glass).
-  func reroute(to next: Source, done: @escaping (String?) -> Void) {
-    guard running else { return done("ear not running") }
-    if next == source && engine.isRunning { return done(nil) }
-    source = next
-    let session = AVAudioSession.sharedInstance()
-    do {
-      try session.setCategory(.playAndRecord, mode: .default, options: Self.sessionOptions(next, duck: ducking))
-    } catch {
-      return done("category: \(error.localizedDescription)")
-    }
-    switch next {
-    case .phone:
-      if let mic = session.availableInputs?.first(where: { $0.portType == .builtInMic }) { try? session.setPreferredInput(mic) }
-    case .headset:
-      // The earbuds' own microphone when they have one; with none, iOS keeps the phone's.
-      try? session.setPreferredInput(session.availableInputs?.first(where: { $0.portType == .bluetoothHFP }))
-    }
-    settle(tries: 5, done: done)
-  }
-
-  /// A Bluetooth profile takes a moment to change, and the input has no format until it has: the
-  /// engine is started on the new route a few times over a second and a half before giving up.
-  private func settle(tries: Int, done: @escaping (String?) -> Void) {
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-      guard let self else { return done("ear gone") }
-      guard self.running else { return done("ear stopped") }
-      do {
-        try self.startEngine()
-        done(nil)
-      } catch {
-        if tries > 1 { return self.settle(tries: tries - 1, done: done) }
-        self.running = false
-        self.onState?(["running": false, "error": "reroute: \(error.localizedDescription)"])
-        done(error.localizedDescription)
-      }
-    }
-  }
-
   /// The microphone is really running. `running` is the intent — the workout holds the ear — and
   /// this is the fact: an interruption stops the engine without a word to anyone (see `resume`).
   var alive: Bool {
@@ -384,7 +315,7 @@ final class HushEar {
   }
 
   /// The loudest and the quietest tenth of a second in 16-bit mono PCM, as RMS (0…1).
-  static func loudness(_ pcm: Data) -> (Float, Float) {
+  private static func loudness(_ pcm: Data) -> (Float, Float) {
     let frame = Int(HushEar.clipRate / 10)
     var peak: Float = 0
     var floor: Float = 1
@@ -406,7 +337,7 @@ final class HushEar {
     return (peak, floor)
   }
 
-  static func decibels(_ v: Float) -> Double {
+  private static func decibels(_ v: Float) -> Double {
     return Double(20 * log10(max(v, 0.000_001)))
   }
 
@@ -526,8 +457,7 @@ final class HushEar {
 }
 
 /// AVAudioConverter pulls its input through a @Sendable block; the one buffer is handed over once.
-/// (Shared with the measurement's ear, `HushProcessedEar.swift`.)
-final class OneShotInput: @unchecked Sendable {
+private final class OneShotInput: @unchecked Sendable {
   private let lock = NSLock()
   private var buffer: AVAudioPCMBuffer?
 

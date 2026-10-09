@@ -21,6 +21,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { audioSession } from '@/platform/voice/audioSession';
 import { cloudEar, LISTEN_EVERY_MS, VOICED_DB } from '@/platform/voice/cloudEar';
 import type { HearExpect } from '@/platform/voice/voiceCloud';
+import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 
 /**
  * iOS 18 and later hand back a final result per UTTERANCE while a continuous request keeps running
@@ -439,6 +440,9 @@ export const voiceCapture = {
    * iOS shows no dialog there — and never when she turned the voice off.
    */
   async askAtStart(voiceOn: boolean): Promise<void> {
+    // A workout that holds no microphone asks for none (2026-10-10): the dialog would be a question
+    // about something the workout never does.
+    if (!workoutHoldsMicrophone()) return;
     const m = nativeModule;
     if (!m || !voiceOn || Platform.OS !== 'ios' || AppState.currentState !== 'active') return;
     try {

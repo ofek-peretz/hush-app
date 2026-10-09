@@ -51,6 +51,15 @@ const mockPhone = {
   noNetwork: false,
   /** What the rest-over alert was last told: the voice will say it (true) or nobody will (false). */
   voiceCallsTheSet: false,
+  /**
+   * The workout holds a microphone (`platform/voice/workoutMicrophone`). ⛔ The product ships with
+   * this OFF since 2026-10-10 — on his phone a held microphone stops his music — and that product is
+   * walked in the last block of this file. It is ON for every walk above it: the microphone's own
+   * code is kept, and kept honest, for the day a phone shows a way for it to live with her music.
+   */
+  holdsMic: true,
+  /** Times she was asked for the microphone. */
+  permissionAsks: 0,
   earOpenTries: 0,
   window: null as any,
   route: new Set<any>(),
@@ -131,11 +140,15 @@ jest.mock('@/platform/voice/audioSession', () => ({
     canPlayFile: () => false,
   },
 }));
+jest.mock('@/platform/voice/workoutMicrophone', () => ({ workoutHoldsMicrophone: () => mockPhone.holdsMic }));
 jest.mock('@/platform/voice/voiceCapture', () => ({
   recognizerLang: (l: string) => (l.startsWith('he') ? 'he-IL' : 'en-US'),
   voiceCapture: {
     available: () => true,
-    ensurePermission: async () => mockPhone.permission,
+    ensurePermission: async () => {
+      mockPhone.permissionAsks += 1;
+      return mockPhone.permission;
+    },
     askAtStart: async () => {},
     lastLevels: () => null,
     /*
@@ -422,7 +435,7 @@ beforeEach(async () => {
   jest.setSystemTime(new Date('2026-10-05T07:00:00Z'));
   mockT0 = Date.now();
   mockLog.length = 0;
-  Object.assign(mockPhone, { onGlass: true, headset: true, permission: true, micHeld: false, inCall: false, micCutByCall: false, noNetwork: false, voiceCallsTheSet: false, earOpenTries: 0, window: null });
+  Object.assign(mockPhone, { onGlass: true, headset: true, permission: true, micHeld: false, inCall: false, micCutByCall: false, noNetwork: false, voiceCallsTheSet: false, holdsMic: true, permissionAsks: 0, earOpenTries: 0, window: null });
   appFixture.profile.voiceMic = undefined;
   for (const set of [mockPhone.route, mockPhone.earState, mockPhone.interruption, mockPhone.appState, mockPhone.keepAlive]) set.clear();
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_t: string, cb: any) => {
@@ -814,5 +827,108 @@ describe('⛔ a stored "earbuds" choice changes nothing', () => {
     await lock();
     await aSetByVoice('עשר');
     expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
+  });
+});
+
+/*
+ * ════ ⛔ THE WORKOUT HOLDS NO MICROPHONE (founder, 2026-10-10: *"מאשר"*) — THE PRODUCT AS IT SHIPS ════
+ *
+ * His phone, Spotify and Sony earbuds:
+ *   > *"לחצתי על בדיקת קול המוזיקה נחלשה."*
+ *   > *"התחלתי אימון והמוזיקה נעצרה … איך שהמאמנת התחילה לדבר המוזיקה שוב נעצרה לגמרי."*
+ * With no microphone the coach's line lowers his music; with it held, her first word stops it. So the
+ * workout takes the half that works: she speaks, nothing listens, a set is marked where it always
+ * could be — and she never says a word about not hearing, because nothing is wrong.
+ */
+describe('⛔ the workout holds no microphone', () => {
+  const MARK_FIRST = 'אני המאמנת שלך. בסוף כל סט, סמן אותו במסך הנעילה או בשעון.';
+  const heardNothing = () => mockLog.filter((l) => l.includes('  MIC  ') || l.includes('microphone'));
+  beforeEach(() => {
+    mockPhone.holdsMic = false;
+  });
+
+  it('Start: no microphone is opened and none is asked for; the first workout\'s one sentence says where a set is MARKED — and nothing is said about not hearing', async () => {
+    await start();
+    await wait(4);
+    expect(mockPhone.micHeld).toBe(false);
+    expect(mockPhone.earOpenTries).toBe(0);
+    expect(mockPhone.permissionAsks).toBe(0);
+    expect(coachSaid()[0]).toBe(MARK_FIRST);
+    expect(coachSaid()).not.toContain('אני המאמנת שלך. בסוף כל סט, תגיד כמה חזרות עשית.');
+    expect(coachSaid()).not.toContain(CANT_HEAR);
+    expect(heardNothing()).toEqual([]);
+    // The rest-over alert knows the voice will say it.
+    expect(mockPhone.voiceCallsTheSet).toBe(true);
+  });
+
+  it('a whole set from his pocket: marked on the lock screen, the rest runs, ten seconds, the bell and the next set — in his ears, with nothing listening at any point', async () => {
+    await start();
+    await lock();
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
+    expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
+    const before = mockLog.length;
+    await wait(100);
+    expect(coachSaid(before).slice(-2)).toEqual(['עוד עשר שניות.', 'סט שני מתוך שלושה.']);
+    expect(mockLog.slice(before).some((l) => l.includes('CHIME'))).toBe(true);
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 9 });
+    expect(rows()).toEqual(['לחיצת חזה במוט 60×10', 'לחיצת חזה במוט 60×9']);
+    expect(heardNothing()).toEqual([]);
+    expect(coachSaid()).not.toContain(CANT_HEAR);
+  });
+
+  it('a set he has not marked: she asks where to mark it — once — and never asks him to say anything', async () => {
+    await start();
+    await lock();
+    await untilCoach(MARK_IT);
+    await wait(120);
+    expect(coachSaid().filter((l) => l === MARK_IT)).toHaveLength(1);
+    expect(coachSaid().some((l) => l.includes('כמה חזרות'))).toBe(false);
+    expect(heardNothing()).toEqual([]);
+  });
+
+  it('out of the pocket and back, minimised and back, a pause and back: no road opens a microphone', async () => {
+    await start();
+    await lock();
+    await wait(5);
+    await unlock();
+    await wait(3);
+    await minimise();
+    await wait(5);
+    await unlock();
+    await wait(3);
+    await drive(() => V().pause());
+    await wait(5);
+    await drive(() => V().resume());
+    await wait(3);
+    expect(mockPhone.earOpenTries).toBe(0);
+    expect(mockPhone.micHeld).toBe(false);
+    expect(heardNothing()).toEqual([]);
+    expect(coachSaid()).not.toContain(CANT_HEAR);
+  });
+
+  it('earbuds out and back in: she is silent while they are out and picks up when they return — still with no microphone', async () => {
+    await start();
+    await wait(4);
+    await earbuds(false);
+    await wait(5);
+    expect(mockPhone.voiceCallsTheSet).toBe(false);
+    await earbuds(true);
+    await wait(5);
+    expect(mockPhone.voiceCallsTheSet).toBe(true);
+    expect(mockPhone.earOpenTries).toBe(0);
+    expect(mockPhone.permissionAsks).toBe(0);
+  });
+
+  it('killed in his pocket and opened again: the workout is where it was, and still nothing listens', async () => {
+    await start();
+    await lock();
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
+    kill();
+    await reopen();
+    await wait(4);
+    expect(rows()).toEqual(['לחיצת חזה במוט 60×10']);
+    expect(mockPhone.earOpenTries).toBe(0);
+    expect(heardNothing()).toEqual([]);
+    expect(coachSaid()).not.toContain(CANT_HEAR);
   });
 });

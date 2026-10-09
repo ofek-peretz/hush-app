@@ -66,16 +66,14 @@ public class HushVoiceAudioModule: Module {
   /// The pocket ear (`HushEar`): the workout's microphone and each window's audio, on every iOS
   /// this app runs on — only Apple's on-device recognizer inside it asks for iOS 26 (2026-10-05).
   private var ear: HushEar?
-  /// ⛔ OFF, AND ONLY THE MEASUREMENT TURNS IT ON (2026-10-06): `.duckOthers` put on and off the live
-  /// session while the pocket ear runs. See `applySession`.
-  private var duckUnderEar = false
-  /// The measurement's ear (`HushProcessedEar`): voice processing, opened by the profile only.
-  private var processedEar: HushProcessedEar?
+  /// The profile's measurement (`HushSessionTrial`): one act on the session at a time. Never a workout's.
+  private let trial = HushSessionTrial()
+  /// What the last `duck` did: whether the session let go before it was taken again with the duck,
+  /// and whether the option is on it. Read by the profile's measurement (`duckReport`).
+  private var lastDuck: [String: Any] = [:]
 
-  /// A microphone is held — the workout's, or the measurement's. Either way the session is never
-  /// deactivated or moved to `.playback` under it.
   private var earRunning: Bool {
-    return (ear?.running ?? false) || (processedEar?.running ?? false)
+    return ear?.running ?? false
   }
 
   private func makeEar() -> HushEar {
@@ -164,11 +162,6 @@ public class HushVoiceAudioModule: Module {
     /// the background). Null when it runs; the reason when it does not. Any iOS: the strong ear
     /// hears through this microphone whether or not the phone has a recognizer of its own.
     AsyncFunction("earOpen") { (source: String) async -> String? in
-      // A workout's microphone always wins over a measurement left open.
-      if let processed = self.processedEar {
-        self.processedEar = nil
-        processed.close()
-      }
       let ear = self.ear ?? self.makeEar()
       do {
         try ear.open(source: HushEar.Source(rawValue: source) ?? .headset)
@@ -196,99 +189,31 @@ public class HushVoiceAudioModule: Module {
       self.ear?.alive ?? false
     }
 
-    // ── ⛔ The measurement's steps (profile only — `src/platform/voice/voiceMeasure.ts`) ──────────
-    // Three ways the coach might be heard over her music while the microphone is held, each asked of
-    // the phone itself. None of them is called by a workout.
+    // ── ⛔ The profile's measurement (`src/platform/voice/voiceMeasure.ts`) — never a workout's ──
 
-    /// Step: `duck`/`unduck` put `.duckOthers` on and off the LIVE session while the pocket ear runs.
-    Function("setDuckUnderEar") { (on: Bool) in
-      self.duckUnderEar = on
-    }
-
-    /// Step: the running engine moved to the other microphone — the earbuds', and back
-    /// (`HushEar.reroute`). Null when it records there; otherwise why it does not.
-    AsyncFunction("earReroute") { (source: String, promise: Promise) in
-      guard let ear = self.ear, ear.running else {
-        promise.resolve("ear not running")
-        return
-      }
-      ear.reroute(to: HushEar.Source(rawValue: source) ?? .phone) { error in
-        promise.resolve(error)
-      }
-    }
-
-    /// The session as iOS has it this instant: ports, sample rate, mode, options, other audio.
+    /// The session as iOS has it this instant: ports, sample rate, mode, options — and whether
+    /// another app's audio is playing.
     Function("sessionReport") { () -> [String: Any] in
       HushProcessedEar.report()
     }
 
-    /// Step: the phone's microphone opened WITH voice processing — ON GLASS ONLY. Null when it runs.
-    AsyncFunction("earProcessedOpen") { () -> String? in
-      if let ear = self.ear, ear.running { return "the workout holds the microphone" }
-      let processed = self.processedEar ?? HushProcessedEar()
-      self.processedEar = processed
-      do {
-        try processed.open()
-        if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
-        return nil
-      } catch {
-        return error.localizedDescription
-      }
-    }
-
-    AsyncFunction("earProcessedClose") { () in
-      guard let processed = self.processedEar else { return }
-      self.processedEar = nil
-      processed.close()
-      if self.keepAliveWanted {
-        try? Self.setPlayback(duck: false)
-        if let p = self.keepAlive, !p.isPlaying { p.play() }
-      } else {
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-      }
-    }
-
-    Function("earProcessedAlive") { () -> Bool in
-      self.processedEar?.alive ?? false
-    }
-
-    /// How far everything that is not the processed voice is lowered (0 default, 10, 20, 30 most),
-    /// and whether only while someone speaks. "ok", or why not.
-    Function("earProcessedDuck") { (level: Int, advanced: Bool) -> String in
-      self.processedEar?.setDuck(level: level, advanced: advanced) ?? "not open"
-    }
-
-    /// One cached line played through the processed output. True when it played to its end.
-    AsyncFunction("earProcessedSay") { (path: String, promise: Promise) in
+    /// One trial of one way to hold the session, from its first statement to its release
+    /// (`HushSessionTrial`). ON GLASS ONLY. Resolves with what iOS said after each act.
+    AsyncFunction("sessionTrial") { (name: String, promise: Promise) in
       DispatchQueue.main.async {
-        guard let processed = self.processedEar else {
-          promise.resolve(false)
+        if let ear = self.ear, ear.running {
+          promise.resolve(["name": name, "error": "the workout holds the microphone"])
           return
         }
-        let url: URL = path.hasPrefix("file://") ? (URL(string: path) ?? URL(fileURLWithPath: path)) : URL(fileURLWithPath: path)
-        processed.speak(url: url) { ok in
-          promise.resolve(ok)
+        self.trial.run(name) { facts in
+          promise.resolve(facts)
         }
       }
     }
 
-    /// From here the processed microphone's audio is kept, until `earProcessedClip` reads it.
-    Function("earProcessedKeep") { () in
-      if let processed = self.processedEar { processed.keep() }
-    }
-
-    /// What it heard since (16 kHz mono WAV, base64, and its loudest and quietest moments) — nil when nothing.
-    AsyncFunction("earProcessedClip") { () -> [String: Any]? in
-      guard let processed = self.processedEar else { return nil }
-      return processed.clip()
-    }
-
-    Function("earProcessedPreferPhoneMic") { () -> String in
-      self.processedEar?.preferPhoneMic() ?? "not open"
-    }
-
-    Function("earProcessedRestate") { () -> String in
-      self.processedEar?.restate() ?? "not open"
+    /// What the last `duck` did to the session (see `lastDuck`).
+    Function("duckReport") { () -> [String: Any] in
+      self.lastDuck
     }
 
     /// Is Apple's on-device recognizer listening to the open window too? (False is not a fault: the
@@ -438,11 +363,24 @@ public class HushVoiceAudioModule: Module {
     /// which plays on), then activated with the duck.
     AsyncFunction("duck") { () in
       let session = AVAudioSession.sharedInstance()
+      // Written down for the profile's measurement: did the session let go, and is the option on it?
+      var letGo = "not needed"
       if !self.earRunning && !session.categoryOptions.contains(.duckOthers) {
         self.keepAlive?.pause()
-        try? session.setActive(false)
+        do {
+          try session.setActive(false)
+          letGo = "ok"
+        } catch {
+          letGo = error.localizedDescription
+        }
       }
-      try self.applySession(duck: true)
+      do {
+        try self.applySession(duck: true)
+        self.lastDuck = ["letGo": letGo, "taken": "ok", "option": session.categoryOptions.contains(.duckOthers)]
+      } catch {
+        self.lastDuck = ["letGo": letGo, "taken": error.localizedDescription, "option": session.categoryOptions.contains(.duckOthers)]
+        throw error
+      }
       if self.keepAliveWanted, let p = self.keepAlive, !p.isPlaying { p.play() }
     }
 
@@ -496,27 +434,16 @@ public class HushVoiceAudioModule: Module {
   /// Every session change goes through here: playback-mixed normally, record-and-play with the
   /// ear's own options while the pocket ear runs (leaving `.playAndRecord` would stop its engine).
   ///
-  /// ⛔ UNDER THE POCKET EAR THE SESSION IS NEVER DEACTIVATED — AND SO HER MUSIC IS NOT LOWERED.
-  /// Deactivating here would stop the microphone, and a microphone stopped in a pocket cannot be
-  /// started again. Apple's page on `.duckOthers`: "Ducking begins when you activate your app's audio
-  /// session and ends when you deactivate the session." So a workout that holds the microphone speaks
-  /// over her music at full volume (founder, 2026-10-06: *"המתאמן שומע בפול ווליום את המוזיקה ולא
-  /// שומעים את המאמן"*) — the conflict the measurement exists to find a way out of.
-  ///
-  /// `duckUnderEar` puts the option on and off the LIVE session instead. It is off; only the
-  /// profile's measurement turns it on, for one step, to hear what a phone does with it. For one
-  /// afternoon (2026-10-06) it was the workout's default, on a guess.
+  /// ⛔ NEVER DUCK UNDER THE POCKET EAR. Apple: "Ducking begins when you activate your app's audio
+  /// session and ends when you deactivate the session" — and deactivating here would stop the
+  /// microphone, which cannot be started again from a pocket. Putting the option on the LIVE session
+  /// instead was tried from his pocket on 2026-10-06, and iOS did not take it (`live duck on
+  /// option=no`). `duck` applies to the playback session only.
   private func applySession(duck: Bool) throws {
     if let ear = self.ear, ear.running {
       let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(ear.source, duck: duck && self.duckUnderEar))
-      ear.ducking = duck && self.duckUnderEar
+      try session.setCategory(.playAndRecord, mode: .default, options: HushEar.sessionOptions(ear.source, duck: false))
       try session.setActive(true)
-      return
-    }
-    if let processed = self.processedEar, processed.running {
-      // Voice processing has shaped this session (its mode, its route); it is kept active, never restated.
-      try AVAudioSession.sharedInstance().setActive(true)
       return
     }
     try Self.setPlayback(duck: duck)
