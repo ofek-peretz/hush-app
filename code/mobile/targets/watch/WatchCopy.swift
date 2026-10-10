@@ -153,9 +153,10 @@ enum WatchCopy {
   // Equipment-native setup line (item 11)
   static var perHand: String { L("perHand", "per hand") }
   static var pin: String { L("pin", "pin") }
-  // WT2 (the set): the per-side plate figure reads "7 kg a side"; the load opens Edit.
+  // WT2 (the set): the per-side plate figure reads "7 kg a side"; the load opens Edit — and since
+  // 2026-10-10 so does the rep band, on the reps (the key keeps its name; the hint names both).
   static var aSide: String { L("aSide", "a side") }
-  static var tapWeightToEdit: String { L("tapWeightToEdit", "Tap weight to edit") }
+  static var tapWeightToEdit: String { L("tapWeightToEdit", "Tap a number to edit") }
   // Instruction-first execution (verb + state). Verbs are uppercase legends; confirmations are quiet.
   static var exLoad: String { L("exLoad", "LOAD") }
   static var exUse: String { L("exUse", "USE") }

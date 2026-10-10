@@ -375,6 +375,17 @@ final class WatchModel: ObservableObject {
     guard envelope.authoritySeq > highestSeq else { return } // reorder-proof
     highestSeq = envelope.authoritySeq
     if syncRx.count < 200 { syncRx.append([Double(envelope.authoritySeq), WatchModel.nowMs()]) }
+    /*
+     * ⛔ A FRAME FROM THE PHONE IS THE PHONE (watch pass, 2026-10-10).
+     *
+     * The Reconnecting viewer was left only by a reachability TRANSITION (`setReachable(true)`). But
+     * the viewer is also entered with reachability TRUE the whole time — a tap whose reply timed
+     * out, or a phone that answered "not listening" in its boot window (`intentDidNotLeave`) — and
+     * then no transition ever comes: the phone went on publishing, every frame was ingested, and
+     * the wrist stayed on "reconnecting · continue on iPhone" over a workout that was running.
+     * A new frame, with the phone in reach, is the strongest proof of a connection there is.
+     */
+    if connection == .reconnecting, manager.isReachable { markConnected() }
 
     // Standalone execution data: persist every published plan snapshot so a
     // workout can start with the phone absent, days after this envelope.
@@ -740,6 +751,7 @@ final class WatchModel: ObservableObject {
   /// (Re)schedule the rest countdown + GO haptics when a rest begins or its end moves (+15 / resume);
   /// cancel them when rest ends, is skipped, or the phase otherwise changes.
   private func syncRestHaptics(prev: WireMirror?, next: WireMirror?) {
+    syncHoldHaptics(prev: prev, next: next)
     let isRest: (WireMirror?) -> Bool = { $0?.phase == "rest_inter" || $0?.phase == "rest_transition" }
     let nowRest = isRest(next)
     let wasRest = isRest(prev)
@@ -754,6 +766,41 @@ final class WatchModel: ObservableObject {
   private func cancelRestHaptics() {
     for w in restHaptics { w.cancel() }
     restHaptics = []
+  }
+
+  /**
+   * ⛔ A HOLD ENDS ON THE WRIST TOO (watch pass, 2026-10-10).
+   *
+   * The hold's clock has crossed the wire since 2026-09-28 and the wrist has drawn it — and a plank
+   * is the one exercise in which nobody can look at a wrist: her forearm is on the floor under her.
+   * With earbuds the coach says when it is over; without them nothing did. The three last seconds
+   * and the end are felt now, counted to the same instant the phone, the card and the voice count
+   * to (`holdEndsAt`), with the rest's own late-delivery guard. Nothing is written at zero on any
+   * surface (founder, 2026-09-09) — the beat says the time is up; her Done says the set is.
+   */
+  private var holdHaptics: [DispatchWorkItem] = []
+  private func syncHoldHaptics(prev: WireMirror?, next: WireMirror?) {
+    let end = next?.phase == "active_set" ? next?.holdEndsAt : nil
+    let was = prev?.phase == "active_set" ? prev?.holdEndsAt : nil
+    guard end != was || (end != nil && holdHaptics.isEmpty) else { return }
+    for w in holdHaptics { w.cancel() }
+    holdHaptics = []
+    guard let end, let endsAt = WatchWire.parseDate(end) else { return }
+    let plan: [(TimeInterval, HapticEvent)] = [
+      (-3, .restApproach), (-2, .restApproach), (-1, .restApproachFinal), (0, .exerciseBoundary),
+    ]
+    for (offset, event) in plan {
+      let intended = endsAt.addingTimeInterval(offset)
+      let delay = intended.timeIntervalSinceNow
+      guard delay > 0.05 else { continue }
+      let work = DispatchWorkItem { [weak self] in
+        let lateBy = -intended.timeIntervalSinceNow
+        guard lateBy < (offset == 0 ? 3.0 : 1.2) else { return }
+        self?.onEntryHaptic.send(event)
+      }
+      holdHaptics.append(work)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
   }
 
   private func scheduleRestHaptics(endsAt: Date, isTransition: Bool) {
@@ -1444,18 +1491,55 @@ final class WatchModel: ObservableObject {
   private func intentDidNotLeave() {
     graceWork?.cancel()
     graceWork = nil
+    scheduleStageReturn()
     guard connection != .reconnecting else { return }
     connection = .reconnecting
     recompute()
+  }
+
+  /// The one way back to `.connected` that is not a reachability transition — see `apply` and below.
+  private func markConnected() {
+    graceWork?.cancel()
+    graceWork = nil
+    stageReturn?.cancel()
+    stageReturn = nil
+    guard connection != .connected else { return }
+    connection = .connected
+  }
+
+  /**
+   * ⛔ THE VIEWER IS NEVER A DEAD END (watch pass, 2026-10-10).
+   *
+   * A tap that did not land shows the honest viewer at once — and the viewer has no button. If the
+   * phone is in reach (the usual case: it is in her pocket, and one reply was late), nothing would
+   * ever bring the stage back unless the phone happened to publish. So, a few seconds on, with the
+   * phone still in reach, the stage returns with her dialled figures intact and she presses again.
+   * A press that fails again shows the viewer again: the loop is honest in both directions, and the
+   * phone refuses a set it has already written (`expectedGlobalIndex`).
+   */
+  private var stageReturn: DispatchWorkItem?
+  private static let stageReturnS: TimeInterval = 4
+  private func scheduleStageReturn() {
+    stageReturn?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.stageReturn = nil
+      guard self.connection == .reconnecting, self.manager.isReachable else { return }
+      self.markConnected()
+      self.recompute()
+    }
+    stageReturn = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + WatchModel.stageReturnS, execute: work)
   }
 
   // MARK: Projection (port of projectWatchScreen)
 
   private func recompute() {
     let next = project()
-    let kindChanged = !sameKind(next, screen)
+    let was = screen
+    let kindChanged = !sameKind(next, was)
     screen = next
-    if kindChanged, let haptic = entryHaptic(for: next) {
+    if kindChanged, let haptic = entryHaptic(for: next, from: was) {
       onEntryHaptic.send(haptic)
     }
   }
@@ -1533,14 +1617,35 @@ final class WatchModel: ObservableObject {
     }
   }
 
-  private func entryHaptic(for screen: WatchScreen) -> HapticEvent? {
+  private func entryHaptic(for screen: WatchScreen, from was: WatchScreen) -> HapticEvent? {
     switch screen {
     case .connectionLost: return .connectionLost
     case .workoutComplete: return .workoutSaved
     case .paused: return .paused
     // The set landed. The haptic says so whether or not the load moved with it — it was the
     // confirmation SCREEN that was redundant, not the confirmation.
-    case .correction, .liftDone: return .setLogged
+    case .correction, .liftDone:
+      // Reached FROM a rest (a beat opened by late news, or a wrist-run workout whose frame lands
+      // before its beat), the set's tap has already been played by the rest below — never twice.
+      if case .interRest = was { return nil }
+      if case .transitionRest = was { return nil }
+      return .setLogged
+    /*
+     * ⛔ EVERY SET IS FELT, NOT ONLY A LIFT'S LAST (watch pass, 2026-10-10).
+     *
+     * The sentence above was written the day the SET LOGGED screen was deleted (2026-08-01), and the
+     * code under it kept the tap only for the two beats that still had a screen. A correction is no
+     * longer sent by anything, so in practice the wrist confirmed the LAST set of each lift and was
+     * silent for every other one: she pressed Complete set, felt nothing, and the ring appeared.
+     *
+     * The set is logged when the stage leaves a live set for a rest — whoever logged it (this
+     * wrist, the lock screen, the phone), and only then: the phone has ANSWERED, which is the one
+     * moment W3 allows a confirmation. Arriving from WT10 or WT3 the tap has already been played,
+     * and arriving from a pause or a reconnection nothing was just logged.
+     */
+    case .interRest, .transitionRest:
+      if case .activeSet = was { return .setLogged }
+      return nil
     default: return nil // cardioComplete plays its own beat in endCardio()
     }
   }

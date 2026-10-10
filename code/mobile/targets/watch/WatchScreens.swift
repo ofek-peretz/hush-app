@@ -2117,9 +2117,32 @@ struct ActiveSetScreen: View {
   @ViewBuilder private var bandLine: some View {
     let lo = mirror.targetReps
     let hi = mirror.targetRepsHi ?? lo
-    Text(hi > lo ? "× \(lo)–\(hi)" : "× \(lo)")
-      .font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).monospacedDigit()
-      .foregroundStyle(Palette.ink1)
+    /*
+     * ⛔ THE REPS ARE A DOOR OF THEIR OWN, AND WHAT SHE DIALLED IS SHOWN (watch pass, 2026-10-10).
+     *
+     * Since the workout stopped listening (2026-10-10) the wrist is where a set is told without
+     * taking the phone out — and telling it how many she did took four presses and the crown: the
+     * LOAD (the only door), the reps row, the crown, Done, and Complete set. A press on Complete
+     * set alone writes the floor of the band, so that is what most sets would have recorded.
+     *
+     * The band opens the editor ON THE REPS, and the editor's own Complete set logs what it shows
+     * (`footer`): two presses and the crown. The hairline is the editor row's resting border — the
+     * field it opens, drawn where it is closed.
+     *
+     * And a figure she has dialled replaces the band, in the primary ink: the row used to go on
+     * reading "× 8–10" over a draft of 11, and the number Complete set was about to write was
+     * nowhere on the screen.
+     */
+    Button { TapGate.pass { enterEdit(.reps) } } label: {
+      Text(draft != nil ? "× \(shownReps)" : (hi > lo ? "× \(lo)–\(hi)" : "× \(lo)"))
+        .font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).monospacedDigit()
+        .foregroundStyle(draft != nil ? Palette.ink0 : Palette.ink1)
+        .lineLimit(1)
+        .padding(.horizontal, Fit.s(12)).padding(.vertical, Fit.s(2))
+        .overlay(Capsule().strokeBorder(Palette.ink0.opacity(0.16), lineWidth: Fit.s(1)))
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
   }
 
   /**
@@ -2229,7 +2252,7 @@ struct ActiveSetScreen: View {
     }
   }
 
-  /// The dashed edit hint — a hint, not a button; the tap target is the hero load above it.
+  /// The dashed edit hint — a hint, not a button; the tap targets are the load and the rep band above it.
   ///
   /// It read "הקש על המשקל לערי…" in the founder's screenshot: a Hebrew sentence set in the mono
   /// face (which has no Hebrew, so it fell back wider than measured), uppercased for a script with
@@ -2360,9 +2383,21 @@ struct ActiveSetScreen: View {
       .lineLimit(1).minimumScaleFactor(0.5)
   }
 
+  /**
+   * ⛔ A HOLD THAT HAS NOT STARTED WAITS FOR ITS START — WITH OR WITHOUT A VOICE (watch pass, 2026-10-10).
+   *
+   * Ready was offered only while the VOICE's dialogue was open (`awaitingReady`). With the voice off
+   * (no earbuds, or the switch) a plank on the wrist was a duration that never moved: nothing here
+   * could start its clock, so there was no countdown and no end to feel. The phone has always taken
+   * `set_ready` on any set still on stage (`markSetStarted`); the wrist now asks for it whenever a
+   * timed hold has no end yet. A carry (metres) has no clock, and a workout the wrist runs alone
+   * carries no holds.
+   */
+  private var holdWaits: Bool { mirror.holdSeconds != nil && mirror.holdEndsAt == nil }
+
   @ViewBuilder
   private var footer: some View {
-    if !editing && mirror.awaitingReady == true {
+    if !editing && (mirror.awaitingReady == true || holdWaits) {
       /*
        * ⛔ READY BESIDE COMPLETE SET (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן אמת"*).
        * The voice said "load the bar, and say ready": the lock card offered Ready beside Done, and
@@ -2373,12 +2408,27 @@ struct ActiveSetScreen: View {
         StageButton(title: WatchCopy.ready, kind: .quiet, height: Wrist.action, fontSize: 15, action: onReady)
         StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, action: onComplete)
       }
-    } else {
-      // Mock WT2: a single full-width "Complete set" (cream). In Edit (WT9) it becomes a moss "Done"
-      // that commits the set — the gentle-confirm fill, distinct from the cream that advances the work.
-      StageButton(title: editing ? WatchCopy.done : WatchCopy.completeSet, kind: editing ? .moss : .primary, height: Wrist.action, fontSize: 15, seated: true) {
-        if editing { commit() } else { onComplete() }
+    } else if editing {
+      /*
+       * ⛔ THE EDITOR LOGS THE SET (watch pass, 2026-10-10). Its one button was a moss "Done" that
+       * only put the figures back on the stage — where a second press, on Complete set, wrote them.
+       * She opens this screen after a set, to say what she did; the button she wants is the one
+       * that says it. Complete set here commits the figures and logs them in one press.
+       *
+       * Save stays beside it, quieter: figures dialled BEFORE a set (a machine with no 40 kg pin)
+       * go back to the stage unwritten, and it is the way out of an editor opened by mistake. The
+       * row is the rest screen's two-button row, so both stay whole on 40 mm.
+       */
+      HStack(spacing: Fit.s(6)) {
+        StageButton(title: WatchCopy.save, kind: .quiet, height: Wrist.action, fontSize: 15) { commit() }
+        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) {
+          commit()
+          onComplete()
+        }
       }
+    } else {
+      // Mock WT2: a single full-width "Complete set" (cream).
+      StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, seated: true, action: onComplete)
     }
   }
 
@@ -2504,7 +2554,9 @@ struct LiftDoneScreen: View {
         Spacer(minLength: 0)
         ZStack {
           Circle().strokeBorder(Palette.signal, lineWidth: Fit.s(1.6)).frame(width: Fit.s(52), height: Fit.s(52))
-          DrawCheck(size: Fit.s(22))
+          // Written at 40 mm: `DrawCheck` scales its own size, and a size handed to it already scaled
+          // drew the check 22 % too large inside its ring on a 45 mm case (watch pass, 2026-10-10).
+          DrawCheck(size: 22)
         }
         Text(WatchCopy.liftDone(name))
           .font(.system(size: Fit.s(20), design: .serif)).foregroundStyle(Palette.ink0)
