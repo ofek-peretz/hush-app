@@ -2023,7 +2023,7 @@ struct ActiveSetScreen: View {
         if editing {
           // The header lives top-left on every screen (the wrist's second rule); the edit legend was
           // the one exception, centred on a row of its own (design pass 2026-09-09).
-          TopStrip(text: WatchCopy.editSet.uppercased())
+          editHeader
         } else {
           header
         }
@@ -2094,6 +2094,46 @@ struct ActiveSetScreen: View {
       crown = f == .weight ? w : r
       crownField = f
     }
+  }
+
+  /**
+   * ⛔ THE EDITOR'S HEADER IS ITS WAY BACK (founder, 2026-10-10).
+   *
+   * The editor had two buttons side by side — Save and Complete set — and he asked the obvious
+   * question: *"למה בעריכת הסט יש גם שמירה וגם השלמת סט? זה לא אותה פעולה בגדול?"* To her they are:
+   * both say "I am done here", and only one of them writes the set. A choice she has to stop and
+   * read, mid-workout, between two buttons that differ by something she cannot see, is a choice the
+   * screen should not be asking.
+   *
+   * So the floor has ONE button — Complete set, which logs what the rows show — and leaving without
+   * logging is the header itself: the chevron every other inner screen on this wrist already uses
+   * (the pain flow), the whole row left of the clock as its target. Going back keeps what she
+   * dialled (a load set before the lift, a machine with no 40 kg pin) and keeps nothing if she
+   * changed nothing, so an editor opened by mistake leaves no trace on the stage.
+   *
+   * He also offered the freed place to a "split" — a few reps, the load dropped, a few more. Not
+   * taken, and said to him: it is rare by his own account, a button for it would stand on every
+   * edit, and a set in two parts is a change to what a set IS in the record (phone, lock card,
+   * engine), not a button on the wrist. If it is built, it belongs where it is true — offered on
+   * the rest after a set that came in under its band — never as a standing control.
+   */
+  private var editHeader: some View {
+    ClockLane {
+      Button(action: { TapGate.pass(leaveEdit) }) {
+        HStack(spacing: Fit.s(5)) {
+          Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold))
+          Text(WatchCopy.editSet.uppercased())
+            .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.8))
+            .lineLimit(1).minimumScaleFactor(0.75)
+        }
+        .foregroundStyle(Palette.ink1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: Fit.s(Wrist.head))
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+    }
+    .frame(height: Fit.s(Wrist.head))
   }
 
   /// The header row: the lift she is on, and where she is in it.
@@ -2604,16 +2644,13 @@ struct ActiveSetScreen: View {
        * She opens this screen after a set, to say what she did; the button she wants is the one
        * that says it. Complete set here commits the figures and logs them in one press.
        *
-       * Save stays beside it, quieter: figures dialled BEFORE a set (a machine with no 40 kg pin)
-       * go back to the stage unwritten, and it is the way out of an editor opened by mistake. The
-       * row is the rest screen's two-button row, so both stay whole on 40 mm.
+       *
+       * ONE button, on the floor (2026-10-10 — see `editHeader`): a quieter "Save" stood beside it
+       * until the founder asked what the difference was. The way out without logging is the header.
        */
-      HStack(spacing: Fit.s(6)) {
-        StageButton(title: WatchCopy.save, kind: .quiet, height: Wrist.action, fontSize: 15) { commit() }
-        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) {
-          commit()
-          onComplete()
-        }
+      StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, seated: true) {
+        commit()
+        onComplete()
       }
     } else {
       // Mock WT2: a single full-width "Complete set" (cream). As on the phone's stage and the lock
@@ -2642,6 +2679,13 @@ struct ActiveSetScreen: View {
   }
   private func commit() {
     onSave(bodyweight ? nil : w, Int(r))
+    editing = false
+  }
+  /// Back from the editor without logging: what she dialled goes to the stage, and an editor she
+  /// only opened leaves the stage exactly as it was (no draft, the band still up).
+  private func leaveEdit() {
+    let loadMoved = !bodyweight && w != ((shownWeight ?? 0) * 2).rounded() / 2
+    if loadMoved || Int(r) != shownReps { onSave(bodyweight ? nil : w, Int(r)) }
     editing = false
   }
 }

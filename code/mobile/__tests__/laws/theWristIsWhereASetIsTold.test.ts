@@ -81,13 +81,37 @@ describe('1 · how many she did: as on the phone — one press as written, two p
   it('⛔ the editor\'s own Complete set commits her figures AND logs them, in that order', () => {
     const footer = between(set, 'private var footer: some View', 'private func enterEdit');
     const editing = flat(between(footer, '} else if editing {', '// Mock WT2'));
-    expect(editing).toContain('StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) { commit() onComplete() }');
-    // The quiet way back: figures dialled before a set, and an editor opened by mistake.
-    expect(editing).toContain('StageButton(title: WatchCopy.save, kind: .quiet, height: Wrist.action, fontSize: 15) { commit() }');
+    expect(editing).toContain('StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, seated: true) { commit() onComplete() }');
     // Nothing on this screen is a "Done" that only closes the editor any more.
     expect(set).not.toContain('WatchCopy.done');
     // `commit` hands the model the figures before `completeSet` reads them (both on the main queue).
-    expect(flat(between(set, 'private func commit()', '\n}'))).toContain('onSave(bodyweight ? nil : w, Int(r)) editing = false');
+    expect(flat(between(set, 'private func commit()', 'private func leaveEdit'))).toContain('onSave(bodyweight ? nil : w, Int(r)) editing = false');
+  });
+
+  it('⛔ the editor has ONE button — the way out without logging is its header, not a second button that looks like the first', () => {
+    /*
+     * Founder, 2026-10-10, of the row [Save | Complete set]: *"למה בעריכת הסט יש גם שמירה וגם השלמת
+     * סט? זה לא אותה פעולה בגדול?"* Both said "I am done here" and one of them wrote the set — a
+     * difference she could not see. He offered the place to a "split" (a few reps, the load dropped,
+     * a few more) *"רק אם אתה באמת חושב שזה הכרחי"*; it was not taken — rare by his own account, and a
+     * set in two parts is a change to the record, not a button. Neither comes back as a standing
+     * control beside Complete set.
+     */
+    const footer = between(set, 'private var footer: some View', 'private func enterEdit');
+    const editing = between(footer, '} else if editing {', '// Mock WT2');
+    expect(editing.match(/\b(StageButton|OutlineButton)\(/g)).toHaveLength(1);
+    expect(set).not.toContain('WatchCopy.save');
+    // The header: the back chevron the pain flow already uses, the whole row left of the clock as its target.
+    const header = flat(between(set, 'private var editHeader: some View', '/// The header row: the lift she is on'));
+    expect(header).toContain('ClockLane { Button(action: { TapGate.pass(leaveEdit) }) {');
+    expect(header).toContain('Image(systemName: "chevron.backward")');
+    expect(header).toContain('.frame(maxWidth: .infinity, alignment: .leading) .frame(height: Fit.s(Wrist.head)) .contentShape(Rectangle())');
+    expect(flat(set)).toContain('if editing { // The header lives top-left on every screen (the wrist\'s second rule); the edit legend was // the one exception, centred on a row of its own (design pass 2026-09-09). editHeader } else {');
+    // Going back keeps what she dialled — and an editor she only opened leaves no draft behind.
+    const leave = flat(between(set, 'private func leaveEdit()', '\n}'));
+    expect(leave).toContain('let loadMoved = !bodyweight && w != ((shownWeight ?? 0) * 2).rounded() / 2');
+    expect(leave).toContain('if loadMoved || Int(r) != shownReps { onSave(bodyweight ? nil : w, Int(r)) } editing = false');
+    expect(leave).not.toContain('onComplete');
   });
 
   it('a figure she dialled is what the row shows — the number Complete set is about to write', () => {
