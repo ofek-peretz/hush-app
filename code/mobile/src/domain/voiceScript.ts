@@ -411,6 +411,8 @@ export const voiceScript = {
   skippedSet: () => tg('voice.skippedSet'),
   finishOnPhone: () => tg('voice.finishOnPhone'),
   paused: () => tg('voice.paused'),
+  /** The pause, when nothing can hear a word she says: no "say continue" (2026-10-10). */
+  pausedNoEar: () => tg('voice.pausedNoEar'),
   resumed: () => tg('voice.resumed'),
 
   /**

@@ -60,6 +60,11 @@ const mockPhone = {
   holdsMic: true,
   /** Times she was asked for the microphone. */
   permissionAsks: 0,
+  /**
+   * How long a line takes to say. Zero everywhere but the last block: a real line takes two to five
+   * seconds, and a thumb is faster than that — which is the only way a queued line can go stale.
+   */
+  lineMs: 0,
   earOpenTries: 0,
   window: null as any,
   route: new Set<any>(),
@@ -87,7 +92,11 @@ jest.mock('@/platform/coach/afterSession', () => ({ askAfterSession: jest.fn(asy
 jest.mock('@/platform/voice/coachVoice', () => ({
   coachVoice: {
     available: () => true,
-    say: async (text: string) => mockNote('COACH', text),
+    // Written down when the line ENDS, as the phone's own journal writes it.
+    say: async (text: string) => {
+      if (mockPhone.lineMs > 0) await new Promise((r) => setTimeout(r, mockPhone.lineMs));
+      mockNote('COACH', text);
+    },
     interrupt: () => {},
     warm: () => {},
     lastLine: () => null,
@@ -435,7 +444,7 @@ beforeEach(async () => {
   jest.setSystemTime(new Date('2026-10-05T07:00:00Z'));
   mockT0 = Date.now();
   mockLog.length = 0;
-  Object.assign(mockPhone, { onGlass: true, headset: true, permission: true, micHeld: false, inCall: false, micCutByCall: false, noNetwork: false, voiceCallsTheSet: false, holdsMic: true, permissionAsks: 0, earOpenTries: 0, window: null });
+  Object.assign(mockPhone, { onGlass: true, headset: true, permission: true, micHeld: false, inCall: false, micCutByCall: false, noNetwork: false, voiceCallsTheSet: false, holdsMic: true, permissionAsks: 0, lineMs: 0, earOpenTries: 0, window: null });
   appFixture.profile.voiceMic = undefined;
   for (const set of [mockPhone.route, mockPhone.earState, mockPhone.interruption, mockPhone.appState, mockPhone.keepAlive]) set.clear();
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_t: string, cb: any) => {
@@ -815,8 +824,8 @@ describe('⛔ a rest, with the phone away', () => {
  * Build 76's profile offered "earbuds", and there it meant no held microphone at all — a coach deaf
  * from a pocket. For one afternoon it meant moving the held engine to the earbuds for each answer; the
  * research the founder asked for found nothing that says a locked phone may, and it left the workout
- * the same day (`theMeasurementAsksThePhone`). A profile that still carries the old choice is a
- * profile like any other.
+ * the same day (`theWorkoutHoldsNoMicrophone` keeps it gone). A profile that still carries the old
+ * choice is a profile like any other.
  */
 describe('⛔ a stored "earbuds" choice changes nothing', () => {
   it('the workout\'s microphone is the phone\'s, held from Start, and hears him from his pocket', async () => {
@@ -930,5 +939,104 @@ describe('⛔ the workout holds no microphone', () => {
     expect(mockPhone.earOpenTries).toBe(0);
     expect(heardNothing()).toEqual([]);
     expect(coachSaid()).not.toContain(CANT_HEAR);
+  });
+});
+
+/*
+ * ════ ⛔ A LINE THAT IS NO LONGER TRUE IS NOT SAID (2026-10-10) ════
+ *
+ * From the journal of his first build-78 workout — he marked a set, paused, and ended the workout,
+ * three taps inside three seconds:
+ *
+ *     12:05:40  said  line=שמונה חזרות. נרשם.
+ *     12:05:43  session_completed  earlyFinish=yes
+ *     12:05:43  said  line=סט שני מתוך שלושה.            ← a set that will never be done
+ *     12:05:48  said  line=האימון מושהה. כדי להמש…        ← five seconds after the workout was over
+ *     12:05:52  said  line=כל הכבוד. ארבעה תרגילי…
+ *
+ * Every line was true when it was decided. A line takes seconds to say and the voice says them in
+ * order, so by its turn the workout had moved on under it. Waze does not say "turn right" after the
+ * turn. A line is asked once more, at the moment of its turn, whether it is still true; the echo of
+ * a set already written is the one thing said to the end (2026-09-27), because the set is a fact.
+ */
+describe('⛔ a line that is no longer true is not said', () => {
+  const said = (from: number) => coachSaid(from);
+  beforeEach(() => {
+    mockPhone.holdsMic = false;
+  });
+
+  it('his three taps: the set is said back, the workout is closed — and nothing between them is said after it ended', async () => {
+    await start();
+    await wait(6);
+    mockPhone.lineMs = 3_000;
+    const before = mockLog.length;
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
+    await wait(0.4);
+    await drive(async () => V().endRest()); // the next set is on stage: its call is queued behind the echo
+    await wait(0.4);
+    await drive(async () => V().pause()); // …and "the workout is paused" behind that
+    await wait(0.4);
+    await drive(() => V().finishEarly());
+    await wait(40);
+    const lines = said(before);
+    expect(lines[0]).toBe('עשר חזרות. נרשם.');
+    expect(lines[lines.length - 1]).toMatch(/^כל הכבוד/);
+    expect(lines).toHaveLength(2);
+    expect(lines.some((l) => l.includes('מושהה') || l.includes('סט שני'))).toBe(false);
+  });
+
+  it('paused and resumed before she could say so: neither "the workout is paused" nor "we go on" is said — and the set she is in is still called', async () => {
+    await start();
+    await wait(6);
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
+    await wait(4);
+    mockPhone.lineMs = 3_000;
+    const before = mockLog.length;
+    await drive(async () => V().endRest());
+    await wait(0.3);
+    await drive(async () => V().pause());
+    await wait(0.5);
+    await drive(async () => V().resume());
+    await wait(30);
+    expect(said(before).some((l) => l.includes('מושהה'))).toBe(false);
+    expect(said(before)).not.toContain('ממשיכים.');
+    expect(said(before)).toContain('סט שני מתוך שלושה.');
+  });
+
+  it('a pause she stays in IS said, and so is the way back — the rule drops what is untrue, never what is true', async () => {
+    await start();
+    await wait(6);
+    mockPhone.lineMs = 3_000;
+    const before = mockLog.length;
+    await drive(async () => V().pause());
+    await wait(8);
+    // With nothing listening the pause is a fact and no more: his build-78 workout was told to SAY "continue".
+    expect(said(before).filter((l) => l.includes('מושהה'))).toEqual(['האימון מושהה.']);
+    await drive(async () => V().resume());
+    await wait(8);
+    expect(said(before)).toContain('ממשיכים.');
+    expect(coachSaid().some((l) => l.includes('תגיד'))).toBe(false);
+  });
+
+  it('a set marked before its call was said: the call is dropped, the set is said back', async () => {
+    await start();
+    await wait(6);
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 10 });
+    await wait(4);
+    mockPhone.lineMs = 3_000;
+    const before = mockLog.length;
+    await drive(async () => V().endRest()); // "סט שני מתוך שלושה." starts on its way…
+    await wait(0.3);
+    await drive(async () => V().pause()); // …and is held behind a pause that is said
+    await wait(0.3);
+    await drive(async () => V().resume());
+    await wait(0.3);
+    await press('Done on the lock screen', { type: 'complete_set', weight: 60, reps: 9 });
+    await wait(30);
+    expect(rows()).toEqual(['לחיצת חזה במוט 60×10', 'לחיצת חזה במוט 60×9']);
+    expect(said(before)).toContain('תשע חזרות. נרשם.');
+    // Whatever was said of set two, it was not said AFTER the set was already written.
+    const echoAt = said(before).indexOf('תשע חזרות. נרשם.');
+    expect(said(before).slice(echoAt + 1)).not.toContain('סט שני מתוך שלושה.');
   });
 });

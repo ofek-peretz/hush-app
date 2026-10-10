@@ -90,8 +90,7 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
    * profile used to offer "earbuds": in build 76 that meant no held microphone at all — a coach deaf
    * from a pocket — and for one afternoon it meant moving the held engine to the earbuds for each
    * answer, which nothing Apple has written says a locked phone may do. `Profile.voiceMic` is not
-   * read any more. Whether the earbuds' microphone can ever hear an answer from a pocket is one of
-   * the questions the profile's measurement asks the phone (`platform/voice/voiceMeasure`).
+   * read any more. (2026-10-10: and the workout holds no microphone at all — `workoutMicrophone`.)
    */
   /*
    * ════ THE NATURAL VOICE AND THE SECOND EAR (2026-09-27) ════

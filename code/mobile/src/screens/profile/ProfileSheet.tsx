@@ -11,7 +11,7 @@
 
 // 
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 // The map's row states the map, and it reads it with the ENGINE's own predicates — so this row and
 // the programme can never disagree about what she chose.
 import { View, Text, Pressable, StyleSheet, Linking, ScrollView, Platform } from 'react-native';
@@ -42,7 +42,6 @@ import { coachVoice } from '@/platform/voice/coachVoice';
 import { DEFAULT_COACH_VOICE, DEVICE_VOICE, NEURAL_VOICES, neuralVoice } from '@/platform/voice/neuralVoice';
 import { readVoiceJournal } from '@/platform/voice/voiceJournal';
 import { voiceCapture } from '@/platform/voice/voiceCapture';
-import { factLine, measurePhone, runMeasure, type MeasureAsk } from '@/platform/voice/voiceMeasure';
 import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 import { track } from '@/platform/telemetry';
 import { syncTrace } from '@/platform/syncTrace';
@@ -709,28 +708,6 @@ const VOICE_CHOICES: { id: string; key: string }[] = [
   { id: DEVICE_VOICE, key: 'profile.coachVoiceDevice' },
 ];
 
-/**
- * The measurement's questions for her ears (`platform/voice/voiceMeasure`). The phone reads for
- * itself whether her music is still PLAYING; whether it was lowered is the one thing only she hears.
- */
-const WHAT_THE_MUSIC_DID = [
-  { value: 'lowered', key: 'profile.measureLowered' },
-  { value: 'stopped', key: 'profile.measureStopped' },
-  { value: 'same', key: 'profile.measureSame' },
-];
-const MEASURE_QUESTIONS: Record<MeasureAsk, { key: string; answers: { value: string; key: string }[] }> = {
-  last: { key: 'profile.measureAskLast', answers: WHAT_THE_MUSIC_DID },
-  during: { key: 'profile.measureAskDuring', answers: WHAT_THE_MUSIC_DID },
-  after: {
-    key: 'profile.measureAskAfter',
-    answers: [
-      { value: 'back', key: 'profile.measureBack' },
-      { value: 'low', key: 'profile.measureStayedLow' },
-      { value: 'stopped', key: 'profile.measureStayedStopped' },
-    ],
-  },
-};
-
 function VoiceGateLine({
   voiceId,
   onVoice,
@@ -785,60 +762,6 @@ function VoiceGateLine({
   };
   /** What the voice did on this phone, as the phone wrote it down (`voiceJournal`) — null until asked for. */
   const [journal, setJournal] = useState<string[] | null>(null);
-  /*
-   * ════ ⛔ THE MEASUREMENT (founder, 2026-10-06: *"אתה לא יכול לבדוק את זה … אם זה אמור או יכול לעבוד
-   * … אני לא רוצה שישר תתחיל לעשות מבלי לתכנן לפני"*) ════
-   * What a search cannot settle is asked of his phone, here. The first run (build 77) found that a
-   * locked phone refuses to change its session, that Apple's voice processing throws the sound out
-   * of the earbuds — and that his music STOPS the moment the coach speaks with the microphone held,
-   * where with no microphone it is only lowered. So the workout holds none now, and this run asks
-   * which act it is that stops the music: ten ways of holding the session, one at a time, on glass,
-   * the phone itself answering after each whether another app is still playing; then the workout's
-   * own duck, and two questions for his ears. What iOS reported is printed below as it arrives (and
-   * written to the voice journal). A screenshot of this block is the whole report.
-   */
-  const [measure, setMeasure] = useState<'idle' | 'running' | 'done'>('idle');
-  const [measureLog, setMeasureLog] = useState<string[]>([]);
-  const [measureHint, setMeasureHint] = useState<string | null>(null);
-  const [asked, setAsked] = useState<MeasureAsk[]>([]);
-  const [answers, setAnswers] = useState<Partial<Record<MeasureAsk, string>>>({});
-  const musicWarnedRef = useRef(false);
-  const startMeasure = async () => {
-    setMeasureHint(null);
-    // A workout (or a run) owns the session and the microphone; the measurement would take both from it.
-    if (audioSession.keepAliveHeld()) return setMeasureHint(t('profile.measureInWorkout'));
-    if (!audioSession.headsetConnected()) return setMeasureHint(t('profile.measureNoHeadset'));
-    if (!(await voiceCapture.ensurePermission())) return setMeasureHint(t('profile.measureNoMic'));
-    // Every question is about her music. Said once; a second press runs it anyway.
-    if (audioSession.sessionReport()?.otherAudio === false && !musicWarnedRef.current) {
-      musicWarnedRef.current = true;
-      return setMeasureHint(t('profile.measureNoMusic'));
-    }
-    setMeasure('running');
-    setAsked([]);
-    setAnswers({});
-    const log: string[] = [];
-    const t0 = Date.now();
-    const outcome = await runMeasure(
-      // Her music did not come back by itself after a trial: she is asked to start it, right here.
-      measurePhone(currentLocale(), (on) => setMeasureHint(on ? t('profile.measurePressPlay') : null)),
-      { duckLine: t('profile.measureDuckLine') },
-      (fact) => {
-        log.push(`${Math.round((Date.now() - t0) / 1000)}s ${factLine(fact)}`);
-        setMeasureLog([...log]);
-        void track('voice_measure', fact);
-      },
-    );
-    log.push(`ended: ${outcome.ended}`);
-    setMeasureLog([...log]);
-    void track('voice_measure', { step: 'ended', how: outcome.ended, asked: outcome.asked.join(',') });
-    setAsked(outcome.asked);
-    setMeasure('done');
-  };
-  const answer = (q: MeasureAsk, a: string) => {
-    setAnswers((was) => ({ ...was, [q]: a }));
-    void track('voice_measure', { step: 'answer', q, a });
-  };
   const line = !capable ? t('profile.voiceGateMissing') : headset ? t('profile.voiceGateOn') : t('profile.voiceGateNoHeadset');
   const routeLine = route
     ? `${route.outputs.map((o) => `${o.name} (${o.type})`).join(', ') || '—'} · ${route.category.replace('AVAudioSessionCategory', '')}`
@@ -889,32 +812,6 @@ function VoiceGateLine({
                 <Text style={styles.voiceGateRoute}>{t('profile.cloudEarSub')}</Text>
               </View>
               <Switch checked={cloudEarOn} onChange={() => onCloudEar(!cloudEarOn)} accessibilityLabel={t('profile.cloudEarRow')} />
-            </View>
-          ) : null}
-          {/* The measurement: one run, and its report (see `startMeasure`). */}
-          <Button
-            variant="secondary"
-            size="sm"
-            label={measure === 'running' ? t('profile.measureRunning') : t('profile.measure')}
-            onPress={() => void startMeasure()}
-            disabled={measure === 'running' || test === 'playing'}
-          />
-          <Text style={styles.voiceGate}>{measureHint ?? t('profile.measureSub')}</Text>
-          {measureLog.length > 0 ? <Text style={styles.voiceGateRoute}>{measureLog.join('\n')}</Text> : null}
-          {measure === 'done' && asked.length > 0 ? (
-            <View style={styles.voiceGateTest}>
-              {asked.map((q) => (
-                <View key={q} style={styles.voiceGateTest}>
-                  <Text style={styles.voiceGate}>{t(MEASURE_QUESTIONS[q].key)}</Text>
-                  <SegmentedControl
-                    size="pill"
-                    options={MEASURE_QUESTIONS[q].answers.map((a) => ({ value: a.value, label: t(a.key) }))}
-                    value={answers[q] ?? ''}
-                    onChange={(a) => answer(q, a)}
-                  />
-                </View>
-              ))}
-              <Text style={styles.voiceGate}>{t('profile.measureShot')}</Text>
             </View>
           ) : null}
           <Button

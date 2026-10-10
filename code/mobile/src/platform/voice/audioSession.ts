@@ -37,8 +37,6 @@ interface AudioModule {
   playFile?(path: string): Promise<boolean>;
   stopFile?(): void;
   recoverSession?(): Promise<boolean>;
-  sessionReport?(): SessionReport;
-  sessionTrial?(name: string): Promise<TrialFacts>;
   duckReport?(): DuckReport;
   addListener(event: 'onRouteChange', cb: (e: { connected: boolean }) => void): { remove(): void };
   addListener(event: 'onEarResult', cb: (e: { text: string; token: number }) => void): { remove(): void };
@@ -85,52 +83,6 @@ export type KeepAliveOwner = 'workout' | 'indoorRun' | 'voiceTest' | 'voice';
 /** The chime's half second (`toneWav(seconds: 0.5)` in the Swift) and a breath after it. */
 const CHIME_SOUNDS_MS = 650;
 const keepAliveOwners = new Set<KeepAliveOwner>();
-
-/**
- * The audio session as iOS has it this instant — what the profile's measurement prints
- * (`platform/voice/voiceMeasure`): the ports it records from and plays to, the hardware's sample rate
- * (a Bluetooth call profile is 8–24 kHz; music is 44.1–48), the mode iOS chose, and whether another
- * app's audio is playing.
- */
-export interface SessionReport {
-  inputs: string[];
-  outputs: string[];
-  outputNames: string[];
-  category: string;
-  mode: string;
-  rate: number;
-  hfpAllowed: boolean;
-  a2dpAllowed: boolean;
-  ducking: boolean;
-  mixing: boolean;
-  otherAudio: boolean;
-}
-
-/**
- * One trial of one way to hold the session (`HushSessionTrial.swift`), as iOS answered it. The four
- * booleans are the same question asked at four moments — is another app's audio playing? — before
- * anything, after the session was opened, after it was stated again, and after the trial's sound.
- */
-export interface TrialFacts {
-  name: string;
-  error?: string;
-  before?: boolean;
-  open?: boolean;
-  restated?: boolean;
-  sound?: boolean;
-  /** The first output voice processing chose by itself, before the category was stated again. */
-  first?: string;
-  restate?: string;
-  lowering?: string;
-  played?: string;
-  ended?: boolean;
-  in?: string;
-  out?: string;
-  rate?: number;
-  mode?: string;
-  mixing?: boolean;
-  released?: string;
-}
 
 /** What the last `duck` did: did the session let go, was it taken again, and is the option on it. */
 export interface DuckReport {
@@ -179,10 +131,6 @@ export const audioSession = {
     const first = keepAliveOwners.size === 0;
     keepAliveOwners.add(owner);
     return first ? quiet(() => native?.startKeepAlive()) : Promise.resolve();
-  },
-  /** Is anything holding the loop right now — a workout (from Start to its end), a run, the voice, a test? */
-  keepAliveHeld(): boolean {
-    return keepAliveOwners.size > 0;
   },
   releaseKeepAlive(owner: KeepAliveOwner): Promise<void> {
     if (!keepAliveOwners.delete(owner) || keepAliveOwners.size > 0) return Promise.resolve();
@@ -261,32 +209,10 @@ export const audioSession = {
   },
   earClose: () => quiet(() => native?.earClose?.()),
   /*
-   * ════ ⛔ THE MEASUREMENT'S CALLS — NEVER A WORKOUT'S (2026-10-10) ════
-   *
-   * His phone, with Spotify and Sony earbuds: the coach speaking with NO microphone lowers his music;
-   * the coach speaking with the microphone held STOPS it. Which act stops it, no page says — so each
-   * is tried alone and the phone is asked after each (`platform/voice/voiceMeasure`,
-   * `HushSessionTrial.swift`). `theMeasurementAsksThePhone` pins that nothing else calls these.
+   * What the last `duck` did, for the journal row of every line a workout says (`useVoiceCoach`,
+   * `voice_said … duck=`): her music in a POCKET is something only a workout can show, and this is
+   * how the phone writes it down. Read only.
    */
-  /** The session as iOS has it now — null without the module. */
-  sessionReport(): SessionReport | null {
-    try {
-      const r = native?.sessionReport?.();
-      return r && Array.isArray(r.inputs) && Array.isArray(r.outputs) ? r : null;
-    } catch {
-      return null;
-    }
-  },
-  /** One trial, from its first statement of the session to its release. On glass only. Never throws. */
-  async sessionTrial(name: string): Promise<TrialFacts> {
-    if (!native?.sessionTrial) return { name, error: 'not in this build' };
-    try {
-      const facts = await native.sessionTrial(name);
-      return facts && typeof facts === 'object' ? { ...facts, name } : { name, error: 'no answer' };
-    } catch (e) {
-      return { name, error: e instanceof Error ? e.message : 'sessionTrial threw' };
-    }
-  },
   /** What the last `duck` did to the session — null without the module. */
   duckReport(): DuckReport | null {
     try {

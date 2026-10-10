@@ -1,7 +1,8 @@
 /**
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
- * ⛔ THE WORKOUT HOLDS NO MICROPHONE — until a phone shows one way for it to live with her music.
- * (founder, 2026-10-10: *"מאשר"*)
+ * ⛔ THE WORKOUT HOLDS NO MICROPHONE — this is the product, not a stopgap.
+ * (founder, 2026-10-10: *"מאשר"*, and the same evening, to "the coach's voice is the product, the
+ * number is a detail": *"אני מסכים"*)
  *
  * What his phone said, with Spotify, Sony WH-1000XM5 and iOS 26.3.1:
  *   > *"לחצתי על בדיקת קול המוזיקה נחלשה."*
@@ -16,9 +17,15 @@
  * So the workout takes the half that works: the coach speaks, the music is lowered for the line,
  * nothing listens, and a set is marked where it always could be — the lock screen, the wrist, the
  * stage. The microphone's own code is untouched and still walked by its laws
- * (`theVoiceSurvivesThePhone` turns this on); what is asked of the phone in the meantime is WHICH
- * act stops the music (`platform/voice/voiceMeasure`), and whether any way of holding the microphone
- * does not.
+ * (`theVoiceSurvivesThePhone` turns this on).
+ *
+ * What the phone answered when it was asked WHICH act stops the music (build 78's measurement, three
+ * identical runs; `docs/canonical/FERROX_VOICE_SCREENPLAY.md` §11): not the microphone. It is the
+ * category being changed from playback to record on a session that is already active — a record
+ * session with no microphone stopped Spotify the same way, and one activated FRESH (let go, state the
+ * category, activate) did not, microphone running. That is the way back the day there is a reason
+ * for one. It does not bring the duck with it: a line still cannot lower his music under a held
+ * microphone, and a coach he cannot hear over his music is no coach — which is why this stays off.
  *
  * ⛔ Not to be turned on by a fix elsewhere. The journal he sent the same day shows a second,
  * unrelated defect — the microphone is not opened when the stage mounts a moment before iOS calls

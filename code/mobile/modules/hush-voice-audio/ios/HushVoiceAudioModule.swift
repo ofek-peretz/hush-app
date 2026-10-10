@@ -66,10 +66,8 @@ public class HushVoiceAudioModule: Module {
   /// The pocket ear (`HushEar`): the workout's microphone and each window's audio, on every iOS
   /// this app runs on — only Apple's on-device recognizer inside it asks for iOS 26 (2026-10-05).
   private var ear: HushEar?
-  /// The profile's measurement (`HushSessionTrial`): one act on the session at a time. Never a workout's.
-  private let trial = HushSessionTrial()
   /// What the last `duck` did: whether the session let go before it was taken again with the duck,
-  /// and whether the option is on it. Read by the profile's measurement (`duckReport`).
+  /// and whether the option is on it. Written into the journal row of every line a workout says.
   private var lastDuck: [String: Any] = [:]
 
   private var earRunning: Bool {
@@ -187,28 +185,6 @@ public class HushVoiceAudioModule: Module {
     /// stop it; see `HushEar.resume`). The session's own decisions above keep reading the intent.
     Function("earRunning") { () -> Bool in
       self.ear?.alive ?? false
-    }
-
-    // ── ⛔ The profile's measurement (`src/platform/voice/voiceMeasure.ts`) — never a workout's ──
-
-    /// The session as iOS has it this instant: ports, sample rate, mode, options — and whether
-    /// another app's audio is playing.
-    Function("sessionReport") { () -> [String: Any] in
-      HushProcessedEar.report()
-    }
-
-    /// One trial of one way to hold the session, from its first statement to its release
-    /// (`HushSessionTrial`). ON GLASS ONLY. Resolves with what iOS said after each act.
-    AsyncFunction("sessionTrial") { (name: String, promise: Promise) in
-      DispatchQueue.main.async {
-        if let ear = self.ear, ear.running {
-          promise.resolve(["name": name, "error": "the workout holds the microphone"])
-          return
-        }
-        self.trial.run(name) { facts in
-          promise.resolve(facts)
-        }
-      }
     }
 
     /// What the last `duck` did to the session (see `lastDuck`).
@@ -363,7 +339,7 @@ public class HushVoiceAudioModule: Module {
     /// which plays on), then activated with the duck.
     AsyncFunction("duck") { () in
       let session = AVAudioSession.sharedInstance()
-      // Written down for the profile's measurement: did the session let go, and is the option on it?
+      // Written down for the journal: did the session let go, and is the option on it?
       var letGo = "not needed"
       if !self.earRunning && !session.categoryOptions.contains(.duckOthers) {
         self.keepAlive?.pause()

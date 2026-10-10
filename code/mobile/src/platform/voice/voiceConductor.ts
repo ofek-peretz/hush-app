@@ -125,6 +125,9 @@ export interface ConductorDeps {
   verdictInWorkout?: boolean;
 }
 
+/** A line about a set already written: said whatever has happened since (see `speak`). */
+const SAID_TO_THE_END = (): boolean => true;
+
 /** The spec's windows, in milliseconds. */
 export const WINDOWS = {
   loading: 90_000,
@@ -363,6 +366,8 @@ export class VoiceConductor {
   private pausedAtMs: number | null = null;
   /** She ended the rest with her own word: the set after it is called without the bell. */
   private restCut = false;
+  /** "האימון מושהה" was really said for the pause she is in (or has just left). */
+  private pauseSaid = false;
 
   constructor(private readonly d: ConductorDeps) {}
 
@@ -791,11 +796,19 @@ export class VoiceConductor {
     this.mode = 'set';
     // Hers from the first word of the call: a killed app, a call, earbuds coming back all re-enter THIS set.
     this.setSet({ key, started: true, askDueMs: null });
-    void this.speak(lines, false, chime).then(() => {
+    // Called only while it is still the set on stage: a set already marked, a pause, an ended workout are not called.
+    void this.speak(lines, false, chime, () => this.inSet(key)).then(() => {
       const now = this.d.getView();
       if (!now || !this.on || this.mode !== 'set' || this.setState?.key !== key || stepKeyOf(now) !== key) return;
       this.scheduleAsk(now, this.d.now() + setupS * 1000);
     });
+  }
+
+  /** Still inside the set `key` — on stage, not paused, not ended: what a line about THIS set must be true of. */
+  private inSet(key: string | null | undefined): boolean {
+    const now = this.d.getView();
+    if (this.mode !== 'set' || !now?.active || now.paused || now.displayPhase !== 'SET_PRESENTED') return false;
+    return key == null || (this.setState?.key === key && stepKeyOf(now) === key);
   }
 
   /** The hold on stage that the voice counts — a timed item of a plank's length; null for anything else. */
@@ -1289,7 +1302,7 @@ export class VoiceConductor {
     const inMs = endMs - 10_000 - this.d.now();
     if (inMs < 0) return;
     this.after(inMs, () => {
-      if (this.mode === 'set' && this.setState?.key === key) void this.speak([voiceScript.tenSeconds()]);
+      if (this.mode === 'set' && this.setState?.key === key) void this.speak([voiceScript.tenSeconds()], false, false, () => this.inSet(key));
     });
   }
 
@@ -1359,7 +1372,8 @@ export class VoiceConductor {
     if (this.earDown) {
       // Nothing can hear the answer: the question becomes where to mark the set.
       this.mode = 'set';
-      void this.speak([voiceScript.markOnLock()]);
+      const key = this.setState?.key;
+      void this.speak([voiceScript.markOnLock()], false, false, () => this.inSet(key));
       return;
     }
     this.mode = 'asking';
@@ -1622,7 +1636,8 @@ export class VoiceConductor {
       this.ask = null;
       if (echo) return this.releaseHeldRest(true);
       this.mode = 'set';
-      void this.speak([voiceScript.markOnLock()]);
+      const key = this.setState?.key;
+      void this.speak([voiceScript.markOnLock()], false, false, () => this.inSet(key));
       return;
     }
     if (echo) {
@@ -1832,7 +1847,7 @@ export class VoiceConductor {
     const items = r.steps.map((st, j) => ({ exerciseId: st.exerciseId, kg: r.weights?.[j] ?? st.kg, reps: r.reps[j] }));
     this.ask = { question: 'echo_round', silences: 0, round: r };
     const mine = this.ask;
-    void this.speak([voiceScript.echoRound(items, l)], true).then(() => {
+    void this.speak([voiceScript.echoRound(items, l)], true, false, SAID_TO_THE_END).then(() => {
       if (this.ask === mine && this.on && this.d.getView()?.active) {
         this.openWindow(WINDOWS.echoTail, (a, text, conf) => this.onDoneAnswer(a, text, conf), 'reps', (why) => this.onDoneWindowEnd(why));
       } else if (this.ask === mine) {
@@ -1915,12 +1930,12 @@ export class VoiceConductor {
      */
     if (ctx.warmup) {
       this.ask = null;
-      await this.speak([voiceScript.echo(weight, reps, l, planned)]);
+      await this.speak([voiceScript.echo(weight, reps, l, planned)], false, false, SAID_TO_THE_END);
       return;
     }
     this.ask = { question: 'echo', silences: 0, echoed: { weight, reps } };
     const mine = this.ask;
-    await this.speak([voiceScript.echo(weight, reps, l, planned), ...(record ? [voiceScript.record()] : []), ...verdict.lines], true);
+    await this.speak([voiceScript.echo(weight, reps, l, planned), ...(record ? [voiceScript.record()] : []), ...verdict.lines], true, false, SAID_TO_THE_END);
     if (this.ask === mine && this.on && this.d.getView()?.active) {
       this.openWindow(WINDOWS.echoTail, (a, text, conf2) => this.onDoneAnswer(a, text, conf2), 'reps', (why) => this.onDoneWindowEnd(why));
     } else if (this.ask === mine) {
@@ -1949,7 +1964,7 @@ export class VoiceConductor {
     }
     this.d.track?.('voice_hold_logged', { exerciseId: ex, seconds });
     if (ex) this.lastLoggedEx = ex;
-    if (ex) await this.speak([voiceScript.holdEcho(seconds, l)]);
+    if (ex) await this.speak([voiceScript.holdEcho(seconds, l)], false, false, SAID_TO_THE_END);
   }
 
   /** The verdict — Loop 1, under the voice only (founder 2026-09-08; the stage stays a logger). */
@@ -2041,7 +2056,7 @@ export class VoiceConductor {
     }
     this.ask = { question: 'echo', silences: 0, echoed: { weight, reps } };
     const mine = this.ask;
-    void this.speak(lines, true).then(() => {
+    void this.speak(lines, true, false, SAID_TO_THE_END).then(() => {
       if (this.ask === mine && this.on) {
         this.openWindow(WINDOWS.echoTail, (a, text, conf) => this.onDoneAnswer(a, text, conf), 'reps', (why) => this.onDoneWindowEnd(why));
       } else if (this.ask === mine) {
@@ -2104,6 +2119,8 @@ export class VoiceConductor {
     // (`lastSetOfExercise` cannot say it: a coach plan marks it wherever the NEXT step is another lift,
     // which is every half of a superset. The plan itself can — does the lift come back?) Asked of
     // the step just done, which the machine still sits on during its rest — a hold writes no row.
+    // What is in `lines` so far is the set she did — said to the end. What follows is where she goes next.
+    const facts = lines.length;
     const plan = v.livePlan as Step[];
     const doneAt = v.globalProgress?.index ?? -1;
     const done = plan[doneAt];
@@ -2126,7 +2143,7 @@ export class VoiceConductor {
       // rest's lines and the move wait until the tail has closed.
       this.heldRest = { lines, move };
     } else {
-      void this.speak(lines).then(() => this.listenInRest());
+      void this.speak(lines, false, false, (i) => i < facts || this.mode !== 'ended').then(() => this.listenInRest());
       if (move) v.setLiftLoad(move.kg);
     }
     this.scheduleTenSeconds(v);
@@ -2200,7 +2217,14 @@ export class VoiceConductor {
     if (inMs < 0) return; // already inside the last ten seconds — a late "ten seconds" is a wrong one
     this.after(inMs, () => {
       const now = this.d.getView();
-      if (now && (now.displayPhase === 'REST_INTER' || now.displayPhase === 'REST_TRANSITION')) void this.speak([voiceScript.tenSeconds()]);
+      if (now && (now.displayPhase === 'REST_INTER' || now.displayPhase === 'REST_TRANSITION')) {
+        // Still a rest, and still more than a breath of it left: a late "ten seconds" is a wrong one.
+        void this.speak([voiceScript.tenSeconds()], false, false, () => {
+          const n = this.d.getView();
+          if (!n?.active || n.paused || (n.displayPhase !== 'REST_INTER' && n.displayPhase !== 'REST_TRANSITION')) return false;
+          return n.restEndsAtMs == null || n.restEndsAtMs - this.d.now() > 5_000;
+        });
+      }
     });
   }
 
@@ -2227,7 +2251,18 @@ export class VoiceConductor {
     this.persist();
     this.ask = { question: 'paused', silences: 0 };
     this.mode = 'paused';
-    void this.speak([voiceScript.paused()], true).then(() => this.listenForResume(true));
+    this.pauseSaid = false;
+    /*
+     * ⛔ SHE IS TOLD TO SAY "המשך" ONLY WHEN SOMETHING CAN HEAR IT (2026-10-10). With no microphone
+     * the line was said all the same — "כדי להמשיך, תגיד: המשך" into a workout that listens to nothing
+     * (it is in his build-78 journal). And said only while the pause still stands: a pause she left
+     * before its turn came is not announced after the fact.
+     */
+    void this.speak([this.earDown ? voiceScript.pausedNoEar() : voiceScript.paused()], true, false, () => {
+      if (this.mode !== 'paused') return false;
+      this.pauseSaid = true;
+      return true;
+    }).then(() => this.listenForResume(true));
   }
 
   /**
@@ -2271,7 +2306,9 @@ export class VoiceConductor {
     this.mode = 'idle';
     this.lastPhase = null; // re-enter the phase she is in
     this.reentry = true;
-    void this.speak([voiceScript.resumed()]);
+    // "ממשיכים" answers a pause that was said. One she left before its line had its turn needs no answer.
+    const answered = this.pauseSaid;
+    void this.speak([voiceScript.resumed()], false, false, () => answered && this.mode !== 'paused' && this.mode !== 'ended');
   }
 
   // ── Plumbing ──────────────────────────────────────────────────────────────────────────────────
@@ -2304,31 +2341,61 @@ export class VoiceConductor {
   /** One voice: every `speak` waits for the one before it, so lines land in the order they were decided. */
   private chain: Promise<void> = Promise.resolve();
 
-  private speak(lines: string[], keepDucked = false, chime = false): Promise<void> {
+  /*
+   * ════ ⛔ A LINE THAT IS NO LONGER TRUE IS NOT SAID (2026-10-10) ════
+   *
+   * From the journal of his first build-78 workout — a set marked, a pause, the workout ended, three
+   * taps inside three seconds:
+   *
+   *     12:05:43  session_completed
+   *     12:05:43  said  סט שני מתוך שלושה.          ← a set that would never be done
+   *     12:05:48  said  האימון מושהה. כדי להמש…      ← five seconds after the workout was over
+   *     12:05:52  said  כל הכבוד. ארבעה תרגילי…
+   *
+   * Every one of those was true when it was decided. A line takes seconds to say and the voice says
+   * them in order, so by its turn the workout had moved on under it; Waze does not say "turn right"
+   * after the turn. So each line is asked once more, AT ITS TURN, whether it is still true (`still`,
+   * by its index in the utterance). With no answer of its own, a line decided while the workout was
+   * running is not said once the workout has ended. The echo of a set already written is the one
+   * thing said to the end (`SAID_TO_THE_END`, the ruling of 2026-09-27): the set is a fact.
+   */
+  private speak(lines: string[], keepDucked = false, chime = false, still?: (index: number) => boolean): Promise<void> {
     if (!this.on || this.interrupted || lines.length === 0) return this.chain;
     // Every line of this utterance starts on its way in the natural voice now — the verdict fetches
     // while the echo plays, and nothing waits twice.
     this.d.mouth.warm?.(lines, this.d.locale().locale);
     this.queued += 1;
+    const decidedInAWorkout = this.mode !== 'ended';
+    const stillTrue = (i: number) => (still ? still(i) : !decidedInAWorkout || this.mode !== 'ended');
     const run = async () => {
       try {
         if (!this.on || this.interrupted) return;
-        this.speaking += 1;
-        try {
-          // While a window is open the recognizer owns the session (record + play, her music already
-          // ducked); switching the category under it would end the recording mid-answer.
-          if (!this.window) await this.d.audio.duck();
-          // ⛔ The rest's end: the chime FIRST, and the line only once it has sounded (2026-09-27).
-          if (chime && this.on) await this.d.audio.playChime();
-          const locale = this.d.locale().locale;
-          for (const line of lines) {
-            if (!this.on || this.interrupted) break; // earbuds out, a call: the rest is not played
-            await this.d.mouth.say(line, locale);
+        if (lines.some((_, i) => stillTrue(i))) {
+          this.speaking += 1;
+          try {
+            // While a window is open the recognizer owns the session (record + play, her music already
+            // ducked); switching the category under it would end the recording mid-answer.
+            if (!this.window) await this.d.audio.duck();
+            // ⛔ The rest's end: the chime FIRST, and the line only once it has sounded (2026-09-27).
+            if (chime && this.on) await this.d.audio.playChime();
+            const locale = this.d.locale().locale;
+            for (let i = 0; i < lines.length; i += 1) {
+              if (!this.on || this.interrupted) break; // earbuds out, a call: the rest is not played
+              if (!stillTrue(i)) {
+                // `String(…)`: a journal row is never the thing that throws inside the voice's chain.
+                this.d.track?.('voice_unsaid', { line: String(lines[i]).slice(0, 22) });
+                continue;
+              }
+              await this.d.mouth.say(lines[i], locale);
+            }
+          } finally {
+            this.speaking -= 1;
+            this.lastSpokeEndMs = this.d.now();
+            this.lastSpoken = lines;
           }
-        } finally {
-          this.speaking -= 1;
-          this.lastSpokeEndMs = this.d.now();
-          this.lastSpoken = lines;
+        } else {
+          // Not one word of it is true any more: no duck, no bell, nothing — and it is written down.
+          this.d.track?.('voice_unsaid', { line: String(lines[0]).slice(0, 22), lines: lines.length });
         }
       } finally {
         this.queued -= 1;
