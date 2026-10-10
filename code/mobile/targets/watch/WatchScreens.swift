@@ -3640,16 +3640,29 @@ struct CompleteScreen: View {
                   }
                 }
                 .frame(width: Fit.s(15), height: Fit.s(15))
-                Text(lift.name)
-                  .font(.system(size: Fit.s(14)))
-                  .foregroundStyle(Palette.ink0)
-                  .lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: Fit.s(4))
-                if let best = lift.best, !best.isEmpty {
-                  Text(best)
-                    .font(.system(size: Fit.s(13), design: .monospaced)).monospacedDigit()
-                    .foregroundStyle(Palette.ink2)
-                    .lineLimit(1).fixedSize()
+                /*
+                 * ⛔ A LIFT IS READ BACK BY ITS WHOLE NAME (the photographs, 2026-10-10). Held to one
+                 * line beside its figures, the list read "לחיצת חזה…" twice — the bar and the incline
+                 * dumbbells, two different lifts she did, told apart by exactly the words an ellipsis
+                 * took. The NAME has the row first: its figures stand beside it where both fit, and
+                 * give the row up where they do not. (A first cut stacked the figures under a
+                 * two-line name; photographed, that made every row three lines tall and a two-second
+                 * beat into a scroll nobody could follow. One line a lift, and the list stays a list.)
+                 */
+                ViewThatFits(in: .horizontal) {
+                  HStack(spacing: Fit.s(4)) {
+                    Text(lift.name)
+                      .font(.system(size: Fit.s(14)))
+                      .foregroundStyle(Palette.ink0)
+                      .lineLimit(1).fixedSize()
+                    Spacer(minLength: Fit.s(4))
+                    readBest(lift.best)
+                  }
+                  Text(lift.name)
+                    .font(.system(size: Fit.s(14)))
+                    .foregroundStyle(Palette.ink0)
+                    .lineLimit(1).truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
               }
               .id(i)
@@ -3660,6 +3673,9 @@ struct CompleteScreen: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.top, Fit.s(6))
         }
+        // Clipped to its own frame: with the glass taken (`WholeGlass`) a scroll view's rows ran on
+        // up under the header strip and the system clock — photographed 2026-10-10.
+        .clipped()
         .onChange(of: read) { _, r in
           guard r > 0 else { return }
           withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(r - 1, anchor: .center) }
@@ -3688,6 +3704,16 @@ struct CompleteScreen: View {
       try? await Task.sleep(nanoseconds: 600_000_000)
       if Task.isCancelled { return }
       if reading { withAnimation { reading = false } }
+    }
+  }
+
+  /// The best set she logged on a lift, in the instrument's own figures — nothing when there is none.
+  @ViewBuilder private func readBest(_ best: String?) -> some View {
+    if let best, !best.isEmpty {
+      Text(best)
+        .font(.system(size: Fit.s(13), design: .monospaced)).monospacedDigit()
+        .foregroundStyle(Palette.ink2)
+        .lineLimit(1).fixedSize()
     }
   }
 
@@ -3742,11 +3768,18 @@ struct CompleteScreen: View {
             .lineLimit(2).minimumScaleFactor(0.7)
             .fixedSize(horizontal: false, vertical: true)
           if let sm = mirror.summary {
-            HStack(alignment: .top, spacing: Fit.s(4)) {
-              completeMetric(minutesLabel(sm.timeLabel), WatchCopy.metricMinShort)
-              // Kcal from the OS runtime; an honest dash when HealthKit gave nothing, never a model.
-              completeMetric(shownKcal.map { "\($0)" } ?? "––", WatchCopy.metricKcalShort)
-              completeMetric(fmtTonnes(sm.volumeKg), WatchCopy.metricTonnesShort)
+            /*
+             * ⛔ THREE FIGURES, ONE SIZE (the photographs, 2026-10-10). Each used to scale into its
+             * own third of the row, so "52", "412" and "11.7" stood in three different sizes — the
+             * minutes twice the height of the tonnes, on a row that is one statement about one
+             * workout. The row now takes the largest size at which all three fit TOGETHER, each as
+             * wide as its own figure, with an even gap between them.
+             */
+            ViewThatFits(in: .horizontal) {
+              completeRow(sm, size: 26)
+              completeRow(sm, size: 22)
+              completeRow(sm, size: 19)
+              completeRow(sm, size: 16)
             }
           }
         }
@@ -3767,22 +3800,29 @@ struct CompleteScreen: View {
     }
   }
 
-  /// One column of the WT6 metric row — mono figure over a muted mono label, a third of the row each.
-  private func completeMetric(_ value: String, _ label: String) -> some View {
+  /// The WT6 metric row at one size: minutes · energy · tonnes.
+  private func completeRow(_ sm: WireSummary, size: CGFloat) -> some View {
+    HStack(alignment: .top, spacing: Fit.s(12)) {
+      completeMetric(minutesLabel(sm.timeLabel), WatchCopy.metricMinShort, size)
+      // Kcal from the OS runtime; an honest dash when HealthKit gave nothing, never a model.
+      completeMetric(shownKcal.map { "\($0)" } ?? "––", WatchCopy.metricKcalShort, size)
+      completeMetric(fmtTonnes(sm.volumeKg), WatchCopy.metricTonnesShort, size)
+    }
+  }
+
+  /// One column of the WT6 metric row — mono figure over a muted label, as wide as its own figure.
+  private func completeMetric(_ value: String, _ label: String, _ size: CGFloat) -> some View {
     VStack(spacing: Fit.s(3)) {
       Text(value)
-        .font(.system(size: Fit.s(26), weight: .medium, design: .monospaced)).monospacedDigit()
+        .font(.system(size: Fit.s(size), weight: .medium, design: .monospaced)).monospacedDigit()
         // A figure the session never measured stands in the superseded ink, never in cream.
         .foregroundStyle(value == "––" ? Palette.ink3 : Palette.ink0)
-        .lineLimit(1).minimumScaleFactor(0.5)
-        // A figure never fills its third edge to edge: photographed on 45 mm, "11.7" ran up against
-        // "412" and the row read as one number (2026-10-10).
-        .padding(.horizontal, Fit.s(4))
+        // Never scaled by itself: the ROW picks the size (`completeRow`), so all three share it.
+        .lineLimit(1).fixedSize()
       // The legend view, not a mono `Text`: "דק׳ · קק״ל · טון" were Hebrew words set in a face
       // with no Hebrew (design pass 2026-09-09).
       Legend(label, size: Wrist.legend)
     }
-    .frame(maxWidth: .infinity)
   }
 
   /**
@@ -4006,6 +4046,9 @@ private struct PainAreaScreen: View {
         }
         .padding(.top, Fit.s(4))
       }
+      // Clipped to its own frame, as the read-back's list is: with the glass taken, the rows would
+      // scroll up under this screen's own header and the system clock.
+      .clipped()
     }
     .padding(.horizontal, Fit.s(Wrist.side)).padding(.top, Fit.s(2))
     .stageFill()

@@ -119,6 +119,26 @@ describe('⛔ nothing she reads is cut', () => {
     expect(outline).toContain('.lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center) } .padding(.horizontal, Fit.s(6)) .frame(maxWidth: .infinity).frame(height: Fit.s(height))');
   });
 
+  it('the closing screen: three figures at ONE size, and a lift read back by its whole name', () => {
+    const done = between(SCREENS, 'struct CompleteScreen: View', '// MARK: 07 · Paused');
+    /*
+     * Photographed 2026-10-10: each figure scaled into its own third, so "52", "412" and "11.7" stood
+     * in three sizes on one row; and the read-back held every name to one line beside its figures —
+     * "לחיצת חזה…" twice, for the bar and for the incline dumbbells.
+     */
+    expect(flat(done)).toContain('ViewThatFits(in: .horizontal) { completeRow(sm, size: 26) completeRow(sm, size: 22) completeRow(sm, size: 19) completeRow(sm, size: 16) }');
+    const metric = flat(between(done, 'private func completeMetric(_ value: String, _ label: String, _ size: CGFloat) -> some View', '/**'));
+    expect(metric).toContain('.font(.system(size: Fit.s(size), weight: .medium, design: .monospaced)).monospacedDigit()');
+    expect(metric).toContain('.lineLimit(1).fixedSize()');
+    expect(metric).not.toContain('minimumScaleFactor'); // a figure never scales by itself — the ROW picks the size
+    const read = flat(between(done, 'private var readBack: some View', 'private func readBest'));
+    expect(read).toContain('ViewThatFits(in: .horizontal) { HStack(spacing: Fit.s(4)) { Text(lift.name) .font(.system(size: Fit.s(14))) .foregroundStyle(Palette.ink0) .lineLimit(1).fixedSize() Spacer(minLength: Fit.s(4)) readBest(lift.best) }');
+    expect(read).toContain("Text(lift.name) .font(.system(size: Fit.s(14))) .foregroundStyle(Palette.ink0) .lineLimit(1).truncationMode(.tail) .frame(maxWidth: .infinity, alignment: .leading) }");
+    // Every list on the wrist is clipped to its own frame: with the glass taken, rows scrolled up under the header and the clock.
+    expect(SCREENS.split('ScrollView {').length - 1).toBe(2);
+    expect(SCREENS.split('\n').filter((l) => l.trim() === '.clipped()')).toHaveLength(2);
+  });
+
   it('the moved-load chip is one line, and its sign stays in front of its number', () => {
     const delta = flat(between(SCREENS, 'struct LoadDelta: View', 'private struct CheckShape'));
     expect(delta).toContain('.lineLimit(1).fixedSize()');

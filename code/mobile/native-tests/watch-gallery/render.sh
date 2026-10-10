@@ -69,11 +69,11 @@ for SIZE in ${GALLERY_SIZES:-40mm 45mm}; do
   xcrun simctl bootstatus "$UDID" -b
   if ! xcrun simctl install "$UDID" "$APP"; then echo "install failed on $SIZE"; FAILED=1; xcrun simctl delete "$UDID"; continue; fi
   mkdir -p "$OUT/$SIZE"
-  while read -r SHOT FRAME OPEN DIRECT; do
+  while read -r SHOT FRAME OPEN DIRECT WAIT; do
     [ -z "$SHOT" ] && continue
     SIMCTL_CHILD_HUSH_FRAME="$FRAME" SIMCTL_CHILD_HUSH_OPEN="$OPEN" SIMCTL_CHILD_HUSH_DIRECT="$DIRECT" \
       xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" || { echo "launch failed: $SHOT"; FAILED=1; }
-    sleep 3
+    sleep "${WAIT:-3}"
     xcrun simctl io "$UDID" screenshot --type=png --mask=black "$OUT/$SIZE/$SHOT.png" || FAILED=1
   done < "$WORK/src/shots.txt"
   xcrun simctl shutdown "$UDID"
