@@ -87,9 +87,10 @@ import { EXERCISES, isSwapOnly } from '@/data/exercises';
 import heCopy from '@/i18n/locales/he.json';
 import type { PromptBlock } from '@/domain/coachPrompt';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
+import { statedLiftsLine, type StatedLift } from '@/domain/statedLifts';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 6;
+export const BUILD_PROMPT_VERSION = 7;
 
 /**
  * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
@@ -316,7 +317,17 @@ export const BUILD_WEEK_SCHEMA = {
                 load: {
                   type: 'number',
                   description:
-                    'Optional. The starting weight in kg for this exercise, from what the athlete told you about the weights they lift today: the total on a barbell or machine, the weight of ONE dumbbell. Omit it when nothing the athlete said lets you ground it — the app then estimates it and corrects it on the first set.',
+                    /*
+                     * ⛔ EVERY LIFT, NOT ONLY THE ONES SHE NAMED (2026-10-11, walked live). This read
+                     * "from what the athlete told you… omit it when nothing lets you ground it", and
+                     * the model took it at its word: a man who wrote "bench 100, squat 130, deadlift
+                     * 160" got those three at his numbers and a Romanian deadlift at 55 kg, an
+                     * incline dumbbell press at 16 kg a hand — 26 lifts of 30 priced for a stranger of
+                     * his bodyweight. The note above always said the model "can carry it to every
+                     * lift of the week"; the description never asked it to. It does now, in the one
+                     * place the model reads the field's meaning.
+                     */
+                    'The starting weight in kg for this exercise: the total on a barbell or machine, the weight of ONE dumbbell. When the athlete gave you any of the weights they lift today, write a starting weight for EVERY exercise of the week that takes a load. A lift they named opens at exactly the weight they gave — give it a rep range that weight fits, never a lighter weight. Each of the others is your estimate from those numbers: a weight this athlete can do for its rep range with a little in hand (the app corrects it on the first set). Omit it only for an exercise done with bodyweight or a band — the app cannot add weight to those, so an athlete who trains one of them with added weight is better given a loaded exercise — or when the athlete gave you no weight at all: the app then estimates from bodyweight.',
                 },
                 /* See the note at `REPS_MIN`. Optional; the description is the whole instruction. */
                 reps: {
@@ -353,6 +364,12 @@ export interface BuildAsk {
    * Optional, and empty is a real answer: she can pick her days and press.
    */
   ask?: string;
+  /**
+   * The weights she lifts today, when she gave them on the intake's own step (`domain/statedLifts`,
+   * 2026-10-11) — the one fact about her the model cannot infer and was not reliably handed. Stated
+   * as catalogue ids, so nothing is matched by name.
+   */
+  lifts?: readonly StatedLift[];
   /** Her language, so the DAY NAMES come back in it — they are the only prose in the answer. */
   locale?: 'en' | 'he';
 }
@@ -493,6 +510,7 @@ export function buildWeekRequest({
   weightKg,
   experience,
   ask,
+  lifts,
   locale = 'en',
   cache = true,
 }: BuildAsk & { cache?: boolean }): {
@@ -532,6 +550,8 @@ export function buildWeekRequest({
     ...(weightKg != null ? [`- bodyweight: ${weightKg} kg`] : []),
     ...(experience ? [`- training experience: ${EXPERIENCE_WORDS[experience]}`] : []),
     `- default rep range: ${band} (every exercise you give no range runs on it)`,
+    // A fact about her, in the catalogue's own ids — and what every load of the week is read from.
+    ...(lifts && lifts.length > 0 ? [`- weights they lift today: ${statedLiftsLine(lifts)}`] : []),
     ...(said ? ['', 'WHAT THE ATHLETE ASKED FOR, in their own words:', said] : []),
   ].join('\n');
   return {

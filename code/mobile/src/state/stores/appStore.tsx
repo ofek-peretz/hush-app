@@ -9,6 +9,7 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer, useRe
 import { setLoadRoom } from '@/engine/v5/loadGrid';
 import type { Experience, MuscleStance, OnboardingInputs, PortraitSnapshot, Profile, Program, RepBandChoice, Session, Units } from '@/data/local/models';
 import type { LearnedAboutHer } from '@/domain/coachPlan';
+import { unitsForDevice } from '@/domain/unitsForDevice';
 import { applyLearned } from '@/domain/coachLearned';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { db, SCHEMA_VERSION, type PersistedMode } from '@/data/local/db';
@@ -465,8 +466,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * ⛔ THE ENGINE WALKS HER ROOM'S RUNGS (2026-09-30, `engine/v5/loadGrid`). Set during render, not in
    * an effect: children's effects run BEFORE this provider's, and the first thing Today does is ask for
    * the week's loads. Idempotent — the same units in, the same room out — so a render may repeat it.
+   *
+   * ⛔ BEFORE THERE IS A PROFILE, THE ROOM IS THE ONE THE INTAKE WILL WRITE (2026-10-11, walked in
+   * pounds). With no profile this fell to kilograms, so the Ready screen priced the week on kilogram
+   * rungs — "132 lb" — and the first screen after it, with the profile on disk, said "135". The
+   * intake takes her units from the device (`ConnectHealth`), so the room does too.
    */
-  setLoadRoom(state.profile?.units);
+  setLoadRoom(state.profile?.units ?? unitsForDevice(Localization.getLocales()[0]));
   /*
    * ⛔ THE MODEL IS THE FIXTURE, FULL STOP (founder ruling, 2026-08-25: "איזה V4? אנחנו ב-v8").
    *

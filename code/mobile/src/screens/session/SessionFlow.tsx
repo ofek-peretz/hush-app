@@ -3136,6 +3136,14 @@ function ActiveSet({
             accessibilityRole="button"
             accessibilityLabel={`${eqLabel} · ${loadSpoken}`}
             onPress={() => openField('weight')}
+            /*
+             * ⛔ A BODYWEIGHT LIFT HAS NO LOAD TO TYPE (2026-10-11, walked live). This cell opened the
+             * keypad on a pull-up, took "45", and wrote nothing: the engine has no load axis for a
+             * bodyweight lift (S-51) and `totalFromEquipment` answers null — so the figure never
+             * appeared and the set was logged as bodyweight. A door that opens onto nothing is
+             * worse than a wall. It is a statement here, not a control, and wears no pencil.
+             */
+            disabled={isBodyweight}
             style={[styles.rxCell, slot === 'weight' && styles.rxCellOpen]}
           >
             {/*
@@ -3156,7 +3164,7 @@ function ActiveSet({
             */}
             <View style={styles.rxHeadRow}>
               <Legend size={17} track={0.24} align="center" style={styles.rxHead}>{eqLabel}</Legend>
-              <Icon name="pencil" size={14} color={stage.ink2} strokeWidth={2} />
+              {isBodyweight ? null : <Icon name="pencil" size={14} color={stage.ink2} strokeWidth={2} />}
             </View>
             <View style={styles.rxFigureRow}>
               {isBodyweight ? (

@@ -42,6 +42,7 @@ import { ExerciseLibrary } from '@/screens/profile/ExerciseLibrary';
 import { ImportPlan } from '@/screens/import/ImportPlan';
 import { ImportReview } from '@/screens/import/ImportReview';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
+import { YourLifts } from '@/screens/onboarding/YourLifts';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { BuildingProgrammeView } from '@/screens/onboarding/BuildingProgrammeView';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
@@ -2022,6 +2023,8 @@ export const GALLERY: GalleryEntry[] = [
    */
   // 1.4 · ABOUT YOU + YOUR WEEK — deleted 2026-08-01. Two wheel pickers asking a coach's
   // questions one screen before a coach; the intake prompt asks for both now.
+  // 1.4 is taken again (2026-10-11) by a different question: not a coach's, a FACT only she has.
+  { id: '1.4', label: 'What you lift today', status: 'live', note: 'asked only of an athlete who said she has trained; every field optional — the coach prices every other lift from these', render: () => mount(YourLifts, { inputs: { ...onboardingInputs, experience: 'advanced' } }) },
   { id: '1.5', label: 'Ready', status: 'live', render: () => mount(ProgramCreated, { inputs: onboardingInputs }) },
   { id: '1.5s', label: 'Ready — no free workout left on this phone', of: '1.5', status: 'live', note: 'a phone that trained before this install: the promise counts what is LEFT, and with none it says what comes next', render: () => mountSpent(ProgramCreated, { inputs: onboardingInputs }) },
   /*

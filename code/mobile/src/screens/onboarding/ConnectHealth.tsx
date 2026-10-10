@@ -41,6 +41,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { asksStatedLifts, intakeStepsFor } from '@/domain/statedLifts';
 import { Button, Legend } from '@/components/ds';
 import { Icon } from '@/components/Icon';
 import { useCopy } from '@/i18n/useCopy';
@@ -200,13 +201,22 @@ export function ConnectHealth({ navigation, route }: Props) {
       });
       return;
     }
+    /*
+     * ⛔ AN ATHLETE WHO HAS TRAINED IS ASKED WHAT SHE LIFTS (founder, 2026-10-11 — see `YourLifts`).
+     * The one fact the coach cannot guess, and the one every other load of her week is read from.
+     * A beginner has no numbers to give and goes straight to the week's question.
+     */
+    if (asksStatedLifts(inputs.experience)) {
+      navigation.navigate('YourLifts', { inputs });
+      return;
+    }
     navigation.navigate('PlanBuilder', { inputs });
   }
 
   return (
     <OnboardingScaffold
       onBack={() => navigation.goBack()}
-      progress={{ index: 2, total: 3 }}
+      progress={{ index: 2, total: intakeStepsFor(route.params?.experience) }}
 
       /*
        * ════════════════════════════════════════════════════════════════════════════════════════

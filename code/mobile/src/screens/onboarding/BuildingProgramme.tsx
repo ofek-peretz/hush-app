@@ -46,6 +46,7 @@ import { importFailure, peekImport, settledImport } from '@/domain/pendingImport
 import { AppState, Text, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { seedStatedLoads } from '@/domain/statedLifts';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
 import { BuildingProgrammeView, beatFor, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
@@ -229,6 +230,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       sex: inputs.sex === 'female' ? 'female' : 'male',
       ...(inputs.weightKg != null ? { weightKg: inputs.weightKg } : {}),
       ...(inputs.experience ? { experience: inputs.experience } : {}),
+      ...(inputs.lifts?.length ? { lifts: inputs.lifts } : {}),
       ...(coachAsk ? { ask: coachAsk } : {}),
     }).catch(() => null);
     if (!res) return { ok: false, reason: 'upstream' };
@@ -594,7 +596,8 @@ export function BuildingProgramme({ navigation, route }: Props) {
        * `engineMayRebuild` refuse, and `saveBuiltProgram` puts it on disk — what she is shown is
        * what she trains, because both are the same record.
        */
-      const asked = answer?.ok ? sealAuthored(answer.program) : null;
+      // Her own numbers open her own lifts, whatever the model did with them (`seedStatedLoads`).
+      const asked = answer?.ok ? sealAuthored(seedStatedLoads(answer.program, inputs.lifts ?? [])) : null;
       /* ⚠️ ONLY WHEN THERE WAS A SENTENCE TO LOSE. Pressing through the ask step without writing a
          line is still the coach path (`coachAsk` is `''`), but there is nothing to apologise for
          and nothing to offer again — the local week IS the answer to saying nothing. */

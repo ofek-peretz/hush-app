@@ -44,6 +44,7 @@ import type { MainParamList, HomeTabsParamList, OnboardingParamList } from './na
 import { Authentication } from '@/screens/onboarding/Authentication';
 import { AboutYou } from '@/screens/onboarding/AboutYou';
 import { ConnectHealth } from '@/screens/onboarding/ConnectHealth';
+import { YourLifts } from '@/screens/onboarding/YourLifts';
 import { BuildingProgramme } from '@/screens/onboarding/BuildingProgramme';
 import { ProgramCreated } from '@/screens/onboarding/ProgramCreated';
 import { Home } from '@/screens/home/Home';
@@ -186,6 +187,8 @@ function OnboardingNavigator() {
           permission ask was a fine thing to put in front of a conversation and a poor thing to put
           between her and her programme. That step was the body map; it is the builder now. */}
       <OnboardingStack.Screen name="ConnectHealth" component={ConnectHealth} />
+      {/* Asked only of an athlete who said she has trained — `ConnectHealth` decides (2026-10-11). */}
+      <OnboardingStack.Screen name="YourLifts" component={YourLifts} />
       {/*
         ⛔ THE BUILDER IS AN INTAKE STEP (founder 2026-08-29) — the same dual registration the import
         has, for the same reason: `OnboardingStack` and `MainStack` are separate navigators, so a

@@ -48,6 +48,7 @@ import React, { useState } from 'react';
 import { View, Text, Keyboard, Pressable, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
+import { intakeStepsFor } from '@/domain/statedLifts';
 import { FirstLight } from '@/components/onboarding/FirstLight';
 import { setLocale, currentLocale, type Locale } from '@/i18n';
 import { reloadApp } from '@/app/reload';
@@ -260,7 +261,7 @@ export function AboutYou({ navigation }: Props) {
   return (
     <View style={styles.host}>
     <OnboardingScaffold
-      progress={{ index: 1, total: 3 }}
+      progress={{ index: 1, total: intakeStepsFor(experience) }}
       topAction={
         <Pressable
           accessibilityRole="button"

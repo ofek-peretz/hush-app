@@ -56,6 +56,7 @@ import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
 import { clearImport } from '@/domain/pendingImport';
+import { intakeStepsFor } from '@/domain/statedLifts';
 import type { OnboardingInputs, Program, ProgramDay } from '@/data/local/models';
 import { EXERCISES, exerciseById, exerciseCues, exerciseDisplayName, isSwapOnly, type Exercise, type EquipmentFamily } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
@@ -109,10 +110,12 @@ const DAYS_OPENS_ON = 3;
  * facts a template is handed, and cannot beat the template.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-function AskTheCoach({ opensOn, intake, onBack, onAsk, title }: {
+function AskTheCoach({ opensOn, intake, steps = 3, onBack, onAsk, title }: {
   opensOn: number;
   /** Inside the intake it wears the step chrome; from the Program tab it is a screen of its own. */
   intake: boolean;
+  /** How many steps this athlete's intake has — four when she was asked what she lifts (`YourLifts`). */
+  steps?: number;
   /** The coach track's for-mode asks about HER, by name — the question is not the coach's own week. */
   title?: string;
   onBack: () => void;
@@ -195,8 +198,8 @@ function AskTheCoach({ opensOn, intake, onBack, onAsk, title }: {
     return (
       <OnboardingScaffold
         onBack={onBack}
-        /* 3/3 — the last beat before the payoff. */
-        progress={{ index: 3, total: 3 }}
+        /* The last beat before the payoff — 3 of 3, or 4 of 4 for an athlete asked what she lifts. */
+        progress={{ index: steps, total: steps }}
         keyboard
         title={t('ob.askTitle')}
         headGap={22}
@@ -516,6 +519,8 @@ export interface PlanBuilderViewProps {
    * on disk, and there is none until the last screen, so the button could only ever fail.
    */
   intake?: boolean;
+  /** Intake only: how many steps her intake has (3, or 4 when `YourLifts` was asked). */
+  intakeSteps?: number;
   /** Intake only: she wants the week assembled for her — the third door, and the ordinary path. */
   /** ⚠️ CARRIES THE FREQUENCY IT JUST ASKED FOR — see `AskTheCoach`. It is the one door with nobody
    *  to derive the number from, so it is the one door that asks. */
@@ -652,6 +657,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
         opensOn={props.forAthlete?.days ?? DAYS_OPENS_ON}
         {...(props.forAthlete ? { title: t('coachTrack.coach.pen.askTitle', { name: props.forAthlete.name }) } : {})}
         intake={!!props.intake}
+        steps={props.intakeSteps ?? 3}
         onBack={intakeAsks ? props.onExit : () => setAsking(false)}
         onAsk={(days, ask) => {
           setAsking(false);
@@ -815,7 +821,7 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
       return (
         <OnboardingScaffold
           onBack={props.onExit}
-          progress={{ index: 3, total: 3 }}
+          progress={{ index: props.intakeSteps ?? 3, total: props.intakeSteps ?? 3 }}
 
           /* The legend names the thing, the title asks the one question about it: HER WEEK — who
              writes it? A title that tried to carry both would be a sentence, and this step is a
@@ -1555,6 +1561,7 @@ export function PlanBuilder({ navigation, route }: Props) {
     <PlanBuilderView
       draft={draft}
       intake={intake}
+      intakeSteps={intakeStepsFor(inputs?.experience)}
       equipment={app.profile?.equipment}
       /*
        * ⛔ THE WAY BACK IS ONE STEP IN THE INTAKE, AND THE WHOLE SCREEN OUTSIDE IT.

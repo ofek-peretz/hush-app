@@ -88,7 +88,10 @@ describe('1 · ⛔ B-1 cancelled — the model writes the opening load from what
     expect(lift.properties.load.type).toBe('number');
     expect(lift.properties.load.description).toMatch(/kg/);
     expect(lift.properties.load.description).toMatch(/ONE dumbbell/);
-    expect(lift.properties.load.description).toMatch(/^Optional\./);
+    // Optional in the SCHEMA (the `required` list below). The description stopped opening on the
+    // word on 2026-10-11: it now says exactly when to omit, because "optional" was being read as
+    // "only the lifts she named" — see `theCoachIsToldWhatSheLifts`.
+    expect(lift.properties.load.description).toMatch(/Omit it only for/);
     expect(lift.required).toEqual(['ex', 'sets']);
   });
 

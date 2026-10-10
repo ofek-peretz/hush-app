@@ -164,6 +164,9 @@ export type OnboardingParamList = {
    * was opened from the Program tab, where there is no intake to finish.
    */
   PlanBuilder: { inputs: OnboardingInputs };
+  /** The weights she lifts today — asked only of an athlete who said she has trained
+   *  (`screens/onboarding/YourLifts`, 2026-10-11). Between the Health step and the week's question. */
+  YourLifts: { inputs: OnboardingInputs };
   // `previewWrist` is the v7 GALLERY's seam and nothing else: 1.3 draws its wrist row from
   // WCSession, which a browser harness has no way to produce, so the row could only ever be looked
   // at ABSENT — the one state it says nothing in. Never passed by the app; on a device the paired

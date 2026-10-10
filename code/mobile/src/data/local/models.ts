@@ -212,6 +212,10 @@ export interface OnboardingInputs {
   /** How long she has for one session, when she told the coach so in the intake (`LearnedAboutHer`).
    *  Absent => the 60-minute default. No screen asks for it; only the conversation can produce it. */
   workoutMinutes?: number;
+  /** The weights she lifts today, when the intake's own step asked and she answered
+   *  (`domain/statedLifts`, 2026-10-11). Read by the build and by nothing after it: from her first
+   *  set on, a lift is priced from her own sets. */
+  lifts?: { exerciseId: string; kg: number; reps?: number }[];
 }
 
 /** A frame-owned slot in a program day. */

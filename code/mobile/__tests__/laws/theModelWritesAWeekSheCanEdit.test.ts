@@ -684,7 +684,8 @@ describe('4 · it can never strand her — and it can never fail her in silence'
      */
     const building = read('src/screens/onboarding/BuildingProgramme.tsx');
     expect(building).toContain("import { sealAuthored } from '@/domain/planBuilder';");
-    expect(building).toContain('const asked = answer?.ok ? sealAuthored(answer.program) : null;');
+    // (2026-10-11: her stated lifts are seeded onto the week first — `theCoachIsToldWhatSheLifts` — and it is still sealed.)
+    expect(building).toContain('const asked = answer?.ok ? sealAuthored(seedStatedLoads(answer.program, inputs.lifts ?? [])) : null;');
     expect(building).toContain('await app.saveBuiltProgram(asked);');
     // …and the save is inside the branch that has a week, before the frequency is re-stamped from it
     expect(building).toMatch(/if \(asked\) \{\s*await app\.saveBuiltProgram\(asked\);\s*const wrote = asked\.days/);

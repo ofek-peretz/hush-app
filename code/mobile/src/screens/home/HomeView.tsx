@@ -406,6 +406,10 @@ function movedFigure(kg: number, units: 'kg' | 'lb'): string {
   return `${LRI}${kg > 0 ? '+' : '\u2212'}${Number(by.toFixed(2))} ${unitLabel(units)}${PDI}`;
 }
 
+/** The longest day name the Begin button carries whole on a 375-point screen; past it the
+ *  button says the act and the card's headline keeps the name. */
+const BEGIN_NAME_MAX = 18;
+
 export function HomeView(props: HomeViewProps) {
   const { t } = useCopy();
   const reduced = useReducedMotion();
@@ -1170,7 +1174,13 @@ export function HomeView(props: HomeViewProps) {
                   variant="primary"
                   size="lg"
                   block
-                  label={t('home.begin', { name: bidi(props.dayName) })}
+                  /*
+                   * ⛔ THE BUTTON IS NEVER CUT (2026-10-11, walked live). A day the model names runs
+                   * long — "דחיפה — חזה, כתפיים ויד אחורית" — and the one act on Today read
+                   * "התחל דחיפה — חזה, כתפיים ויד אחו…". The name is the card's own headline, two
+                   * lines above; past the length a button holds, the button says the act alone.
+                   */
+                  label={props.dayName.length > BEGIN_NAME_MAX ? t('home.beginWorkout') : t('home.begin', { name: bidi(props.dayName) })}
                   onPress={props.onStart}
                   leading={<Icon name="play" size={16} color={color.onAccent} />}
                 />
