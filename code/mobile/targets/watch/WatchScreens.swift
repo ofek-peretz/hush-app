@@ -441,6 +441,10 @@ private struct TopStrip: View {
   /// A figure at the END of the row, still clear of the clock — the glance screen's elapsed.
   var trailing: String? = nil
   var controlsHint: Bool = false
+  /// The FERROX mark leading the row — Home's signature (2026-10-10). The wrist's first face named
+  /// the workout and never the product; the mark stands where watchOS puts an app's own title,
+  /// level with the clock, and costs the legend beside it nothing.
+  var mark: Bool = false
   @Environment(\.goControls) private var goControls
 
   /// Her word for it (2026-09-09): this was the literal "LIFT" on a Hebrew wrist, on the one strip
@@ -453,6 +457,7 @@ private struct TopStrip: View {
       // No spacing of its own: the row's one gap is the Spacer's. Seven points here, on top of it,
       // were exactly what kept the word off a 40 mm rest strip ("2/6" where "תרגיל 2/6" fits).
       HStack(spacing: 0) {
+        if mark { FerroxMark().padding(.trailing, Fit.s(6)) }
         if let full {
           if controlsHint {
             /*
@@ -763,14 +768,8 @@ private struct DrawCheck: View {
   }
 }
 
-/**
- * The brand's range mark, small enough to sit beside a wordmark: a rule between two end ticks.
- *
- * ⚠️ CREAM, NOT OCHRE. I reached for ochre because that is how I had drawn it — and this palette
- * says in its own words that *"ochre is retired: v7's tokens.ts holds none"*. The phone's
- * `RangeMark` defaults to `color.textPrimary` too, so cream is not a compromise here; it is what
- * the component actually is on both surfaces.
- */
+// MARK: The brand
+
 /// THE FERROX MARK (2026-09-16) — two horns whose flat middle is a bar, with a notch that cradles
 /// the dot. Geometry from `brand/logo/export/ferrox-mark.svg` (box 9.5,16 · 81×59); do not redraw.
 private struct FerroxHorns: Shape {
@@ -803,31 +802,128 @@ private struct FerroxDot: Shape {
   }
 }
 
-private struct RangeGlyph: View {
+/// The mark at a width (written at the 40 mm size, like every number here); its height follows.
+private struct FerroxMark: View {
+  var width: CGFloat = 18
   var body: some View {
     ZStack {
       FerroxHorns().fill(Palette.ink0)
       FerroxDot().fill(Palette.signal)
     }
-    .frame(width: Fit.s(18), height: Fit.s(18) * 59 / 81)
+    .frame(width: Fit.s(width), height: Fit.s(width) * 59 / 81)
+    .accessibilityHidden(true)
   }
 }
 
-/// WT6's seal — the tally mark from the mock: a moss horizontal rule with a short upstroke at each
-/// end (the "closed" counting mark). Not a check: a check says "correct"; this says "counted, and
-/// filed." Drawn from three rects so it scales cleanly on either case.
-private struct TallyMark: View {
+/*
+ * ════ THE NAME, DRAWN ════ (founder, 2026-10-10: *"אני לא רואה את השם או הלוגו של האפליקציה שלנו
+ * מופיעה במסכי השעון… תראה למשל את מסך הסיום, מה קשור המשקולת הזאת? הסמל שלנו אחר בכלל"*)
+ *
+ * He was right twice. The closing screen was sealed with a rule between two end ticks — Hush's
+ * old range mark, kept as a "tally" through the rename — and on glass a rule with a tick at each
+ * end is a dumbbell, which is nobody's product. And the name stood on the wrist only as six system
+ * capitals with their letters pushed apart: FERROX has a wordmark, and it is not San Francisco.
+ *
+ * The wordmark is geometry from `brand/logo/export/ferrox-wordmark.svg` (box −2,−4 · 704×108, the
+ * phone's `FerroxWordmark`): do not redraw it. It is two shapes because it has two kinds of part —
+ * strokes that overlap each other (an even-odd fill would punch a hole wherever F's stem meets its
+ * arm), and three counters that ARE holes (the bowls of the Rs, the O).
+ */
+private struct FerroxWordStrokes: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 704, rect.height / 108)
+    let ox = rect.minX + (rect.width - 704 * s) / 2
+    let oy = rect.minY + (rect.height - 108 * s) / 2
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + (x + 2) * s, y: oy + (y + 4) * s) }
+    func bar(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
+      CGRect(origin: p(x, y), size: CGSize(width: w * s, height: h * s))
+    }
+    var path = Path()
+    // F
+    path.addRect(bar(0, 0, 16, 100)); path.addRect(bar(0, 0, 66, 16)); path.addRect(bar(0, 40, 56, 16))
+    // E
+    path.addRect(bar(110, 0, 16, 100)); path.addRect(bar(110, 0, 68, 16))
+    path.addRect(bar(110, 40, 60, 16)); path.addRect(bar(110, 84, 68, 16))
+    // R · R — the stem and the leg; the bowl is a counter (`FerroxWordBowls`)
+    for x: CGFloat in [222, 346] {
+      path.addRect(bar(x, 0, 16, 100))
+      path.move(to: p(x + 36, 42)); path.addLine(to: p(x + 54.4, 42))
+      path.addLine(to: p(x + 80, 100)); path.addLine(to: p(x + 61.6, 100)); path.closeSubpath()
+    }
+    // X — two strokes wound the same way, so where they cross stays filled
+    path.move(to: p(616, 0)); path.addLine(to: p(635.2, 0)); path.addLine(to: p(700, 100)); path.addLine(to: p(680.8, 100)); path.closeSubpath()
+    path.move(to: p(680.8, 0)); path.addLine(to: p(700, 0)); path.addLine(to: p(635.2, 100)); path.addLine(to: p(616, 100)); path.closeSubpath()
+    return path
+  }
+}
+
+/// The wordmark's counters — filled even-odd, so each inner contour is a hole in its outer one.
+private struct FerroxWordBowls: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = min(rect.width / 704, rect.height / 108)
+    let ox = rect.minX + (rect.width - 704 * s) / 2
+    let oy = rect.minY + (rect.height - 108 * s) / 2
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + (x + 2) * s, y: oy + (y + 4) * s) }
+    // the bowl of an R: a bar that turns through a half circle — r 29 outside, r 13 inside
+    let contours: [(left: CGFloat, top: CGFloat, r: CGFloat)] = [(0, 0, 29), (16, 16, 13)]
+    var path = Path()
+    for x: CGFloat in [222, 346] {
+      for c in contours {
+        path.move(to: p(x + c.left, c.top))
+        path.addLine(to: p(x + 48, c.top))
+        path.addArc(center: p(x + 48, 29), radius: c.r * s, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: p(x + c.left, 58 - c.top))
+        path.closeSubpath()
+      }
+    }
+    // O
+    path.addEllipse(in: CGRect(origin: p(470, -1.5), size: CGSize(width: 102 * s, height: 103 * s)))
+    path.addEllipse(in: CGRect(origin: p(486, 14.5), size: CGSize(width: 70 * s, height: 71 * s)))
+    return path
+  }
+}
+
+private struct FerroxWordmark: View {
+  /// Its width at the 40 mm size; the height follows at 108/704.
+  var width: CGFloat = 52
   var body: some View {
     ZStack {
-      Rectangle().fill(Palette.signal).frame(width: Fit.s(30), height: Fit.s(1.5)) // the rule
-      HStack(spacing: 0) {
-        Rectangle().fill(Palette.signal).frame(width: Fit.s(1.5), height: Fit.s(10))
-        Spacer(minLength: 0)
-        Rectangle().fill(Palette.signal).frame(width: Fit.s(1.5), height: Fit.s(10))
-      }
-      .frame(width: Fit.s(30), height: Fit.s(12))
+      FerroxWordStrokes().fill(Palette.ink0)
+      FerroxWordBowls().fill(Palette.ink0, style: FillStyle(eoFill: true))
     }
-    .frame(width: Fit.s(30), height: Fit.s(12))
+    .frame(width: Fit.s(width), height: Fit.s(width) * 108 / 704)
+  }
+}
+
+/*
+ * THE BRAND, WHOLE: the mark and the name as the phone's Home sets them (`HomeView`'s brand row) —
+ * 30 : 84 wide, a gap of three tenths of the mark, centred on each other.
+ *
+ * ⛔ LEFT TO RIGHT IN EVERY LANGUAGE. The phone's lockup is an LTR island ("Brand lockup stays LTR
+ * in every locale rather than mirroring"), and on the wrist the reason is harder still: a
+ * right-to-left layout MIRRORS a shape's path (the lift-done check, 2026-10-10), so a wordmark left
+ * to the screen's direction would read XORREF in mirror writing on a Hebrew wrist.
+ *
+ * It is turned back the way the check is: the direction is READ and the whole row is flipped once
+ * more — the mark returns to the left, the letters to themselves. No second `layoutDirection` is
+ * written; the wrist still turns around exactly once, at the root.
+ *
+ * Where it stands: on the wrist's COVERS — the face that waits for the phone, and the closing of a
+ * workout. The mark alone leads Home's header. Never on a set, a rest or a crossing: every point of
+ * those belongs to the lift, and the cream and the moss already say whose screen it is.
+ */
+private struct FerroxLockup: View {
+  /// The mark's width at the 40 mm size; the name follows at 2.8×.
+  var mark: CGFloat = 18
+  @Environment(\.layoutDirection) private var direction
+  var body: some View {
+    HStack(alignment: .center, spacing: Fit.s(mark * 0.3)) {
+      FerroxMark(width: mark)
+      FerroxWordmark(width: mark * 2.8)
+    }
+    .scaleEffect(x: direction == .rightToLeft ? -1 : 1, y: 1)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("FERROX")
   }
 }
 
@@ -1402,11 +1498,9 @@ struct WatchRootView: View {
     case .idle:
       VStack(spacing: Fit.s(10)) {
         // The wordmark, not a dumbbell — this is the first face the wrist ever shows, and a
-        // borrowed SF glyph is nobody's product (design pass 2026-09-09).
-        HStack(spacing: Fit.s(6)) {
-          RangeGlyph()
-          Text("FERROX").font(.system(size: Fit.s(14), weight: .semibold)).tracking(Fit.s(2)).foregroundStyle(Palette.ink0)
-        }
+        // borrowed SF glyph is nobody's product (design pass 2026-09-09). Drawn, since 2026-10-10:
+        // the name was six system capitals here, and FERROX has letters of its own.
+        FerroxLockup(mark: 24)
         Text(WatchCopy.idleWaiting).font(.system(size: Fit.s(14), weight: .medium)).foregroundStyle(Palette.ink1)
         /*
          * The wire's testimony (build-59 silence), and it names the FAULT now rather than the
@@ -1550,7 +1644,7 @@ struct StartScreen: View {
     // measures the button first; the headline scales into what is left rather than the reverse.
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
-        TopStrip(text: WatchCopy.firstWorkout)
+        TopStrip(text: WatchCopy.firstWorkout, mark: true)
         Spacer(minLength: Fit.s(2))
         VStack(alignment: .leading, spacing: Fit.s(8)) {
           Text(WatchCopy.findYourWeights)
@@ -1600,7 +1694,7 @@ struct StartScreen: View {
      */
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
-        TopStrip(text: WatchCopy.upNext.uppercased())
+        TopStrip(text: WatchCopy.upNext.uppercased(), mark: true)
         Spacer(minLength: Fit.s(2))
         VStack(alignment: .leading, spacing: Fit.s(6)) {
           Text(resting ? WatchCopy.recoveryTitle : lobby.workoutName)
@@ -3486,18 +3580,16 @@ struct CardioCompleteScreen: View {
      * Design pass 2026-09-09: the wordmark keeps its place and gives back its row. It moves into
      * the header lane — the corner every other screen spends on a legend, and the one this screen
      * left empty while spending a centred line of its own on the mark. The row it frees goes to
-     * the figures: the hero to 48 pt, the three under it to 24. The seal between them is WT6's
-     * own tally — counted, and filed — so the two closings share one mark, and a figure the run
-     * never measured is drawn in the superseded ink rather than in cream.
+     * the figures: the hero to 48 pt, the three under it to 24. A figure the run never measured is
+     * drawn in the superseded ink rather than in cream.
+     *
+     * 2026-10-10: the name in that lane is the drawn wordmark (`FerroxLockup`), and the "tally"
+     * that stood between the hero and its row is gone from both closings — the founder read it as
+     * what it looked like, a dumbbell, and it was not our symbol.
      */
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
-        ClockLane {
-          HStack(spacing: Fit.s(6)) {
-            RangeGlyph()
-            Text("FERROX").font(.system(size: Fit.s(12), weight: .semibold)).tracking(Fit.s(1.6)).foregroundStyle(Palette.ink0)
-          }
-        }
+        ClockLane { FerroxLockup() }
         .frame(height: Fit.s(Wrist.head))
         Spacer(minLength: Fit.s(2))
         /*
@@ -3532,7 +3624,9 @@ struct CardioCompleteScreen: View {
               .foregroundStyle(Palette.ink0)
               .lineLimit(1).minimumScaleFactor(0.5)
           }
-          TallyMark()
+          // A plain rule, where the old tally stood: it only parts the hero from its row. The brand
+          // is the lockup in the header — one mark on a screen, and it is ours.
+          Rectangle().fill(Palette.ink0.opacity(0.18)).frame(width: Fit.s(30), height: Fit.s(1))
           // The row carries whichever of the two did NOT take the hero, so nothing is said twice.
           HStack(spacing: Fit.s(4)) {
             // ⓘ Parenthesised: `??` binds LOOSER than `>`, so `a ?? 0 > 0` is `a ?? (0 > 0)`.
@@ -3722,8 +3816,8 @@ struct CompleteScreen: View {
     withAnimation { reading = false }
   }
 
-  /// WT6 · SESSION EARNED. The tally mark, the quiet serif "That's the work.", and the four-metric
-  /// row (MIN · KCAL · T · UP) the mock centres in the case — no "SAVED" legend, no workout name.
+  /// WT6 · SESSION EARNED. The brand in the header, the workout's name in the serif, and the row of
+  /// figures the mock centres in the case — no "SAVED" legend.
   /// The one exit still passes through beat 4 when this session crossed a mark.
   private var result: some View {
     /*
@@ -3741,15 +3835,23 @@ struct CompleteScreen: View {
      */
     WristScreen {
       VStack(spacing: 0) {
-        TopStrip()
+        /*
+         * ⛔ THE CLOSING IS SIGNED WITH OUR OWN NAME (founder, 2026-10-10: *"מה קשור המשקולת הזאת?
+         * הסמל שלנו אחר בכלל"*). A moss rule with a tick at each end stood centred above the name —
+         * Hush's range mark, called a tally here, and to anyone who had not read this file a
+         * dumbbell. It is gone, and so is the row it took: the brand stands in the header lane,
+         * level with the clock, exactly where the run's closing has carried it since 2026-09-09 —
+         * and the row goes back to a name that runs to two lines on a 40 mm case.
+         */
+        ClockLane { FerroxLockup() }
+          .frame(height: Fit.s(Wrist.head))
         Spacer(minLength: Fit.s(2))
         VStack(spacing: Fit.s(10)) {
-          TallyMark()
           /*
            * ⛔ THE WORKOUT'S NAME, NOT A MOOD (founder 2026-08-04, applying the phone's poster to the
            * wrist). `WireMirror.workoutName` has ridden the wire the whole time and this screen never
-           * drew it: **"That's the work." is a mood; "Lower A" is a fact**, and the tally mark above
-           * it has already said the work is done.
+           * drew it: **"That's the work." is a mood; "Lower A" is a fact**, and the closing itself
+           * has already said the work is done.
            *
            * ⚠️ IT IS ON THE MIRROR, NOT ON THE SUMMARY. I wrote `summary?.workoutName` and that field
            * does not exist — `WireSummary` carries the figures, `WireLobby` and `WireRecord` carry a

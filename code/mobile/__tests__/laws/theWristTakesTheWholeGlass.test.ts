@@ -150,15 +150,16 @@ describe('⛔ a Hebrew wrist is set in Hebrew', () => {
   it('no legend is letter-spaced, and a legend that carries a word is not set in a face with no Hebrew', () => {
     expect(SCREENS).toContain('static func track(_ v: CGFloat) -> CGFloat { WatchCopyStore.isRTL ? 0 : Fit.s(v) }');
     expect(SCREENS).toContain('static var legendDesign: Font.Design { WatchCopyStore.isRTL ? .default : .monospaced }');
-    // Every spaced line goes through the one helper — except the wordmark, which is Latin by name.
+    // Every spaced line goes through the one helper. (The wordmark was the one exception while it
+    // was typed; it is drawn now — `theWristCarriesOurOwnMark`.)
     const spaced = SCREENS.split('\n').filter((l) => /\.tracking\(/.test(l) && !/^\s*(\*|\/\/|\/\*)/.test(l));
-    expect(spaced.filter((l) => !l.includes('Wrist.track(') && !l.includes('"FERROX"'))).toEqual([]);
+    expect(spaced.filter((l) => !l.includes('Wrist.track('))).toEqual([]);
     // …and none of them pairs a word with the monospaced face.
     expect(spaced.filter((l) => l.includes('design: .monospaced') && l.includes('Wrist.track('))).toEqual([]);
   });
 
   it('a check is the same mark in every script — a right-to-left layout does not draw it backwards', () => {
-    const check = flat(between(SCREENS, 'private struct DrawCheck: View', '* The brand\'s range mark'));
+    const check = flat(between(SCREENS, 'private struct DrawCheck: View', '// MARK: The brand'));
     expect(check).toContain('.scaleEffect(x: direction == .rightToLeft ? -1 : 1, y: 1)');
     // Read, never set: the wrist still turns around exactly once, at the root.
     expect(SCREENS.match(/\.environment\(\\\.layoutDirection/g)).toHaveLength(1);

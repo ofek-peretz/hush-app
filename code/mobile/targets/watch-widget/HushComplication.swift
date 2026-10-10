@@ -104,7 +104,8 @@ struct HushProvider: TimelineProvider {
 
 // MARK: Marks
 
-/// The brand's range mark — a rule between two end ticks — at complication scale.
+/// The brand's mark at complication scale. Both shapes in one ink: a face tints a complication to
+/// its own colour, so the dot cannot be told by moss here — it is told by the notch that holds it.
 /// THE FERROX MARK (2026-09-16) — two horns whose flat middle is a bar, with a notch that cradles
 /// the dot. Geometry from `brand/logo/export/ferrox-mark.svg` (box 9.5,16 · 81×59); do not redraw.
 private struct FerroxHorns: Shape {

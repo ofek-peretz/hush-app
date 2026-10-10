@@ -35,6 +35,18 @@ struct GalleryRoot: View {
   private let frame = ProcessInfo.processInfo.environment["HUSH_FRAME"] ?? "02-set-first"
   private let direct = ProcessInfo.processInfo.environment["HUSH_DIRECT"] ?? "-"
 
+  init(model: WatchModel) {
+    _model = ObservedObject(wrappedValue: model)
+    // `00-idle` is the face that waits for the phone: NO frame is applied, so the model stays where
+    // a fresh install leaves it. Only her language is adopted — and before the first render, since
+    // the copy store is not something a view observes.
+    if ProcessInfo.processInfo.environment["HUSH_FRAME"] == GalleryRoot.idle,
+       let home = GALLERY_FRAMES["01-home"], let envelope = WatchWire.decodeEnvelope(home) {
+      WatchCopyStore.adopt(envelope.copy)
+    }
+  }
+  private static let idle = "00-idle"
+
   var body: some View {
     ZStack {
       if direct == "-" {
@@ -68,6 +80,7 @@ struct GalleryRoot: View {
   }
 
   private func feed() {
+    guard frame != GalleryRoot.idle else { return }
     guard let template = GALLERY_FRAMES[frame] else {
       fault = "no frame: \(frame)"
       return

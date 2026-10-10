@@ -9,10 +9,10 @@ module.exports = {
   // The companion link (WKCompanionAppBundleIdentifier = com.hushfitness.app) is in
   // targets/watch/Info.plist.
   bundleIdentifier: '.watch',
-  // Placeholder AppIcon (opaque, no branding). watchOS REFUSES to install an app
-  // with no AppIcon set ("This app could not be installed at this time"), so this
-  // is required to install — apple-targets generates the watch icon set from it.
-  // Replace with the real brand icon before TestFlight.
+  // The FERROX mark on the stage (2026-09-16), re-cut 2026-10-10 for the watch's circular mask —
+  // see `scripts/render-watch-icon.py`, which draws it from `brand/logo/export/ferrox-app-icon.svg`.
+  // Opaque, 1024². watchOS REFUSES to install an app with no AppIcon set ("This app could not be
+  // installed at this time"); apple-targets generates the watch icon set from this one file.
   icon: './icon.png',
   deploymentTarget: '10.0',
   // WidgetKit: the app asks the face to redraw after it writes the snapshot (2026-09-09).

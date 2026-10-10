@@ -98,6 +98,8 @@ const frames = {
  */
 const shots = Object.keys(frames).map((name) => [name, name, '-', '-', '3']);
 shots.push(
+  // The face that waits for the phone — no frame at all (`GalleryApp.swift` adopts only her language).
+  ['00-idle', '00-idle', '-', '-', '3'],
   ['18-edit-reps', '03-set-history', 'reps', '-', '3'],
   ['19-edit-weight', '04-set-moved', 'weight', '-', '3'],
   ['20-edit-bodyweight', '06-set-bodyweight', 'reps', '-', '3'],
