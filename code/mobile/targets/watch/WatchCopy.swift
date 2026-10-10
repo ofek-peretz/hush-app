@@ -157,6 +157,9 @@ enum WatchCopy {
   // 2026-10-10 so does the rep band, on the reps (the key keeps its name; the hint names both).
   static var aSide: String { L("aSide", "a side") }
   static var tapWeightToEdit: String { L("tapWeightToEdit", "Tap a number to edit") }
+  /// The editor's strip until she has said the reps of a working set (2026-10-10) — the question
+  /// the coach used to ask aloud, asked where it is now answered.
+  static var howManyReps: String { L("howManyReps", "How many reps?") }
   // Instruction-first execution (verb + state). Verbs are uppercase legends; confirmations are quiet.
   static var exLoad: String { L("exLoad", "LOAD") }
   static var exUse: String { L("exUse", "USE") }

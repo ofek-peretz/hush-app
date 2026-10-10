@@ -42,46 +42,118 @@ const between = (src: string, from: string, to: string): string => {
   return src.slice(a, b);
 };
 
-describe('1 · how many she did: two presses and the crown', () => {
+describe('1 · how many she did: SAID on every working set (founder, 2026-10-10)', () => {
+  /*
+   * I had reported that a press on Complete set with nothing dialled writes the floor of the band.
+   * His ruling: *"למה שפשוט לא נעשה שחובה להזין את החזרות בכל סט וסט."* On the wrist a working set
+   * cannot be logged until she has turned the crown on its reps.
+   */
   const screens = read('WatchScreens.swift');
   const set = between(screens, 'struct ActiveSetScreen: View', '// MARK: 03 · WT3');
+  const model = read('WatchModel.swift');
 
-  it('⛔ the rep band is a door of its own, and it opens the editor ON THE REPS', () => {
-    const band = between(set, '@ViewBuilder private var bandLine: some View', 'private var setFigures: some View');
-    expect(band).toContain('Button { TapGate.pass { enterEdit(.reps) } } label: {');
-    // …and the load is still the door to the load.
-    expect(set).toContain('Button { TapGate.pass { enterEdit(.weight) } } label: {');
+  it('⛔ one rule says which sets must be told: not a hold, not a carry, not a warm-up step — everything else', () => {
+    const rule = flat(between(model, 'static func mustStateReps(_ m: WireMirror, draft: EditDraft?) -> Bool', '/// The current shown weight/reps'));
+    expect(rule).toContain('if m.holdSeconds != nil || m.holdMetres != nil { return false }');
+    expect(rule).toContain('if m.isWarmup == true { return false }');
+    expect(rule).toContain('return draft?.repsStated != true');
+    // Asked by the stage (what its button does) and by the model (what may leave).
+    expect(set).toContain('private var mustState: Bool { WatchModel.mustStateReps(mirror, draft: draft) }');
+    const complete = between(model, 'func completeSet()', 'func ready()');
+    expect(complete).toContain('guard !WatchModel.mustStateReps(m, draft: editDraft) else { return }');
+    expect(complete.indexOf('mustStateReps')).toBeLessThan(complete.indexOf('engine.completeSet'));
+    expect(complete.indexOf('mustStateReps')).toBeLessThan(complete.indexOf('sendExpectingReply'));
   });
 
-  it('⛔ the editor\'s own Complete set commits her figures AND logs them, in that order', () => {
-    const footer = between(set, 'private var footer: some View', 'private func enterEdit');
-    const editing = between(footer, '} else if editing {', '} else {');
-    expect(flat(editing)).toContain('StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) { commit() onComplete() }');
+  it('⛔ Complete set on the live stage ASKS: it opens the editor on the reps, and writes nothing', () => {
+    expect(flat(between(set, 'private func pressComplete()', 'private func enterEdit'))).toContain('if mustState { enterEdit(.reps) } else { onComplete() }');
+    const footer = between(set, 'private var footer: some View', 'private func pressComplete()');
+    // Both live buttons go through it — the lone one, and the one beside Ready.
+    expect(footer.match(/action: pressComplete\)/g)).toHaveLength(2);
+    expect(footer).not.toMatch(/action: onComplete\)/);
+  });
+
+  it('⛔ the reps are ASLEEP until her hand turns the crown on them: a dash, no figure she did not put there', () => {
+    expect(set).toContain('value: stated ? "\\(Int(r))" : "–", active: bodyweight || field == .reps, asleep: !stated)');
+    // Opened asleep on every set that must be told; awake only where nothing has to be said.
+    const enter = flat(between(set, 'private func enterEdit(_ f: EditField)', 'private func commit()'));
+    expect(enter).toContain('r = Double(seedReps)');
+    expect(enter).toContain('stated = !mustState');
+    // The crown: a value that differs from the figure the row holds is her hand; the first such
+    // click brings the figure in where it stands, and only the clicks after it move it.
+    const crown = flat(between(set, '.onChange(of: crown) { _, v in', '.onChange(of: field)'));
+    expect(crown).toContain('guard editing, crownField == field else { return }');
+    expect(crown).toContain('let next = max(0, v.rounded()) guard next != r else { return } crownMoved = true if stated { r = next } else {');
+    expect(crown).toContain('stated = true crown = r');
+    // Nothing else on the screen says the reps for her.
+    expect(set.match(/stated = true/g)).toHaveLength(1);
+    expect(set.match(/stated = !mustState/g)).toHaveLength(1);
+  });
+
+  it('⛔ and the editor\'s Complete set is not a button until then — it refuses aloud, and says what it waits for', () => {
+    const footer = between(set, 'private var footer: some View', 'private func pressComplete()');
+    const editing = flat(between(footer, '} else if editing {', '// Mock WT2'));
+    expect(editing).toContain('if stated { StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) { commit() onComplete() } } else {');
+    expect(editing).toContain('field = .reps crownMoved = false WatchHaptics.play(.notYet) } .opacity(0.35)');
     // The quiet way back: figures dialled before a set, and an editor opened by mistake.
-    expect(flat(editing)).toContain('StageButton(title: WatchCopy.save, kind: .quiet, height: Wrist.action, fontSize: 15) { commit() }');
-    // Nothing on this screen is a "Done" that only closes the editor any more.
-    expect(set).not.toContain('WatchCopy.done');
-    // `commit` hands the model the figures before `completeSet` reads them (both on the main queue).
-    expect(flat(between(set, 'private func commit()', '\n}'))).toContain('onSave(bodyweight ? nil : w, Int(r)) editing = false');
-    const model = read('WatchModel.swift');
+    expect(editing).toContain('StageButton(title: WatchCopy.save, kind: .quiet, height: Wrist.action, fontSize: 15) { commit() }');
+    expect(read('WatchHaptics.swift')).toContain('return [Beat(delay: 0, type: .retry)]');
+    // Until she has said them, the strip asks the coach's own question.
+    expect(set).toContain('TopStrip(text: (stated ? WatchCopy.editSet : WatchCopy.howManyReps).uppercased())');
+  });
+
+  it('what she said is what is written, and it travels with the draft — a save, a failed press, the stage coming back', () => {
+    expect(flat(between(set, 'private func commit()', '\n}'))).toContain('onSave(bodyweight ? nil : w, Int(r), stated) editing = false');
+    expect(flat(model)).toContain('func saveEdit(weight: Double?, reps: Int, repsStated: Bool) { editDraft = EditDraft(weight: weight, reps: max(0, reps), repsStated: repsStated) recompute() }');
     const complete = between(model, 'func completeSet()', 'func ready()');
     expect(complete).toContain('let weight = editDraft?.weight ?? m.targetWeight');
     expect(complete).toContain('let reps = editDraft?.reps ?? m.targetReps');
-  });
-
-  it('5 · a figure she dialled is what the row shows — the number Complete set is about to write', () => {
+    // A figure she said is what the live row shows; a draft of the load alone leaves the band up.
     const band = between(set, '@ViewBuilder private var bandLine: some View', 'private var setFigures: some View');
-    expect(band).toContain('Text(draft != nil ? "× \\(shownReps)" : (hi > lo ? "× \\(lo)–\\(hi)" : "× \\(lo)"))');
-    expect(band).toContain('.foregroundStyle(draft != nil ? Palette.ink0 : Palette.ink1)');
+    expect(band).toContain('Text(draft?.repsStated == true ? "× \\(shownReps)" : (hi > lo ? "× \\(lo)–\\(hi)" : "× \\(lo)"))');
   });
 
-  it('the hint names both doors, in both languages and both genders', () => {
+  it('the doors: the band opens the editor on the reps, the load on the load; nothing here is a "Done" that only closes', () => {
+    const band = between(set, '@ViewBuilder private var bandLine: some View', 'private var setFigures: some View');
+    expect(band).toContain('Button { TapGate.pass { enterEdit(.reps) } } label: {');
+    expect(set).toContain('Button { TapGate.pass { enterEdit(.weight) } } label: {');
+    expect(set).not.toContain('WatchCopy.done');
+  });
+
+  it('a new set is a new screen — reps said for one set never carry into the next', () => {
+    const stage = between(screens, 'case let .activeSet(m, draft):', 'case let .interRest(m):');
+    expect(stage).toContain('ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,');
+    expect(stage).toContain('.id(m.globalIndex)');
+  });
+
+  it('the words, in both languages and both genders', () => {
     const he = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'i18n', 'locales', 'he.json'), 'utf8')).watch;
     const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'i18n', 'locales', 'en.json'), 'utf8')).watch;
+    expect(he.howManyReps).toBe('כמה חזרות?');
+    expect(en.howManyReps).toBe('How many reps?');
     expect(he.tapWeightToEdit).toBe('הקש על מספר כדי לעדכן');
     expect(he.tapWeightToEdit_female).toBe('הקישי על מספר כדי לעדכן');
     expect(en.tapWeightToEdit).toBe('Tap a number to edit');
     expect(read('WatchCopy.swift')).toContain('L("tapWeightToEdit", "Tap a number to edit")');
+    expect(read('WatchCopy.swift')).toContain('L("howManyReps", "How many reps?")');
+  });
+});
+
+describe('open training is not offered on the wrist (founder, 2026-10-10: "תבטל את אימון חופשי")', () => {
+  const screens = read('WatchScreens.swift');
+  const start = between(screens, 'struct StartScreen: View', 'private struct WeekRail');
+
+  it('⛔ neither face of Home has the door — and nothing sets the count that opened it', () => {
+    expect(start).not.toContain('WatchCopy.cardio');
+    expect(start).not.toMatch(/counting = true/);
+    // One chooser where there were two chips, so it says the whole thing.
+    expect(start.match(/WatchCopy\.chooseWorkout/g)).toHaveLength(2);
+    expect(start).not.toContain('WatchCopy.another');
+  });
+
+  it('the run\'s own screens are kept, as the phone kept its tab\'s — only the door is closed', () => {
+    expect(screens).toContain('private struct CardioPicker');
+    expect(screens).toContain('struct CardioPager');
   });
 });
 
