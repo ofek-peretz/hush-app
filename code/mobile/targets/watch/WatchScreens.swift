@@ -3731,6 +3731,9 @@ struct CompleteScreen: View {
         // A figure the session never measured stands in the superseded ink, never in cream.
         .foregroundStyle(value == "––" ? Palette.ink3 : Palette.ink0)
         .lineLimit(1).minimumScaleFactor(0.5)
+        // A figure never fills its third edge to edge: photographed on 45 mm, "11.7" ran up against
+        // "412" and the row read as one number (2026-10-10).
+        .padding(.horizontal, Fit.s(4))
       // The legend view, not a mono `Text`: "דק׳ · קק״ל · טון" were Hebrew words set in a face
       // with no Hebrew (design pass 2026-09-09).
       Legend(label, size: Wrist.legend)
