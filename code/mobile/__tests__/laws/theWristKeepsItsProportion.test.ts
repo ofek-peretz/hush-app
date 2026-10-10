@@ -134,7 +134,9 @@ describe('3 · nothing is scaled twice', () => {
   });
 
   it('a component that takes a size scales it where it draws it', () => {
-    expect(CODE).toContain('.font(.system(size: Fit.s(size), weight: .medium)).tracking(Fit.s(0.9))'); // Legend
+    // Legend. (`Wrist.track` scales the spacing by `Fit` — and answers 0 on a Hebrew wrist, 2026-10-10.)
+    expect(CODE).toContain('.font(.system(size: Fit.s(size), weight: .medium)).tracking(Wrist.track(0.9))');
+    expect(CODE).toContain('static func track(_ v: CGFloat) -> CGFloat { WatchCopyStore.isRTL ? 0 : Fit.s(v) }');
     expect(CODE).toContain('Text(label(dir)).font(.system(size: Fit.s(fontSize)'); // LoadDelta
     expect(CODE).toContain('.frame(width: Fit.s(size), height: Fit.s(size * 0.82))'); // DrawCheck
     // …and the callers that already scale (`RestRing(diameter:)`, `Metric(valueSize:)`) are not
@@ -174,14 +176,26 @@ describe('5 · nothing overflows its slot', () => {
 
   it('⛔ a one-line label never becomes two inside a row with no height for it', () => {
     for (const line of [
-      'Text("\\(WatchCopy.liftWord.uppercased()) \\(lift.i)/\\(lift.n)")',
       'Legend(WatchCopy.whereIsIt, size: Wrist.legend).lineLimit(1)',
       'Legend(WatchCopy.howSharp, size: Wrist.legend).lineLimit(1)',
     ]) {
       expect(CODE).toContain(line);
     }
+    /*
+     * The strip (2026-10-10, after the first photographs of the wrist): every line of type on it goes
+     * through ONE function that holds it to a single line — and where 0.75 was not enough ("…תרגיל" on
+     * 40 mm: the word whole, the count lost) the row gives way in order instead of cutting: the
+     * chip's chevron, then the word.
+     */
     const strip = CODE.slice(CODE.indexOf('private struct TopStrip'), CODE.indexOf('private struct ClockLane'));
-    expect(strip.split('.lineLimit(1).minimumScaleFactor(0.75)').length - 1).toBeGreaterThanOrEqual(3);
+    const flat = strip.replace(/\s+/g, ' ');
+    expect(flat).toContain('private func line(_ s: String) -> some View { Text(s) .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.8)) .foregroundStyle(Palette.ink1) .lineLimit(1) }');
+    expect(strip.match(/\bText\(/g)).toHaveLength(2); // `line`, and the trailing figure — nothing else draws type here
+    expect(strip).toContain('.lineLimit(1).minimumScaleFactor(0.75)'); // the trailing figure
+    expect(flat).toContain(
+      'ViewThatFits(in: .horizontal) { HStack(spacing: Fit.s(7)) { line(full); chip(chevron: true) } HStack(spacing: Fit.s(7)) { line(full); chip(chevron: false) } HStack(spacing: Fit.s(7)) { line(brief ?? full).minimumScaleFactor(0.75); chip(chevron: false) } }',
+    );
+    expect(strip).toContain('private var full: String? { text ?? lift.map { "\\(WatchCopy.liftWord.uppercased()) \\($0.i)/\\($0.n)" } }');
   });
 
   it('a rail of marks shrinks to its row instead of running off the case', () => {
@@ -221,7 +235,18 @@ describe('6 · the two screens that could not fit were redesigned to fit whole (
     expect(inter).not.toMatch(/CorrectionNote|fixedSize/);
     const crossing = screen('struct TransitionRestScreen', 'struct CardioPager');
     expect(crossing).toContain('Text(mirror.nextExerciseName ?? "")');
-    expect(crossing).not.toMatch(/SwapUndoChip|fixedSize/);
+    expect(crossing).not.toMatch(/SwapUndoChip/);
+    /*
+     * ONE rigid thing, and it is the screen's whole job (2026-10-10). This line used to refuse every
+     * `fixedSize` on the crossing — written from arithmetic, before the wrist had ever been
+     * photographed. Photographed, the stack answered a tight slot by giving the NEXT LIFT'S NAME one
+     * line and an ellipsis ("לחיצת חזה בשיפוע עם מש…"). The name asks for its two lines now, and the
+     * body shrinks around it (`FitToSlot`) instead of the name being cut.
+     */
+    expect(crossing.match(/fixedSize/g)).toHaveLength(1);
+    expect(crossing.replace(/\s+/g, ' ')).toContain(
+      'Text(mirror.nextExerciseName ?? "") .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0) .lineLimit(2).minimumScaleFactor(0.8) .fixedSize(horizontal: false, vertical: true)',
+    );
     expect(crossing).toContain('title: WatchCopy.undo');
   });
 

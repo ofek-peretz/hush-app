@@ -4,10 +4,15 @@ import WatchKit
 // ════ THE WRIST'S GALLERY — the real screens, fed the phone's own frames ════
 //
 // Compiled together with `targets/watch/*.swift` (minus `HushWatchApp.swift`, whose place this
-// takes) into a watchOS-simulator app by `render.sh`. One launch draws one frame: the name arrives
-// in `HUSH_FRAME`, its envelope goes through the wrist's real decoder and `WatchModel.apply`, and
-// `WatchRootView` — the product's own root — draws whatever that produces. Nothing here lays out a
-// screen; if a frame looks wrong, the product looks wrong.
+// takes) into a watchOS-simulator app by `render.sh`. One launch draws one shot: the frame's name
+// arrives in `HUSH_FRAME`, its envelope goes through the wrist's real decoder and
+// `WatchModel.apply`, and `WatchRootView` — the product's own root — draws whatever that produces.
+// Nothing here lays out a screen; if a shot looks wrong, the product looks wrong.
+//
+// Two things a photograph cannot do are done for it:
+//   · `HUSH_OPEN` opens the live set's editor (the one `#if GALLERY` seam in the product's source);
+//   · `HUSH_DIRECT` draws a screen the model only reaches through a tap or a lost connection —
+//     under the same root treatment `WatchRootView` gives every screen.
 //
 // `model.start()` is deliberately never called: it would open WatchConnectivity and ask HealthKit
 // for authorization, and a gallery has neither a phone nor a body.
@@ -26,11 +31,30 @@ struct GalleryRoot: View {
   @ObservedObject var model: WatchModel
   @State private var fed = false
   @State private var fault: String?
+  @State private var mirror: WireMirror?
   private let frame = ProcessInfo.processInfo.environment["HUSH_FRAME"] ?? "02-set-first"
+  private let direct = ProcessInfo.processInfo.environment["HUSH_DIRECT"] ?? "-"
 
   var body: some View {
     ZStack {
-      WatchRootView(model: model)
+      if direct == "-" {
+        WatchRootView(model: model)
+      } else if fed {
+        Group {
+          switch direct {
+          case "liftdone":
+            LiftDoneScreen(name: mirror?.exerciseName ?? "", lift: (done: 3, count: 6), onTap: {})
+          case "reconnecting":
+            ConnectionLostScreen(mirror: mirror)
+          default:
+            Text("no direct: \(direct)")
+          }
+        }
+        // The root's own treatment (see `WatchRootView.body`).
+        .wholeGlass()
+        .background(Palette.stage0.ignoresSafeArea())
+        .environment(\.layoutDirection, WatchCopyStore.isRTL ? .rightToLeft : .leftToRight)
+      }
       if let fault {
         // A frame the wrist refused is shown as its reason, so the photograph is the diagnosis.
         Text(fault).font(.system(size: 11)).foregroundStyle(.red).padding(6).background(Color.black)
@@ -38,8 +62,8 @@ struct GalleryRoot: View {
     }
     .onAppear {
       guard !fed else { return }
-      fed = true
       feed()
+      fed = true
     }
   }
 
@@ -56,6 +80,12 @@ struct GalleryRoot: View {
       fault = "decode: " + WatchWire.decodeFailureReason(json, sentLen: nil)
       return
     }
-    model.apply(envelope)
+    mirror = envelope.mirror
+    if direct == "-" {
+      model.apply(envelope)
+    } else {
+      // A direct screen never passes through `apply`; it still speaks her language.
+      WatchCopyStore.adopt(envelope.copy)
+    }
   }
 }

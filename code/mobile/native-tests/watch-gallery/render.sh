@@ -30,7 +30,7 @@ echo "── build"
 APP="$WORK/Gallery.app"
 mkdir -p "$APP"
 ARCH="$(uname -m)"
-xcrun --sdk watchsimulator swiftc -parse-as-library -Onone \
+xcrun --sdk watchsimulator swiftc -parse-as-library -Onone -D GALLERY \
   -target "$ARCH-apple-watchos10.0-simulator" \
   -o "$APP/Gallery" "$WORK"/src/*.swift || exit 1
 cp "$HERE/Info.plist" "$APP/Info.plist"
@@ -58,7 +58,9 @@ for r in json.load(sys.stdin)["runtimes"]:
 }
 
 FAILED=0
-for SIZE in 40mm 45mm; do
+# The smallest case and the founder's by default; `GALLERY_SIZES="40mm 41mm 42mm 44mm 45mm 46mm 49mm"`
+# photographs every case watchOS runs on (the workflow asks for that when the commit says [all-sizes]).
+for SIZE in ${GALLERY_SIZES:-40mm 45mm}; do
   TYPE="$(device_type "($SIZE)")"
   if [ -z "$TYPE" ]; then echo "no $SIZE device type for $RUNTIME — skipped"; continue; fi
   echo "── $SIZE · $TYPE"
@@ -67,12 +69,13 @@ for SIZE in 40mm 45mm; do
   xcrun simctl bootstatus "$UDID" -b
   if ! xcrun simctl install "$UDID" "$APP"; then echo "install failed on $SIZE"; FAILED=1; xcrun simctl delete "$UDID"; continue; fi
   mkdir -p "$OUT/$SIZE"
-  while read -r FRAME; do
-    [ -z "$FRAME" ] && continue
-    SIMCTL_CHILD_HUSH_FRAME="$FRAME" xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" || { echo "launch failed: $FRAME"; FAILED=1; }
-    sleep 4
-    xcrun simctl io "$UDID" screenshot --type=png --mask=black "$OUT/$SIZE/$FRAME.png" || FAILED=1
-  done < "$WORK/src/frames.txt"
+  while read -r SHOT FRAME OPEN DIRECT; do
+    [ -z "$SHOT" ] && continue
+    SIMCTL_CHILD_HUSH_FRAME="$FRAME" SIMCTL_CHILD_HUSH_OPEN="$OPEN" SIMCTL_CHILD_HUSH_DIRECT="$DIRECT" \
+      xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" || { echo "launch failed: $SHOT"; FAILED=1; }
+    sleep 3
+    xcrun simctl io "$UDID" screenshot --type=png --mask=black "$OUT/$SIZE/$SHOT.png" || FAILED=1
+  done < "$WORK/src/shots.txt"
   xcrun simctl shutdown "$UDID"
   xcrun simctl delete "$UDID"
 done

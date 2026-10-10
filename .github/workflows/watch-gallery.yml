@@ -23,7 +23,7 @@ jobs:
   render:
     name: photograph the wrist (watchOS simulator)
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -32,6 +32,9 @@ jobs:
           xcrun simctl list runtimes
           xcrun simctl list devicetypes | grep -i watch || true
       - name: Photograph
+        # Two cases (~8 min) unless the commit's message carries [all-sizes] — then all seven (~20 min).
+        env:
+          GALLERY_SIZES: ${{ contains(github.event.head_commit.message, '[all-sizes]') && '40mm 41mm 42mm 44mm 45mm 46mm 49mm' || '40mm 45mm' }}
         run: bash code/mobile/native-tests/watch-gallery/render.sh "$RUNNER_TEMP/renders"
       - name: Send the photographs back (branch ci/watch-renders)
         if: always()

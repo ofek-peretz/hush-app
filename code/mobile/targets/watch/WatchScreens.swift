@@ -106,6 +106,35 @@ enum Wrist {
      goes rather than being set to zero — a named gap is a gap somebody re-applies. */
   /// The header row. Fixed on every screen, so nothing above the fold ever shifts between them.
   static let head: CGFloat = 20
+  /**
+   * How far under the glass's top edge the header row begins — so its line of type stands at the
+   * height of the system clock it shares the row with.
+   *
+   * ⚠️ MEASURED FROM THE SYSTEM'S OWN BAND, NOT FROM OUR SCALE (the photographs, 2026-10-10). The
+   * clock is the system's and does not grow by `Fit`: its band is 37.5 pt on 40 mm and 49 pt on
+   * 45 mm (× 1.31, where `Fit` is × 1.22), and its figures centre a little above the band's middle
+   * on both (16 of 37.5, 23.5 of 49). A fixed 6 pt put the header level with the clock on 40 mm and
+   * drew the lift's NAME under the clock's figures on 45 mm. So the header row (`head` tall) is
+   * centred where the clock is, on whatever case this is; with no band reported it keeps a breath.
+   */
+  static func rowTop(band: CGFloat) -> CGFloat {
+    max(Fit.s(4), band * 0.46 - Fit.s(head) / 2)
+  }
+  /**
+   * Letter-spacing for a legend — and NONE on a Hebrew wrist. Spaced capitals are a Latin idiom; a
+   * Hebrew word pulled apart ("ה ב א   ב ת ו ר") is slower to read at 11 pt on a moving wrist, and
+   * the phone's own type lint has refused tracked words since the day she turned the app to Hebrew.
+   * The photographs showed every legend on the wrist drawn that way.
+   */
+  static func track(_ v: CGFloat) -> CGFloat { WatchCopyStore.isRTL ? 0 : Fit.s(v) }
+  /// The face of a legend that carries a WORD. Monospaced is the instrument's voice for figures and
+  /// Latin capitals; it has no Hebrew, so a Hebrew legend set in it falls back to another face at
+  /// the mono advance — wide enough that "תרגיל 2/6" did not fit beside the pause chip on 40 mm.
+  static var legendDesign: Font.Design { WatchCopyStore.isRTL ? .default : .monospaced }
+  /// The air kept under a screen with NO action zone, now that the glass reaches its bottom edge
+  /// — a line of type must not sit in the curve of the case. (Never under a button: an action
+  /// zone owns the floor, by the ruling of 2026-08-05.)
+  static let sill: CGFloat = 12
   /// A primary action. Big enough to hit with a wet thumb, on the smallest case.
   static let action: CGFloat = 44
   /*
@@ -374,7 +403,7 @@ private struct Legend: View {
   init(_ text: String, size: CGFloat = 10) { self.text = text; self.size = size }
   var body: some View {
     Text(text.uppercased())
-      .font(.system(size: Fit.s(size), weight: .medium)).tracking(Fit.s(0.9))
+      .font(.system(size: Fit.s(size), weight: .medium)).tracking(Wrist.track(0.9))
       .foregroundStyle(Palette.ink2)
   }
 }
@@ -407,47 +436,42 @@ private struct TopStrip: View {
   /// Anything the screen wants said on the header row — "CHEST · SET 2/4", "NOW · UPPER A".
   /// It replaces the lift counter rather than joining it: one line, one fact.
   var text: String? = nil
+  /// The shorter line that stands in for `text` when it does not fit beside the pause chip.
+  var short: String? = nil
   /// A figure at the END of the row, still clear of the clock — the glance screen's elapsed.
   var trailing: String? = nil
   var controlsHint: Bool = false
   @Environment(\.goControls) private var goControls
+
+  /// Her word for it (2026-09-09): this was the literal "LIFT" on a Hebrew wrist, on the one strip
+  /// every execution screen carries.
+  private var full: String? { text ?? lift.map { "\(WatchCopy.liftWord.uppercased()) \($0.i)/\($0.n)" } }
+  private var brief: String? { text != nil ? short : lift.map { "\($0.i)/\($0.n)" } }
+
   var body: some View {
     ClockLane {
-      HStack(spacing: Fit.s(7)) {
-        if let text {
-          Text(text)
-            .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: .monospaced)).tracking(Fit.s(0.8))
-            .foregroundStyle(Palette.ink1)
-            .lineLimit(1).minimumScaleFactor(0.75)
-        } else if let lift {
-          // Her word for it (2026-09-09): this was the literal "LIFT" on a Hebrew wrist, on the one
-          // strip every execution screen carries.
-          Text("\(WatchCopy.liftWord.uppercased()) \(lift.i)/\(lift.n)")
-            .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: .monospaced)).tracking(Fit.s(0.8))
-            .foregroundStyle(Palette.ink1)
-            // One line, always: beside the pause chip this lane is ~46 pt on a 40 mm case, and a
-            // second line inside a 20 pt row spills out of it (2026-09-15).
-            .lineLimit(1).minimumScaleFactor(0.75)
-        }
-        if controlsHint {
-          /*
-           * THE WAY TO PAUSE IS A TARGET, NOT A GLYPH (design pass 2026-09-09). The chip was 18 pt
-           * tall — the smallest thing on a screen she reaches for at a stride. Its glyphs stay the
-           * size they were; the capsule around them grows to the row's full height, because the
-           * thing she taps is the capsule.
-           */
-          Button(action: { TapGate.pass(goControls) }) {
-            HStack(spacing: Fit.s(3)) {
-              Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold))
-              Image(systemName: "pause.fill").font(.system(size: Fit.s(12), weight: .semibold))
+      // No spacing of its own: the row's one gap is the Spacer's. Seven points here, on top of it,
+      // were exactly what kept the word off a 40 mm rest strip ("2/6" where "תרגיל 2/6" fits).
+      HStack(spacing: 0) {
+        if let full {
+          if controlsHint {
+            /*
+             * ⛔ NOTHING ON THIS ROW IS CUT (the photographs, 2026-10-10). Beside the clock's lane
+             * and the pause chip a 40 mm case leaves the words ~43 pt, and the rest screens read
+             * "…תרגיל" — the word whole, and the count it exists to carry lost to an ellipsis. The
+             * row now gives way in the order of what matters least: first the chip's chevron (the
+             * pause mark alone is still the way to pause), then the word (the count alone).
+             */
+            ViewThatFits(in: .horizontal) {
+              HStack(spacing: Fit.s(7)) { line(full); chip(chevron: true) }
+              HStack(spacing: Fit.s(7)) { line(full); chip(chevron: false) }
+              HStack(spacing: Fit.s(7)) { line(brief ?? full).minimumScaleFactor(0.75); chip(chevron: false) }
             }
-            .foregroundStyle(Palette.ink2)
-            .padding(.horizontal, Fit.s(8))
-            .frame(height: Fit.s(Wrist.head))
-            .background(Palette.stage1).clipShape(Capsule())
-            .contentShape(Capsule())
+          } else {
+            line(full).minimumScaleFactor(0.75)
           }
-          .buttonStyle(.plain)
+        } else if controlsHint {
+          chip(chevron: true)
         }
         Spacer(minLength: Fit.s(2))
         if let trailing {
@@ -455,10 +479,39 @@ private struct TopStrip: View {
             .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: .monospaced)).monospacedDigit()
             .foregroundStyle(Palette.ink1)
             .lineLimit(1).minimumScaleFactor(0.75)
+            .padding(.leading, Fit.s(5))
         }
       }
     }
     .frame(height: Fit.s(Wrist.head))
+  }
+
+  /// The row's line of type — one line, always: a second inside a 20 pt row spills out of it.
+  private func line(_ s: String) -> some View {
+    Text(s)
+      .font(.system(size: Fit.s(Wrist.label), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.8))
+      .foregroundStyle(Palette.ink1)
+      .lineLimit(1)
+  }
+
+  /*
+   * THE WAY TO PAUSE IS A TARGET, NOT A GLYPH (design pass 2026-09-09). The chip was 18 pt tall —
+   * the smallest thing on a screen she reaches for at a stride. Its glyphs stay the size they were;
+   * the capsule around them grows to the row's full height, because the thing she taps is the capsule.
+   */
+  private func chip(chevron: Bool) -> some View {
+    Button(action: { TapGate.pass(goControls) }) {
+      HStack(spacing: Fit.s(3)) {
+        if chevron { Image(systemName: "chevron.backward").font(.system(size: Fit.s(12), weight: .semibold)) }
+        Image(systemName: "pause.fill").font(.system(size: Fit.s(12), weight: .semibold))
+      }
+      .foregroundStyle(Palette.ink2)
+      .padding(.horizontal, Fit.s(8))
+      .frame(height: Fit.s(Wrist.head))
+      .background(Palette.stage1).clipShape(Capsule())
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
   }
 }
 
@@ -589,6 +642,9 @@ struct StageButton: View {
           // rather than wrapping into a second the button has no height for.
           .lineLimit(1).minimumScaleFactor(0.75)
       }
+        // The label never touches its button's edge: photographed on 40 mm, "דלג על המנוחה" filled
+        // the button from side to side, because a label that exactly fits is not asked to scale.
+        .padding(.horizontal, Fit.s(8))
         .frame(maxWidth: .infinity).frame(height: Fit.s(height))
         .padding(.bottom, seated ? SEAT_BLEED : 0)
         .foregroundStyle(fg)
@@ -651,6 +707,9 @@ struct LoadDelta: View {
         RoundedRectangle(cornerRadius: Fit.s(1)).fill(color).frame(width: Fit.s(7), height: Fit.s(2))
       }
       Text(label(dir)).font(.system(size: Fit.s(fontSize), weight: .medium, design: .monospaced)).foregroundStyle(color)
+        // One line, at its own width: beside the ring on 40 mm the chip broke after the figure
+        // ("2.5+" over "ק״ג") — photographed 2026-10-10.
+        .lineLimit(1).fixedSize()
     }
     .padding(.horizontal, Fit.s(7)).padding(.vertical, Fit.s(3))
     .background(wash).clipShape(Capsule())
@@ -659,7 +718,9 @@ struct LoadDelta: View {
     if dir == 0 { return "hold" }
     // The unit in her language — "kg" was a literal here while every other unit on the wrist
     // went through `WatchCopy.kg` (2026-09-09). Two runs, so the mono face never meets Hebrew.
-    return (dir > 0 ? "+" : "−") + fmtW(abs(deltaKg)) + " " + WatchCopy.kg
+    // The figure is isolated left-to-right (U+2066 … U+2069): in a Hebrew line the sign is a
+    // neutral and was carried to the far side of its number — "2.5+".
+    return "\u{2066}" + (dir > 0 ? "+" : "−") + fmtW(abs(deltaKg)) + "\u{2069} " + WatchCopy.kg
   }
 }
 
@@ -685,12 +746,17 @@ private struct DrawCheck: View {
   var size: CGFloat = 22
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.isLuminanceReduced) private var dimmed
+  @Environment(\.layoutDirection) private var direction
   @State private var drawn = false
   var body: some View {
     CheckShape()
       .trim(from: 0, to: drawn ? 1 : 0)
       .stroke(Palette.up, style: StrokeStyle(lineWidth: Fit.s(max(2.4, size * 0.13)), lineCap: .round, lineJoin: .round))
       .frame(width: Fit.s(size), height: Fit.s(size * 0.82))
+      // ⛔ NOT MIRRORED (the photographs, 2026-10-10). A right-to-left layout flips a shape's
+      // path, and on a Hebrew wrist the check was drawn backwards — long stroke first, the hands
+      // of a clock at twenty to four inside a ring. A check is the same mark in every script.
+      .scaleEffect(x: direction == .rightToLeft ? -1 : 1, y: 1)
       .onAppear {
         if reduceMotion || dimmed { drawn = true } else { withAnimation(.easeOut(duration: 0.35)) { drawn = true } }
       }
@@ -816,7 +882,7 @@ private struct RestRing: View {
             .monospacedDigit().foregroundStyle(Palette.ink0)
             // Inside the stroke, always — "10:00" in the 62 pt crossing ring touched it.
             .lineLimit(1).minimumScaleFactor(0.6).frame(maxWidth: diameter * 0.72)
-          Text(ready ? WatchCopy.ready.uppercased() : restingLabel).font(.system(size: Fit.s(12), weight: .medium)).tracking(Fit.s(0.8)).foregroundStyle(Palette.ink2)
+          Text(ready ? WatchCopy.ready.uppercased() : restingLabel).font(.system(size: Fit.s(12), weight: .medium)).tracking(Wrist.track(0.8)).foregroundStyle(Palette.ink2)
             // "YOUR PACE" is the label now when the timer is her median — inside the stroke, on one line.
             .lineLimit(1).minimumScaleFactor(0.7).frame(maxWidth: diameter * 0.72)
         }
@@ -1115,6 +1181,7 @@ private struct GlanceScreen: View {
         }
         .foregroundStyle(Palette.ink2)
         .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.bottom, Fit.s(Wrist.sill))
       }
     }
   }
@@ -1230,13 +1297,17 @@ private struct ExecutionPager<Content: View>: View {
     // swipe the "wrong" way found nothing at all (founder 2026-07-28).
     TabView(selection: $page) {
       ControlsScreen(lift: lift, sets: sets, elapsed: { metrics.elapsed() }, onPage: page == 0,
-                     onPause: onPause, onEnd: onEnd, onReportPain: onReportPain).tag(0)
+                     onPause: onPause, onEnd: onEnd, onReportPain: onReportPain)
+        .wholeGlass()
+        .tag(0)
       // The stage is handed the way IN to the Controls page: the "‹ ⏸" hint taps through
       // to exactly where the swipe lands. The page index never leaves this view.
       content()
         .environment(\.goControls, { withAnimation { page = 0 } })
+        .wholeGlass()
         .tag(1)
       GlanceScreen(metrics: metrics, lift: lift)
+        .wholeGlass()
         .tag(2)
     }
     .tabViewStyle(.page(indexDisplayMode: .never))
@@ -1253,13 +1324,63 @@ private extension View {
   }
 }
 
+extension View {
+  /**
+   * The whole container, top and bottom, with the header row dropped to the clock's height — see
+   * the note in `WatchRootView.body`.
+   *
+   * ⚠️ THE ROOT IS NOT ENOUGH: A PAGER HANDS ITS PAGES THE SAFE AREA BACK. Applied at the root alone
+   * (the second set of photographs), Home, Paused and Complete took the glass and every execution
+   * screen stayed exactly where it was — a `TabView`'s pages are inset by the window's own safe
+   * area whatever their ancestors ignored. So each PAGE takes the glass itself.
+   *
+   * Not private: the gallery (`native-tests/watch-gallery`) gives a screen it draws by itself the
+   * same glass the root gives every screen.
+   */
+  func wholeGlass() -> some View { WholeGlass { self } }
+}
+
+/// See `wholeGlass()`. The reader stands INSIDE the safe area so that it can read the height of the
+/// system's top band — the one number the header row is placed by (`Wrist.rowTop`).
+struct WholeGlass<Content: View>: View {
+  @ViewBuilder let content: () -> Content
+  var body: some View {
+    GeometryReader { glass in
+      content()
+        .padding(.top, Wrist.rowTop(band: glass.safeAreaInsets.top))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
+    }
+  }
+}
+
 // MARK: Root
 
 struct WatchRootView: View {
   @ObservedObject var model: WatchModel
   var body: some View {
-    content
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    WholeGlass {
+      /*
+       * ════ THE WHOLE GLASS IS OURS — AND UNTIL 2026-10-10 A THIRD OF IT WAS NOT USED ════
+       *
+       * Every screen here is designed against the full case: "the header lives top-left, beside the
+       * clock" (`ClockLane`), "the action zone sits ON the bottom edge" (`WristScreen`), and the
+       * 2026-09-15 proportion pass measured every body against 197 pt of a 40 mm case. None of it
+       * was ever SEEN — and the first photographs of the wrist (`native-tests/watch-gallery`,
+       * watchOS 26) showed why screens kept being reported as cut off and crowded: watchOS keeps
+       * the root inside its safe area. The row beside the clock (38 pt on 40 mm) stayed empty with
+       * our header pushed under it, and 19 pt at the foot stayed empty under buttons whose "seated"
+       * bottom was drawn in mid-air. 140 pt of 197 were ours; bodies shrank to the 0.75 floor and
+       * still ran under the buttons (the crossing's ring, the paused title, the set's own figures).
+       *
+       * The root now takes the whole container, top and bottom. The system still draws its clock
+       * over the top-right corner — the lane every strip has reserved all along — and
+       * `Wrist.rowTop` drops the header row to the clock's own height, clear of the glass's corner.
+       *
+       * ⚠️ `.container` only: the keyboard and the system's own overlays keep their regions.
+       */
+      content
+    }
       .background(Palette.stage0.ignoresSafeArea())
       /*
        * THE WHOLE WRIST TURNS AROUND, ONCE, HERE.
@@ -1641,9 +1762,17 @@ private struct OutlineButton: View {
     Button(action: { if repeatable { TapGate.repeatable(action) } else { TapGate.pass(action) } }) {
       HStack(spacing: Fit.s(5)) {
         if let systemImage { Image(systemName: systemImage).font(.system(size: Fit.s(12))) }
+        /*
+         * TWO LINES BEFORE AN ELLIPSIS (the first photographs, 2026-10-10). On 40 mm the pain door
+         * read "משהו לא מרגיש…" — the one report this product most needs her to find, cut mid-word —
+         * and "החלף תרגיל" ran off its half of the row. Half a row is ~70 pt; these buttons are
+         * 34–40 pt tall, which holds two lines of their own type. And a label never touches its
+         * border: the gutter inside is what asks it to wrap or scale.
+         */
         Text(title).font(.system(size: Fit.s(fontSize), weight: .semibold))
-          .lineLimit(1).minimumScaleFactor(0.7)
+          .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
       }
+      .padding(.horizontal, Fit.s(6))
       .frame(maxWidth: .infinity).frame(height: Fit.s(height))
       .padding(.bottom, seated ? SEAT_BLEED : 0)
       .foregroundStyle(tint)
@@ -1905,6 +2034,17 @@ struct ActiveSetScreen: View {
     } actions: {
       footer
     }
+    #if GALLERY
+    // The gallery's hand (`native-tests/watch-gallery`): a photograph cannot tap, so the editor is
+    // opened for it. Compiled only into the gallery's simulator app (`-D GALLERY`), never the product.
+    .onAppear {
+      switch ProcessInfo.processInfo.environment["HUSH_OPEN"] {
+      case "reps": enterEdit(.reps)
+      case "weight": enterEdit(.weight)
+      default: break
+      }
+    }
+    #endif
     .focusable(editing)
     /*
      * ⛔ THE WRIST COULD NOT SAY 32.5 (founder 2026-08-05): *"the watch and the phone do not show
@@ -1964,13 +2104,16 @@ struct ActiveSetScreen: View {
   /// row and the set position rides with it. The dots stay, folded to the left of the clock lane.
   private var header: some View {
     VStack(alignment: .leading, spacing: Fit.s(1)) {
-      HStack(spacing: Fit.s(7)) {
-        Text(setPosition)
-          .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(1.1))
-          .foregroundStyle(Palette.ink2)
-          // "SHOULDERS · 2/4" is wider than the clock leaves it on 40 mm; a second line would push the
-          // lift's name down into the load inside this fixed 38 pt header.
-          .lineLimit(1).minimumScaleFactor(0.75)
+      // The clock's lane, on the PHYSICAL right (`ClockLane`). This row reserved it with
+      // `.padding(.trailing, …)` — the left of a Hebrew wrist — which cost nothing while the row
+      // sat under the clock, and would have put "חזה · 2/3" beneath it the day the row rose.
+      ClockLane {
+        // "ירך אחורית · 2/5" is wider than the clock leaves it on 40 mm, and what an ellipsis took
+        // was the COUNT ("…2 · ירך אחורית", photographed 2026-10-10). The muscle gives way first.
+        ViewThatFits(in: .horizontal) {
+          positionLine(setPosition)
+          positionLine(setCount).minimumScaleFactor(0.75)
+        }
         /*
          * ⛔ THE DOTS ARE DELETED (founder 2026-08-05, from his own screenshot). "QUADS · 1/4"
          * and a row of four pips beside it are the same sentence twice — and the SET ROW below
@@ -1979,15 +2122,29 @@ struct ActiveSetScreen: View {
          * Their cost was the header wrapping to two lines on a 41 mm case, which is why "1/4" sat
          * under "QUADS" in his photograph with the pips colliding with the clock's lane.
          */
-        Spacer(minLength: Fit.s(2))
       }
-      .padding(.trailing, Fit.s(52)) // the clock's lane
+      // The header ROW's own height, so the name starts under the clock's figures on every case
+      // (`Wrist.rowTop`): at 14 pt the row let "לחיצת חזה במוט" stand beneath the clock on 45 mm.
+      .frame(height: Fit.s(Wrist.head))
+      /*
+       * THE NAME IS READ WHOLE (the photographs, 2026-10-10). One line cut "לחיצת חזה בשיפוע עם
+       * משקולות יד" at "…משקו" — and the word an ellipsis takes from a lift's name is the one that
+       * tells two lifts apart (the dumbbells, the bar, the machine). Two lines when it needs them;
+       * the header is as tall as its name, and the body gives the room back (`FitToSlot`).
+       */
       Text(mirror.exerciseName)
         .font(.system(size: Fit.s(Wrist.body), weight: .semibold)).foregroundStyle(Palette.ink0)
-        .lineLimit(1).minimumScaleFactor(0.7)
+        .lineLimit(2).minimumScaleFactor(0.85).multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .frame(height: Fit.s(38), alignment: .top)
+  }
+
+  private func positionLine(_ s: String) -> some View {
+    Text(s)
+      .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(1.1))
+      .foregroundStyle(Palette.ink2)
+      .lineLimit(1)
   }
 
   /// "CHEST · 2/4" without the muscle — the muscle now rides the name below it.
@@ -2004,6 +2161,13 @@ struct ActiveSetScreen: View {
     // The coach names no muscles (`muscles: ''` from Home), so this branch is the one that draws —
     // and it said "SET" in English on a Hebrew wrist (2026-09-09).
     return group.isEmpty ? "\(WatchCopy.setWord.uppercased()) \(n)/\(m)" : "\(group) · \(n)/\(m)"
+  }
+
+  /// The position without the muscle — what the header falls back to when both do not fit.
+  private var setCount: String {
+    let n = mirror.setNumber ?? 1
+    let m = mirror.setsInExercise ?? 1
+    return "\((mirror.isWarmup == true ? WatchCopy.warmupWord : WatchCopy.setWord).uppercased()) \(n)/\(m)"
   }
 
   /* ⛔ `setDots` is DELETED (2026-08-05) — see the note where it used to be drawn. It said the same
@@ -2361,7 +2525,7 @@ struct ActiveSetScreen: View {
     Button(action: { TapGate.pass(tap) }) {
       HStack(alignment: .firstTextBaseline, spacing: Fit.s(6)) {
         Text(unit.uppercased())
-          .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(1.1))
+          .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(1.1))
           .foregroundStyle(active ? Palette.ink0 : Palette.ink2)
         if let band {
           // The ask, inside the row it is about. Moss here is earned: it is the coach's decision.
@@ -2394,7 +2558,7 @@ struct ActiveSetScreen: View {
   private var crownHint: some View {
     HStack(spacing: Fit.s(5)) {
       Image(systemName: "arrow.clockwise").font(.system(size: Fit.s(12), weight: .semibold))
-      Text(WatchCopy.turnCrownToSet).font(.system(size: Fit.s(Wrist.legend), weight: .medium)).tracking(Fit.s(1.1))
+      Text(WatchCopy.turnCrownToSet).font(.system(size: Fit.s(Wrist.legend), weight: .medium)).tracking(Wrist.track(1.1))
     }
     .foregroundStyle(Palette.ink2)
     .frame(maxWidth: .infinity, alignment: .center)
@@ -2725,7 +2889,7 @@ struct InterRestScreen: View {
   private var upNextCard: some View {
     VStack(alignment: .leading, spacing: Fit.s(2)) {
       Text(WatchCopy.upNext.uppercased())
-        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
+        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.9))
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.75)
       if let hold = holdText(mirror.nextHoldSeconds, mirror.nextHoldMetres) {
@@ -2746,7 +2910,7 @@ struct InterRestScreen: View {
           .lineLimit(1).minimumScaleFactor(0.7)
       }
       Text("\(mirror.nextIsWarmup == true ? WatchCopy.warmupWord : WatchCopy.setWord) \(mirror.nextSetNumber ?? ((mirror.setNumber ?? 1) + 1))/\(mirror.nextIsWarmup == true ? (mirror.nextSetsInExercise ?? 1) : (mirror.setsInExercise ?? 1))")
-        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
+        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.9))
         .foregroundStyle(Palette.ink2)
         .lineLimit(1).minimumScaleFactor(0.75)
       if let d = movedBy {
@@ -2787,7 +2951,7 @@ struct TransitionRestScreen: View {
      */
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
-        TopStrip(text: crossing, controlsHint: true)
+        TopStrip(text: crossing, short: crossingShort, controlsHint: true)
         Spacer(minLength: Fit.s(2))
         HStack(alignment: .center, spacing: Fit.s(8)) {
           RestRing(
@@ -2799,9 +2963,13 @@ struct TransitionRestScreen: View {
           )
           nextLiftCard
         }
+        // Its two lines are ASKED for, not hoped for (the photographs, 2026-10-10): squeezed, the
+        // stack gave the name one line and an ellipsis — "לחיצת חזה בשיפוע עם מש…" — on the one
+        // screen whose whole job is to say what comes next. The body shrinks around it instead.
         Text(mirror.nextExerciseName ?? "")
           .font(.system(size: Fit.s(13), weight: .semibold)).foregroundStyle(Palette.ink0)
           .lineLimit(2).minimumScaleFactor(0.8)
+          .fixedSize(horizontal: false, vertical: true)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.top, Fit.s(6))
         Spacer(minLength: Fit.s(2))
@@ -2839,13 +3007,21 @@ struct TransitionRestScreen: View {
     let arrow = WatchCopyStore.isRTL ? "←" : "→"
     return "\(WatchCopy.liftWord) \(i) \(arrow) \(min(i + 1, n))"
   }
+  /// The same crossing without its word, for the strip when the word does not fit beside the chip.
+  private var crossingShort: String {
+    let i = mirror.liftIndex ?? 1
+    let n = mirror.liftCount ?? 1
+    // U+200F: with no Hebrew letter left in it the line has no direction of its own, and was laid
+    // out left-to-right — "2 ← 3", an arrow from the lift ahead back to the one behind.
+    return WatchCopyStore.isRTL ? "\u{200F}\(i) ← \(min(i + 1, n))" : "\(i) → \(min(i + 1, n))"
+  }
 
   /// What is coming: the load, and its ▲/▼ when the engine moved it. On a NEW lift she has no previous
   /// number on screen to compare against, so the mark is the only signal there is.
   private var nextLiftCard: some View {
     VStack(alignment: .leading, spacing: Fit.s(2)) {
       Text(WatchCopy.upNext.uppercased())
-        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
+        .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.9))
         .foregroundStyle(Palette.ink1)
         .lineLimit(1).minimumScaleFactor(0.75)
       HStack(alignment: .firstTextBaseline, spacing: Fit.s(3)) {
@@ -2916,9 +3092,12 @@ struct CardioPager: View {
         CardioPausedScreen(paused: paused, onPage: page == 0,
                            metrics: metrics, elapsed: elapsed,
                            onPauseToggle: onPauseToggle, onEnd: onEnd,
-                           onReportPain: onReportPain).tag(0)
+                           onReportPain: onReportPain)
+          .wholeGlass()
+          .tag(0)
         CardioStageScreen(metrics: metrics, elapsed: elapsed)
           .environment(\.goControls, { withAnimation { page = 0 } })
+          .wholeGlass()
           .tag(1)
       }
       .tabViewStyle(.page(indexDisplayMode: .never))
@@ -2964,7 +3143,7 @@ private struct KmLoggedScreen: View {
             HStack(spacing: Fit.s(4)) {
               Image(systemName: "checkmark").font(.system(size: Fit.s(12), weight: .bold))
               Text(WatchCopy.quickestThisRun)
-                .font(.system(size: Fit.s(12), design: .monospaced)).tracking(Fit.s(0.5))
+                .font(.system(size: Fit.s(12), design: Wrist.legendDesign)).tracking(Wrist.track(0.5))
                 .lineLimit(1).minimumScaleFactor(0.75)
             }
             .foregroundStyle(Palette.signal)
@@ -3946,7 +4125,7 @@ struct ConnectionLostScreen: View {
           HStack(spacing: Fit.s(5)) {
             Image(systemName: "wifi.slash").font(.system(size: Fit.s(12), weight: .semibold)).foregroundStyle(Palette.ink2)
             Text(WatchCopy.reconnecting.uppercased())
-              .font(.system(size: Fit.s(Wrist.label), weight: .medium)).tracking(Fit.s(0.8))
+              .font(.system(size: Fit.s(Wrist.label), weight: .medium)).tracking(Wrist.track(0.8))
               .foregroundStyle(Palette.ink1)
               .lineLimit(1).minimumScaleFactor(0.75)
           }
@@ -3970,7 +4149,7 @@ struct ConnectionLostScreen: View {
             // Composed here rather than `m.setLabel`, which is the phone's English fallback string
             // ("Set 2 of 4") — the one line on this screen that never turned Hebrew (2026-09-09).
             Text("\(WatchCopy.setWord.uppercased()) \(m.setNumber ?? 1)/\(m.setsInExercise ?? 1)")
-              .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: .monospaced)).tracking(Fit.s(0.9))
+              .font(.system(size: Fit.s(Wrist.legend), weight: .medium, design: Wrist.legendDesign)).tracking(Wrist.track(0.9))
               .foregroundStyle(Palette.ink2.opacity(0.6))
           }
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -3983,6 +4162,7 @@ struct ConnectionLostScreen: View {
           .font(.system(size: Fit.s(13), weight: .medium)).foregroundStyle(Palette.ink1)
           .frame(maxWidth: .infinity)
           .lineLimit(2).minimumScaleFactor(0.8)
+          .padding(.bottom, Fit.s(Wrist.sill))
       }
     }
   }
