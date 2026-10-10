@@ -92,7 +92,7 @@ describe('count family', () => {
 
   it('but a partial session STILL breaks every other mark — the work was real', () => {
     // A short session in which the athlete genuinely lifted a club load keeps the club mark.
-    const partial = { ...session(1, [log('bb_back_squat', 100)]), trained: false };
+    const partial = { ...session(1, [log('bb_back_squat', 100, 8, 50)]), trained: false };
     const clubs = earnedMilestones([partial]).filter((m) => m.family === 'club');
     expect(clubs.map((m) => m.id)).toContain('club_bb_back_squat_100');
     expect(earnedMilestones([partial]).filter((m) => m.family === 'count')).toEqual([]);
@@ -133,8 +133,10 @@ describe('tonnage family', () => {
 describe('club family', () => {
   // No profile passed ⇒ the median man (75 kg, intermediate): squat starts at 50 kg, so his
   // ladder is 60 · 80 · 100 · 120 · 140.
+  // ⚠️ The fourth argument is the PRESCRIPTION, and since 2026-10-11 it is what anchors a ladder
+  // (`openingLoads`): he was handed 50 and squatted 100. See "a seal is a step up" below.
   it('a logged 100 kg squat set earns every rung up to it at once', () => {
-    const s = session(0, [log('bb_back_squat', 100, 5)]);
+    const s = session(0, [log('bb_back_squat', 100, 5, 50)]);
     const clubs = earnedMilestones([s]).filter((m) => m.family === 'club');
     expect(clubs.map((m) => m.id)).toEqual([
       'club_bb_back_squat_60',
@@ -145,7 +147,7 @@ describe('club family', () => {
 
   it('each rung is earned once; the next rung needs a genuinely heavier set', () => {
     const sessions = [
-      session(0, [log('bb_bench_press', 60, 8)]),
+      session(0, [log('bb_bench_press', 60, 8, 40)]),
       session(2, [log('bb_bench_press', 62.5, 8)]), // heavier, but no new rung crossed
       session(4, [log('bb_bench_press', 100, 3)]),
     ];
@@ -161,6 +163,48 @@ describe('club family', () => {
   it('non-club lifts never club, and a 0-rep set never counts', () => {
     const s = session(0, [log('leg_press', 220, 8), log('bb_deadlift', 140, 0)]);
     expect(earnedMilestones([s]).filter((m) => m.family === 'club')).toEqual([]);
+  });
+});
+
+/**
+ * ⛔ A SEAL IS A STEP UP FROM WHERE THE APP OPENED HER (2026-10-11).
+ *
+ * Walked live as a man who told the intake "bench 100, squat 130": his first workout closed on a
+ * seal reading "bench press · 80 kg" with 40 and 50 struck beside it, the row he was handed at
+ * 42.5 earned "40", and the 130 squat earned "120". The header has always promised a rung is "a
+ * genuine step up from where THIS athlete began" — the anchor was still the modelled cold start,
+ * which nobody has put on his bar since stated loads began to open a week.
+ */
+describe('a seal is a step up from the load the app opened the lift at', () => {
+  const man: MilestoneProfile = { sex: 'male', weightKg: 70 };
+
+  it('lifting exactly what he was asked to on day one strikes nothing', () => {
+    const first = session(0, [log('bb_bench_press', 100, 6, 100), log('bb_row', 42.5, 8, 42.5), log('bb_back_squat', 130, 5, 130)]);
+    expect(earnedMilestones([first], man).filter((m) => m.family === 'club')).toEqual([]);
+  });
+
+  it('his ladder opens ABOVE his stated load, and the first real step up is the first seal', () => {
+    const first = session(0, [log('bb_bench_press', 100, 6, 100)]);
+    const later = session(14, [log('bb_bench_press', 120, 3, 117.5)]);
+    const clubs = earnedMilestones([first, later], man).filter((m) => m.family === 'club');
+    expect(clubs.map((m) => [m.id, m.sessionId])).toEqual([['club_bb_bench_press_120', later.id]]);
+    // …and what the gallery shows as "next" is ahead of him, never behind.
+    const next = nextUp([first], man).find((n) => n.milestone.family === 'club' && n.milestone.exerciseId === 'bb_bench_press');
+    expect(next?.target).toBeGreaterThan(100);
+  });
+
+  it('an athlete opened at the model keeps the ladder she had, to the kilo', () => {
+    const cold = clubLadders(man);
+    const opened = clubLadders(man, { bb_bench_press: 20, bb_back_squat: 10 });
+    expect(opened).toEqual(cold);
+  });
+
+  it('a warm-up bridge and a free log are not the app opening a lift', () => {
+    const bridge = { ...log('bb_bench_press', 100, 5, 100), isApproach: true };
+    const ramped = session(0, [bridge, log('bb_bench_press', 60, 8, 40)]);
+    expect(earnedMilestones([ramped], man).filter((m) => m.family === 'club').length).toBeGreaterThan(0);
+    const free = { ...session(0, [log('bb_bench_press', 100, 1, 100)]), freeform: true };
+    expect(earnedMilestones([free], man).filter((m) => m.family === 'club').length).toBeGreaterThan(0);
   });
 });
 
@@ -199,7 +243,7 @@ describe('club ladders are cut from the onboarding answers', () => {
   });
 
   it('the same 100 kg squat is a mark for one athlete and further along the ladder for another', () => {
-    const s = [session(0, [log('bb_back_squat', 100, 3)])];
+    const s = [session(0, [log('bb_back_squat', 100, 3, 20)])];
     const hers = earnedMilestones(s, woman).filter((m) => m.family === 'club').length;
     const his = earnedMilestones(s, man).filter((m) => m.family === 'club').length;
     expect(hers).toBeGreaterThan(his); // she has crossed more of her ladder with the same bar

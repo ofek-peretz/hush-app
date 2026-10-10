@@ -141,7 +141,7 @@ export type ClubLadders = Readonly<Record<string, readonly number[]>>;
  * The athlete's club ladders — the ONE input every club calculation below takes. Derived, never
  * stored: same profile in, same ladders out, on any device, forever.
  */
-export function clubLadders(profile?: MilestoneProfile | null): ClubLadders {
+export function clubLadders(profile?: MilestoneProfile | null, openings?: OpeningLoads | null): ClubLadders {
   const p = profile ?? DEFAULT_PROFILE;
   // The bodyweight Hush met them at (see the header) — the current one only when there is no
   // record of the original (every profile written before this existed).
@@ -152,8 +152,22 @@ export function clubLadders(profile?: MilestoneProfile | null): ClubLadders {
     const ex = exerciseById(exId);
     const grid = CLUB_GRID[exId];
     if (!ex || !grid) continue;
-    const anchor = modelledStartingWeight(ex, anchorProfile);
-    if (anchor == null) continue;
+    const modelled = modelledStartingWeight(ex, anchorProfile);
+    if (modelled == null) continue;
+    /*
+     * ⛔ WHERE THIS ATHLETE BEGAN — NOT WHERE A STRANGER OF HER WEIGHT WOULD HAVE (2026-10-11).
+     *
+     * Walked live as a man who told the intake he benches 100 kg: his first workout closed on a
+     * seal reading "bench press · 80 kg", with 40 and 50 struck beside it, and his 130 kg squat
+     * earned "120". The header above promises a rung is "always a genuine step up from where THIS
+     * athlete began" — and the anchor was still the modelled cold start, the number nobody has put
+     * on his bar since stated loads began to open a week (B-1 cancelled, 2026-09-28).
+     *
+     * The anchor is the heavier of the two: the modelled start, and the load the app actually
+     * opened the lift at (`openingLoads` — the prescription of her first session on it). It only
+     * ever RISES, so an athlete who was opened at the model keeps the ladder she had, to the kilo.
+     */
+    const anchor = Math.max(modelled, openings?.[exId] ?? 0);
 
     const rungs: number[] = [];
     for (const mult of CLUB_MULTIPLES) {
@@ -223,6 +237,40 @@ function chronological(sessions: Session[]): Session[] {
 const countsAsWorkout = (s: Session): boolean => s.trained !== false;
 
 /**
+ * The load the app OPENED each lift at: the heaviest prescription of her first session on it — "the
+ * SAME number the engine put on the bar on day one", in the header's own words. It is the stated
+ * load when she stated one, and the cold start (experience and all) when she did not.
+ *
+ * ⚠️ THE PRESCRIPTION, NOT WHAT SHE LIFTED. A stranger who is handed 50 kg and squats 100 on her
+ * first day has beaten what the app expected, and the catalog's law stands: every rung up to it
+ * lands at once. What may not happen is a seal for lifting exactly what she was asked to.
+ *
+ * History only grows forward, so this is as stable as the onboarding bodyweight — same sessions
+ * in, same ladders out.
+ */
+export type OpeningLoads = Readonly<Record<string, number>>;
+
+export function openingLoads(sessions: readonly Session[]): OpeningLoads {
+  const out: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const s of chronological(sessions as Session[])) {
+    // A free log and an imported record carry no prescription of ours — their "recommended" is the
+    // set itself, written so the row is whole. A PR single logged freely still strikes its club.
+    if (s.freeform) continue;
+    const peak = new Map<string, number>();
+    for (const x of s.sets) {
+      if (seen.has(x.exerciseId) || x.recommendedWeight == null || x.isApproach) continue;
+      if (x.recommendedWeight > (peak.get(x.exerciseId) ?? 0)) peak.set(x.exerciseId, x.recommendedWeight);
+    }
+    for (const [exId, kg] of peak) {
+      out[exId] = kg;
+      seen.add(exId);
+    }
+  }
+  return out;
+}
+
+/**
  * Kilos she moved — EVIDENCE sets only (`domain/setEvidence`, 2026-09-07). A presumed set is the
  * prescription copied across, and a tonnage club struck on numbers she may never have lifted is a
  * milestone she would not believe. The same predicate excludes the warm-up bridge, the line every
@@ -240,7 +288,7 @@ const sessionTonnage = (s: Session): number =>
  */
 export function earnedMilestones(sessions: Session[], profile?: MilestoneProfile | null): EarnedMilestone[] {
   const hist = chronological(sessions);
-  const ladders = clubLadders(profile);
+  const ladders = clubLadders(profile, openingLoads(hist));
   const out: EarnedMilestone[] = [];
   const earn = (m: Milestone, s: Session) => out.push({ ...m, earnedAt: s.startedAt, sessionId: s.id });
 
@@ -366,7 +414,7 @@ export function newlyEarned(sessions: Session[], profile?: MilestoneProfile | nu
 export function nextUp(sessions: Session[], profile?: MilestoneProfile | null): NextMilestone[] {
   const hist = chronological(sessions);
   const earned = new Set(earnedMilestones(hist, profile).map((m) => m.id));
-  const ladders = clubLadders(profile);
+  const ladders = clubLadders(profile, openingLoads(hist));
   const out: NextMilestone[] = [];
 
   const count = hist.filter(countsAsWorkout).length; // whole workouts only (see countsAsWorkout)

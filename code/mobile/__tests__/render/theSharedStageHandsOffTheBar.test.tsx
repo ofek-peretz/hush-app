@@ -63,6 +63,8 @@ const liveSet = {
   currentItem: null,
   nextItem: null,
   straightInto: null,
+  superset: null,
+  nextSuperset: null,
   nextExerciseId: null,
   nextExercise: null,
   nextTarget: null,

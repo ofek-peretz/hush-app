@@ -46,6 +46,7 @@ import { useFocusedStatusBar } from '@/platform/statusBar';
 import { useSession, filmSubject, type CompleteResult } from '@/state/stores/sessionStore';
 import { exerciseById, exerciseCues, exerciseDisplayName } from '@/data/exercises';
 import { exerciseNameSize } from '@/screens/session/nameSize';
+import { SupersetAfter, SupersetCard, SupersetFigures, SupersetSteps } from '@/screens/session/SupersetBlock';
 import { useVoiceCoach } from '@/platform/voice/useVoiceCoach';
 import { weightStepFor } from '@/domain/weightStep';
 import { emptyBarKg } from '@/engine/loadMath';
@@ -1211,6 +1212,7 @@ export function SessionFlow({ navigation, route }: Props) {
               setN={restingBetweenSets ? session.nextSetLabel?.n : session.setLabel?.n}
               setM={restingBetweenSets ? session.nextSetLabel?.m : session.setLabel?.m}
               warmup={restingBetweenSets ? session.nextSetLabel?.warmup : session.setLabel?.warmup}
+              superset={session.displayPhase.startsWith('REST') ? session.nextSuperset : session.superset}
             />
           </Pressable>
         </>
@@ -2186,15 +2188,27 @@ function LiftRail({
   setN,
   setM,
   warmup,
+  superset,
 }: {
   index: number;
   total: number;
   setN?: number;
   setM?: number;
   warmup?: boolean;
+  /** Inside a superset the line counts ROUNDS (2026-10-11): "exercise 4 / 6 · set 2 of 3" flipped
+   *  to "exercise 5 / 6" and back on every set of a pair, which is the opposite of a position. */
+  superset?: { round: number; rounds: number } | null;
 }) {
   const { t } = useCopy();
   const sets = setM && setM > 1 && setN ? setM : 0;
+  if (superset) {
+    const line = t('workout.supersetRound', { n: superset.round, m: superset.rounds });
+    return (
+      <View style={styles.railRow} accessibilityRole="progressbar" accessibilityLabel={line}>
+        <Text style={styles.railLine} numberOfLines={1}>{line}</Text>
+      </View>
+    );
+  }
   if (total <= 1 && !sets) return null;
   return (
     <View
@@ -2951,18 +2965,18 @@ function ActiveSet({
             <Legend size={20} track={0.28} align="center" style={styles.group}>
               {t('workout.warmupOfM', { n: setN, m: setM })}
             </Legend>
-          ) : session.straightInto ? (
-            <Legend size={20} track={0.28} align="center" style={styles.group}>{t('workout.superset')}</Legend>
+          ) : session.superset ? (
+            /* ⛔ WHICH OF THE TWO SHE IS ON (founder, 2026-10-11: *"כרגע זה לא ברור בכלל"*). The one
+               word "סופרסט" stood here over two names of equal size, and only on the first lift —
+               the second arrived with nothing saying what it was half of. The steps mark the lift
+               she is doing on BOTH; the round is counted on the rail above. See `SupersetBlock`. */
+            <SupersetSteps count={session.superset.exerciseIds.length} position={session.superset.position} />
           ) : null}
           {/* Sized from the name, never fitted — see `nameSize.ts` for the frame that shrank it to
               nothing (founder 2026-09-08). Two lines are allowed; the size already guarantees the
               name fits them, so nothing here is ever clipped or shrunk. */}
           <Text style={[styles.exName, exerciseNameSize(exName)]} numberOfLines={2}>{exName}</Text>
-          {session.straightInto ? (
-            <Text style={[styles.supersetNext, exerciseNameSize(session.straightInto)]} numberOfLines={2}>
-              {session.straightInto}
-            </Text>
-          ) : null}
+          {session.superset && !session.setLabel?.warmup ? <SupersetAfter superset={session.superset} /> : null}
           {/* ⛔ NO NOTE ON THE STAGE (founder, 2026-09-15): *"ותוריד את האפשרות לכתוב NOTES במסך הזה אין בזה
               צורך."* The note on a lift still lives on the lift's own page (LiftDetail); mid-set it was a
               control nobody reaches for, under the one name she reads. */}
@@ -4282,7 +4296,13 @@ function Rest({
           giving. A crossing wants a WALKING pose and there isn't one yet; until there is, it draws
           nothing, which is what it drew yesterday.
         */}
-        {isTransition ? (
+        {session.nextSuperset ? (
+          /* ⛔ BOTH LIFTS, PERFORMED (founder, 2026-10-11: *"סרטון של שני התרגילים שצריך לבצע"*). A
+             superset's rest used to show the first lift alone and call it "a new exercise". */
+          <View style={styles.crossingAthleteSlot}>
+            <SupersetFigures superset={session.nextSuperset} fps={STAGE_FPS} />
+          </View>
+        ) : isTransition ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('workout.form')}
@@ -4313,7 +4333,8 @@ function Rest({
             station, and it is the only rest where a number is an instruction rather than a
             reminder. The reps still do not appear: you cannot load reps onto a bar. */}
         <View style={styles.upNext}>
-          <View style={styles.upCard}>
+          {session.nextSuperset ? <SupersetCard superset={session.nextSuperset} units={units} /> : null}
+          <View style={[styles.upCard, session.nextSuperset ? styles.upCardStoodDown : null]}>
             <View style={styles.upRow}>
               <View style={styles.upInfo}>
                 {/*
@@ -4504,7 +4525,15 @@ function Rest({
           variant="onstage"
           size={isTransition ? 'crossing' : 'act'}
           block
-          label={isTransition ? t('workout.startNamed', { name: bidi(nextName) }) : t('workout.startNextSet')}
+          label={
+            session.nextSuperset
+              ? session.nextSuperset.round === 1
+                ? t('workout.startSuperset')
+                : t('workout.startRound', { n: session.nextSuperset.round })
+              : isTransition
+                ? t('workout.startNamed', { name: bidi(nextName) })
+                : t('workout.startNextSet')
+          }
           onPress={() => {
             // A rest she CHANGED is a measurement (2.4d): cutting it short or stretching it both
             // move her median, and the beat says so on the way out. A rest that simply ran out
@@ -4940,9 +4969,6 @@ const styles = StyleSheet.create({
    * 30, 26 beyond — arithmetic, never a measurement, so no frame can move it.
    */
   exName: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink0, textAlign: 'center', maxWidth: 330 },
-  // The second half of a superset: the SAME size as the lift she is on, in the quiet tone the unit
-  // label wears — present as an equal, subordinate only in colour.
-  supersetNext: { fontFamily: font.sansSemibold, fontSize: 36, lineHeight: 42, color: stage.ink2, textAlign: 'center', maxWidth: 330, marginTop: 2 },
   // Tapping the load reveals "why this load" — a quiet, intentional dim, never a button-like fill.
   // A.13 — the wash, not a fade: a control at 55% reads as disabled, not as pressed.
   // The equipment-native figure UNDER the hero: "7 kg a side". The number is a measurement (mono,
@@ -5483,6 +5509,9 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingHorizontal: 22,
   },
+  // A superset's rest draws `SupersetCard` in this card's place (2026-10-11); the single-lift card
+  // is taken out of the layout rather than unmounted, so nothing inside it has to know.
+  upCardStoodDown: { display: 'none' },
   upRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   upInfo: { flex: 1, minWidth: 0, gap: 7 },
   upLegend: { color: stage.ink1 },

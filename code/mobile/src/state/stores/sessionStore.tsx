@@ -87,6 +87,7 @@ function worthQueuing(e: unknown): boolean {
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { bandOf, currentBlockSets } from '@/domain/setRow';
+import { supersetAt, type SupersetView } from '@/domain/supersetView';
 import { dayTitle } from '@/i18n/dayTitle';
 
 export { REST_COMPOUND_S, REST_ISOLATION_S, REST_TRANSITION_S, REST_INTER_S, REST_UNSTATED_S, refreshLearnedRests, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds } from '@/domain/restPrescription';
@@ -560,6 +561,16 @@ export interface SessionView {
    * a row appeared immediately, and nothing said that was the plan rather than a fault.
    */
   straightInto: string | null;
+  /**
+   * The superset the CURRENT step is part of — its lifts in order, which of them she is on, and the
+   * round of how many (`domain/supersetView`). Null on every ordinary set. This, not `straightInto`,
+   * is what the stage draws since 2026-10-11: the second lift of a pair has no "straight into" and
+   * used to arrive with nothing saying what it was half of.
+   */
+  superset: SessionSuperset | null;
+  /** The same for the step a rest is leading into — so the rest card can announce the superset
+   *  before its first round and name the round between rounds. Null outside a rest. */
+  nextSuperset: SessionSuperset | null;
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
   /** Set n of m within the exercise. `warmup: true` = a ramp step — n/m then count the RAMP
@@ -1226,6 +1237,30 @@ export function insertWarmup(plan: Step[], at: number, ramp: WarmupSet[]): Step[
 let nowOverrideMs: number | null = null;
 export function clockNow(): number {
   return nowOverrideMs ?? Date.now();
+}
+
+/** "The next step follows this one with no rest" — the machine's own line for skipping the rest
+ *  screen (§1.14), and so the definition of a superset's inside (`domain/supersetView`). */
+export function flowsStraightOn(step: Step): boolean {
+  return restAfterStep(step) <= REST_SKIP_THRESHOLD_S && !step.lastSetOfSession;
+}
+
+/** A superset as the session publishes it: where she stands, and each lift's own prescription for
+ *  THIS round (kg, as the engine wrote it — the screen converts, as it does every load). */
+export interface SessionSuperset extends SupersetView {
+  lifts: { exerciseId: string; weightKg: number | null; reps: number | null }[];
+}
+
+export function sessionSupersetAt(plan: readonly Step[], index: number): SessionSuperset | null {
+  const view = supersetAt(plan, index, flowsStraightOn);
+  if (!view) return null;
+  return {
+    ...view,
+    lifts: view.exerciseIds.map((exerciseId, k) => {
+      const target = plan[view.first + k]?.target;
+      return { exerciseId, weightKg: target?.recommendedWeight ?? null, reps: target?.recommendedReps ?? null };
+    }),
+  };
 }
 
 export function restAfterStep(step: Step): number {
@@ -2751,10 +2786,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // `<= REST_SKIP_THRESHOLD_S`, the machine's own line (§1.14): a coach rest of one to five
       // seconds skips the rest screen exactly as zero does, and read as `=== 0` the superset label
       // went missing on precisely those (2026-09-09).
+      // ⛔ IN HER LANGUAGE (2026-10-11, walked live): this read the catalogue's `name` first — the
+      // English one — so a Hebrew stage drew "Rope Pushdown" under "הרחקת כתף בפולי".
       straightInto:
         current && restAfterStep(current) <= REST_SKIP_THRESHOLD_S && next && !current.lastSetOfSession
-          ? exerciseById(next.exerciseId)?.name ?? exerciseDisplayName(next.exerciseId)
+          ? exerciseDisplayName(next.exerciseId)
           : null,
+      superset: current ? sessionSupersetAt(plan, idx) : null,
+      nextSuperset: resting && next ? sessionSupersetAt(plan, idx + 1) : null,
       setLabel: current ? stepPosition(current) : null,
       /*
        * ⚠️ THE LIVE SESSION IS EXCLUDED BY ID. History is written as she goes, so without this

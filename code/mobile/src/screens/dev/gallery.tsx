@@ -305,6 +305,8 @@ const sessionFixture = {
   nextLiftFact: null,
   // An ordinary set: a rest follows it, so nothing is chained. 2.2k drives the superset.
   straightInto: null,
+  superset: null,
+  nextSuperset: null,
   nextExerciseId: 'bb_bench_press',
   setLabel: { n: 2, m: 4 },
   /* ⛔ `emphases` STOOD HERE with two of the coach's KEY POINTS — a surface the founder deleted on
@@ -469,6 +471,18 @@ const itemFixture = {
 const supersetFixture = {
   ...(sessionFixture as unknown as Record<string, unknown>),
   straightInto: exerciseDisplayName('bb_row'),
+  // Round 2 of 3, on the first of the two lifts — the steps, the round on the rail, what follows.
+  superset: {
+    exerciseIds: ['bb_bench_press', 'bb_row'],
+    position: 1,
+    round: 2,
+    rounds: 3,
+    first: 0,
+    lifts: [
+      { exerciseId: 'bb_bench_press', weightKg: 60, reps: 8 },
+      { exerciseId: 'bb_row', weightKg: 50, reps: 10 },
+    ],
+  },
 } as unknown as React.ContextType<typeof SessionContext>;
 
 /** 2.4e · A CROSSING INTO A RUN — the up-next card with no load to state. */
