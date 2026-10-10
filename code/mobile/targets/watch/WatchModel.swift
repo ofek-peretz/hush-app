@@ -27,9 +27,6 @@ enum ConnectionState { case connected, reconnecting }
 struct EditDraft: Equatable {
   var weight: Double?
   var reps: Int
-  /// She SAID the reps — turned the crown on them — rather than leaving the figure the editor
-  /// opened on. Only stated reps are ever written for a working set (`WatchModel.mustStateReps`).
-  var repsStated: Bool = false
 }
 
 /// Which slot a one-tap swap replaced — the CURRENT lift (Active Set) or the NEXT one
@@ -840,29 +837,9 @@ final class WatchModel: ObservableObject {
   // MARK: Local UI — inline Edit (committed override) + Set Confirmation
 
   /// Commit the inline Edit (load + reps): shown on Active Set until Complete logs it.
-  func saveEdit(weight: Double?, reps: Int, repsStated: Bool) {
-    editDraft = EditDraft(weight: weight, reps: max(0, reps), repsStated: repsStated)
+  func saveEdit(weight: Double?, reps: Int) {
+    editDraft = EditDraft(weight: weight, reps: max(0, reps))
     recompute()
-  }
-
-  /**
-   * ⛔ THE REPS OF A WORKING SET ARE SAID, NEVER ASSUMED (founder, 2026-10-10).
-   *
-   * I had told him that a press on Complete set with nothing dialled writes the FLOOR of the band —
-   * a lifter who does ten and presses once is recorded as eight, and the programme is built on it.
-   * His answer: *"למה שפשוט לא נעשה שחובה להזין את החזרות בכל סט וסט."*
-   *
-   * So on the wrist a working set cannot be logged until she has turned the crown on its reps. The
-   * one rule, asked by the stage (what its button does) and by `completeSet` (what may leave):
-   *   · a HOLD or a carry has no reps — its Done is its Done;
-   *   · a WARM-UP step is written as prescribed: nothing reads its reps, and a question nobody
-   *     listens to the answer of is only friction (my reading of "every set" — told to him);
-   *   · everything else waits for `repsStated`.
-   */
-  static func mustStateReps(_ m: WireMirror, draft: EditDraft?) -> Bool {
-    if m.holdSeconds != nil || m.holdMetres != nil { return false }
-    if m.isWarmup == true { return false }
-    return draft?.repsStated != true
   }
 
   /// The current shown weight/reps (override if present, else the target) — the
@@ -929,8 +906,6 @@ final class WatchModel: ObservableObject {
 
   func completeSet() {
     guard let m = effectiveMirror else { return }
-    // Defence in depth: the stage opens the question instead of calling this (`ActiveSetScreen`).
-    guard !WatchModel.mustStateReps(m, draft: editDraft) else { return }
     let weight = editDraft?.weight ?? m.targetWeight
     let reps = editDraft?.reps ?? m.targetReps
     let confirm = (weight: weight, reps: reps, index: m.setNumber ?? 1, total: m.setsInExercise ?? 1)

@@ -1832,8 +1832,7 @@ struct ChooseOverlay: View {
 struct ActiveSetScreen: View {
   let mirror: WireMirror
   let draft: EditDraft?
-  /// Her figures back to the model: the load, the reps, and whether she SAID the reps.
-  let onSave: (Double?, Int, Bool) -> Void
+  let onSave: (Double?, Int) -> Void
   let onComplete: () -> Void
   /// "מוכן" — offered only while the voice's loading dialogue is open (`mirror.awaitingReady`).
   var onReady: () -> Void = {}
@@ -1861,33 +1860,12 @@ struct ActiveSetScreen: View {
   @State private var crown: Double = 0
   /// The crown has turned at least once in this edit — the hint under the rows has done its job.
   @State private var crownMoved = false
-  /**
-   * ⛔ THE REPS ARE ASLEEP UNTIL SHE TURNS THE CROWN ON THEM (founder, 2026-10-10: *"חובה להזין את
-   * החזרות בכל סט וסט"* — see `WatchModel.mustStateReps`).
-   *
-   * The editor opens on a working set with NO reps figure: a dash. The first click of the crown
-   * brings the figure in — last time's reps on this set, or the floor of the band — and only then
-   * does it move, and only then is Complete set a button. So no number is ever written that she did
-   * not put on the glass herself; a set she did exactly as last time costs one click.
-   */
-  @State private var stated = false
   /// The row the crown's value currently belongs to — see the crown's `onChange`.
   @State private var crownField: EditField = .weight
 
   private var bodyweight: Bool { mirror.targetWeight == nil }
   private var shownWeight: Double? { draft?.weight ?? mirror.targetWeight }
   private var shownReps: Int { draft?.reps ?? mirror.targetReps }
-  /// Must she say the reps before this set can be written? (A hold and a warm-up step: no.)
-  private var mustState: Bool { WatchModel.mustStateReps(mirror, draft: draft) }
-  /// Where the reps figure starts when the crown wakes it: what she dialled, else what she did on
-  /// this set last time (the dimmed figure the set row already shows), else the floor of the band.
-  private var seedReps: Int {
-    if let d = draft, d.repsStated { return d.reps }
-    let i = (mirror.setNumber ?? 1) - 1
-    if mirror.isWarmup != true, let ghosts = mirror.lastReps, ghosts.indices.contains(i) { return ghosts[i] }
-    return mirror.targetReps
-  }
-
   var body: some View {
     /*
      * ════ THE SET, RE-LAID ════
@@ -1916,8 +1894,7 @@ struct ActiveSetScreen: View {
         if editing {
           // The header lives top-left on every screen (the wrist's second rule); the edit legend was
           // the one exception, centred on a row of its own (design pass 2026-09-09).
-          // Until she has said them the strip ASKS — the coach's own question, moved to the wrist.
-          TopStrip(text: (stated ? WatchCopy.editSet : WatchCopy.howManyReps).uppercased())
+          TopStrip(text: WatchCopy.editSet.uppercased())
         } else {
           header
         }
@@ -1955,10 +1932,9 @@ struct ActiveSetScreen: View {
       guard editing, crownField == field else { return }
       /*
        * ⛔ ONLY HER HAND COUNTS (2026-10-10). This closure also runs when the CODE sets the crown —
-       * on opening the editor, on switching rows, on the wake below — and it used to treat that as
-       * a turn: the hint was struck the moment the editor opened. A turn is a value that DIFFERS
-       * from the figure the row already holds; the code only ever sets the crown to that figure.
-       * That is also what makes the wake safe: nothing but a real click can say the reps.
+       * on opening the editor and on switching rows — and it used to treat that as a turn: the hint
+       * was struck the moment the editor opened. A turn is a value that DIFFERS from the figure the
+       * row already holds; the code only ever sets the crown to that figure.
        */
       if field == .weight {
         // Snapped to the detent rather than to a whole number — `by:` sets the crown's step, and this
@@ -1971,13 +1947,7 @@ struct ActiveSetScreen: View {
         let next = max(0, v.rounded())
         guard next != r else { return }
         crownMoved = true
-        if stated {
-          r = next
-        } else {
-          // The first click brings the figure in where it stands; the clicks after it move it.
-          stated = true
-          crown = r
-        }
+        r = next
       }
     }
     .onChange(of: field) { _, f in
@@ -2189,9 +2159,9 @@ struct ActiveSetScreen: View {
      * nowhere on the screen.
      */
     Button { TapGate.pass { enterEdit(.reps) } } label: {
-      Text(draft?.repsStated == true ? "× \(shownReps)" : (hi > lo ? "× \(lo)–\(hi)" : "× \(lo)"))
+      Text(draft != nil ? "× \(shownReps)" : (hi > lo ? "× \(lo)–\(hi)" : "× \(lo)"))
         .font(.system(size: Fit.s(18), weight: .medium, design: .monospaced)).monospacedDigit()
-        .foregroundStyle(draft?.repsStated == true ? Palette.ink0 : Palette.ink1)
+        .foregroundStyle(draft != nil ? Palette.ink0 : Palette.ink1)
         .lineLimit(1)
         .padding(.horizontal, Fit.s(12)).padding(.vertical, Fit.s(2))
         .overlay(Capsule().strokeBorder(Palette.ink0.opacity(0.16), lineWidth: Fit.s(1)))
@@ -2371,8 +2341,7 @@ struct ActiveSetScreen: View {
       if !bodyweight {
         editRow(unit: WatchCopy.kg, band: nil, value: fmtW(w), active: field == .weight) { field = .weight }
       }
-      // Asleep, the row holds a dash: there is no figure on this screen she did not put there.
-      editRow(unit: WatchCopy.reps, band: bandLabel, value: stated ? "\(Int(r))" : "–", active: bodyweight || field == .reps, asleep: !stated) { field = .reps }
+      editRow(unit: WatchCopy.reps, band: bandLabel, value: "\(Int(r))", active: bodyweight || field == .reps) { field = .reps }
       // A hint teaches; once the crown has turned it is a sentence she has already read, and the
       // system's own crown indicator is beside her thumb. The row keeps its height so nothing jumps.
       crownHint.opacity(crownMoved ? 0 : 1)
@@ -2388,7 +2357,7 @@ struct ActiveSetScreen: View {
   }
 
   /// One half of the editor: a legend, a figure, and a border that says whether the crown is on it.
-  private func editRow(unit: String, band: String?, value: String, active: Bool, asleep: Bool = false, tap: @escaping () -> Void) -> some View {
+  private func editRow(unit: String, band: String?, value: String, active: Bool, tap: @escaping () -> Void) -> some View {
     Button(action: { TapGate.pass(tap) }) {
       HStack(alignment: .firstTextBaseline, spacing: Fit.s(6)) {
         Text(unit.uppercased())
@@ -2403,7 +2372,7 @@ struct ActiveSetScreen: View {
         Spacer(minLength: Fit.s(4))
         Text(value)
           .font(.system(size: Fit.s(30), weight: .medium, design: .monospaced)).monospacedDigit()
-          .foregroundStyle(asleep ? Palette.ink3 : (active ? Palette.ink0 : Palette.ink1))
+          .foregroundStyle(active ? Palette.ink0 : Palette.ink1)
           .lineLimit(1).minimumScaleFactor(0.6)
       }
       .padding(.horizontal, Fit.s(12))
@@ -2462,7 +2431,7 @@ struct ActiveSetScreen: View {
        */
       HStack(spacing: Fit.s(6)) {
         StageButton(title: WatchCopy.ready, kind: .quiet, height: Wrist.action, fontSize: 15, action: onReady)
-        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, action: pressComplete)
+        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, action: onComplete)
       }
     } else if editing {
       /*
@@ -2474,37 +2443,20 @@ struct ActiveSetScreen: View {
        * Save stays beside it, quieter: figures dialled BEFORE a set (a machine with no 40 kg pin)
        * go back to the stage unwritten, and it is the way out of an editor opened by mistake. The
        * row is the rest screen's two-button row, so both stay whole on 40 mm.
-       *
-       * ⛔ AND IT IS NOT A BUTTON UNTIL THE REPS ARE SAID (founder, 2026-10-10 — `stated`). Dimmed,
-       * it answers a press with the system's "try again" and puts the crown back on the reps: a
-       * control that refuses must say so, and say what it is waiting for.
        */
       HStack(spacing: Fit.s(6)) {
         StageButton(title: WatchCopy.save, kind: .quiet, height: Wrist.action, fontSize: 15) { commit() }
-        if stated {
-          StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) {
-            commit()
-            onComplete()
-          }
-        } else {
-          StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) {
-            field = .reps
-            crownMoved = false
-            WatchHaptics.play(.notYet)
-          }
-          .opacity(0.35)
+        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15) {
+          commit()
+          onComplete()
         }
       }
     } else {
-      // Mock WT2: a single full-width "Complete set" (cream).
-      StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, seated: true, action: pressComplete)
+      // Mock WT2: a single full-width "Complete set" (cream). As on the phone's stage and the lock
+      // card, one press logs the set as written; the load and the band above are the doors for a
+      // set that went otherwise (founder, 2026-10-10: "תשאיר את החזרות כמו שיש בפלאפון").
+      StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, seated: true, action: onComplete)
     }
-  }
-
-  /// Complete set on the live stage: a working set first asks how many (the editor, on the reps,
-  /// asleep); anything else — a hold, a warm-up step, a set whose reps she has already said — is written.
-  private func pressComplete() {
-    if mustState { enterEdit(.reps) } else { onComplete() }
   }
 
   /// Open the inline editor with `f` focused (bodyweight always edits reps — there is no load).
@@ -2517,9 +2469,7 @@ struct ActiveSetScreen: View {
      * was given.
      */
     w = ((shownWeight ?? 0) * 2).rounded() / 2
-    r = Double(seedReps)
-    // Awake from the start only where nothing has to be said (a warm-up step), or already was.
-    stated = !mustState
+    r = Double(shownReps)
     field = bodyweight ? .reps : f
     crown = field == .weight ? w : r
     crownField = field
@@ -2527,7 +2477,7 @@ struct ActiveSetScreen: View {
     editing = true
   }
   private func commit() {
-    onSave(bodyweight ? nil : w, Int(r), stated)
+    onSave(bodyweight ? nil : w, Int(r))
     editing = false
   }
 }

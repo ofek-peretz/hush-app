@@ -26,7 +26,6 @@ enum HapticEvent {
   case receiptEarned // firm even double
   case exerciseBusyApplied // action ack
   case kmSplit // strong single — a whole kilometre closed mid-run (felt without looking)
-  case notYet // a press the screen cannot take yet — "say the reps first" (2026-10-10)
 }
 
 enum WatchHaptics {
@@ -76,9 +75,6 @@ enum WatchHaptics {
     case .kmSplit:
       // one strong notification beat — unmistakable through a stride, used by nothing else.
       return [Beat(delay: 0, type: .notification)]
-    case .notYet:
-      // the system's own "try again": a control that refuses must never refuse in silence.
-      return [Beat(delay: 0, type: .retry)]
     }
   }
 }

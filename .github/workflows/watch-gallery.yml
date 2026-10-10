@@ -1,0 +1,49 @@
+# The wrist, photographed — ON DEMAND ONLY.
+#
+# No Swift compiles on the machine this code is written on, so until 2026-10-10 the watch app had
+# never been SEEN from this repository: every wrist law reads source. This job builds the watch
+# target's own screens into a simulator app, feeds them the frames the phone sends, and takes the
+# simulator's screenshot of each, on the smallest case and on the founder's.
+#
+# It runs only when someone asks for it — a push to `ci/watch-gallery` (push the commit you want
+# photographed there) or a manual dispatch — because a macOS runner is ten times the price of a
+# Linux one and nothing here gates a merge. The photographs come back on the `ci/watch-renders`
+# branch (force-pushed, photographs only), so they can be read with `git fetch` and no token.
+name: watch-gallery
+
+on:
+  push:
+    branches: ["ci/watch-gallery"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    name: photograph the wrist (watchOS simulator)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i watch || true
+      - name: Photograph
+        run: bash code/mobile/native-tests/watch-gallery/render.sh "$RUNNER_TEMP/renders"
+      - name: Send the photographs back (branch ci/watch-renders)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/renders"
+          cd "$RUNNER_TEMP/renders"
+          echo "$GITHUB_SHA" > SOURCE
+          git init -q -b ci/watch-renders
+          git config user.name "watch-gallery"
+          git config user.email "watch-gallery@users.noreply.github.com"
+          git add -A
+          git commit -q -m "watch gallery @ $GITHUB_SHA"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci/watch-renders
