@@ -3,6 +3,10 @@
  * functions; they decide strongest/lagging, still-learning, threshold crossings,
  * and the compare reference.
  */
+// @ts-nocheck
+
+// 
+
 import type { Capability, PortraitSnapshot } from '@/data/local/models';
 import {
   strongestConfident,

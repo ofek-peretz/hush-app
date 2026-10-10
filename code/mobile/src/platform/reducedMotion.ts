@@ -4,6 +4,9 @@
  * still fires), Portrait bars draw fully. No Hush moment depends on motion to
  * be understood.
  */
+
+// 
+
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 

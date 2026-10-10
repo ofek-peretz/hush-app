@@ -6,12 +6,23 @@
  *
  * Stroke-based by default; `filled` switches the tab glyphs to a solid look for
  * the active tab. Color/size/strokeWidth are caller-controlled.
+ *
+ * FOUNDER RULING 2026-07-12 — CLOSED: the stroke weight stays as it is. It was proposed that
+ * every icon be thinned to match the font's stroke (~1.5px) for typographic harmony. Rejected:
+ * LEGIBILITY BEATS AESTHETICS. A slightly heavy glyph that is recognised in a fraction of a
+ * second across a gym is worth more than a harmonious one that disappears at 16px.
  */
+
+// 
+
 import React from 'react';
+import { I18nManager } from 'react-native';
 import Svg, { Path, Rect, Circle, Line, G } from 'react-native-svg';
 import { color as tokens } from '@/design/tokens';
 
 export type IconName =
+  | 'camera'
+  | 'search'
   | 'menu' // line.3.horizontal (hamburger)
   | 'chevronRight'
   | 'chevronLeft'
@@ -21,12 +32,16 @@ export type IconName =
   | 'swap' // arrow.left.arrow.right
   | 'check' // checkmark
   | 'close' // xmark
+  | 'backspace' // lucide delete — the keypad's erase key (mirrors under RTL: it erases toward the start)
   | 'grip' // reorder handle
   | 'home' // house / house.fill
+  | 'todayRange' // v7 2.1 — the brand's measured range with the dot at centre (the Today tab)
+  | 'lineChart' // v7 2.1 — a bare polyline, no arrowhead (the Progress tab)
   | 'program' // square.grid.2x2
   | 'history' // clock.arrow.circlepath
   | 'portrait' // chart.bar / chart.bar.fill
   | 'settings' // gearshape
+  | 'user' // a person — the "You" tab
   | 'play' // play (lucide outline triangle — Begin)
   | 'playCircle' // circle-play (Form)
   | 'repeat' // repeat (Swap)
@@ -36,6 +51,7 @@ export type IconName =
   | 'calendar' // calendar-range
   | 'trendingUp' // trending-up
   | 'layers' // layers
+  | 'plate' // a weight plate, face-on — the "add N + N per side" instruction
   | 'lock' // lock
   | 'pin' // pin — "pinned / protected" (the lock affordance; not a security padlock)
   | 'minus' // minus — calm "matched / held" verdict mark
@@ -43,10 +59,22 @@ export type IconName =
   | 'dumbbell' // dumbbell (history)
   | 'shield' // shield-check (consent)
   | 'heart' // heart-pulse (health)
-  | 'footprints' // footprints (Open training: run / walk)
+  | 'footprints' // footprints (a recorded walk)
+  | 'runner' // a running figure (Open training: run / walk)
   | 'wind' // wind (walk mode)
   | 'flag' // flag (finish a cardio activity)
-  | 'checkCheck'; // check-check (cardio recorded)
+  | 'flame' // flame (calories burned — cardio)
+  | 'checkCheck' // check-check (cardio recorded)
+  | 'activity' // pulse waveform (cardio record header — v7 3.3c)
+  | 'star' // a solid five-point star — a MARK EARNED (v7 3.2b Milestones)
+  | 'plus' // plus — "where it began", inside a dashed ring (v7 3.2b)
+  | 'alert' // a warning triangle — the ONE place it appears is the pain door (v7 13.1)
+  | 'share' // a tray with an arrow out of it — sending a plan link (v7 11.4)
+  | 'link' // two chain links — the superset couple (builder, 2026-08-26)
+  | 'twoPeople' // two figures — the door to the share cards, from Today (v7 2.1)
+  | 'speech' // a single bubble — the door to the coach, in the corner of Today
+  | 'eyeOff' // an eye, struck — "this does NOT travel" (v7 11.4's privacy line)
+  | 'watch'; // a watch on its band, crown at the side — the wrist (10.4)
 
 interface Props {
   name: IconName;
@@ -54,9 +82,41 @@ interface Props {
   color?: string;
   strokeWidth?: number;
   filled?: boolean; // tab glyphs: solid when active
+  /** Opt OUT of RTL geometry mirroring — for a glyph that is a MEDIA TRANSPORT rather than a
+   *  direction of travel (the ▶ on a video). See the note above `resolveDirection`. */
+  noMirror?: boolean;
 }
 
-export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled }: Props) {
+/**
+ * The horizontal chevrons are DIRECTIONAL (back / forward / disclosure) everywhere
+ * they're used in this app, so they must mirror under RTL — a frozen SVG glyph won't.
+ * `trendingUp` and `swap` are NOT mirrored (a rising trend rises the same way in every
+ * language; an exchange glyph is a cycle, not a direction). Vertical chevrons are neutral.
+ *
+ * `play` DOES mirror now (founder 2026-07-12: "the start-workout arrow points the opposite
+ * way to every other arrow on the screen"). The iOS convention that freezes a play triangle
+ * is about a MEDIA TRANSPORT — the ▶ on a video, which means "run the tape", not "go that
+ * way". Ours is not that. It sits on "Begin Push A" and "Start run", beside a row of
+ * disclosure chevrons that all point to the start of the line, and it means GO FORWARD.
+ * Forward in Hebrew is leftward.
+ *
+ * The one place `play` IS a transport is the video player (components/FormMedia), and a
+ * backwards ▶ on a video is nonsense in any language — that call site passes `noMirror`.
+ * `playCircle` never mirrors: it is only ever a transport.
+ */
+function resolveDirection(name: IconName): IconName {
+  if (!I18nManager.isRTL) return name;
+  if (name === 'chevronLeft') return 'chevronRight';
+  if (name === 'chevronRight') return 'chevronLeft';
+  return name;
+}
+
+/** Glyphs whose SVG geometry must be flipped (no mirrored twin exists to swap to). */
+function mirrorsGeometry(name: IconName): boolean {
+  return I18nManager.isRTL && (name === 'play' || name === 'backspace');
+}
+
+export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth = 2, filled, noMirror }: Props) {
   const stroke = color;
   const common = {
     stroke,
@@ -67,8 +127,15 @@ export function Icon({ name, size = 22, color = tokens.textPrimary, strokeWidth 
   };
 
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      {render(name, { stroke, strokeWidth, filled: !!filled, common })}
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      // A geometric flip about the glyph's own centre — the triangle points the way the
+      // language reads (see mirrorsGeometry).
+      style={!noMirror && mirrorsGeometry(name) ? { transform: [{ scaleX: -1 }] } : undefined}
+    >
+      {render(resolveDirection(name), { stroke, strokeWidth, filled: !!filled, common })}
     </Svg>
   );
 }
@@ -116,6 +183,15 @@ function render(
           <Path d="M17 16H5l3 3" />
         </G>
       );
+    case 'link':
+      // Two chain links at 45° — the superset couple (builder, 2026-08-26).
+      return (
+        <G {...common}>
+          <Path d="M10.5 13.5l3-3" />
+          <Path d="M8.5 15.5l-1.8 1.8a3.2 3.2 0 0 0 4.5 4.5l1.8-1.8a3.2 3.2 0 0 0 0-4.5" />
+          <Path d="M15.5 8.5l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5l-1.8 1.8a3.2 3.2 0 0 0 0 4.5" />
+        </G>
+      );
     case 'check':
       return <Path d="M5 12.5l4.5 4.5L19 7" {...common} />;
     case 'close':
@@ -125,6 +201,27 @@ function render(
           <Line x1="18" y1="6" x2="6" y2="18" />
         </G>
       );
+    case 'backspace':
+      // lucide `delete`: the key's body pointing at what it erases, the small x inside it.
+      return (
+        <G {...common}>
+          <Path d="M20 5H9l-7 7 7 7h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" />
+          <Line x1="18" y1="9" x2="12" y2="15" />
+          <Line x1="12" y1="9" x2="18" y2="15" />
+        </G>
+      );
+    case 'todayRange':
+      // v7 2.1 — the Today tab wears the brand's own glyph: a span between two end ticks with
+      // the dot landed at its centre. Today IS the measurement, so the tab says so.
+      return (
+        <G {...common}>
+          <Path d="M4 12h16M4 8.5v7M20 8.5v7" />
+          <Circle cx="12" cy="12" r="2.6" fill={stroke} stroke="none" />
+        </G>
+      );
+    case 'lineChart':
+      // v7 2.1 — Progress: a bare trace, no arrowhead. The shape is the point, not the direction.
+      return <Path d="M4 17l6-6 4 3 6-8" {...common} />;
     case 'home':
       return filled ? (
         <Path d="M12 3l9 8h-2v9h-5v-6h-4v6H5v-9H3z" fill={stroke} />
@@ -176,15 +273,23 @@ function render(
           <Path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" />
         </G>
       );
+    case 'user':
+      // lucide `user` — a head and shoulders, the "You" tab.
+      return (
+        <G {...common}>
+          <Circle cx="12" cy="9" r="3.6" />
+          <Path d="M5.5 19c1.4-3.2 4-4.6 6.5-4.6s5.1 1.4 6.5 4.6" />
+        </G>
+      );
     case 'play':
-      // lucide `play` — a clean rounded triangle (outline), used on Begin CTAs.
-      return <Path d="M8 5.2l11 6.8-11 6.8z" {...common} />;
+      // v7: the Begin CTA's triangle is SOLID — `M8 5v14l11-7z`, filled, no stroke.
+      return <Path d="M8 5v14l11-7z" fill={stroke} />;
     case 'playCircle':
-      // lucide `circle-play` — Form action.
+      // lucide `circle-play` — the form-clip glyph on every plan row.
       return (
         <G {...common}>
           <Circle cx="12" cy="12" r="9" />
-          <Path d="M10 8.5l5.5 3.5-5.5 3.5z" fill={stroke} />
+          <Path d="M10 8.5l5 3.5-5 3.5z" fill={stroke} stroke="none" />
         </G>
       );
     case 'repeat':
@@ -267,6 +372,25 @@ function render(
       return <Line x1="5" y1="12" x2="19" y2="12" {...common} />;
     case 'circle':
       return <Circle cx="12" cy="12" r="8" {...common} strokeDasharray="3 3" />;
+    /* lucide `camera` — "photograph your plan" is an ACT, and a `+` only says "add something".
+       The one glyph that names the act in every language. */
+    case 'camera':
+      return (
+        <G {...common}>
+          <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+          <Circle cx="12" cy="13" r="3.2" />
+        </G>
+      );
+    /* lucide `search` — the one glyph a search field cannot do without. See the note at
+       `ExerciseLibrary`'s field: this app draws inputs on a RULE rather than in a box (founder
+       2026-07-12), which is right, and leaves a search field with nothing at all to identify it. */
+    case 'search':
+      return (
+        <G {...common}>
+          <Circle cx="11" cy="11" r="7" />
+          <Path d="M20 20 L16 16" />
+        </G>
+      );
     case 'dumbbell':
       // lucide `dumbbell` (current diagonal form, verbatim) — matches the Claude
       // Design history rows (which render `data-lucide="dumbbell"` from lucide@latest).
@@ -293,12 +417,48 @@ function render(
           <Path d="M3 13h4l2-3 2 5 2-3h6" />
         </G>
       );
+    case 'flame':
+      // lucide `flame` — the calories-burned glyph on the cardio stage. Rendered filled at the call
+      // site (moss) beside a burn figure; a stroke fallback here keeps it legible if drawn outline.
+      return (
+        <G {...common} fill={filled ? stroke : 'none'}>
+          <Path d="M12 22c-3.9 0-7-2.9-7-6.8 0-2.7 1.5-4.7 2.9-6.5.3-.4 1-.2 1 .3.1 1 .4 2 1.2 2.5C10.6 8.7 11.5 5 14 2.4c.4-.4 1-.1 1 .4-.1 2 .5 3.6 1.7 5.1 1.2 1.5 2.3 3.2 2.3 5.3 0 3.9-3.1 6.8-7 6.8z" />
+        </G>
+      );
     case 'footprints':
       // lucide `footprints` — two staggered footprints.
       return (
         <G {...common}>
           <Path d="M4 16v-2.4a2 2 0 0 1 .6-1.5C5.3 11.4 6 10.3 6 8.5 6 6 5 4 6.5 4S9 6 9 8.5c0 1.6.4 3 .7 4.1.2.7-.4 1.4-1.1 1.4H5.2A1.2 1.2 0 0 0 4 15.2" />
           <Path d="M20 20v-2.4a2 2 0 0 0-.6-1.5c-.7-.7-1.4-1.8-1.4-3.6 0-2.5 1-4.5-.5-4.5S15 10 15 12.5c0 1.6-.4 3-.7 4.1-.2.7.4 1.4 1.1 1.4h3.4a1.2 1.2 0 0 1 1.2 1.2" />
+        </G>
+      );
+    case 'plate':
+      // A WEIGHT PLATE, seen face-on: the disc, its rim, and the collar hole.
+      //
+      // Founder 2026-07-12: this instruction ("Add 20 + 20 per side") used to carry lucide's
+      // `layers` glyph — two stacked rhombi, which read as a pair of squares and meant nothing to
+      // an athlete standing at a bar. The one thing they are about to pick up is a round plate, so
+      // that is what the icon is: the disc and its collar hole, and nothing else. It renders at
+      // 18px, where a third ring would close up into mush — two circles is what stays legible in
+      // the fraction of a second an athlete gives it.
+      return (
+        <G {...common}>
+          <Circle cx="12" cy="12" r="9" />
+          <Circle cx="12" cy="12" r="3" />
+        </G>
+      );
+    case 'runner':
+      // A running figure — the head, the driving arm, the split stride.
+      // Founder 2026-07-12: `footprints` was abstract enough to read as two cups. Open
+      // training is a PERSON moving; the glyph should be unmistakable at 16px.
+      return (
+        <G {...common}>
+          <Circle cx="15.5" cy="4.5" r="1.9" fill={stroke} stroke="none" />
+          <Path d="M13.2 20.5l1.6-5-3.1-2.6.9-4.9" />
+          <Path d="M12.6 8l-3.4 1.6L8 12.6" />
+          <Path d="M12.6 8l3.9 1.7 2.2 3.4h2" />
+          <Path d="M11.7 12.9L7.4 15l-2.6 4.4" />
         </G>
       );
     case 'wind':
@@ -323,6 +483,97 @@ function render(
         <G {...common}>
           <Path d="M2 12.5l3.5 3.5L13 8" />
           <Path d="M11 15l1 1 7.5-8" />
+        </G>
+      );
+    case 'activity':
+      // lucide `activity` — a single pulse/waveform line. Marks a cardio record
+      // (v7 3.3c) in moss beside the serif title.
+      return (
+        <G {...common}>
+          <Path d="M3 12h4l2-6 4 12 2-6h6" />
+        </G>
+      );
+    case 'star':
+      // SOLID, not outlined: a milestone is a thing that HAPPENED. It is the only filled glyph in
+      // the set, which is exactly why it reads as a seal beside the stroke-drawn rest.
+      return <Path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" fill={stroke} stroke="none" />;
+    case 'plus':
+      return (
+        <G {...common}>
+          <Path d="M12 6v12M6 12h12" />
+        </G>
+      );
+    case 'twoPeople':
+      /* Traced from the canonical HTML's Today screen (§02) — two heads over two shoulder arcs,
+         the second slightly behind the first. It is the door to the SHARE cards, and it says what
+         sharing IS here: another person, not a network. Circles carry no stroke-linecap, so they
+         are drawn with the same `common` props the paths use. */
+      return (
+        <G {...common}>
+          <Circle cx={8} cy={9} r={2.6} />
+          <Circle cx={16} cy={9} r={2.6} />
+          <Path d="M3.4 18c.9-2.4 2.6-3.4 4.6-3.4 1.3 0 2.5.4 3.4 1.3" />
+          <Path d="M14 15.9c.9-.9 2.1-1.3 3.4-1.3 2 0 3.7 1 4.6 3.4" />
+        </G>
+      );
+    case 'share':
+      // lucide `share`/upload — a tray with the arrow rising out of it. Never mirrored: it means
+      // "out of this device", not a direction of travel through the text.
+      return (
+        <G {...common}>
+          <Path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7" />
+          <Path d="M16 6l-4-4-4 4M12 2v13" />
+        </G>
+      );
+    case 'eyeOff':
+      return (
+        <G {...common}>
+          <Path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+          <Path d="M4 4l16 16" />
+        </G>
+      );
+    case 'speech':
+      /*
+       * ONE BUBBLE, AND NOTHING INSIDE IT.
+       *
+       * The corner of Today drew `twoPeople` — the SHARE glyph, left behind when that corner became
+       * the coach's door. Two figures say "send this to a friend", which is what the corner used to
+       * do and is now the one thing it cannot.
+       *
+       * What it may not say either is "AI": no sparkle, no spark, no robot. The founder's whole
+       * reason for keeping the coach out of the tab bar is that the app must not read as another
+       * AI app, and a sparkle in the corner would undo that in one glyph. A speech bubble is the
+       * plainest true statement available — something here talks — and it is the same shape a
+       * person's message takes everywhere else on a phone.
+       *
+       * ⏸️ Still a placeholder: the founder is drawing this one in Claude Design. It is here because
+       * a WRONG meaning is worse than a plain one, not because it is finished.
+       */
+      // lucide `message-square`, untouched — one closed outline, no ellipsis inside it.
+      return (
+        <G {...common}>
+          <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </G>
+      );
+    case 'watch':
+      // The wrist (10.4): the case, the two band stubs above and below it, and the crown on the
+      // side. It is a DEVICE, not a clock — no hands inside it, because the one thing this glyph
+      // must never say is "time".
+      return (
+        <G {...common}>
+          <Rect x="6" y="6" width="12" height="12" rx="3.6" />
+          <Path d="M9 6V3.6h6V6" />
+          <Path d="M9 18v2.4h6V18" />
+          <Path d="M19.6 10.4v3.2" />
+        </G>
+      );
+    case 'alert':
+      // lucide `triangle-alert`. It marks the pain door and nothing else — Hush does not warn.
+      return (
+        <G {...common}>
+          <Path d="M10.3 3.9L2.6 17.5A2 2 0 004.3 20.5h15.4a2 2 0 001.7-3l-7.7-13.6a2 2 0 00-3.4 0z" />
+          <Path d="M12 8v5" />
+          <Path d="M12 16.4v.2" />
         </G>
       );
     default:

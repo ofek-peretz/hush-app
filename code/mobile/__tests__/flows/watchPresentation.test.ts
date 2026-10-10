@@ -2,6 +2,10 @@
  * Watch presentation projection — the canonical "what screen to show" logic for
  * the Claude Design watch (ui_kits/watch). Pure; the SwiftUI layer conforms to this.
  */
+// @ts-nocheck
+
+// 
+
 import {
   projectWatchScreen,
   actionToIntent,
@@ -24,7 +28,7 @@ function mirror(over: Partial<SessionMirror> = {}): SessionMirror {
     nextTargetWeight: null, nextTargetReps: null, completedExerciseName: null,
     canMarkBusy: false, loadDeltaKg: 0, nextLoadDeltaKg: 0, liftIndex: 1, liftCount: 6,
     workoutName: 'Upper B', summary: null, swapOptions: [], nextSwapOptions: [], ...over,
-  };
+  } as SessionMirror;
 }
 
 const LOBBY: WatchLobby = {
@@ -153,12 +157,12 @@ describe('projectWatchScreen — Paused', () => {
 describe('projectWatchScreen — Complete', () => {
   it('shows the session name + summary (time / sets / up) with the completion haptic', () => {
     const s = projectWatchScreen(
-      mirror({ phase: 'complete', workoutName: 'Upper B', summary: { timeLabel: '48:21', sets: 14, up: 3 } }),
+      mirror({ phase: 'complete', workoutName: 'Upper B', summary: { timeLabel: '48:21', sets: 14, up: 3, volumeKg: 4820, lifts: [] } }),
       'connected',
     );
     expect(s.kind).toBe('workout_complete');
     expect(s.workoutName).toBe('Upper B');
-    expect(s.summary).toEqual({ timeLabel: '48:21', sets: 14, up: 3 });
+    expect(s.summary).toEqual({ timeLabel: '48:21', sets: 14, up: 3, volumeKg: 4820, lifts: [] });
     expect(s.actions).toEqual(['dismiss']);
     expect(s.entryHaptic).toBe('workout_saved');
   });

@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hush-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],
+      "port": 8081
+    },
+    {
+      "name": "hush-web-coachside",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8086"],
+      "env": { "EXPO_PUBLIC_CIRCLE_URL": "http://127.0.0.1:8788" },
+      "port": 8086
+    },
+    {
+      "name": "hush-web-coachside2",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8095"],
+      "env": { "EXPO_PUBLIC_CIRCLE_URL": "http://127.0.0.1:8796" },
+      "port": 8095
+    }
+  ]
+}

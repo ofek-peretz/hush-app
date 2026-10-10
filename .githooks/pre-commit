@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# ══════════════════════════════════════════════════════════════════════════════════════════════════
+# REFUSE A COMMIT THAT CONTAINS STRYKER'S MUTANTS.
+#
+# ⛔ FOUNDER, 2026-08-10, approving this guard after the failure it exists for.
+#
+# Stryker runs `inPlace: true` — it edits the real source files rather than a sandbox copy, because
+# its sandbox breaks jest's `<rootDir>` resolution under the jest-expo preset. That is safe while a
+# run completes: it restores everything from `.stryker-tmp/backup-*` on the way out.
+#
+# It is not safe when a run is INTERRUPTED. This session opened on 521 instrumented files sitting in
+# the working tree, left by a run that had been killed — and instrumented source looks like ordinary
+# work in `git status`. Committing it would put `// @ts-nocheck` and mutation scaffolding into the
+# engine, and the diff is large enough that nobody reads it line by line.
+#
+# ⚠️ IT ALSO CATCHES THE WORSE CASE: a commit made WHILE a run is live. That is not just bad content
+# — it corrupts the measurement. Restoring files mid-run made every subsequent mutant test run
+# against un-mutated source, so the tests passed, every mutant was recorded as SURVIVED, and the run
+# reported 11% for a file that actually scores 62%. A phantom number is worse than no number.
+#
+# Bypass with `git commit --no-verify` when you genuinely mean it.
+# ══════════════════════════════════════════════════════════════════════════════════════════════════
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# 1 · A live run. `.stryker-tmp` exists only between a run's start and its restore.
+for d in .stryker-tmp code/mobile/.stryker-tmp; do
+  if [ -d "$d" ]; then
+    echo "⛔ commit refused: $d exists, so a mutation run is live or was interrupted."
+    echo "   Stryker mutates source IN PLACE. Committing now stores mutants; touching the tree"
+    echo "   mid-run also corrupts the score (a killed run once reported 11% for a 62% file)."
+    echo "   Let it finish, or restore with: git checkout -- code/mobile/src && rm -rf $d"
+    exit 1
+  fi
+done
+
+# 2 · Instrumented content, in case the backup directory was already removed. Stryker's marker is a
+#     global mutant-coverage object; matching THAT rather than `@ts-nocheck` avoids false positives,
+#     because this repo writes `@ts-nocheck` by hand at the top of nearly every file.
+hits=$(echo "$staged" | grep -E '\.(ts|tsx)$' | xargs -r grep -l -E 'stryMutAct_|__stryker__|activeMutant' 2>/dev/null)
+if [ -n "$hits" ]; then
+  echo "⛔ commit refused: these staged files still carry Stryker instrumentation —"
+  echo "$hits" | sed 's/^/     /'
+  echo "   Restore them with: git checkout -- <path>"
+  exit 1
+fi
+
+exit 0

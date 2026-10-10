@@ -1,0 +1,90 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "FERROX"
+    },
+    {
+      "id": "page-2",
+      "name": "Early directions"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "The mark",
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 780,
+      "page": "page-1"
+    },
+    {
+      "file": "Lockups.dc.html",
+      "title": "Lockups",
+      "x": 1300,
+      "y": 0,
+      "w": 1200,
+      "h": 780,
+      "page": "page-1"
+    },
+    {
+      "file": "AppIcon.dc.html",
+      "title": "App icon",
+      "x": 0,
+      "y": 920,
+      "w": 1200,
+      "h": 640,
+      "page": "page-1"
+    },
+    {
+      "file": "Construction.dc.html",
+      "title": "Construction & color",
+      "x": 1300,
+      "y": 920,
+      "w": 1200,
+      "h": 780,
+      "page": "page-1"
+    },
+    {
+      "file": "Plate.dc.html",
+      "title": "A · הצלחת, מהקצה",
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 680,
+      "page": "page-2"
+    },
+    {
+      "file": "Barbell.dc.html",
+      "title": "B · F עם משקולות",
+      "x": 1120,
+      "y": 0,
+      "w": 1000,
+      "h": 680,
+      "page": "page-2"
+    },
+    {
+      "file": "Ox.dc.html",
+      "title": "C · השור",
+      "x": 0,
+      "y": 840,
+      "w": 1000,
+      "h": 680,
+      "page": "page-2"
+    },
+    {
+      "file": "Forged.dc.html",
+      "title": "D · FX יצוק",
+      "x": 1120,
+      "y": 840,
+      "w": 1000,
+      "h": 680,
+      "page": "page-2"
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

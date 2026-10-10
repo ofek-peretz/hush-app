@@ -6,6 +6,9 @@
  * ADVISORY / ADVISORY_AUTOPILOT_L1. Every voice surface routes through here so
  * the law cannot be bypassed screen by screen.
  */
+
+// 
+
 import type { AthleteMode } from '@/data/local/models';
 
 /** True only in modes where Hush is permitted to speak about decisions. */

@@ -9,6 +9,9 @@
  * the data threshold is "still learning" and is excluded from commitments and
  * median/imbalance math (spec §5.7, §7.9).
  */
+
+// 
+
 import type { Capability, PortraitSnapshot } from '@/data/local/models';
 import type { Line } from '@/domain/voice';
 
@@ -95,6 +98,16 @@ export function stateKeyFor(s: PortraitSnapshot, c: Capability): string {
 export function compareProof(baseline: PortraitSnapshot, current: PortraitSnapshot): Line | null {
   const baselineWeakest = rankAll(baseline)[rankAll(baseline).length - 1];
   if (!baselineWeakest) return null;
+  /*
+   * ⛔ AND THE HEBREW HAD THE SAME AGREEMENT FAULT (2026-08-28). It read
+   * `ה{{capability}} שלך עבר …` — masculine — while **four of the five capability names are
+   * feminine** (`דחיפה אופקית`, `משיכה אופקית`, `דחיפה אנכית`, `מתיחת ירך`; only
+   * `סקוואט` is masculine). The verb is deleted rather than duplicated — see the note at
+   * `Paywall`'s `case`, which is the same fix on the same day.
+   *
+   * ⚠️ The definite article went with it: `הדחיפה אופקית` needs `ה` on the adjective too,
+   * and a construct name like `מתיחת ירך` may not take it on the first word at all.
+   */
   return {
     key: 'portrait.compareProof',
     params: {

@@ -4,4 +4,7 @@
  * version writes a new server-side consent record, so the ledger proves which
  * version each athlete accepted and when. Dated for unambiguous auditability.
  */
+
+// 
+
 export const CONSENT_VERSION = 'v1-2026-06-17';

@@ -7,6 +7,10 @@
  *   I-27b — a reprice explanation states the SETS ARE KEPT (volume is never cut).
  * Also proves en/he parity for the namespace so a change can't drop a locale.
  */
+// @ts-nocheck
+
+// 
+
 import en from '@/i18n/locales/en.json';
 import he from '@/i18n/locales/he.json';
 
@@ -47,6 +51,68 @@ describe('v4 explanation copy', () => {
   it('en/he parity — every explain key is translated', () => {
     const heLeaves: { path: string; v: string }[] = [];
     leaves(explainHe, '', heLeaves);
-    expect(heLeaves.map((l) => l.path).sort()).toEqual(enLeaves.map((l) => l.path).sort());
+    // `_female` is the Hebrew-only gender mechanism (a variant of a key that IS in parity), so it
+    // is exempt here exactly as it is in `lint-copy.cjs` — `explain.detrain` conjugates "שתסיים".
+    const translated = heLeaves.map((l) => l.path).filter((p) => !p.endsWith('_female'));
+    expect(translated.sort()).toEqual(enLeaves.map((l) => l.path).sort());
+  });
+
+  /**
+   * `detrain` is emitted by the v5 engine as `L('detrain.observation')` → `explain.detrain.*`
+   * (src/engine/v5/v5Engine.ts). It was authored at the TOP LEVEL of both locale files, so the
+   * layoff letter rendered the raw dotted key. It lives inside `explain` now, and this pins it:
+   * the block the engine names is the block the locale carries.
+   */
+  it('the engine’s `detrain` reason resolves inside `explain`, not at the top level', () => {
+    for (const [tag, tree] of [['en', en], ['he', he]] as const) {
+      expect({ tag, topLevel: (tree as Tree).detrain }).toEqual({ tag, topLevel: undefined });
+    }
+    for (const field of ['observation', 'conclusion', 'action', 'text']) {
+      expect((explainEn.detrain as Record<string, string>)[field]).toBeTruthy();
+      expect((explainHe.detrain as Record<string, string>)[field]).toBeTruthy();
+    }
+  });
+});
+
+/**
+ * ════ ONE SENTENCE (founder 2026-07-29) ════
+ *
+ * "Limit it to a sentence. People finishing a workout do not read scrolls."
+ *
+ * `text` is the form the engine's reason takes on the CLOSING screen (2.5), read standing in a gym
+ * with a pulse still up — so it gets one sentence and no more. `rungOutOfReach.text` was two, the
+ * first of them 30 words long, and it was the row the founder was looking at.
+ *
+ * The reasoning is NOT thinned to fit: the triple (`observation` / `conclusion` / `action`) is the
+ * long form, opened deliberately from a WHY, and the escape hatch that sentence carried still lives
+ * in `rungOutOfReach.action` word for word. One fact, one place, at the length its place can hold.
+ */
+describe('a reason on the closing screen is ONE sentence', () => {
+  /** Sentences, counted the way a reader counts them — a full stop that ends a clause. */
+  const sentences = (s: string): string[] =>
+    s
+      .replace(/\{\{[^}]+\}\}/g, 'X') // an interpolated lift name is not a sentence break
+      .split(/(?<=[.!?])\s+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+  for (const [tag, tree] of [['en', explainEn], ['he', explainHe]] as const) {
+    it(`${tag}: every explain.*.text lands in one`, () => {
+      const out: { path: string; v: string }[] = [];
+      leaves(tree, '', out);
+      const tooLong = out
+        .filter((x) => /\.text(Bw|Variation)?$/.test(x.path))
+        .filter((x) => sentences(x.v).length > 1)
+        .map((x) => `${x.path} — ${sentences(x.v).length} sentences`);
+      expect({ scrolls: tooLong }).toEqual({ scrolls: [] });
+    });
+  }
+
+  it('…and the long form still exists, so nothing was thinned to fit', () => {
+    // The F-2 escape hatch (register Rev 12) survives where the athlete goes to read the argument.
+    const rung = explainEn.rungOutOfReach as Record<string, string>;
+    expect(rung.action).toContain('smaller jump');
+    expect(rung.observation).toBeTruthy();
+    expect(rung.conclusion).toBeTruthy();
   });
 });
