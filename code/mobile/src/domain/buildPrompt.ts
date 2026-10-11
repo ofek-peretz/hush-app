@@ -197,7 +197,7 @@ export const BUILD_WEEK_SCHEMA = {
     name: {
       type: 'string',
       description:
-        'A short title for this whole week, in the athlete’s language, as a coach would write at the top of the sheet: what it is built around. Specific to this athlete — never a title that would fit anybody.',
+        'A short title for this whole week, in the athlete’s language, as a coach would write at the top of the sheet: what it is built around. Specific to this athlete — never a title that would fit anybody. Write no weight in it: the app shows every weight in the athlete’s own units, and a title cannot be converted.',
     },
     days: {
       type: 'array',

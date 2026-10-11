@@ -55,6 +55,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { FerroxMark, FerroxWordmark } from '@/components/FerroxLogo';
 import { sessionPoster } from '@/domain/sessionPoster';
 import { useCopy } from '@/i18n/useCopy';
+import { inHerUnits } from '@/i18n/herUnits';
 import { sessionCardFromHistory, weekCardFromHistory } from '@/domain/shareCard';
 import { bidi, ltrIsland } from '@/i18n/bidi';
 import { dayTitle } from '@/i18n/dayTitle';
@@ -1578,7 +1579,8 @@ export function SessionEarned({
                       when the sentence is covering more than one lift, because a rule over a single
                       row is a separator between a fact and its own reason. */}
                   <Text style={[styles.earnedReason, g.lines.length > 1 && styles.earnedReasonForMany]}>
-                    {'text' in g.reason ? g.reason.text : t(g.reason.key, g.reason.params)}
+                    {/* The engine's numbers are kilograms; the sentence is read in her units (`i18n/herUnits`). */}
+                    {'text' in g.reason ? g.reason.text : t(g.reason.key, inHerUnits(g.reason.params, units ?? 'kg'))}
                   </Text>
                 </View>
               ))}

@@ -251,10 +251,20 @@ describe('the sheet that answers back', () => {
     expect(next().days[0].slots).toHaveLength(1); // was 2 on day one of the fixture
   });
 
-  it('the pen-back door shows only when the SAVED week is hers, and asks before acting', () => {
-    const there = draw({ savedIsAuthored: true });
-    expect(textOf(there.r)).toContain(tg('builder.revert'));
-    const notThere = draw({ savedIsAuthored: false });
-    expect(textOf(notThere.r)).not.toContain(tg('builder.revert'));
+  it('⛔ a week she owns offers a NEW week from the coach — never the local assembler', () => {
+    /*
+     * "Hand the pen back to me" built a week no model wrote (sweep, 2026-10-11). The door is the ask
+     * now: it needs a way to ask (`onLetHushBuild` — a stored profile), and it opens the same step
+     * the intake ends on.
+     */
+    const there = draw({ savedIsAuthored: true, onLetHushBuild: noop });
+    expect(textOf(there.r)).toContain(tg('builder.newWeek'));
+    const door = there.r.root.findAll((n) => n.props?.label === tg('builder.newWeek') && n.props?.onPress, { deep: true })[0];
+    act(() => door.props.onPress());
+    expect(textOf(there.r)).not.toContain(tg('builder.newWeek')); // the ask step stands instead of the editor
+    const noWayToAsk = draw({ savedIsAuthored: true });
+    expect(textOf(noWayToAsk.r)).not.toContain(tg('builder.newWeek'));
+    const notHers = draw({ savedIsAuthored: false, onLetHushBuild: noop });
+    expect(textOf(notHers.r)).not.toContain(tg('builder.newWeek'));
   });
 });

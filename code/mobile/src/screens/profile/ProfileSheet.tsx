@@ -45,7 +45,7 @@ import { voiceCapture } from '@/platform/voice/voiceCapture';
 import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 import { track } from '@/platform/telemetry';
 import { syncTrace } from '@/platform/syncTrace';
-import { freeSessionsRemaining, FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { freeSessionsRemaining, FREE_SESSION_LIMIT, trialDaysLeft } from '@/domain/entitlement';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -205,6 +205,21 @@ export function ProfileSheet({ navigation }: Props) {
   function confirmSignOut() {
     setOverlay('signout');
   }
+  /*
+   * ⛔ ONE PRESS, AND THE BUTTON SAYS IT IS WORKING (sweep, 2026-10-11). Both wipes wait on the
+   * network and on iCloud before they clear the phone, and for all of that time the sheet stood
+   * unchanged with the danger button live — it read as a press that had not landed, and a second
+   * press started a second wipe over the first. A wipe that fails says so and gives the sheet back.
+   */
+  const [wiping, setWiping] = useState(false);
+  function wipe(run: () => Promise<void>) {
+    if (wiping) return;
+    setWiping(true);
+    run().catch(() => {
+      setWiping(false);
+      toast.show(t('profile.wipeFailed'));
+    });
+  }
   function confirmDelete() {
     setOverlay('delete');
   }
@@ -214,7 +229,7 @@ export function ProfileSheet({ navigation }: Props) {
   // opens the paywall.
   const ent = app.entitlement;
   const planPeriod = ent.productId && isProductId(ent.productId) ? PRODUCT_PERIOD[ent.productId] : null;
-  const sessionsLeft = freeSessionsRemaining(app.modeState.completedSessions);
+  const sessionsLeft = freeSessionsRemaining(app.modeState.completedSessions, app.profile?.memberSince);
   const membershipState: 'active' | 'trial' | 'ended' = ent.active ? 'active' : sessionsLeft > 0 ? 'trial' : 'ended';
   function onMembership() {
     // The coach track, ruling 1: Pro that comes from her coach is managed where the link is.
@@ -352,7 +367,13 @@ export function ProfileSheet({ navigation }: Props) {
             ) : null}
             {/* Inside the card it explains, over its own hairline (design review 2026-09-01) —
                 floating below the card it read as a stray paragraph about nothing in particular. */}
-            {membershipState === 'trial' ? <Text style={styles.trialNoteIn}>{t('profile.trialNote')}</Text> : null}
+            {membershipState === 'trial' ? (
+              <Text style={styles.trialNoteIn}>
+                {t('profile.trialNote')}
+                {/* The free workouts have a clock, and this is the one place she looks for it. */}
+                {trialDaysLeft(app.profile?.memberSince) != null ? ` ${t('profile.trialDaysLeft', { count: trialDaysLeft(app.profile?.memberSince) ?? 0 })}` : ''}
+              </Text>
+            ) : null}
           </View>
           <View style={membershipState === 'trial' ? styles.memberChevronTop : styles.memberChevron}>
             <Icon name="chevronRight" size={18} color={color.textTertiary} strokeWidth={2} />
@@ -660,8 +681,8 @@ export function ProfileSheet({ navigation }: Props) {
         <BottomSheet onClose={() => setOverlay('none')} heightFraction={0.3}>
           <Text style={styles.confirm}>{t('profile.signOutConfirm')}</Text>
           <View style={styles.confirmActions}>
-            <Button variant="danger" block label={t('profile.signOut')} onPress={() => app.resetAccount()} />
-            <Button variant="quiet" block label={t('profile.cancel')} onPress={() => setOverlay('none')} />
+            <Button variant="danger" block label={t('profile.signOut')} disabled={wiping} onPress={() => wipe(app.resetAccount)} />
+            <Button variant="quiet" block label={t('profile.cancel')} disabled={wiping} onPress={() => setOverlay('none')} />
           </View>
         </BottomSheet>
       ) : null}
@@ -669,8 +690,8 @@ export function ProfileSheet({ navigation }: Props) {
         <BottomSheet onClose={() => setOverlay('none')} heightFraction={0.3}>
           <Text style={styles.confirm}>{t('profile.deleteConfirm')}</Text>
           <View style={styles.confirmActions}>
-            <Button variant="danger" block label={t('profile.deleteAccount')} onPress={() => app.deleteAccount()} />
-            <Button variant="quiet" block label={t('profile.cancel')} onPress={() => setOverlay('none')} />
+            <Button variant="danger" block label={t('profile.deleteAccount')} disabled={wiping} onPress={() => wipe(app.deleteAccount)} />
+            <Button variant="quiet" block label={t('profile.cancel')} disabled={wiping} onPress={() => setOverlay('none')} />
           </View>
         </BottomSheet>
       ) : null}

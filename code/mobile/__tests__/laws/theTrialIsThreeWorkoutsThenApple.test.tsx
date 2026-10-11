@@ -290,7 +290,7 @@ describe("3 · it offers Apple's free trial as a timeline, and keeps the reminde
     const home = read('src/screens/home/Home.tsx');
     expect(home).toMatch(/if \(intakeHandoff\.takePaywall\(\)\) navigation\.navigate\('Paywall', \{ source: 'intake' \}\);/);
     // The gate on Start is exactly what it was.
-    expect(home).toMatch(/if \(gated\) \{\s+navigation\.navigate\('Paywall', \{ source: 'gate' \}\);/);
+    expect(home).toMatch(/if \(gated \|\| isTrainingGated\(app\.modeState\.completedSessions, app\.entitlement\.active, app\.profile\?\.memberSince\)\) \{\s+navigation\.navigate\('Paywall', \{ source: 'gate' \}\);/);
     const { intakeHandoff } = require('@/app/intakeHandoff');
     expect(intakeHandoff.takePaywall()).toBe(false); // nothing owed by default
     intakeHandoff.owePaywall();

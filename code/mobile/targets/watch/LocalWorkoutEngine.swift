@@ -316,17 +316,11 @@ final class LocalWorkoutEngine {
   }
 
   private func liftPosition(at idx: Int) -> (index: Int, count: Int) {
-    var runs = 0
-    var curRun = 1
-    var prev: String?
-    for (i, s) in state.steps.enumerated() {
-      if s.exerciseId != prev {
-        runs += 1
-        prev = s.exerciseId
-      }
-      if i == idx { curRun = runs }
-    }
-    return (max(curRun, 1), max(runs, 1))
+    // LIFTS, not runs — a superset (A, B, A, B) is two lifts. The phone's rule (`sessionMirror.liftPosition`).
+    var order: [String] = []
+    for s in state.steps where !order.contains(s.exerciseId) { order.append(s.exerciseId) }
+    let here = state.steps.indices.contains(idx) ? order.firstIndex(of: state.steps[idx].exerciseId) : nil
+    return ((here ?? 0) + 1, max(order.count, 1))
   }
 
   /**
@@ -486,8 +480,9 @@ final class LocalWorkoutEngine {
     }
     return order.map { name in
       let s = best[name]!
-      let w = s.actualWeight.map { $0.rounded() == $0 ? String(Int($0)) : String(format: "%.1f", $0) } ?? "BW"
-      return WireSummaryLift(name: name, best: "\(w) × \(s.actualReps)")
+      // A lift with no load says its reps and nothing else — the phone's rule (`bestSetLabel`), not "BW".
+      let w = s.actualWeight.map { $0.rounded() == $0 ? String(Int($0)) : String(format: "%.1f", $0) }
+      return WireSummaryLift(name: name, best: w.map { "\($0) × \(s.actualReps)" } ?? "× \(s.actualReps)")
     }
   }
 

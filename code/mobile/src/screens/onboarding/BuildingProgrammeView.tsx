@@ -58,16 +58,13 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Arrive, Legend, Stage } from '@/components/ds';
-import { BodyMapFigure, viewOf } from '@/components/BodyMapFigure';
+import { paragraphMark } from '@/i18n/bidi';
+export { paragraphMark } from '@/i18n/bidi';
 import { DayInMotion } from '@/components/DayInMotion';
-import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
-import { bidi } from '@/i18n/bidi';
 import { useCopy } from '@/i18n/useCopy';
-import { useReducedMotion } from '@/platform/reducedMotion';
 import { color, font, space, stage } from '@/design/tokens';
 
 /** One lift, as the simulation prints it — the three numbers a prescription needs. */
@@ -164,14 +161,26 @@ export interface BuildingProgrammeViewProps {
   /** How many lifts the coach is choosing from — the length of the catalogue it was sent. */
   libraryCount?: number;
   waitHint?: string | null;
+  /**
+   * HER week's lifts, in the order she will meet them — what the figure performs once the answer
+   * has landed (2026-10-11; see the note on the stage). Each carries the weight and the sets the
+   * week gives it. Empty until then.
+   */
+  week?: readonly BuildWeekLift[];
 }
 
-const NOOP = () => {};
+/** One lift of her week on the stage: the film's id, and the prescription under it. */
+export interface BuildWeekLift extends BuildLift {
+  id: string;
+}
 
 /** Her sentence and her facts land first; the library takes the stage after this long. */
 export const READ_MS = 3200;
 /** One lift of the library on the stage — a little over a rep, so it reads as browsing, not a lesson. */
 export const LIBRARY_HOLD_MS = 2800;
+/** How long one of HER lifts holds the stage once the week has landed — long enough to read a name
+ *  and its three figures, short enough that two of them pass before the week is named. */
+export const WEEK_HOLD_MS = 1300;
 
 /**
  * ════════════════════════════════════════════════════════════════════════════════════════════════
@@ -189,89 +198,23 @@ export const LIBRARY_HOLD_MS = 2800;
  * the 90 ms survived: both were "correct" on their own.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
-/** Between one lift starting and the next — they overlap, so the feed breathes rather than ticks. */
-export const LIFT_STEP_MS = 220;
-export const LIFT_RISE_MS = 420;
-/** The row simply SITS there. This is the part that makes it readable rather than a flicker. */
-export const LIFT_HOLD_MS = 460;
-/** Up into the figure. */
-export const LIFT_TRAVEL_MS = 520;
-/** A breath on the lit muscle after the last row has gone in, before the next muscle takes over. */
-export const MUSCLE_BREATH_MS = 300;
-/** Half a breath of the DARK body while the answer is out — see the note where it is used. */
-export const BREATH_MS = 1400;
+/** How many of her lifts pass on the stage before the week is named. */
+export const WEEK_LIFTS_BEFORE_NAME = 2;
 
 /**
- * How long one muscle owns the screen: exactly as long as its own lifts need, plus a breath.
- * A muscle with four lifts genuinely has more to show than one with two, and gets it.
+ * How long her week owns the stage before its name lands: exactly as long as what is DRAWN needs —
+ * two of her lifts, each held long enough to be read. The container's clock asks this and holds
+ * no second opinion (`BuildingProgramme.fillHold`); a week of a single lift waits for one.
  */
 export function beatFor(lifts: number): number {
-  const rows = Math.max(1, lifts);
-  return (rows - 1) * LIFT_STEP_MS + LIFT_RISE_MS + LIFT_HOLD_MS + LIFT_TRAVEL_MS + MUSCLE_BREATH_MS;
+  return Math.max(1, Math.min(lifts, WEEK_LIFTS_BEFORE_NAME)) * WEEK_HOLD_MS;
 }
 
 export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
   const { t } = useCopy();
   const named = !!props.programmeName;
-  /*
-   * The muscle being filled right now, and every muscle already in the body. `lit` is a body map in
-   * the figure's own vocabulary — `emphasis` is its moss — so the instrument she drew her map on is
-   * the instrument that reports the result, with no second drawing to keep in step.
-   */
-  const current = props.muscles.length ? props.muscles[props.muscles.length - 1] : null;
-  const filling = named ? null : current?.muscle ?? null;
-  const lit = React.useMemo(() => {
-    /*
-     * ⛔ THE UNALLOCATED MUSCLES ARE `off`, NOT ABSENT — and absent is what they were for an hour.
-     *
-     * A muscle missing from a body map is `normal`, which the figure draws in CREAM. So the beat
-     * opened on a fully cream body and "filling" it meant nudging each muscle from cream to moss:
-     * two light tones a metre apart. **The founder's design is a body that starts dark and lights
-     * up**, and the only way to say that in this component's vocabulary is to state the darkness
-     * rather than leave it to a default.
-     */
-    const out: Record<string, 'emphasis' | 'off'> = {};
-    for (const m of CANONICAL_MUSCLE_ORDER) out[m] = 'off';
-    for (const m of props.muscles) out[m.muscle] = 'emphasis';
-    return out;
-  }, [props.muscles]);
-  /* The figure turns to whichever face carries the muscle being filled — she never has to guess
-     where the light went. It holds the last face once the programme is named. */
-  const face = filling ? viewOf(filling) : 'front';
-  /*
-   * ⛔ THE WAIT BREATHES, AND SAYS NOTHING ELSE (2026-09-14, the founder's ruling on the wait).
-   *
-   * No muscles yet means the answer is not in — and until it is, this screen may not name a muscle,
-   * light a region or draw a row, because every one of those is a claim about a week nobody has
-   * written yet. What is honest is that something is happening, so the dark body breathes: one slow
-   * swell, no colour, no names. It is the same figure she will watch fill; it is simply not
-   * pretending to be full.
-   *
-   * ⚠️ REDUCED MOTION GETS A STEADY DIM instead of a pulse — the state still reads as "waiting"
-   * without moving, which is what the setting asks for.
-   */
+  /* The call is out and nothing of her week exists yet — the stage shows the catalogue, never a claim. */
   const waiting = !named && props.muscles.length === 0;
-  const reduced = useReducedMotion();
-  const breath = useSharedValue(1);
-  React.useEffect(() => {
-    if (!waiting) {
-      breath.value = 1;
-      return;
-    }
-    if (reduced) {
-      breath.value = 0.78;
-      return;
-    }
-    breath.value = withRepeat(
-      withSequence(
-        withTiming(0.62, { duration: BREATH_MS, easing: Easing.inOut(Easing.quad) }),
-        withTiming(1, { duration: BREATH_MS, easing: Easing.inOut(Easing.quad) }),
-      ),
-      -1,
-      false,
-    );
-  }, [waiting, reduced, breath]);
-  const breathStyle = useAnimatedStyle(() => ({ opacity: breath.value }));
 
   /*
    * The wait's two beats (see `library`): her words and her facts first, then the catalogue. The
@@ -290,6 +233,12 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
   const shownName = library.find((l) => l.id === shownId)?.name ?? null;
   const libraryIds = React.useMemo(() => library.map((l) => l.id), [library]);
   const onShow = React.useCallback((id: string) => setShownId(id), []);
+  /* Her week on the stage, from the moment it lands — see the note there. */
+  const week = props.muscles.length ? props.week ?? [] : [];
+  const weekIds = React.useMemo(() => week.map((l) => l.id), [week]);
+  const [hersId, setHersId] = React.useState<string | null>(null);
+  const hers = week.find((l) => l.id === hersId) ?? week[0] ?? null;
+  const onShowHers = React.useCallback((id: string) => setHersId(id), []);
 
   return (
     <View style={styles.root}>
@@ -300,7 +249,7 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
             {named
               ? t('ob.buildYourProgramme')
               : props.muscles.length
-                ? t('ob.buildChoosing')
+                ? t('ob.buildYours')
                 : browsing && choosing
                   ? t('ob.buildChoosingFrom', { n: props.libraryCount ?? library.length })
                   : t('ob.buildReading')}
@@ -335,7 +284,12 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
             <Legend size={17} track={0.14} style={styles.askedLegend}>{t('ob.buildingAround')}</Legend>
             {/* Five lines, not three: the founder's own sentence was cut at "ובעל מראה" — the half that said
                 what he wanted. The words are the evidence; a truncated quote is a misquote. */}
-            <Text style={styles.askedText} numberOfLines={5}>{`“${props.askedFor.trim()}”`}</Text>
+            {/* ⛔ …AND A HEBREW SENTENCE THAT OPENS ON A LATIN WORD IS STILL HEBREW (walked 2026-10-11:
+                "PPL, דגש על גב וכתפיים." drew its full stop in the middle of the line — the first
+                STRONG letter was the P, so the paragraph fell to left-to-right). A right-to-left
+                mark ahead of the quote makes the paragraph hers whenever she wrote any Hebrew at
+                all; a sentence with none is left to its own first letter, as before. */}
+            <Text style={styles.askedText} numberOfLines={5}>{`${paragraphMark(props.askedFor)}“${props.askedFor.trim()}”`}</Text>
           </Arrive>
         ) : null}
 
@@ -354,7 +308,7 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
           <Arrive order={0} style={styles.namedHead}>
             <View style={styles.namedRule} />
             {/* The coach's title is a whole paragraph too — same reason as her sentence above. */}
-            <Text style={styles.programmeName} numberOfLines={3}>{props.programmeName!.trim()}</Text>
+            <Text style={styles.programmeName} numberOfLines={3}>{`${paragraphMark(props.programmeName!)}${props.programmeName!.trim()}`}</Text>
             {props.summary ? <Text style={styles.summary}>{props.summary}</Text> : null}
           </Arrive>
         ) : null}
@@ -383,11 +337,27 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
           ════════════════════════════════════════════════════════════════════════════════════════
         */}
         <View style={styles.body}>
+          {/*
+            ════ ⛔ THE FIGURE NEVER LEAVES THE STAGE (founder, 2026-10-11) ════
+
+            *"זה מציג יפה באנימציה את התרגילים שהבינה נותנת אבל לבסוף הגוף עם השרירים חוזר ומופיע
+            וזה לא יפה. אני מציע במקום זה לעשות משהו אחר כך שיהיה מעבר חלק יותר."*
+
+            The wait was an athlete performing lifts; the instant the answer landed the screen CUT to
+            an anatomical map — a different drawing, in a different language, holding the one beat
+            that is supposed to be the delivery. The map was right on 2026-08-12, when the intake
+            had a body-map step and this screen filled in "the map she just drew". That step left
+            the intake; the map stayed, as the ending of a screen that no longer leads up to it.
+
+            So the same athlete, on the same stage, simply goes on — and what she performs now is
+            HER week: each lift with its weight and its sets, which is what the catalogue's lifts
+            never carried. The legend says the lifts are hers; the name then lands above a figure
+            that is still moving, and the Ready screen that follows opens on that same week.
+          */}
           {browsing ? (
             /*
               The catalogue, in motion — and LABELLED as the catalogue by the legend above it. The
-              name under the figure is the lift on the stage, not a lift in her week; her week's
-              lifts arrive in the body map below, the instant the answer does.
+              name under the figure is the lift on the stage, not a lift in her week.
             */
             choosing ? (
               <Arrive order={0} style={styles.libraryStage}>
@@ -400,86 +370,36 @@ export function BuildingProgrammeView(props: BuildingProgrammeViewProps) {
                   style={styles.libraryFigure}
                 />
                 <Text style={styles.libraryName} numberOfLines={1}>{shownName ?? ''}</Text>
+                {/* The catalogue's lifts carry no figures — the row is held open all the same, so
+                    her week's lifts land on the line the figure is already standing over. */}
+                <Text style={styles.weekFacts} numberOfLines={1}>{''}</Text>
               </Arrive>
             ) : (
               <View style={styles.libraryStage} />
             )
+          ) : weekIds.length ? (
+            <Arrive order={0} style={styles.libraryStage}>
+              <DayInMotion
+                exerciseIds={weekIds}
+                figure={props.sex}
+                holdMs={WEEK_HOLD_MS}
+                onShow={onShowHers}
+                fit
+                style={styles.libraryFigure}
+              />
+              <Text style={styles.libraryName} numberOfLines={1}>{hers?.name ?? ''}</Text>
+              {/* A name and a weight is a shopping list; with the sets it is a prescription. The row
+                  keeps its height when a lift has no load (bodyweight), so nothing under it jumps. */}
+              <Text style={styles.weekFacts} numberOfLines={1}>
+                {[hers?.load, hers?.scheme].filter(Boolean).join('  ·  ')}
+              </Text>
+            </Arrive>
           ) : (
-            <Animated.View style={[styles.figureStage, breathStyle]}>
-              <BodyMapFigure face={face} map={lit} selected={filling} onSelect={NOOP} sex={props.sex} />
-            </Animated.View>
+            <View style={styles.libraryStage} />
           )}
-
-          {/*
-            The muscle being filled, and the lifts going into it. Only the CURRENT muscle's lifts
-            are on screen: the ones before it are already in the body, which is what the moss says.
-          */}
-          {/* While the library browses, the feed's seat is empty by definition — holding it open
-              pushed the athlete above the middle of the screen. It returns with her first muscle. */}
-          <View style={[styles.feed, browsing && styles.feedAway]}>
-            {/*
-              ⚠️ AND THE FEED CLEARS WHEN THE PROGRAMME IS NAMED. `current` is still the last muscle
-              at that moment, so the closing beat was the whole body lit — the thing she came for —
-              with one muscle's lift list still sitting under it, as though the build had stopped
-              mid-calf. The final frame is the body and its name, and nothing else.
-            */}
-            {current && !named ? (
-              <>
-                <Legend size={19} track={0.22} align="center" tone="accent">
-                  {t(`muscle.${current.muscle}`).toUpperCase()}
-                </Legend>
-                {current.lifts.map((l, i) => (
-                  <LiftIn key={`${current.muscle}_${i}`} name={l.name} order={i} />
-                ))}
-              </>
-            ) : null}
-          </View>
         </View>
       </SafeAreaView>
     </View>
-  );
-}
-
-/**
- * ⛔ ONE LIFT, GOING IN — the founder's *"זורקת אותם לתוך השריר"* (2026-08-12).
- *
- * It rises into place and then travels UP toward the figure as it fades: the row does not vanish,
- * it goes somewhere, and the place it goes is the muscle that just turned moss.
- *
- * ⚠️ THE TRAVEL IS THE POINT AND THE FADE IS NOT ENOUGH ON ITS OWN. A row that merely dissolves
- * reads as the screen forgetting it; a row that moves toward the body reads as the body taking it.
- * The two together are what makes the map look like it is being FILLED rather than coloured in.
- */
-function LiftIn({ name, order }: { name: string; order: number }) {
-  const reduced = useReducedMotion();
-  const life = useSharedValue(reduced ? 1 : 0);
-  React.useEffect(() => {
-    if (reduced) {
-      life.value = 1;
-      return;
-    }
-    life.value = withDelay(
-      order * LIFT_STEP_MS,
-      withSequence(
-        withTiming(1, { duration: LIFT_RISE_MS, easing: Easing.out(Easing.cubic) }),
-        withDelay(LIFT_HOLD_MS, withTiming(2, { duration: LIFT_TRAVEL_MS, easing: Easing.in(Easing.cubic) })),
-      ),
-    );
-  }, [life, order, reduced]);
-
-  const style = useAnimatedStyle(() => {
-    const rise = Math.min(1, life.value);
-    const draw = Math.max(0, life.value - 1);
-    return {
-      opacity: rise * (1 - draw),
-      transform: [{ translateY: (1 - rise) * 14 - draw * 76 }, { scale: 1 - draw * 0.14 }],
-    };
-  });
-
-  return (
-    <Animated.View style={style}>
-      <Text style={styles.feedLift} numberOfLines={1}>{bidi(name)}</Text>
-    </Animated.View>
   );
 }
 
@@ -497,12 +417,11 @@ const styles = StyleSheet.create({
    * stopped rendering on 2026-08-12 — dead weight that reads, to anyone opening this file, as a
    * description of what the screen does.
    */
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.gutter, gap: 18 },
-  figureStage: { width: '100%', maxWidth: 260, alignSelf: 'center' },
-  /* A fixed seat, so the figure does not shuffle up and down as lifts come and go. */
-  feed: { height: 132, alignSelf: 'stretch', alignItems: 'center', gap: 6 },
-  feedAway: { height: 0 },
-  feedLift: { fontFamily: font.sansMedium, fontSize: 19, lineHeight: 25, color: stage.ink0, textAlign: 'center' },
+  /* ⛔ THE STAGE STANDS ON THE FLOOR, NOT IN THE MIDDLE (walked 2026-10-11). Centred, it rode up by
+     a hand's width the instant the week landed — the chips above it leave, and the middle of
+     what is left is higher. The figure is the one thing that must NOT move at that moment, so it
+     is seated from the bottom, where nothing changes. */
+  body: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: space.gutter, paddingBottom: 96, gap: 18 },
 
   /* ── the name — a HEAD over the finished week, not a screen that replaces it ── */
   /* Quiet, above the week, and never in place of it — the same rule the name obeys. */
@@ -520,6 +439,9 @@ const styles = StyleSheet.create({
   libraryStage: { width: '100%', maxWidth: 360, alignSelf: 'center', alignItems: 'center', gap: 10 },
   libraryFigure: { width: '100%', height: 250 },
   libraryName: { fontFamily: font.sansMedium, fontSize: 19, lineHeight: 25, color: stage.ink0, textAlign: 'center' },
+  // Her lift's weight and sets, under its name — figures, so the mono face; a fixed height so a
+  // bodyweight lift (no load) does not pull the row away.
+  weekFacts: { fontFamily: font.mono, fontSize: 17, lineHeight: 23, minHeight: 23, color: stage.ink1, textAlign: 'center' },
   askedLegend: { color: stage.ink2 },
   askedText: { fontFamily: font.serif, fontSize: 22, lineHeight: 30, color: stage.ink0, textAlign: 'left' },
   noteRow: { paddingHorizontal: 4, paddingBottom: 14 },

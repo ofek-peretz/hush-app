@@ -198,7 +198,7 @@ describe('projectSessionMirror', () => {
     })!;
     expect(m!.summary!.lifts).toEqual([
       { name: 'Bench Press', best: '60 × 5' },
-      { name: 'Squat', best: 'BW × 12' },
+      { name: 'Squat', best: '× 12' }, // no load → the count alone; the mirror holds no words (2026-10-11)
     ]);
   });
 
@@ -227,7 +227,7 @@ describe('projectSessionMirror', () => {
         { weight: null, reps: 11 }, // the longer set — this is the one read back
       ],
     })!;
-    expect(m!.summary!.lifts[0].best).toBe('BW × 11');
+    expect(m!.summary!.lifts[0].best).toBe('× 11');
   });
 
   it('keeps the deprecated `done` on the wire — an older watch binary decodes it or drops the frame', () => {

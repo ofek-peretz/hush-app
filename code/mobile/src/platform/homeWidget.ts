@@ -28,6 +28,8 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 import { coachWeek } from '@/domain/coachWeek';
+import { plannedMinutes } from '@/domain/duration';
+import { dayTitle } from '@/i18n/dayTitle';
 import { tg } from '@/i18n';
 
 interface HushHomeWidgetNative {
@@ -64,8 +66,11 @@ export function composeWidgetSnapshot(
     return { title: tg('widget.weekDone'), sub: '', weekLabel, dots, done: true };
   }
   return {
-    title: next.name,
-    sub: tg('program.dayMeta', { count: next.lifts, min: next.minutes }),
+    /* ⛔ THE NAME TODAY SAYS, AND THE MINUTES TODAY SAYS (sweep, 2026-10-11): the raw day key
+       ("Upper A") and the unrounded estimate stood here, on the home screen of a phone whose app
+       says "פלג עליון א׳ · 50 דק׳" one tap in. Both go through the doors every screen uses. */
+    title: dayTitle(next.name),
+    sub: tg('program.dayMeta', { count: next.lifts, min: plannedMinutes(next.minutes) }),
     weekLabel,
     dots,
     done: false,

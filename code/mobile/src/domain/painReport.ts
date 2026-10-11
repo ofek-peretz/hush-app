@@ -302,6 +302,25 @@ export function activeEases(eases: readonly PainEase[] | undefined, nowMs: numbe
   return (eases ?? []).filter((e) => e.untilMs > nowMs);
 }
 
+/**
+ * Her eases the instant a report is filed: the live ones, with this muscle's replaced by the new one.
+ *
+ * ⛔ ONE RULE, READ BY THE STORE AND BY THE SCREEN (sweep, 2026-10-11). The store built this list
+ * and saved it; the report screen then asked "which of today's lifts does she now have to leave?"
+ * of `app.profile.painEases` — the profile from the render BEFORE the report, which does not hold
+ * the ease just filed. So a first report forbade nothing, and Resume put her back on the chest
+ * press she had just said hurt: the founder's own 2026-08-12 finding, closed that week by a line
+ * that read the wrong list. Both now ask this function, and neither waits for a render.
+ */
+export function easesAfterReport(
+  eases: readonly PainEase[] | undefined,
+  muscle: string,
+  severity: PainSeverity,
+  nowMs: number,
+): PainEase[] {
+  return [...activeEases(eases, nowMs).filter((e) => e.muscle !== muscle), easeFor(muscle, severity, nowMs)];
+}
+
 /** The ease standing on one muscle, if any. */
 export function easeOn(eases: readonly PainEase[] | undefined, muscle: string, nowMs: number): PainEase | null {
   // Newest wins: reporting the same muscle again extends the rest rather than shortening it.

@@ -22,6 +22,7 @@
 //
 
 import { db } from '@/data/local/db';
+import { erasedRecord } from '@/domain/record';
 import { cloud } from '@/platform/cloud';
 
 const BACKUP_EVERY_MS = 60_000;
@@ -45,6 +46,21 @@ export async function cloudAutoBackup(nowMs: number = Date.now()): Promise<boole
 }
 
 /** Test seam: reset the throttle window. */
+/**
+ * The cloud copy is unmade — see `domain/record.erasedRecord`. Called by the two wipes (sign out,
+ * delete account) BEFORE the phone is cleared. False when there is no iCloud or the write failed;
+ * the wipe goes on either way, because her right to clear the phone in her hand cannot wait on it.
+ */
+export async function cloudErase(nowMs: number = Date.now()): Promise<boolean> {
+  if (!cloud.available()) return false;
+  lastBackupAt = 0;
+  try {
+    return await cloud.backup(JSON.stringify(erasedRecord(nowMs)));
+  } catch {
+    return false;
+  }
+}
+
 export function resetCloudBackupThrottle(): void {
   lastBackupAt = 0;
 }

@@ -48,7 +48,7 @@ import { Arrive, Button, Legend, SegmentedControl } from '@/components/ds';
 import { useApp } from '@/state/stores/appStore';
 import { useSession } from '@/state/stores/sessionStore';
 import { tg } from '@/i18n';
-import { EASE_DAYS, liftsForbiddenNow, restsTheMuscle, type PainSeverity } from '@/domain/painReport';
+import { EASE_DAYS, easesAfterReport, liftsForbiddenNow, restsTheMuscle, type PainSeverity } from '@/domain/painReport';
 import { exerciseById, muscleOf } from '@/data/exercises';
 import { color, font, stage, textScale } from '@/design/tokens';
 import type { MainParamList } from '@/app/navigation';
@@ -114,8 +114,12 @@ export function PainWhere({ navigation, route }: Props) {
        * cannot be emptied out from under her. What it will not do is end her workout for her.
        * ════════════════════════════════════════════════════════════════════════════════════════
        */
+      /* ⛔ THE EASES AS THEY STAND *AFTER* THIS REPORT — `app.profile` here is the render before it,
+         and does not hold the one she just filed (`easesAfterReport`, which the store saves from). */
       const remaining = session.sessionExerciseIds ?? [];
-      const gone = liftsForbiddenNow(remaining, app.profile?.painEases, Date.now(), (id) => exerciseById(id)?.pattern);
+      const now = Date.now();
+      const eases = easesAfterReport(app.profile?.painEases, muscle, severity, now);
+      const gone = liftsForbiddenNow(remaining, eases, now, (id) => exerciseById(id)?.pattern);
       if (gone.length > 0) session.reviseToday(gone.map((ex) => ({ do: 'drop', ex }) as const));
       setDone({ muscle, severity });
     } finally {

@@ -629,7 +629,15 @@ describe('4 · it can never strand her — and it can never fail her in silence'
     expect(screen).not.toContain('const [cycle, setCycle]');
     // …and the screen is alive for as long as the answer takes, without saying anything
     expect(view).toContain('const waiting = !named && props.muscles.length === 0;');
-    expect(view).toContain('withRepeat(');
+    /*
+     * ⛔ THE BREATHING BODY LEFT WITH THE BODY MAP (2026-10-11, `theFigureNeverLeavesTheStage`). What
+     * keeps the wait alive now is the athlete walking the CATALOGUE — a loop that cannot run dry
+     * (`DayInMotion` wraps round its list for ever) and still claims nothing about her week: the
+     * lifts are the library's, and the legend above them says so.
+     */
+    expect(view).not.toContain('withRepeat(');
+    expect(view).toContain('const browsing = waiting && library.length > 0;');
+    expect(view).toContain('exerciseIds={libraryIds}');
   });
 
   it('⛔ a sentence she wrote and no answer ⇒ the screen STOPS and says the true reason', () => {

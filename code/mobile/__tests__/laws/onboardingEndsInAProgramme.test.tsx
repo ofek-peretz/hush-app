@@ -188,9 +188,10 @@ describe('⛔ the intake never freezes', () => {
       if (!m) throw new Error(`no ${name}`);
       return Number(m[1].replace(/_/g, ''));
     };
+    // 2026-10-11: the beat after the answer is HER lifts on the stage (`theFigureNeverLeavesTheStage`) —
+    // two of them, each held `WEEK_HOLD_MS` — where it used to be one muscle's rows flying into a body map.
     const beatFor = (lifts: number) =>
-      (Math.max(1, lifts) - 1) * num(view, 'LIFT_STEP_MS') + num(view, 'LIFT_RISE_MS')
-      + num(view, 'LIFT_HOLD_MS') + num(view, 'LIFT_TRAVEL_MS') + num(view, 'MUSCLE_BREATH_MS');
+      Math.max(1, Math.min(lifts, num(view, 'WEEK_LIFTS_BEFORE_NAME'))) * num(view, 'WEEK_HOLD_MS');
 
     /*
      * ⚠️ THE MUSCLE COUNT IS NOT IN THIS SUM ANY MORE, AND THAT IS THE WHOLE CHANGE OF 2026-08-30.

@@ -33,6 +33,7 @@ import { color, space, font, textScale, tracking, trackingPx, press, signal, dir
 import type { MainParamList } from '@/app/navigation';
 // The app's language, not the device's — see `everyDateSpeaksHerLanguage`.
 import { currentLocale } from '@/i18n';
+import { dayTitle } from '@/i18n/dayTitle';
 
 type Props = NativeStackScreenProps<MainParamList, 'WorkoutDetail'>;
 
@@ -84,7 +85,7 @@ export function WorkoutDetail({ navigation, route }: Props) {
       forward={forward}
       loading={loading}
       units={app.profile?.units ?? 'kg'}
-      dayName={session ? sessionDayName(session) : ''}
+      dayName={session ? dayTitle(sessionDayName(session)) : ''}
       bodyweightKg={app.profile?.weightKg}
       onBack={() => navigation.goBack()}
       onAmend={async (ordinal, v) => {

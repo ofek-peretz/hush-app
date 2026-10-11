@@ -122,7 +122,8 @@ describe('the Hebrew reads as Hebrew', () => {
    * measurement rather than addressing anybody.
    */
   it('B.2 — the three measurements each have their own line, in both languages', () => {
-    for (const k of ['healthHr', 'healthHrSub', 'healthKcal', 'healthKcalSub', 'healthKm', 'healthKmSub']) {
+    // The kilometre pair left with the runs (2026-10-11, `theFullSweepOfTheScreens`): two measurements now.
+    for (const k of ['healthHr', 'healthHrSub', 'healthKcal', 'healthKcalSub']) {
       expect(tg(`ob.${k}`)).toBeTruthy();
       expect(tg(`ob.${k}`)).not.toBe(`ob.${k}`); // i18next echoes the key when it is missing
     }

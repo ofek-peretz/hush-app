@@ -267,9 +267,33 @@ export function isTrainingGated(
   return completedSessions >= FREE_SESSION_LIMIT || trialTimeSpent(memberSince, nowMs);
 }
 
-/** Free sessions still available before the paywall (0 once spent). */
-export function freeSessionsRemaining(completedSessions: number): number {
+/**
+ * Free sessions still available before the paywall (0 once spent).
+ *
+ * ⛔ SPENT BY THE CLOCK IS SPENT (sweep, 2026-10-11). The gate above has asked two questions since
+ * the cap was armed — the count OR the days — and this counter went on asking one. So an athlete
+ * who trained once and came back on day fifteen met a wall under a Today that said nothing, a
+ * profile that said "trial · 2 of 3 left", and a paywall headed "session 1 of 3": three screens
+ * contradicting the one that was refusing her. Every reader passes her `memberSince` now, and the
+ * counter and the gate are the same sentence. A caller with no date gets the count alone, as before.
+ */
+export function freeSessionsRemaining(completedSessions: number, memberSince?: string, nowMs: number = Date.now()): number {
+  if (trialTimeSpent(memberSince, nowMs)) return 0;
   return Math.max(0, FREE_SESSION_LIMIT - completedSessions);
+}
+
+/** Whole days left on the free workouts' clock (never negative); null while the cap is disarmed or the start unknown. */
+export function trialDaysLeft(memberSince: string | undefined, nowMs: number = Date.now()): number | null {
+  if (TRIAL_MAX_DAYS == null || !memberSince) return null;
+  const start = Date.parse(memberSince);
+  if (!Number.isFinite(start)) return null;
+  const DAY = 24 * 60 * 60 * 1000;
+  return Math.max(0, Math.ceil((start + TRIAL_MAX_DAYS * DAY - nowMs) / DAY));
+}
+
+/** Did the DAYS end her free workouts, with some of them still unused? The wall says so in those words. */
+export function trialEndedByTime(completedSessions: number, memberSince?: string, nowMs: number = Date.now()): boolean {
+  return completedSessions < FREE_SESSION_LIMIT && trialTimeSpent(memberSince, nowMs);
 }
 
 /**

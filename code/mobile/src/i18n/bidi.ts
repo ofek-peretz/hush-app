@@ -22,9 +22,28 @@ import { I18nManager, type TextStyle } from 'react-native';
 const FSI = '⁨'; // First Strong Isolate — open
 const PDI = '⁩'; // Pop Directional Isolate — close
 
-/** Isolate a run so the surrounding BiDi context cannot reorder it (or it the context). */
+const RLI = '⁧'; // Right-to-Left Isolate — open
+const HEBREW = /[֐-׿]/;
+
+/**
+ * Isolate a run so the surrounding BiDi context cannot reorder it (or it the context).
+ *
+ * ⛔ A RUN WITH HEBREW IN IT IS A HEBREW RUN, WHATEVER IT OPENS ON (walked 2026-10-11). The isolate
+ * was always FIRST-STRONG: it takes the run's direction from its first strong letter. So a week the
+ * coach titled "PPL לחמישה ימים: דגש על גב וכתפיים" — Hebrew, opening on a Latin acronym — was laid
+ * out left to right on the Ready screen, its words in the wrong order and its colon on the wrong
+ * side; a day she named "Push — חזה וכתפיים" would do the same on every screen that prints it. A
+ * run that carries any Hebrew letter is isolated as right-to-left; a run with none (a Latin name
+ * inside a Hebrew sentence — the case this function was written for) is first-strong as before.
+ */
 export function bidi(s: string): string {
-  return `${FSI}${s}${PDI}`;
+  return `${HEBREW.test(s) ? RLI : FSI}${s}${PDI}`;
+}
+
+/** U+200F ahead of a whole PARAGRAPH that holds Hebrew — its direction said outright, where an
+ *  isolate would be skipped when the paragraph's own direction is found (`BuildingProgrammeView`). */
+export function paragraphMark(text: string): string {
+  return HEBREW.test(text) ? '‏' : '';
 }
 
 /** Longer than this and a name has to be allowed to break, or it overruns the column. */

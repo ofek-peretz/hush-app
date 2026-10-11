@@ -43,7 +43,8 @@ describe('1 · every UI door gates', () => {
   it('Home’s Begin asks, and answers with the paywall', () => {
     const home = read('src/screens/home/Home.tsx');
     expect(home).toContain('isTrainingGated(app.modeState.completedSessions, app.entitlement.active, app.profile?.memberSince)');
-    expect(home).toMatch(/if \(gated\) \{\s*\n\s*navigation\.navigate\('Paywall', \{ source: 'gate' \}\)/);
+    // Asked again AT THE PRESS — the render's answer can be a day old (sweep 2026-10-11).
+    expect(home).toMatch(/if \(gated \|\| isTrainingGated\(app\.modeState\.completedSessions, app\.entitlement\.active, app\.profile\?\.memberSince\)\) \{\s+navigation\.navigate\('Paywall', \{ source: 'gate' \}\);/);
   });
 
   it('⛔ the pre-workout card’s Start asks the SAME question — the side door of build 57', () => {

@@ -107,7 +107,9 @@ describe('⛔ the three roads that carried pounds into a kilogram record', () =>
   it('the stage’s number pad converts what she typed before it writes the set', () => {
     const src = read('screens/session/SessionFlow.tsx');
     const pad = src.slice(src.indexOf('const onPadKey'), src.indexOf('const openField'));
-    expect(pad).toMatch(/editCurrentSet\(\{ weight: kgFromDisplay\(total, units\)/);
+    // The conversion happens once, into `kg`, and that is what is written (and what the ceiling reads).
+    expect(pad).toMatch(/const kg = total != null && total > 0 \? kgFromDisplay\(total, units\) : null;/);
+    expect(pad).toMatch(/if \(kg != null\) session\.editCurrentSet\(\{ weight: kg, reps: repsNow \}\);/);
   });
 
   it('the voice steps a load by a detent converted to kilograms', () => {

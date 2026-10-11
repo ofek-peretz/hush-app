@@ -49,7 +49,7 @@ import { OnboardingScaffold } from '@/components/onboarding/OnboardingScaffold';
 import { seedStatedLoads } from '@/domain/statedLifts';
 import { Button } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
-import { BuildingProgrammeView, beatFor, type BuildLift, type BuildMuscle } from '@/screens/onboarding/BuildingProgrammeView';
+import { BuildingProgrammeView, beatFor, type BuildLift, type BuildMuscle, type BuildWeekLift } from '@/screens/onboarding/BuildingProgrammeView';
 import { muscleOf, exerciseDisplayName } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
@@ -64,7 +64,8 @@ import type { Experience, Profile, Program } from '@/data/local/models';
 import type { OnboardingParamList } from '@/app/navigation';
 import { offeredLiftIds } from '@/domain/buildPrompt';
 import { LB_PER_KG } from '@/engine/v5/loadGrid';
-import { unitLabel } from '@/domain/schedule';
+import { displayWeight, unitLabel } from '@/domain/schedule';
+import { openingLoadsOf } from '@/data/api/fixtureModel';
 
 type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
 
@@ -154,7 +155,8 @@ const LIBRARY_TOUR = [
 ] as const;
 
 function fillHold(muscles: readonly BuildMuscle[]): number {
-  return beatFor(muscles[muscles.length - 1]?.lifts.length ?? 1);
+  // How many lifts her week has to show — the view's clock decides how many of them pass (2026-10-11).
+  return beatFor(muscles.reduce((n, m) => n + m.lifts.length, 0));
 }
 /*
  * ⛔ THE WAIT CLAIMS NOTHING (founder, 2026-09-14: *"תחליף את שורות ההמתנה"*).
@@ -306,7 +308,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
    */
   const [shownMuscles, setShownMuscles] = useState(0);
 
-  const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number } | null>(null);
+  const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number; days: number; week: BuildWeekLift[] } | null>(null);
   /** When the show began — wall-clock, so a background gap costs nothing (see the catch-up below). */
   const startedAtMs = useRef(Date.now());
   /** …and when the answer landed, which is what everything after the fill is scheduled from. */
@@ -638,6 +640,9 @@ export function BuildingProgramme({ navigation, route }: Props) {
         muscles: buildMusclesFromProgram(program, profile.repBand ?? DEFAULT_REP_BAND),
         name: programmeName(program.days, profile.bodyMap, CANONICAL_MUSCLE_ORDER, program.title),
         lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
+        days: program.days.filter((d) => !d.isRest && d.slots.length > 0).length,
+        // Her lifts as the stage performs them — priced on the same rungs every later screen uses.
+        week: buildWeekFromProgram(program, profile, inputs.units),
       });
       /*
        * ⛔ NO `setShownMuscles(1)` HERE. It was the line that killed the opening beat: a pure call
@@ -794,7 +799,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
            checker cannot see through the derivation, and it is right to ask: a refactor that
            loosened `named` would have made this a crash on the one screen she cannot go back from. */
         revealed && named && built
-          ? t('ob.buildSummary', { muscles: built.muscles.length, lifts: built.lifts })
+          ? t('ob.buildSummaryWeek', { days: built.days, lifts: built.lifts })
           : null
       }
       note={importFailed ? t(`import.fail.${importFailed}`) : null}
@@ -806,6 +811,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       library={askingTheCoach ? waitLibrary : undefined}
       libraryCount={askingTheCoach ? offeredLiftIds().length : undefined}
       waitHint={askingTheCoach ? t('ob.buildUsually') : null}
+      week={built && muscles.length ? built.week : undefined}
     />
   );
 }
@@ -822,6 +828,37 @@ export function BuildingProgramme({ navigation, route }: Props) {
  * yet. `load: null` is what the row renders as a dash — the honest answer, and the same one every
  * untrained lift gives everywhere else in the app.
  */
+/**
+ * Her week as the stage performs it: each lift once, in the order she will meet it, with the
+ * weight it opens at and its sets × reps — the lift's OWN range when the week wrote one (the row
+ * this replaces printed the default range over every lift, 2026-10-11).
+ */
+export function buildWeekFromProgram(
+  program: Program,
+  profile: Parameters<typeof openingLoadsOf>[1],
+  units: 'kg' | 'lb',
+): BuildWeekLift[] {
+  const loads = openingLoadsOf(program, profile);
+  const fallback = (profile.repBand ?? DEFAULT_REP_BAND).replace('-', '–');
+  const out: BuildWeekLift[] = [];
+  const seen = new Set<string>();
+  for (const day of program.days) {
+    if (day.isRest) continue;
+    for (const slot of day.slots) {
+      if (seen.has(slot.exerciseId)) continue;
+      seen.add(slot.exerciseId);
+      const shown = displayWeight(loads[slot.exerciseId] ?? null, units);
+      out.push({
+        id: slot.exerciseId,
+        name: exerciseDisplayName(slot.exerciseId),
+        load: shown != null ? `${shown} ${unitLabel(units)}` : null,
+        scheme: `${slot.setCount} × ${slot.repBand ? `${slot.repBand[0]}–${slot.repBand[1]}` : fallback}`,
+      });
+    }
+  }
+  return out;
+}
+
 export function buildMusclesFromProgram(program: Program, repBand: string): BuildMuscle[] {
   const byMuscle = new Map<string, BuildLift[]>();
   const seen = new Set<string>();

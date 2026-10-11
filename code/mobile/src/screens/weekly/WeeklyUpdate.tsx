@@ -33,6 +33,7 @@ import { WhyChangedSheet, whyProps } from '@/components/WhyChangedSheet';
 import { changedLiftCase } from '@/domain/changedLiftCase';
 import { currentLocale } from '@/i18n';
 import { useCopy } from '@/i18n/useCopy';
+import { inHerUnits } from '@/i18n/herUnits';
 import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 // ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
@@ -358,7 +359,7 @@ export function WeeklyUpdate({ navigation, route }: Props) {
          * the three surfaces cannot start explaining one decision three ways.
          */
         line: l.change!.explanation?.text?.key
-          ? t(l.change!.explanation.text.key, l.change!.explanation.text.params)
+          ? t(l.change!.explanation.text.key, inHerUnits(l.change!.explanation.text.params, units))
           : null,
       };
     });

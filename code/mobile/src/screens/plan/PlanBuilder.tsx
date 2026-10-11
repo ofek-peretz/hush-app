@@ -611,7 +611,6 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
   const [allFor, setAllFor] = useState<{ day: number; slot: number } | null>(null);
   const [setsFor, setSetsFor] = useState<string | null>(null);
   const [demoFor, setDemoFor] = useState<string | null>(null);
-  const [confirmRevert, setConfirmRevert] = useState(false);
   /* The ask step, which stands instead of the doors. Declared with the other sheet state because
      the branches below return early and hooks may not sit behind one. */
   const [asking, setAsking] = useState(!!props.previewAsking);
@@ -654,7 +653,9 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
   if ((asking || intakeAsks) && props.onLetHushBuild) {
     return (
       <AskTheCoach
-        opensOn={props.forAthlete?.days ?? DAYS_OPENS_ON}
+        /* From the editor the wheel opens on the week she HAS — asking for a new week is not asking
+           to drop to three days (walked 2026-10-11). The intake and the doors keep the default. */
+        opensOn={props.forAthlete?.days ?? (d && !props.intake && !props.offerDoors ? d.days.length : DAYS_OPENS_ON)}
         {...(props.forAthlete ? { title: t('coachTrack.coach.pen.askTitle', { name: props.forAthlete.name }) } : {})}
         intake={!!props.intake}
         steps={props.intakeSteps ?? 3}
@@ -1170,16 +1171,22 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
           </>
         )}
 
-        {!fa && props.savedIsAuthored ? (
-          confirmRevert ? (
-            <View style={styles.revertConfirm}>
-              <Text style={styles.revertBody}>{t('builder.revertBody')}</Text>
-              <Button block variant="ghost" label={t('builder.revertYes')} onPress={props.onRevert} />
-              <Button block variant="ghost" label={t('common.cancel')} onPress={() => setConfirmRevert(false)} />
-            </View>
-          ) : (
-            <Button block variant="ghost" label={t('builder.revert')} onPress={() => setConfirmRevert(true)} style={styles.revertBtn} />
-          )
+        {/*
+          ════ ⛔ A NEW WEEK IS ASKED OF THE COACH — THE ONLY AUTHOR THERE IS (sweep, 2026-10-11) ════
+
+          "Hand the pen back to me" stood here, and what it handed the pen to was the local
+          assembler: *"I will build a fresh week from your profile"* — a week no model wrote, on
+          the one screen of an athlete whose every week since 2026-09-28 is the coach's by ruling
+          (*"הבינה בונה את השבוע בלבד"*). And because a week she owns opens straight into this
+          editor, the doors — where "build a programme for me" lives — were never drawn for her:
+          pressing this was the only way to a new week, and it was the one way that was not the AI.
+
+          So it is the ask now: the same step the intake ends on (her sentence, her days), answered
+          by the model, landing here as a draft she can still edit before she saves it. Nothing is
+          replaced until she saves — which is why there is no "are you sure" in front of it.
+        */}
+        {!fa && props.savedIsAuthored && props.onLetHushBuild ? (
+          <Button block variant="ghost" label={t('builder.newWeek')} onPress={() => setAsking(true)} disabled={!!props.buildBusy} style={styles.revertBtn} />
         ) : null}
       </ScrollView>
 
@@ -1733,7 +1740,6 @@ const styles = StyleSheet.create({
   /* The refusal sits UNDER the control it refuses, in the muted tone — a reason, never a scolding. */
   emptyNote: { fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textTertiary, textAlign: 'left' },
   revertBtn: { marginTop: 2 },
-  revertConfirm: { gap: 8, backgroundColor: color.surface, borderRadius: radius.lg, padding: 14 },
   /*
    * ⛔ "YOURS" IS A STATEMENT, NOT A BUTTON (2026-08-26, the elevation pass).
    *

@@ -35,7 +35,7 @@ export type IconName =
   | 'backspace' // lucide delete — the keypad's erase key (mirrors under RTL: it erases toward the start)
   | 'grip' // reorder handle
   | 'home' // house / house.fill
-  | 'todayRange' // v7 2.1 — the brand's measured range with the dot at centre (the Today tab)
+  | 'todayRange' // the Today tab: the FERROX mark in the tab's tint (the name is the v7 glyph's, kept for its callers)
   | 'lineChart' // v7 2.1 — a bare polyline, no arrowhead (the Progress tab)
   | 'program' // square.grid.2x2
   | 'history' // clock.arrow.circlepath
@@ -211,12 +211,22 @@ function render(
         </G>
       );
     case 'todayRange':
-      // v7 2.1 — the Today tab wears the brand's own glyph: a span between two end ticks with
-      // the dot landed at its centre. Today IS the measurement, so the tab says so.
+      /*
+       * ⛔ THE TODAY TAB WEARS THE BRAND'S MARK — AND THE BRAND IS FERROX (2026-10-11). This drew
+       * "a span between two end ticks with the dot at its centre": Hush's glyph, which survived
+       * the 2026-09-16 rename on the one control every session passes. It is the horns and the
+       * dot now, in the tab's own single tint (as the watch's complication draws them) — the
+       * master's geometry (`brand/logo/export/ferrox-mark.svg`, box 9.5,16 · 81×59) scaled into
+       * the 24-point cell, never redrawn.
+       */
       return (
-        <G {...common}>
-          <Path d="M4 12h16M4 8.5v7M20 8.5v7" />
-          <Circle cx="12" cy="12" r="2.6" fill={stroke} stroke="none" />
+        <G transform="translate(1.2 3.6) scale(0.2667) translate(-9.5 -16)">
+          <Path
+            d="M62 60 C79 60 88 46 89.5 17 C82 34 74 44 61 44 L39 44 C26 44 18 34 10.5 17 C12 46 21 60 38 60 L36.584 60 A14 14 0 0 1 63.416 60 Z"
+            fill={stroke}
+            stroke="none"
+          />
+          <Circle cx="50" cy="64" r="10" fill={stroke} stroke="none" />
         </G>
       );
     case 'lineChart':

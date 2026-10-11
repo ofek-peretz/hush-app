@@ -33,7 +33,7 @@ import { HttpError } from '@/data/api/httpErrors';
 import { track, flush as flushTelemetry, refreshTelemetryOptOut } from '@/platform/telemetry';
 import type { ModelClient } from '@/data/api/modelClient';
 import { move } from '@/domain/reorder';
-import { activeEases, awaitingAnswer, easeFor, effectiveBodyMap, ANSWER_SEVERITY, type EaseAnswer, type PainEase, type PainSeverity } from '@/domain/painReport';
+import { activeEases, awaitingAnswer, easeFor, easesAfterReport, effectiveBodyMap, ANSWER_SEVERITY, type EaseAnswer, type PainEase, type PainSeverity } from '@/domain/painReport';
 import { muscleOf } from '@/data/exercises';
 import { notifier } from '@/platform/notifications';
 import { health } from '@/platform/health';
@@ -50,7 +50,7 @@ import { BILLING_EVENTS } from '@/platform/events';
 import { trialUsed, nextLedger } from '@/domain/trialLedger';
 import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
 import { cloud } from '@/platform/cloud';
-import { cloudAutoBackup } from '@/platform/cloudBackup';
+import { cloudAutoBackup, cloudErase } from '@/platform/cloudBackup';
 import { updateHomeWidget } from '@/platform/homeWidget';
 import { syncTrainingRemindersFromPlan } from '@/platform/trainingReminders';
 import { armGapCatch } from '@/platform/gapCatch';
@@ -1270,7 +1270,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Newest-wins by construction: the old ease is kept only if it is for another muscle, so
         // reporting the same one again REPLACES its window rather than stacking two.
         const active = activeEases(state.profile.painEases, now);
-        const kept = active.filter((e) => e.muscle !== muscle);
         /*
          * ⚠️ THE SAME REPORT, ARRIVING TWICE (2026-08-05).
          *
@@ -1285,7 +1284,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * standing for this muscle at this severity means the coach has already been told.
          */
         const already = active.some((e) => e.muscle === muscle && e.severity === severity);
-        const profile: Profile = { ...state.profile, painEases: [...kept, easeFor(muscle, severity, now)] };
+        const profile: Profile = { ...state.profile, painEases: easesAfterReport(state.profile.painEases, muscle, severity, now) };
         await db.saveProfile(profile);
         dispatch({ type: 'PROFILE_UPDATED', profile });
         void track('pain_reported', { muscle, severity });
@@ -1844,7 +1843,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async resetAccount() {
         void track('signed_out');
         await flushTelemetry(); // ship before the wipe
-        await notifier.cancelAll(); // cancel the weekly note so a signed-out device stays silent
+        await notifier.cancelAll().catch(() => {}); // cancel the weekly note so a signed-out device stays silent
+        // ⛔ "Nothing is kept to restore from" is the sentence she just agreed to — so nothing is.
+        if (cloud.available() && !(await within(cloudErase(), WIPE_WAIT_MS, false))) void track('account_erase_failed', { kind: 'cloud_record' });
         await db.clearAll();
         await circleSignOut(); // the circle session is IDENTITY — a stranger's phone keeps nobody's circle
         // The device goes back to a stranger. Nothing about the last athlete may survive into the
@@ -1872,7 +1873,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          * while the token that authenticates it still exists; a failure is journaled, never a
          * blocker — her right to wipe the device in her hand does not depend on the network.
          */
-        if (!(await deleteIdentity().catch(() => false))) {
+        /* ⛔ BOUNDED (sweep, 2026-10-11): the call is a bare fetch, and on a dead connection it held
+           the confirmation sheet open with nothing moving for as long as the radio felt like it. */
+        if (!(await within(deleteIdentity().catch(() => false), WIPE_WAIT_MS, false))) {
           void track('account_erase_failed', { kind: 'identity_worker' });
         }
         // The model's erase hook (OD-2), kept best-effort: today the fixture's is a no-op — her
@@ -1884,7 +1887,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         } catch (e) {
           void track('account_erase_failed', { kind: e instanceof HttpError ? e.kind : 'unknown' });
         }
-        await notifier.cancelAll();
+        await notifier.cancelAll().catch(() => {});
+        // ⛔ DELETED IN HER iCLOUD TOO — or the next launch restores the athlete she just deleted
+        // (`domain/record.erasedRecord`).
+        if (cloud.available() && !(await within(cloudErase(), WIPE_WAIT_MS, false))) void track('account_erase_failed', { kind: 'cloud_record' });
         await db.clearAll();
         await circleSignOut(); // the circle session is IDENTITY — a stranger's phone keeps nobody's circle
         // The device goes back to a stranger. Nothing about the last athlete may survive into the
@@ -1904,6 +1910,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [state, coachLinked, coachPlan]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
+}
+
+/** How long a wipe waits on the network or the cloud before it goes on without them. */
+const WIPE_WAIT_MS = 6_000;
+
+/** `p`, or `fallback` if it has not answered in `ms` — a wipe is never held by a slow answer. */
+function within<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const tm = setTimeout(() => resolve(fallback), ms);
+    p.then(
+      (v) => {
+        clearTimeout(tm);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(tm);
+        resolve(fallback);
+      },
+    );
+  });
 }
 
 export function useApp(): AppApi {

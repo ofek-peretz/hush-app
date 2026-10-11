@@ -39,6 +39,7 @@ import { Legend, Button, Arrive, opticalFigure } from '@/components/ds';
 import { SHEET_SETTLE } from '@/components/BottomSheet';
 import { useCopy } from '@/i18n/useCopy';
 import { exerciseDisplayName } from '@/data/exercises';
+import { inHerUnits } from '@/i18n/herUnits';
 import type { ChangedLiftCase } from '@/domain/changedLiftCase';
 import { color, font, stage, tracking, trackingPx, up, down, hold } from '@/design/tokens';
 
@@ -274,7 +275,8 @@ export function whyProps(
       reached: s.reached,
     })),
     // The engine's reason was an i18n key the app expanded; the coach's is already a sentence.
-    line: 'text' in c.line ? c.line.text : c.line.key ? t(c.line.key, c.line.params) : '',
+    // Its numbers are kilograms: the sentence is read in her units (`i18n/herUnits`).
+    line: 'text' in c.line ? c.line.text : c.line.key ? t(c.line.key, inHerUnits(c.line.params, c.unit === 'lb' ? 'lb' : 'kg')) : '',
   };
 }
 

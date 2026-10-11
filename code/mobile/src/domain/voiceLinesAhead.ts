@@ -43,6 +43,10 @@ export function fixedLines(): string[] {
     voiceScript.record(), voiceScript.paused(), voiceScript.resumed(), voiceScript.back(),
     voiceScript.finishOnPhone(), voiceScript.cantHear(), voiceScript.markOnLock(), voiceScript.askDoneHoldAgain(),
     voiceScript.holdNotHeard(), voiceScript.cantSkip(), voiceScript.askDoneHold(),
+    /* ⛔ THE TWO LINES THE WORKOUT ACTUALLY SAYS WITH NO MICROPHONE (sweep, 2026-10-11) — which is
+       every workout since 2026-10-10. Neither was fetched, so the first sentence of her first
+       session and every "paused" came out in the phone's own voice, between lines in the coach's. */
+    voiceScript.openFirstSessionMark(), voiceScript.pausedNoEar(),
   ];
 }
 

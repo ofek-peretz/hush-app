@@ -62,7 +62,8 @@ import { SHARED_SWAP_WAIT_MS, sharedRestEndsAt } from '@/domain/sharedSession';
 import { PairSwapSheet } from '@/components/PairSwapSheet';
 import { displayWeekNumber } from '@/domain/weekCadence';
 import { displayWeight, kgFromDisplay, unitLabel, learnPhaseLength } from '@/domain/schedule';
-import { equipmentLoad, equipmentValue, loadSetup, rxType, totalFromEquipment, type LoadSetup, noLoadIsBand } from '@/domain/loadPresentation';
+import { equipmentDelta, equipmentLoad, equipmentValue, loadSetup, rxType, totalFromEquipment, type LoadSetup, noLoadIsBand } from '@/domain/loadPresentation';
+import { STATED_LIFT_MAX_KG } from '@/domain/statedLifts';
 import { StageBreath } from '@/components/StageBreath';
 import { db } from '@/data/local/db';
 // ⛔ ONE DOOR ONTO HER WEEK, whoever wrote it — the coach's plan when there is one, the engine's
@@ -135,6 +136,8 @@ export type Confirm = {
 };
 
 const CONFIRM_DWELL_MS = 1400; // the deliberate "Set logged" capture beat
+/** The most reps the pad will take for one set — a hundred push-ups is a set; a thousand is a thumb. */
+const MAX_TYPED_REPS = 100;
 /**
  * ⛔ AND A LIFT CLOSING HOLDS LONGER THAN A SET LANDING (founder, 2026-08-26 — the ring).
  *
@@ -391,6 +394,8 @@ export function SessionFlow({ navigation, route }: Props) {
     }
   }, [voice.silentBecause, notify, t, session.startedAtMs, session.loggedSets, app.modeState?.completedSessions]);
   const confirmRunning = useRef(false);
+  /** The pending write of the set whose "logged" beat is on screen — see `openPause`. */
+  const flushConfirmRef = useRef<(() => Promise<boolean>) | null>(null);
   // Equipment-learning toast: the engine's pristine load for the active set (captured before any
   // Edit Result), and whether the athlete corrected the load to a different available weight.
   const originalWeightRef = useRef<number | null>(null);
@@ -539,6 +544,26 @@ export function SessionFlow({ navigation, route }: Props) {
   }, [session.paused]);
 
   function openPause() {
+    /*
+     * ⛔ A SET SHE WAS SHOWN AS LOGGED IS LOGGED BEFORE THE WORKOUT FREEZES (sweep, 2026-10-11).
+     *
+     * The "logged" beat is drawn the instant she presses, and the write waits behind it — 1.4 s, or
+     * 2.6 s on a lift's last set. The pause disc stays live through all of it, and a frozen workout
+     * refuses a set (`completeSet`'s race guard). So: last set of her last lift, the tick lands, she
+     * presses Pause → End — and the set she had just been shown as recorded was not in the record.
+     * The beat's own write is run NOW, and the workout pauses on the far side of it. If that set
+     * was the last of the session there is nothing left to pause: Well Done opens instead.
+     */
+    const flush = flushConfirmRef.current;
+    if (flush) {
+      flushConfirmRef.current = null;
+      void flush().then((ended) => {
+        if (ended) return;
+        session.pause();
+        setOverlay((o) => (o === 'endConfirm' ? o : 'pause'));
+      });
+      return;
+    }
     session.pause(); // the effect above raises the stage — one path, phone or wrist
     /*
      * …AND ASSERT IT HERE TOO, because the effect above is edge-triggered and this button is not.
@@ -642,9 +667,16 @@ export function SessionFlow({ navigation, route }: Props) {
     // Set inside the async callback (after completeSet reveals a correction) and cleared on unmount
     // so the extra correction-hold timer never outlives the screen.
     let holdId: ReturnType<typeof setTimeout> | undefined;
-    const id = setTimeout(async () => {
+    let written = false;
+    /* Returns whether the set ended the session — `openPause` needs to know before it freezes one. */
+    const write = async (): Promise<boolean> => {
+      if (written) return false;
+      written = true;
+      flushConfirmRef.current = null;
+      let ended = false;
       try {
         const r = await session.completeSet();
+        ended = r.ended;
         // Non-blocking confirmation that Hush will remember the corrected load — shown at most ONCE
         // per workout, and NEVER when this set ends the workout (it must never float over Well Done).
         if (corrected && !r.ended && !learnToastShownRef.current) {
@@ -705,9 +737,16 @@ export function SessionFlow({ navigation, route }: Props) {
        * `beatCorrection` is deliberately NOT read here — it cannot be known before `completeSet`
        * resolves, and it owns its own hold when it arrives.
        */
-    }, beatSpeaksFor(confirm) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0);
+      return ended;
+    };
+    const id = setTimeout(() => void write(), beatSpeaksFor(confirm) ? (closesTheLift(confirm) ? LIFT_DONE_DWELL_MS : CONFIRM_DWELL_MS) : 0);
+    flushConfirmRef.current = () => {
+      clearTimeout(id);
+      return write();
+    };
     return () => {
       clearTimeout(id);
+      flushConfirmRef.current = null;
       if (holdId) clearTimeout(holdId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1624,6 +1663,7 @@ function ItemBeat({
   onRun: (metres: number, say?: string) => void;
 }) {
   const session = useSession();
+  const units = useApp().profile?.units ?? 'kg';
   const name = exerciseDisplayName(session.currentExerciseId);
   /*
    * ════ WHERE SHE IS IN A REPEATED ITEM — "REP 3 OF 6" ════
@@ -1700,6 +1740,7 @@ function ItemBeat({
           item={item}
           name={name}
           measured={measured}
+          units={units}
           onDone={() => (measured ? onRun(item.metres, item.say) : finish())}
         />
       );
@@ -2591,12 +2632,15 @@ function ActiveSet({
   /* What the ENGINE asked for this set — captured at the beat's open, BEFORE any edit writes
      through to the live target. The restore line below offers exactly this number back. */
   const plannedWeightRef = useRef<number | null>(null);
+  /* …and the count it asked for, for the same reason: an emptied field gives the plan back. */
+  const plannedRepsRef = useRef<number | null>(null);
   useEffect(() => {
     setSlot('athlete');
     setRepsTyped('');
     setDraft('');
     setDraftPristine(false);
     plannedWeightRef.current = session.currentTarget?.recommendedWeight ?? null;
+    plannedRepsRef.current = session.currentTarget?.recommendedReps ?? null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beat]);
   /* One frame, on the way out — see the hook above. Every hook this component owns has now run, so
@@ -2777,6 +2821,24 @@ function ActiveSet({
   const eq = equipmentLoad(setup);
 
   /*
+   * ⛔ THE ARROW IS IN THE FIGURE'S OWN TERMS (sweep, 2026-10-11). `loadNews` measures the TOTAL —
+   * it was written when the hero was the total. The hero has been the per-side figure since the
+   * 2026-08-31 ruling, and the arrow stayed behind: a bench going 60 → 62.5 read "21.25 ↑2.5" under
+   * the words A SIDE, when one side went up 1.25. The move is now measured on the same figure it
+   * stands beside — per side on a bar, per hand on a dumbbell, the pin on a stack — and an arrow
+   * that would round to nothing is not drawn.
+   */
+  const newsFigure =
+    news && target.recommendedWeight != null
+      ? equipmentDelta(
+          session.currentExerciseId,
+          weight,
+          displayWeight(target.recommendedWeight + (news.direction === 'up' ? -news.deltaKg : news.deltaKg), units),
+          units,
+        )
+      : null;
+
+  /*
    * ════════════════════════════════════════════════════════════════════════════════════════════
    * ⛔ WHAT SHE DID LAST TIME — ON THIS SET, INSIDE THE FIELD (founder, 2026-08-31, free hand)
    * ════════════════════════════════════════════════════════════════════════════════════════════
@@ -2846,11 +2908,20 @@ function ActiveSet({
   /**
    * A key press, routed to whichever field is open.
    *
-   * ⛔ THE WEIGHT WRITES THROUGH ON EVERY KEY and the reps do NOT. A half-typed weight is still a
-   * weight (7 on the way to 7.5 is a load she could have used), so the total under it can track her
-   * thumb and teach the arithmetic as she goes. A half-typed rep count is not a rep count — writing
-   * `1` on the way to `12` would put a set of one into the engine for as long as her second finger
-   * takes, and `Complete Set` is one mis-tap away the whole time.
+   * BOTH FIELDS WRITE THROUGH ON EVERY KEY — the act logs the set as it stands (2026-09-07), so what
+   * is on the pad has to be what is in the set. (This note said the reps did not; they have since
+   * the act stopped opening the field.)
+   *
+   * ⛔ AND AN EMPTIED FIELD IS THE PRESCRIPTION AGAIN (sweep, 2026-10-11). Writing through on every
+   * key and writing NOTHING on an empty field left the last half-typed digit in the set: tap reps,
+   * type 1, think better of it, backspace — the pad said "—" and the set said ONE rep, with the
+   * count the coach wrote gone for good. The same on the weight: 40 a side, two backspaces, and the
+   * bar was 4 a side. An empty field now hands back what the plan asked for, which is also what
+   * the screen shows the moment the pad closes.
+   *
+   * ⛔ AND THE PAD REFUSES A NUMBER NO BAR HAS CARRIED. Five characters was the only limit, so
+   * 99999 reps or 99999 a side went into the record — and from there into her "best", her tonnage,
+   * her milestones and next week's load. The intake's own ceilings (`statedLifts`) apply here too.
    */
   const onPadKey = (k: string) => {
     /* A pristine draft is the value she arrived with, not something she typed — the first key
@@ -2866,7 +2937,6 @@ function ActiveSet({
             : `${base === '' ? '0' : base}.`
           : `${base}${k}`.replace(/^0(?=\d)/, '');
     if (next.length > 5) return; // 137.5 is the widest real load; nothing legitimate is longer
-    setDraft(next);
     if (slot === 'weight') {
       const v = next === '' || next === '.' ? null : Number(next);
       const total = v == null ? null : totalFromEquipment(session.currentExerciseId, v, units);
@@ -2874,11 +2944,21 @@ function ActiveSet({
          units she typed in, and it went into the set as it stood — so 25 lb a side, a 95 lb bar, was
          written as NINETY-FIVE KILOGRAMS and came back on the stage as 209 lb. Every other road into
          a set converts (`kgFromDisplay`); this one does now too. */
-      if (total != null) session.editCurrentSet({ weight: kgFromDisplay(total, units), reps: repsNow });
+      const kg = total != null && total > 0 ? kgFromDisplay(total, units) : null;
+      if (kg != null && kg > STATED_LIFT_MAX_KG) return; // the key is refused; the field keeps what it had
+      setDraft(next);
+      if (kg != null) session.editCurrentSet({ weight: kg, reps: repsNow });
+      else if (plannedWeightRef.current != null) session.editCurrentSet({ weight: plannedWeightRef.current, reps: repsNow });
     } else if (slot === 'reps') {
-      setRepsTyped(next);
       const v = Number(next);
-      if (next !== '' && Number.isFinite(v) && v > 0) session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
+      const typed = next !== '' && Number.isFinite(v) && v > 0;
+      if (typed && v > MAX_TYPED_REPS) return;
+      setDraft(next);
+      setRepsTyped(next);
+      if (typed) session.editCurrentSet({ weight: target.recommendedWeight, reps: v });
+      else if (plannedRepsRef.current != null) session.editCurrentSet({ weight: target.recommendedWeight, reps: plannedRepsRef.current });
+    } else {
+      setDraft(next);
     }
   };
 
@@ -3207,9 +3287,9 @@ function ActiveSet({
                   {slot === 'weight' ? draft || '0' : (eq?.value ?? '')}
                 </Text>
               )}
-              {news && slot !== 'weight' ? (
+              {news && newsFigure && slot !== 'weight' ? (
                 <Text style={[styles.rxFigureDelta, { color: directionTone(news.direction) }]} numberOfLines={1}>
-                  {`${news.direction === 'up' ? '↑' : '↓'}${displayWeight(news.deltaKg, units)}`}
+                  {`${news.direction === 'up' ? '↑' : '↓'}${newsFigure}`}
                 </Text>
               ) : null}
             </View>
@@ -4615,8 +4695,11 @@ function Rest({
               end of the lift she just did — during a crossing that is the lift that ENDED
               (`currentExerciseId`, see the note at `restSeconds`), and it becomes the very next
               thing; between sets it waits its turn. The engine still wrote the set; she only
-              asked for another of it (`addWorkingSet`). */}
-          {session.currentExerciseId && session.currentTarget ? (
+              asked for another of it (`addWorkingSet`).
+              ⛔ NOT INSIDE A SUPERSET (sweep, 2026-10-11): there "one more set" has no single meaning
+              — of which lift, in which round? — and the store refuses it (`addWorkingSet`), so the
+              control is not drawn where it would do nothing. */}
+          {session.currentExerciseId && session.currentTarget && !session.superset && !session.nextSuperset ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('workout.oneMoreSet')}

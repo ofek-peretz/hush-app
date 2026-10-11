@@ -412,10 +412,15 @@ function formatDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** "60 × 8" · "62.5 × 6" · "BW × 12" — the read-back's one number, phone-identical. */
+/**
+ * "60 × 8" · "62.5 × 6" · "× 12" — the read-back's one number.
+ *
+ * ⛔ A LIFT WITH NO LOAD SAYS ITS REPS AND NOTHING ELSE (sweep, 2026-10-11). It said "BW × 12" — two
+ * English letters on a Hebrew wrist, beside every pull-up and push-up of the workout. This file is
+ * pure and holds no words; the count alone is true in every language.
+ */
 function bestSetLabel(s: MirrorLoggedSet): string {
-  const w = s.weight == null ? 'BW' : String(Math.round(s.weight * 10) / 10);
-  return `${w} × ${s.reps}`;
+  return s.weight == null ? `× ${s.reps}` : `${String(Math.round(s.weight * 10) / 10)} × ${s.reps}`;
 }
 
 /**
@@ -456,20 +461,20 @@ export function summaryLifts(
   return order.map((name) => ({ name, best: bestSetLabel(best.get(name)!) }));
 }
 
-/** The current step's lift ordinal (1-based) among contiguous same-exercise runs,
- *  and the total number of runs ("Lift 1/6"). */
-function liftPosition(steps: MirrorStep[], idx: number): { index: number; count: number } {
-  let runs = 0;
-  let curRun = 0;
-  let prev: string | null = null;
-  for (let i = 0; i < steps.length; i++) {
-    if (steps[i].exerciseName !== prev) {
-      runs += 1;
-      prev = steps[i].exerciseName;
-    }
-    if (i === idx) curRun = runs;
-  }
-  return { index: curRun || 1, count: runs || 1 };
+/**
+ * The current step's lift ordinal (1-based) and how many lifts the workout holds ("Lift 2/5").
+ *
+ * ⛔ IT COUNTS LIFTS, NOT RUNS (sweep, 2026-10-11). It counted contiguous same-name runs, which was
+ * the same number while every lift was one unbroken block. A superset is not: A, B, A, B, A, B is
+ * two lifts and six runs — so five lifts with one pair supersetted read "2 of 5" on the phone
+ * (which counts distinct lifts) and "4 / 9" on the wrist and the lock card, in the same instant.
+ * First-seen order, each lift once, exactly as the stage's own rail counts them.
+ */
+export function liftPosition(steps: MirrorStep[], idx: number): { index: number; count: number } {
+  const order: string[] = [];
+  for (const s of steps) if (!order.includes(s.exerciseName)) order.push(s.exerciseName);
+  const at = order.indexOf(steps[idx]?.exerciseName ?? '');
+  return { index: at >= 0 ? at + 1 : 1, count: order.length || 1 };
 }
 
 /**

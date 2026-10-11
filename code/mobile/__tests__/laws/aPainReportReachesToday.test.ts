@@ -94,7 +94,12 @@ describe('the wire', () => {
   it('⛔ the report screen revises TODAY, not only the programme', () => {
     const pain = read('src/screens/pain/PainWhere.tsx');
     expect(pain).toContain('await app.reportPain(muscle, severity);');
-    expect(pain).toContain('liftsForbiddenNow(remaining, app.profile?.painEases, Date.now()');
+    /* ⛔ NOT `app.profile.painEases` AS IT STOOD (2026-10-11): that is the profile from the render
+       BEFORE the report, so the ease just filed was never in it and a first report dropped nothing —
+       this very line was pinned here, green, while the founder's 2026-08-12 finding stayed open. */
+    expect(pain).toContain('const eases = easesAfterReport(app.profile?.painEases, muscle, severity, now);');
+    expect(pain).toContain('liftsForbiddenNow(remaining, eases, now,');
+    expect(pain).not.toContain('liftsForbiddenNow(remaining, app.profile?.painEases');
     expect(pain).toContain("session.reviseToday(gone.map((ex) => ({ do: 'drop', ex }) as const))");
   });
 

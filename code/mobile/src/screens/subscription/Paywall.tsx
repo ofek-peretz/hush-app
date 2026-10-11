@@ -51,7 +51,7 @@ import { track } from '@/platform/telemetry';
 import { BILLING_EVENTS } from '@/platform/events';
 import { billing, PRODUCT_IDS, type ProductId, type SubscriptionProduct } from '@/platform/billing';
 import { annualSavingPct, monthlyEquivalentLabel } from '@/domain/pricing';
-import { FREE_SESSION_LIMIT } from '@/domain/entitlement';
+import { FREE_SESSION_LIMIT, TRIAL_MAX_DAYS, trialEndedByTime } from '@/domain/entitlement';
 import { paywallCase, type PaywallCase } from '@/domain/paywallCase';
 import { athleteFile } from '@/domain/athleteFile';
 import { engineReceipt, type EngineReceipt } from '@/domain/engineReceipt';
@@ -75,7 +75,10 @@ export function Paywall({ navigation, route }: Props) {
    * gate (the watch reconciling offline work, say) cannot print "session 15 of 14".
    */
   const sessionsDone = Math.min(app.modeState.completedSessions, FREE_SESSION_LIMIT);
-  const trialSpent = sessionsDone >= FREE_SESSION_LIMIT;
+  /* The days can end the free workouts before the count does — and then the wall says THAT, not
+     "session 1 of 3" over a Begin it is refusing (`freeSessionsRemaining`). */
+  const endedByTime = trialEndedByTime(app.modeState.completedSessions, app.profile?.memberSince);
+  const trialSpent = sessionsDone >= FREE_SESSION_LIMIT || endedByTime;
   const source = route.params?.source ?? 'gate';
 
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
@@ -259,6 +262,8 @@ export function Paywall({ navigation, route }: Props) {
               debt on the profile's door into this screen (design audit 2026-09-29). */}
           {returning
             ? t('paywall.trialUsed')
+            : endedByTime
+            ? t('paywall.trialDays', { days: TRIAL_MAX_DAYS ?? 0 })
             : trialSpent
             ? t('paywall.trialDone', { count: FREE_SESSION_LIMIT })
             : sessionsDone === 0
@@ -272,7 +277,7 @@ export function Paywall({ navigation, route }: Props) {
               it thanked her for workouts that never happened. Spent trial: what the next weeks do
               with what she did. Otherwise: what the membership is. */}
           <Text style={styles.title} accessibilityRole="header">
-            {trialSpent && !returning ? t('paywall.titleSpent', { count: FREE_SESSION_LIMIT }) : t('paywall.title')}
+            {trialSpent && !endedByTime && !returning ? t('paywall.titleSpent', { count: FREE_SESSION_LIMIT }) : t('paywall.title')}
           </Text>
         </Arrive>
 

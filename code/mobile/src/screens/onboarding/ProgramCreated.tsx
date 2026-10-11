@@ -66,6 +66,7 @@ import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Icon } from '@/components/Icon';
+import { FerroxMark } from '@/components/FerroxLogo';
 import { LegalSheet } from '@/components/LegalSheet';
 import { onNewArm } from '@/platform/experiments';
 import { Button, FooterFade, Legend } from '@/components/ds';
@@ -86,7 +87,7 @@ import { dayTitle } from '@/i18n/dayTitle';
 import type { OnboardingInputs } from '@/data/local/models';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
-import { applyCycleTrial, freeSessionsRemaining } from '@/domain/entitlement';
+import { applyCycleTrial, freeSessionsRemaining, TRIAL_MAX_DAYS } from '@/domain/entitlement';
 import { intakeHandoff } from '@/app/intakeHandoff';
 import { PRO_TRIAL_DAYS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
@@ -357,8 +358,13 @@ export function ProgramCreated({ route, navigation }: Props) {
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Animated.View style={[styles.readyBlock, { opacity: seal }]}>
-            {/* The measuring mark — a moss start/finish bracket with the dot arriving at centre. */}
-            <StartFinishMark />
+            {/*
+              ⛔ OUR OWN MARK (2026-10-11). A moss rule between two end caps with a dot at its centre
+              stood here — Hush's measuring mark, the same drawing the founder had just read on the
+              wrist as "a dumbbell… our symbol is completely different". This is the screen that
+              hands her the week; it is signed with the horns and the dot, as Today is.
+            */}
+            <FerroxMark width={46} />
             {/* THE NAME (founder 2026-07-13), folded into the serif statement the way the v7 mock
                 draws it: "Erez, your program is built." — addressed, not generic. */}
             <Text style={styles.readyBuilt} accessibilityRole="header">
@@ -409,7 +415,13 @@ export function ProgramCreated({ route, navigation }: Props) {
                 </View>
                 <View style={styles.cancelRow}>
                   <Icon name="check" size={15} color={color.accent} strokeWidth={2.4} />
-                  <Text style={styles.cancelText}>{t('ob.readyCancel', { count: freeLeft, days: PRO_TRIAL_DAYS })}</Text>
+                  <Text style={styles.cancelText}>
+                    {t('ob.readyCancel', { count: freeLeft, days: PRO_TRIAL_DAYS })}
+                    {/* ⛔ THE CLOCK ON THE FREE WORKOUTS IS SAID WHERE THEY ARE PROMISED (sweep,
+                        2026-10-11). The days were enforced and written nowhere — the first she
+                        heard of them was the wall. Absent when the cap is disarmed. */}
+                    {TRIAL_MAX_DAYS != null ? ` ${t('ob.readyWithin', { days: TRIAL_MAX_DAYS })}` : ''}
+                  </Text>
                 </View>
               </>
             ) : (
@@ -523,18 +535,6 @@ export function ProgramCreated({ route, navigation }: Props) {
   );
 }
 
-/** The moss start/finish measuring mark — two caps, a rule between them, the dot arrived at centre. */
-function StartFinishMark() {
-  return (
-    <View style={styles.mark}>
-      <View style={styles.markBar} />
-      <View style={styles.markCapStart} />
-      <View style={styles.markCapEnd} />
-      <View style={styles.markDot} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   // The name sits between the greeting and the fourteen — it is the object, they are its terms.
   programName: { marginTop: 18, gap: 8 },
@@ -568,13 +568,6 @@ const styles = StyleSheet.create({
 
   // ready — a left-aligned, centred column (v7 1.5). The mark leads it, FREE is the headline.
   readyBlock: { alignItems: 'stretch', gap: 20 },
-
-  // The moss start/finish measuring mark (64 × 22).
-  mark: { width: 64, height: 22 },
-  markBar: { position: 'absolute', left: 0, top: 10, width: 64, height: 2, backgroundColor: color.accent },
-  markCapStart: { position: 'absolute', left: 0, top: 2, width: 2, height: 18, backgroundColor: color.accent },
-  markCapEnd: { position: 'absolute', right: 0, top: 2, width: 2, height: 18, backgroundColor: color.accent },
-  markDot: { position: 'absolute', left: 27, top: 5, width: 12, height: 12, borderRadius: 6, backgroundColor: color.accent },
 
   // "Erez, your program is built." — the serif statement, 40px.
   readyBuilt: { fontFamily: font.serif, fontSize: 40, lineHeight: 43, letterSpacing: trackingPx(40, tracking.display), color: color.textPrimary, textAlign: 'left' },

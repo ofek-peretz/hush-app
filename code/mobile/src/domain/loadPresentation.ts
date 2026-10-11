@@ -370,6 +370,26 @@ export function equipmentLoad(setup: LoadSetup | null): EquipmentLoad | null {
 }
 
 /**
+ * How far the figure she SETS moved, for a move of the total — both in her display units.
+ *
+ * A bar that went 60 → 62.5 moved 1.25 a side; a stack moved its whole pin. The set stage draws
+ * its arrow beside the equipment figure, so the arrow is measured on that figure and nowhere else
+ * (`SessionFlow.newsFigure`). Null when either end has no equipment figure, or the move rounds away.
+ */
+export function equipmentDelta(
+  exerciseId: string | null | undefined,
+  nowDisplay: number | null,
+  wasDisplay: number | null,
+  units: Units,
+): number | null {
+  const now = equipmentLoad(loadSetup(exerciseId, nowDisplay, units));
+  const was = equipmentLoad(loadSetup(exerciseId, wasDisplay, units));
+  if (!now || !was) return null;
+  const moved = round2(Math.abs(now.value - was.value));
+  return moved > 0 ? moved : null;
+}
+
+/**
  * The exact inverse: what she typed on the equipment → what the record stores.
  *
  * ⛔ A NEGATIVE OR NONSENSE ENTRY RETURNS NULL rather than a clamped number. She is reporting a

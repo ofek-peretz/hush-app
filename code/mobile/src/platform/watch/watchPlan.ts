@@ -24,7 +24,7 @@
 
 import type { ProgramDay, SetTarget, Session } from '@/data/local/models';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
-import { exerciseById, muscleGroupsLabel } from '@/data/exercises';
+import { exerciseById, exerciseDisplayName, muscleGroupsLabel } from '@/data/exercises';
 import type { PlannedItem } from '@/domain/coachPlan';
 import { loadSetup } from '@/domain/loadPresentation';
 import { restInterSecondsFor } from '@/domain/restPrescription';
@@ -247,7 +247,9 @@ export function buildCoachWatchPlan(inp: {
         for (let r = 0; r < block.rounds; r++) {
           steps.push({
             exerciseId: item.ex,
-            exerciseName: ex?.name ?? item.ex,
+            // Her language's name — the same one the phone's mirror carries (`buildMirrorSteps`),
+            // so a workout begun on the wrist reads as it would have from the phone.
+            exerciseName: exerciseDisplayName(item.ex),
             exerciseGroup: ex?.muscle ?? '',
             setIndexInExercise: r,
             totalSetsInExercise: block.rounds,

@@ -39,6 +39,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Arrive, Button, Legend } from '@/components/ds';
 import { useCopy } from '@/i18n/useCopy';
+import { inHerUnits } from '@/i18n/herUnits';
 import { exerciseById } from '@/data/exercises';
 import { font, space, stage } from '@/design/tokens';
 import { heroType } from '@/domain/loadPresentation';
@@ -337,10 +338,13 @@ export function DistanceStage({
   name,
   onDone,
   measured = false,
+  units = 'kg',
 }: {
   item: Extract<PlannedItem, { kind: 'distance' }>;
   name: string;
   onDone: () => void;
+  /** Her units — a carried load is said in them, not in the plan's kilograms. */
+  units?: 'kg' | 'lb';
   /**
    * The phone is going to MEASURE this one — a GPS movement, so the act starts the run rather than
    * confirming it (founder, 2026-08-02: *"why does she need a Done button? The GPS can tell us she
@@ -395,7 +399,7 @@ export function DistanceStage({
           </View>
           {item.load != null ? (
             <Legend size={17} track={0.14} align="center" tone="onStage">
-              {t('workout.itemCarrying', { load: item.load })}
+              {t('workout.itemCarrying', inHerUnits({ load: item.load }, units))}
             </Legend>
           ) : null}
         </Arrive>

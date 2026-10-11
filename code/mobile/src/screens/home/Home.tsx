@@ -240,7 +240,7 @@ export function Home({ navigation, route }: Props) {
   useEffect(() => {
     if (!voiceOn || !app.profile) return;
     neuralVoice.setVoice(coachVoiceId);
-    neuralVoice.prefetch([voiceScript.openFirstSession(), ...fixedLines()], currentLocale());
+    neuralVoice.prefetch([voiceScript.openFirstSession(), ...fixedLines()], currentLocale()); // `fixedLines` holds the no-microphone opening too
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceOn, coachVoiceId, app.profile?.sex]);
   /* The live pair — read here for two things only: the name stamped on the record at Begin, and
@@ -839,7 +839,7 @@ export function Home({ navigation, route }: Props) {
       // the engine's own pricing of the session, and hedging it read as the app unsure of itself.
       // …and in her language: the wrist prints this verbatim (uppercased), so "52 min" sat inside a
       // Hebrew meta line as the one English word on the Start screen (2026-09-09).
-      durationLabel: todayCoach && todayCoach.minutes > 0 ? `${todayCoach.minutes} ${t('common.minShort')}` : undefined,
+      durationLabel: todayCoach && todayCoach.minutes > 0 ? `${plannedMinutes(todayCoach.minutes)} ${t('common.minShort')}` : undefined,
       // WT7 — her very first: no completed session anywhere in her history. Read from the same
       // history every other surface reads, so the wrist and the phone agree about which day it is.
       firstWorkout: saved != null && saved.length === 0,
@@ -1006,7 +1006,14 @@ export function Home({ navigation, route }: Props) {
       void app.refreshProgram();
       return;
     }
-    if (gated) {
+    /*
+     * ⛔ ASKED AT THE PRESS, NOT AT THE LAST PAINT (sweep, 2026-10-11). `gated` above is this
+     * render's answer, and the free days can run out between a render and a thumb: the store asks
+     * again at the doorway and refuses, and Begin then opened the stage over a session that never
+     * started — a black screen with no way off it. The press now asks the question the doorway is
+     * about to ask, so the two can only agree.
+     */
+    if (gated || isTrainingGated(app.modeState.completedSessions, app.entitlement.active, app.profile?.memberSince)) {
       navigation.navigate('Paywall', { source: 'gate' });
       return;
     }
@@ -1132,7 +1139,7 @@ export function Home({ navigation, route }: Props) {
     return (
       <LapsedView
         dayName={todayName || null}
-        endedOn={app.entitlement.expiresAt ? new Date(app.entitlement.expiresAt).toLocaleDateString() : ''}
+        endedOn={app.entitlement.expiresAt ? new Date(app.entitlement.expiresAt).toLocaleDateString(currentLocale()) : ''}
         /*
          * ⛔ THE PRICE, WHICH THIS SCREEN PROMISED TO PRINT AND WAS HANDED `null` (2026-08-16).
          *
@@ -1152,8 +1159,8 @@ export function Home({ navigation, route }: Props) {
           ...(last
             ? [{
                 key: 'last',
-                title: t('lapsed.lastSession', { date: new Date(last.startedAt).toLocaleDateString() }),
-                detail: sessionDayName(last),
+                title: t('lapsed.lastSession', { date: new Date(last.startedAt).toLocaleDateString(currentLocale()) }),
+                detail: dayTitle(sessionDayName(last)),
                 onOpen: () => navigation.navigate('WorkoutDetail', { sessionId: last.id }),
               }]
             : []),
@@ -1334,7 +1341,7 @@ export function Home({ navigation, route }: Props) {
        * `ProgramDay` and the conversion into a `CoachPlan` deliberately carries no opinions across.
        */
 
-      trialLeft={app.entitlement.active ? null : freeSessionsRemaining(app.modeState.completedSessions)}
+      trialLeft={app.entitlement.active ? null : freeSessionsRemaining(app.modeState.completedSessions, app.profile?.memberSince)}
       /*
        * ⛔ THE COACH DOOR IS CLOSED, AND THE SCREEN BEHIND IT IS DELETED (founder 2026-08-11).
        *

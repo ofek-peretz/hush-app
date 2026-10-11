@@ -321,7 +321,9 @@ export function ConnectHealth({ navigation, route }: Props) {
       <View style={styles.reads}>
         <HealthRead icon="heart" name={t('ob.healthHr')} sub={t('ob.healthHrSub')} />
         <HealthRead icon="flame" name={t('ob.healthKcal')} sub={t('ob.healthKcalSub')} />
-        <HealthRead icon="footprints" name={t('ob.healthKm')} sub={t('ob.healthKmSub')} />
+        {/* ⛔ THE KILOMETRE ROW LEFT WITH THE RUNS (sweep, 2026-10-11). "The true distance of a run"
+            was a third reason to say yes — for a thing the product has not offered since Cardio
+            was hidden (2026-09-29). Two true reasons, and the write-back below. */}
         {/*
          * ⛔ THE WRITE SIDE, FINALLY SAID (2026-08-23). Hush has written every finished workout back
          * to Health since the world-class pass — the plist promised it in writing for months — and

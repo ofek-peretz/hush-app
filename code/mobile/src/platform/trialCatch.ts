@@ -14,7 +14,7 @@
 //
 
 import { db } from '@/data/local/db';
-import { FREE_SESSION_LIMIT, type Entitlement } from '@/domain/entitlement';
+import { freeSessionsRemaining, type Entitlement } from '@/domain/entitlement';
 import { currentLocale } from '@/i18n';
 import { ensureNotificationPermission, notifier } from '@/platform/notifications';
 
@@ -37,7 +37,9 @@ export async function armTrialLast(nowMs: number = Date.now()): Promise<void> {
     // "already gated" case is deliberate too: once the wall stands, Home owns that conversation,
     // and a push about a decision she is already facing on screen would be a nag, not a fact.
     const completed = mode?.completedSessions ?? 0;
-    const remaining = FREE_SESSION_LIMIT - completed;
+    /* Asked as of the moment the note would FIRE: a "one workout left" that lands after the free
+       days have run out is a note about a workout she can no longer have. */
+    const remaining = freeSessionsRemaining(completed, profile?.memberSince, nowMs + FIRE_AFTER_MS);
     if (!profile || entitlement?.active === true || remaining !== 1) {
       await notifier.syncTrialLast(null);
       return;

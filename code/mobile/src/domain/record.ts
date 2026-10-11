@@ -186,6 +186,23 @@ export type RestoreVerdict =
   | { do: 'restore'; confirm: true; gaining: number }
   | { do: 'refuse'; onPhone: number; inFile: number };
 
+/**
+ * ════ ⛔ WHAT STANDS IN HER iCLOUD AFTER SHE DELETES HER ACCOUNT (sweep, 2026-10-11) ════
+ *
+ * "Delete account" and "Sign out" wiped the phone and left the cloud record where it was — the
+ * seam has a write and a read and no delete. The boot restore runs onto exactly the phone a wipe
+ * leaves behind (no profile, no history), so the next cold launch quietly put the deleted athlete
+ * back, whole history and all, under a confirmation that had promised *"nothing is kept to restore
+ * from"*.
+ *
+ * So the wipe overwrites the record with THIS: not a record (`readRecord` answers `not_a_record`,
+ * the boot restores nothing), dated, and replaced by a real one the first time a new athlete on
+ * this Apple ID finishes a workout. No native change — the write that made the copy unmakes it.
+ */
+export function erasedRecord(nowMs: number): { erased: true; at: string } {
+  return { erased: true, at: new Date(nowMs).toISOString() };
+}
+
 export function restoreVerdict(record: AthleteRecord, sessionsOnPhone: number): RestoreVerdict {
   const inFile = record.sessions.length;
   if (sessionsOnPhone === 0) return { do: 'restore', confirm: false };

@@ -34,7 +34,7 @@ import { liveActivity, drainLockIntents, addLockIntentListener, type LockExtras,
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy, type Translate } from '@/domain/milestoneCopy';
-import { i18n, tg } from '@/i18n';
+import { tg } from '@/i18n';
 import { equipmentLoad, loadSetup, noLoadIsBand } from '@/domain/loadPresentation';
 import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { AppState } from 'react-native';
@@ -316,6 +316,17 @@ export function addWorkingSet(plan: Step[], boundary: number, exerciseId: string
     at = end;
   }
   if (!pick) return plan;
+  /*
+   * ⛔ NEVER INTO A LIFT THAT COMES ROUND AGAIN (sweep, 2026-10-11). A set is known by its lift and
+   * its number (`hasLoggedStep`), and the added set takes "the next number" of the run it joins. In a
+   * superset every run is ONE step — A, B, A, B — so a set added after B's first round took number 2,
+   * which is the number B's planned second round already carries: she logged the extra set, came
+   * round to the planned one, and Complete answered with the logged beat and the same set, for ever.
+   * The only way out was to end the workout. The same collision waits in a lift whose remainder was
+   * sent to the end of the order. So: a lift with more of itself still ahead gains nothing here —
+   * she adds her set when she is on its last run, where "the next number" is free.
+   */
+  if (plan.slice(pick.start + pick.run.length).some((st) => st.exerciseId === exerciseId)) return plan;
   const working = pick.run.filter((st) => !st.warmup);
   const last = working[working.length - 1];
   if (!last || !last.target) return plan; // a hold, a run, a bridge — nothing to copy
@@ -1483,7 +1494,9 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
     const swapOptions = ex
       ? swapChoices(ex.id, { sessionExerciseIds, equipment }, 2)
           .filter((c) => c.sameMovement)
-          .map((c) => ({ id: c.exercise.id, name: c.exercise.name }))
+          /* The name is the wrist's KEY for "is this the lift on stage" (Undo matches it against
+             `exerciseName`), so it is the same spoken name the step carries — see below. */
+          .map((c) => ({ id: c.exercise.id, name: exerciseDisplayName(c.exercise.id) }))
       : [];
     /*
      * ⛔ A HOLD CROSSES AS A HOLD (sync simulator, 2026-09-17). It used to be dropped here — "publishing
@@ -1496,8 +1509,9 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
       const item = st.item;
       if (!item || item.kind === 'reps') return [];
       return {
-        // A hold is usually a MOVEMENT (a plank), not a lift in the exercise catalogue.
-        exerciseName: ex?.name ?? movementById(st.exerciseId)?.name ?? '',
+        // A hold is usually a MOVEMENT (a plank), not a lift in the exercise catalogue —
+        // `exerciseDisplayName` answers for both, in her language.
+        exerciseName: exerciseDisplayName(st.exerciseId),
         exerciseGroup: ex?.muscle ?? '',
         setIndexInExercise: st.exerciseSetIndex,
         totalSetsInExercise: st.totalSetsInExercise,
@@ -1512,7 +1526,15 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
     }
     const setup = loadSetup(st.exerciseId, st.target.recommendedWeight, 'kg');
     return {
-      exerciseName: ex?.name ?? '',
+      /*
+       * ⛔ THE NAME SHE READS ON THE PHONE IS THE NAME ON HER WRIST (sweep, 2026-10-11). This was the
+       * catalogue's English `name` — the matching key, which `exerciseDisplayName` exists to keep
+       * off every screen — so a Hebrew athlete read "משיכת פולי עליון" on the stage and "Lat
+       * Pulldown" on the watch and the lock card, for every lift of every workout, and a closing
+       * line that said "Rope Pushdown, הושלם". The wrist gallery never showed it: its fixtures are
+       * Hebrew names typed by hand. Three surfaces, one name.
+       */
+      exerciseName: exerciseDisplayName(st.exerciseId),
       exerciseGroup: ex?.muscle ?? '',
       setIndexInExercise: st.exerciseSetIndex,
       totalSetsInExercise: st.totalSetsInExercise,
@@ -1725,6 +1747,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   viewCaughtUpRef.current = viewCaughtUp;
   /** A set write is in flight (see completeSet) — the phone and the wrist can both ask at once. */
   const completingRef = useRef(false);
+  /** A workout is being closed — see `finalize`. */
+  const finalizingRef = useRef(false);
   // Temporal telemetry: when the current rest/pause began (ms epoch).
   const restStartedAtRef = useRef<number | null>(null);
   const pauseStartedAtRef = useRef<number | null>(null);
@@ -2469,7 +2493,24 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // A RESUMED rest asks it the same way. What remains of it is not a length — see `restSeconds`.
     const restSeconds = current ? restAfterStep(current) : restTransitionSeconds();
 
+    /*
+     * ⛔ A WORKOUT ENDS ONCE (sweep, 2026-10-11). Closing one is slow on purpose — it writes the
+     * session to history and counts it against her free workouts BEFORE it clears the stage — and
+     * for all of that time the record it reads (`sessionRef`) is still standing. A second call in
+     * that window (a second press on "save and end", or the phone and the wrist both ending) wrote
+     * the same workout to history twice and spent two of her free sessions on it. The second caller
+     * is told nothing ended; the first one's result is what navigates.
+     */
     async function finalize(earlyFinish: boolean): Promise<CompleteResult> {
+      if (finalizingRef.current) return { ended: false, unlockedPortrait: false };
+      finalizingRef.current = true;
+      try {
+        return await finalizeOnce(earlyFinish);
+      } finally {
+        finalizingRef.current = false;
+      }
+    }
+    async function finalizeOnce(earlyFinish: boolean): Promise<CompleteResult> {
       // The workout's trace ships a moment after the end, so the closing frames are in it; the next workout starts its own.
       setTimeout(() => void syncTrace.end(), 3_000);
       const session = sessionRef.current;
@@ -2659,7 +2700,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        * THE MARK, ON THE WRIST (founder 2026-07-13). The phone celebrates a milestone as beat 4 of
        * Well Done; an athlete who trained with the phone in a locker never saw it. The mark is
        * earned HERE — on the phone, from the phone's history, one line after the session was
-       * written to it — and rides the complete frame as finished English copy (MirrorMilestone).
+       * written to it — and rides the complete frame as finished copy in her language (MirrorMilestone).
        * No milestone logic crosses to the watch: there is no second engine on the wrist.
        *
        * It must be computed BEFORE the frame is published (the publish is what ends the watch
@@ -2670,9 +2711,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       try {
         const earned = newlyEarned(await db.loadHistory(), app.profile)[0] ?? null;
         if (earned) {
-          // English: the watch target has no i18n runtime (WatchCopy.swift is English by law).
-          const tEn = i18n.getFixedT('en') as unknown as Translate;
-          const c = milestoneCopy(earned, tEn, app.profile?.units ?? 'kg');
+          /* IN HER LANGUAGE (sweep, 2026-10-11). This was fixed English, from the days the wrist had
+             no copy of its own; it has carried her language since the copy pack, and the one screen
+             that still closed a Hebrew workout with "You kept coming." was the medallion. */
+          const c = milestoneCopy(earned, tg as unknown as Translate, app.profile?.units ?? 'kg');
           milestone = { value: c.value, caption: c.caption, title: c.title, sub: c.sub };
         }
       } catch {
@@ -3384,6 +3426,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           { type: 'COMPLETE_SET', restSeconds: restSecondsForThis, lastSetOfExercise: current.lastSetOfExercise },
         );
         sessionRef.current = updated;
+        /*
+         * ⛔ THE MACHINE WRITTEN IS THE MACHINE READ (walked 2026-10-11). `advanceMachine` reads
+         * `machineRef`, and this dispatch did not write it — the ref caught up on the next render. So
+         * an event in the SAME tick as a logged set (a Pause, from the phone's own button or the
+         * wrist) reduced from the machine BEFORE the set, and its dispatch then overwrote this one:
+         * the set was in the record, the stage was back on that same set, and Complete answered
+         * with nothing — `hasLoggedStep` refuses a set that is already logged. A workout with no way
+         * forward but to end it. The ref moves with the dispatch now, as it does in `advanceMachine`.
+         */
+        machineRef.current = m;
         dispatch({ type: 'LOG', setLog, session: updated, machine: m });
 
         // Engine v5 · the remaining sets follow what she just LIFTED (the fact, not the prescription).
@@ -3712,8 +3764,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
          * ⛔ FROM THE STEP SHE IS ON, NEVER BEHIND IT. A logged set is a fact about her body; no
          * answer from a model may rewrite one. `applyLiveEdit` enforces the same boundary, and this
          * is where the boundary's VALUE comes from.
+         *
+         * AND "THE STEP SHE IS ON" IS NOT THE CURSOR DURING A REST (sweep, 2026-10-11). The cursor
+         * still sits on the set just logged, so an edit made between sets reached BACK over it: a
+         * dropped lift took its logged step out of the plan, the plan slid up by one, and the rest's
+         * end then stepped past the first set of the next lift. `reorderBoundary` is the one answer
+         * to "where does the future begin", and every other verb here already asks it.
          */
-        const from = machine.setIndex;
+        const from = reorderBoundary(machine);
         let next = plan;
         let landed = 0;
         for (const edit of edits) {

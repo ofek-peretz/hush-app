@@ -315,7 +315,8 @@ private func strengthFooter(_ s: HushSessionAttributes.ContentState) -> String {
   if s.phase == "logged" { return s.wordLogged }
   if s.phase == "transition" {
     if let w = s.nextTargetWeight, let r = s.nextTargetReps { return "\(s.wordNext) · \(fmtWeight(w)) \(s.unitLabel) × \(r)" }
-    if let r = s.nextTargetReps { return "\(s.wordNext) · BW × \(r)" }
+    // Her word for no external load, sent by the phone — the last hard "BW" on the card (2026-10-11).
+    if let r = s.nextTargetReps { return "\(s.wordNext) · \(s.wordBodyweight) × \(r)" }
     return s.wordNext
   }
   if s.phase == "rest" { return "\(s.wordNext) · \(s.setLabel)" }

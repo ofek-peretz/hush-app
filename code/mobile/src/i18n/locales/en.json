@@ -288,6 +288,8 @@
     "delete": "Delete",
     "close": "Close",
     "minShort": "min",
+    "unitKg": "kg",
+    "unitLb": "lb",
     "vocative": "{{name}},",
     "cancel": "Cancel"
   },
@@ -493,8 +495,6 @@
     "healthHrSub": "How hard you worked, as it happens",
     "healthKcal": "Calories",
     "healthKcalSub": "Measured, not estimated",
-    "healthKm": "Kilometres",
-    "healthKmSub": "The true distance of a run",
     "healthHelper": "For the runs and walks you record. Your lifting runs on one thing: what you lift.",
     "healthSkip": "Skip for now",
     "liftsTitle": "What do you lift today?",
@@ -509,6 +509,7 @@
     "daysLabel": "Sessions a week",
     "buildReading": "Reading what you told me",
     "buildChoosing": "Choosing your lifts",
+    "buildYours": "These are your lifts",
     "buildChoosingFrom": "Choosing from {{n}} exercises",
     "buildUsually": "This usually takes about half a minute",
     "briefDays": "{{n}} workouts a week",
@@ -518,6 +519,7 @@
     "buildYourProgramme": "Your programme",
     "weightLabel": "Bodyweight",
     "buildSummary": "{{muscles}} muscles · {{lifts}} lifts",
+    "buildSummaryWeek": "{{days}} workouts a week · {{lifts}} lifts",
     "buildingAround": "Building around",
     "minutesUnit": "min",
     "female": "Female",
@@ -549,6 +551,7 @@
     "readyWorkouts_one": "First workout",
     "readyWorkouts_other": "First workouts",
     "readyFree": "Free",
+    "readyWithin": "The free workouts are good for {{days}} days from today.",
     "readySpent": "The free workouts on this device have already been used. The next step is choosing a membership, and your programme is kept either way.",
     "readyCancel_one": "No card, no charge. It is where I start learning you, and after it come {{days}} more days free through Apple, cancel any time.",
     "readyCancel_other": "No card, no charge. They are how I learn you, and after them come {{days}} more days free through Apple, cancel any time.",
@@ -728,7 +731,7 @@
     "itemStart": "Start",
     "itemStop": "Stop",
     "itemDone": "Done",
-    "itemCarrying": "Carrying {{load}} kg",
+    "itemCarrying": "Carrying {{load}} {{unit}}",
     "superset": "Superset",
     "supersetRound": "Superset · round {{n}} of {{m}}",
     "supersetHowTwo": "Two exercises back to back, no rest between them. Rest only after both.",
@@ -1290,9 +1293,7 @@
     },
     "save": "Save as my program",
     "needsALift": "Add at least one exercise to one workout — there is nothing to save yet.",
-    "revert": "Hand the pen back to me",
-    "revertBody": "I will build a fresh week from your profile. The program you built stays saved until then — this replaces it.",
-    "revertYes": "Rebuild with me",
+    "newWeek": "Ask the coach for a new week",
     "aiReview": "Coach's opinion",
     "aiBusy": "Asking...",
     "review": {
@@ -1520,6 +1521,9 @@
     "membershipTrialEnded": "Free trial ended",
     "proName": "FERROX Pro",
     "badgeTrial": "Trial",
+    "trialDaysLeft_one": "1 day left for the trial workouts.",
+    "trialDaysLeft_other": "{{count}} days left for the trial workouts.",
+    "wipeFailed": "Nothing was erased. Press again.",
     "badgeActive": "Active",
     "badgeExpired": "Expired",
     "trialSubLead": "",
@@ -1560,7 +1564,7 @@
     "voiceJournal": "Voice log",
     "voiceJournalEmpty": "Nothing written yet.",
     "reminderRow": "Training-day reminder",
-    "reminderSub": "One note at 17:30, on the days you train — learned from your own pattern. A finished week goes quiet.",
+    "reminderSub": "One note on the days you train — at 17:30, and after a few workouts at the hour you usually start.",
     "usageRow": "Share usage data",
     "usageSub": "Anonymous measurements that help me improve. Your training never leaves the device for this."
   },
@@ -1906,6 +1910,7 @@
     "timelineRemindSub": "A reminder from me",
     "timelineChargeSub": "Billing starts",
     "trialLeft": "Session {{done}} of {{n}}",
+    "trialDays": "Your {{days}} days of free workouts have ended",
     "trialUsed": "The free workouts on this device have been used",
     "keepTraining": "Keep training with me",
     "later": "Not now",
@@ -1921,15 +1926,15 @@
   },
   "explain": {
     "progressLoad": {
-      "text": "It hit the top of its range with room, so I added {{delta}} kg.",
+      "text": "It hit the top of its range with room, so I added {{delta}} {{unit}}.",
       "textVariation": "It is holding the top of its range — keep it there and the harder variation comes next.",
       "observation": "It reached the top of its range with room to spare.",
       "conclusion": "It is ready for more weight.",
       "conclusionVariation": "Holding the top consistently earns the harder variation.",
-      "action": "I added {{delta}} kg.",
+      "action": "I added {{delta}} {{unit}}.",
       "actionVariation": "I kept the target at the top of the range.",
       "observationMet": "It met its target on every set.",
-      "textMet": "It met its target on every set, so I added {{delta}} kg."
+      "textMet": "It met its target on every set, so I added {{delta}} {{unit}}."
     },
     "graduate": {
       "text": "You have taken {{from}} as far as its reps allow, so I moved you up to {{ex}}.",
@@ -1962,11 +1967,11 @@
       "action": "I held the weight. We add reps until the next one is within reach — and if the machine offers a smaller jump, load it and I'll learn the step."
     },
     "reprice": {
-      "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} kg and kept your sets unchanged.",
+      "text": "Last week {{ex}} came in under its prescription, so I set it to {{load}} {{unit}} and kept your sets unchanged.",
       "textBw": "Last week {{ex}} came in under its prescription, so I matched it to your demonstrated capability and kept your sets unchanged.",
       "observation": "Last week {{ex}} came in under its prescription.",
       "conclusion": "That shows me the right weight for now.",
-      "action": "I set it to {{load}} kg and kept your sets unchanged.",
+      "action": "I set it to {{load}} {{unit}} and kept your sets unchanged.",
       "actionBw": "I matched it to your demonstrated capability and kept your sets unchanged."
     },
     "swap": {
@@ -2059,7 +2064,7 @@
     "swapWhy": "shorter range, no strain on it",
     "loadLegend": "Load",
     "wasLoad": "was {{value}} {{unit}}",
-    "easedFor": "{{muscle}} eased in your map for {{days}} days",
+    "easedFor": "{{muscle}} work rests for {{days}} days",
     "easedTail": " — then it returns on its own.",
     "nothingNew": "Same swap you already have — nothing new to learn, nothing permanent.",
     "continueWith": "Continue with {{exercise}}",
@@ -2538,11 +2543,11 @@
     "termsTitle": "Terms of use",
     "termsBody": "FERROX is a personal training programme. It is not medical advice: before a major change in your training — and especially after an injury — consult a professional. You receive a personal licence to use the app; its content, code and figures are FERROX's property. Use that breaks the law or harms the service can close the account.",
     "privacyTitle": "Your privacy",
-    "privacyBody": "Your workouts, loads and body map are stored on your device. An encrypted backup lives in iCloud under your Apple ID, so a new phone picks up where you stopped. When you ask the coach to build or review a week, or to read a routine you photographed, the training data needed for it is processed for us by OpenAI; with the voice coach on, short recordings of your spoken answers are sent the same way to be recognised. None of it is used to train OpenAI's models, and we do not keep the recordings. Product usage is measured with PostHog under a random install identifier, never your name; crash reports reach Sentry without personal details. If you join a circle, your first name and weekly workout counts are kept on Cloudflare servers until you leave or delete the account. Nothing is ever sold or used for advertising. Deleting the account, in the You tab, erases what our servers hold and what the device holds; the iCloud backup is yours to remove. Data is processed in the EU and US. Requests and questions: ofek34458@gmail.com.",
+    "privacyBody": "Your workouts and loads are stored on your device. An encrypted backup lives in iCloud under your Apple ID, so a new phone picks up where you stopped. When you ask the coach to build or review a week, the training data needed for it — and what you wrote to it — is processed for us by OpenAI, and is not used to train its models. The app does not record you: the voice coach speaks and does not listen. Product usage is measured with PostHog under a random install identifier, never your name; crash reports reach Sentry without personal details. If you join a circle, your first name and weekly workout counts are kept on Cloudflare servers until you leave or delete the account; if you link to a coach, your workouts from that day — as far as you agreed to share them — are kept there and shown to that coach, until you unlink or delete the account. Nothing is ever sold or used for advertising. Deleting the account, on the You screen, erases what our servers hold, what the device holds, and the iCloud backup. Data is processed in the EU and US. Requests and questions: ofek34458@gmail.com.",
     "healthTitle": "Health data",
     "healthBody": "Connecting Apple Health is your call alone. Heart rate, calories and distance are read to show them beside your training, and a finished workout is written back to Health. Health data never leaves the device.",
     "billingTitle": "Subscription & billing",
     "billingBody": "The first workouts the app offers are free and take no card. After them — a subscription billed through the App Store: where Apple offers a free trial it comes before the first charge, with a reminder two days before it ends; the price is shown before any charge; cancel anytime in your Apple ID settings.",
-    "updated": "Updated: 1 September 2026"
+    "updated": "Updated: 11 October 2026"
   }
 }
