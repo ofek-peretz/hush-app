@@ -1033,20 +1033,48 @@ export function SessionFlow({ navigation, route }: Props) {
    * permission granted mid-rest lands from the next rest on. Re-arming this one behind her would
    * mean a "7 seconds left" for a rest she has been watching the whole time.
    */
+  /*
+   * ════ ⛔ …AND NOW TO THE MOMENT THE WORKOUT OPENS (founder, 2026-10-11) ════
+   *
+   * *"לאחר האימון הראשון זה שולח בקשה לאישור התראות. למה זה אחרי האימון ולא לפניו? הרי יש גם התראות
+   * במהלך האימון. ויותר גרוע מזה — זה הראה את זה לפני שהוא הראה את מסך סיום האימון."*
+   *
+   * The first rest was already late: the alert that ends a rest is armed as the rest STARTS, so
+   * the rest she was asked on ran silent, and a phone that went into her pocket before it never
+   * showed the ask at all — which is how it reached him on Well Done, standing over the result.
+   * It is asked as the first workout opens: she has just pressed Begin, nothing is on the bar, and
+   * the first rest of her first workout already has its alert.
+   *
+   * ⚠️ STILL NEVER FROM UNDER A LOADED BAR. The opening counts only while NOTHING has been logged
+   * (`nothingLoggedYet`); a session resumed mid-way waits for a rest, as before.
+   *
+   * ⚠️ AND THE ASK IS NOT SPENT ON A SCREEN THAT COULD NOT SHOW IT. The ref used to be set before
+   * the overlay was known to be free — the first-gym card up at that instant, and the one chance
+   * of the session was gone. It is set only when the ask is actually raised.
+   */
   const firstWorkout = (app.modeState?.completedSessions ?? 0) === 0;
   const askedThisSessionRef = useRef(false);
   useEffect(() => {
-    if (!firstWorkout || askedThisSessionRef.current) return;
-    if (session.displayPhase !== 'REST_INTER' && session.displayPhase !== 'REST_TRANSITION') return;
-    askedThisSessionRef.current = true;
+    if (!firstWorkout || askedThisSessionRef.current || overlay !== 'none') return;
+    const opening = session.displayPhase === 'SET_PRESENTED' && session.nothingLoggedYet;
+    if (!opening && session.displayPhase !== 'REST_INTER' && session.displayPhase !== 'REST_TRANSITION') return;
     let alive = true;
     void shouldAskForNotifications().then((yes) => {
-      if (alive && yes) setOverlay((cur) => (cur === 'none' ? 'notifyAsk' : cur));
+      if (!alive || askedThisSessionRef.current) return;
+      if (!yes) {
+        askedThisSessionRef.current = true; // already decided, here or by iOS — nothing to raise
+        return;
+      }
+      setOverlay((cur) => {
+        if (cur !== 'none') return cur;
+        askedThisSessionRef.current = true;
+        return 'notifyAsk';
+      });
     });
     return () => {
       alive = false;
     };
-  }, [firstWorkout, session.displayPhase]);
+  }, [firstWorkout, session.displayPhase, session.nothingLoggedYet, overlay]);
 
   const isTransition = session.displayPhase === 'REST_TRANSITION';
   /** A crossing into a RUN has no form clip and nothing to swap for — see `swapPool`. */

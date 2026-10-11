@@ -72,13 +72,14 @@ describe('⛔ the intake does not reset the trial', () => {
     await h.unmount();
   });
 
-  it('…and a phone that never trained begins at nought, with all three in hand', async () => {
+  // (2026-10-11: the allowance is her cycle and its first repeat — three days a week is FOUR free workouts.)
+  it('…and a phone that never trained begins at nought, with her whole allowance in hand', async () => {
     mockLedger = null;
     const h = await bootFresh();
     expect(h.api().modeState.completedSessions).toBe(0);
     await act(async () => { await h.api().completeOnboarding(inputs); });
     expect(h.api().modeState.completedSessions).toBe(0);
-    expect(freeSessionsRemaining(h.api().modeState.completedSessions)).toBe(3);
+    expect(freeSessionsRemaining(h.api().modeState.completedSessions)).toBe(4);
     expect(gated(h.api())).toBe(false);
     await h.unmount();
   });
@@ -88,7 +89,7 @@ describe('⛔ the intake does not reset the trial', () => {
     const h = await bootFresh();
     await act(async () => { await h.api().completeOnboarding(inputs); });
     expect(h.api().modeState.completedSessions).toBe(2);
-    expect(freeSessionsRemaining(h.api().modeState.completedSessions)).toBe(1); // what the Ready screen promised
+    expect(freeSessionsRemaining(h.api().modeState.completedSessions)).toBe(2); // what the Ready screen promised: four, less the two spent
     expect(gated(h.api())).toBe(false);
     await h.unmount();
   });

@@ -78,6 +78,59 @@ export function applyTrialLimitOverride(n: unknown): void {
   if (grandfathered) return;
   if (typeof n !== 'number' || !Number.isInteger(n)) return;
   FREE_SESSION_LIMIT = Math.max(1, Math.min(60, n));
+  // The server (or an experiment arm) has spoken for this install: her cycle no longer sets it.
+  serverSetTheLimit = true;
+}
+
+/**
+ * ════ ⛔ THE FREE WORKOUTS RUN THROUGH THE FIRST REPEAT (founder, 2026-10-11) ════
+ *
+ * I walked the app as a man who trains five days a week and told him where the wall fell: at the
+ * start of workout FOUR — Wednesday of his first week, before a single workout had come round
+ * again. The thing he is asked to pay for is an app that moves his weights from what he did; he
+ * had not yet seen it do so once, because the first decision is drawn on the first REPEATED
+ * workout. Three free workouts were a whole cycle only for someone who trains twice a week.
+ *
+ * His ruling on the three open items: *"כן טפל בשלושת הסעיפים האלו ותוודא בצורה הרמטית שזה סגור
+ * ונעול."*
+ *
+ * So the allowance is her own cycle and one more: every workout of her week once, and the first
+ * of them again — the workout whose closing screen shows what the app decided. Never fewer than
+ * the three she was always promised.
+ *
+ *     days a week   2   3   4   5   6
+ *     free          3   4   5   6   7
+ *
+ * ⚠️ STAMPED WHEN HER WEEK IS WRITTEN (`Profile.trialSessions`), so editing the week afterwards
+ * does not move the wall in either direction. A 2026-09-28 profile that carries the model's stamp
+ * and no count is read from the days it trains.
+ */
+export const FREE_SESSION_FLOOR = 3;
+export function freeSessionsForCycle(trainingDays: number | null | undefined): number {
+  const days = typeof trainingDays === 'number' && Number.isInteger(trainingDays) && trainingDays > 0 ? trainingDays : 0;
+  return Math.max(FREE_SESSION_FLOOR, Math.min(60, days + 1));
+}
+
+let serverSetTheLimit = false;
+
+/**
+ * Set the allowance from her cycle: a profile (its stamp, or its days), or the days of a week that
+ * has just been written and has no profile yet (the Ready screen). A grandfathered member keeps
+ * her fourteen, and a limit the server sent stands — this never overrides either.
+ */
+export function applyCycleTrial(
+  source: { trialSessions?: number; daysPerWeek?: number } | number | null | undefined,
+): void {
+  if (grandfathered || serverSetTheLimit || source == null) return;
+  if (typeof source === 'number') {
+    FREE_SESSION_LIMIT = freeSessionsForCycle(source);
+    return;
+  }
+  const stamped = source.trialSessions;
+  FREE_SESSION_LIMIT =
+    typeof stamped === 'number' && Number.isInteger(stamped) && stamped >= FREE_SESSION_FLOOR
+      ? Math.min(60, stamped)
+      : freeSessionsForCycle(source.daysPerWeek);
 }
 
 /**
@@ -108,9 +161,12 @@ export const TRIAL_NEWS_AT = 1;
  * says both halves ("14 workouts, within 30 days"). Remote config (`trialMaxDays`) can still move
  * it, and `0` disarms it — a KV word, never a silent code change.
  */
-export const TRIAL_MAX_DAYS_DEFAULT = 10;
+export const TRIAL_MAX_DAYS_DEFAULT = 14;
 /* ⛔ TEN, NOT THIRTY (2026-09-28): three workouts are about ten days at the cadence this product is
-   for, and the Apple trial that follows carries the next fourteen. Clamped 7..365 as before. */
+   for, and the Apple trial that follows carries the next fourteen. Clamped 7..365 as before.
+   ⛔ FOURTEEN SINCE 2026-10-11: a cycle and its first repeat is eight days at ANY frequency when no
+   day is missed (Mon…Mon), and ten left two days of slack — one cold and the calendar cut the very
+   workout the allowance exists to reach. Two weeks, the same span the Apple trial is told in. */
 export let TRIAL_MAX_DAYS: number | null = TRIAL_MAX_DAYS_DEFAULT;
 
 /** Remote-config apply (clamped 7..365; `0` disarms; garbage restores the default). */
@@ -156,6 +212,7 @@ export function grandfatherTrial(profile: { trialModel?: string } | null | undef
 /** Test seam — the defaults, with no grandfathering. */
 export function __resetTrialForTest(): void {
   grandfathered = false;
+  serverSetTheLimit = false;
   FREE_SESSION_LIMIT = 3;
   TRIAL_MAX_DAYS = TRIAL_MAX_DAYS_DEFAULT;
 }

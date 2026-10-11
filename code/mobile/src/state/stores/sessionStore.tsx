@@ -571,6 +571,10 @@ export interface SessionView {
   /** The same for the step a rest is leading into — so the rest card can announce the superset
    *  before its first round and name the round between rounds. Null outside a rest. */
   nextSuperset: SessionSuperset | null;
+  /** True until the first set of this session is written — the workout has opened and nothing has
+   *  been lifted yet. The one moment before a rest when a question may be put to her (the
+   *  notification ask, 2026-10-11): she has just pressed Begin and is not under a bar. */
+  nothingLoggedYet: boolean;
   /** Raw id of the upcoming exercise (rest only) — readable-name fallback (§7.9). */
   nextExerciseId: string | null;
   /** Set n of m within the exercise. `warmup: true` = a ramp step — n/m then count the RAMP
@@ -2794,6 +2798,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           : null,
       superset: current ? sessionSupersetAt(plan, idx) : null,
       nextSuperset: resting && next ? sessionSupersetAt(plan, idx + 1) : null,
+      nothingLoggedYet: (state.session?.sets?.length ?? 0) === 0,
       setLabel: current ? stepPosition(current) : null,
       /*
        * ⚠️ THE LIVE SESSION IS EXCLUDED BY ID. History is written as she goes, so without this

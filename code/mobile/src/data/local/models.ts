@@ -190,6 +190,10 @@ export interface Profile {
    * under the fourteen-workout promise, and keeps it (`entitlement.grandfatherTrial`).
    */
   trialModel?: 'three';
+  /** How many free workouts this athlete was promised when her week was written: her cycle and
+   *  its first repeat (`entitlement.freeSessionsForCycle`, 2026-10-11). Stamped once, so editing the
+   *  week later never moves the wall. Absent on a profile from before — read from its days then. */
+  trialSessions?: number;
 }
 
 /** Everything onboarding gathers before building the first program (§4.2–4.6). */

@@ -96,12 +96,16 @@ describe('remote config — the tuning channel', () => {
 });
 
 /* ⛔ TEN DAYS SINCE 2026-09-28 (the pricing model: three free workouts, then Apple's 14-day trial). */
-describe('the trial time cap — armed by default (2026-09-09; ten days since 2026-09-28)', () => {
-  it('armed by default: a once-a-week athlete meets the gate on day 10, not after three weeks', () => {
+describe('the trial time cap — armed by default (2026-09-09; ten days since 2026-09-28; fourteen since 2026-10-11)', () => {
+  it('armed by default: a once-a-week athlete meets the gate on day 14, not after three weeks', () => {
     const start = '2026-01-01T00:00:00.000Z';
     const monthsLater = Date.parse('2026-06-01T00:00:00.000Z');
     const day9 = Date.parse('2026-01-10T00:00:00.000Z');
-    expect(entitlement.TRIAL_MAX_DAYS).toBe(10);
+    const day13 = Date.parse('2026-01-14T00:00:00.000Z');
+    const day15 = Date.parse('2026-01-16T00:00:00.000Z');
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(14);
+    expect(entitlement.isTrainingGated(2, false, start, day13)).toBe(false);
+    expect(entitlement.isTrainingGated(2, false, start, day15)).toBe(true);
     expect(entitlement.trialTimeSpent(start, monthsLater)).toBe(true);
     expect(entitlement.isTrainingGated(2, false, start, monthsLater)).toBe(true);
     expect(entitlement.isTrainingGated(2, false, start, day9)).toBe(false);
@@ -114,7 +118,7 @@ describe('the trial time cap — armed by default (2026-09-09; ten days since 20
     expect(entitlement.trialTimeSpent(start, monthsLater)).toBe(false);
     expect(entitlement.isTrainingGated(2, false, start, monthsLater)).toBe(false);
     entitlement.applyTrialMaxDaysOverride(undefined); // back to the default for the suites that follow
-    expect(entitlement.TRIAL_MAX_DAYS).toBe(10);
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(14);
   });
 
   it('armed by the config word: sessions OR days, whichever runs out first', async () => {
@@ -135,7 +139,7 @@ describe('the trial time cap — armed by default (2026-09-09; ten days since 20
     entitlement.applyTrialMaxDaysOverride(10_000);
     expect(entitlement.TRIAL_MAX_DAYS).toBe(365);
     entitlement.applyTrialMaxDaysOverride('forever');
-    expect(entitlement.TRIAL_MAX_DAYS).toBe(10); // garbage restores the default rather than guessing
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(14); // garbage restores the default rather than guessing
   });
 });
 

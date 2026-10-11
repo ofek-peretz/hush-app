@@ -47,6 +47,56 @@ describe('⛔ the ask lands where the alerts are needed', () => {
     expect(wellDone).toContain('<NotificationAsk');
   });
 
+  /*
+   * ⛔ BEFORE THE WORKOUT, AND NEVER IN FRONT OF ITS RESULT (founder, 2026-10-11):
+   *
+   *   > *"לאחר האימון הראשון זה שולח בקשה לאישור התראות. למה זה אחרי האימון ולא לפניו? הרי יש גם
+   *   > התראות במהלך האימון. ויותר גרוע מזה — זה הראה את זה לפני שהוא הראה את מסך סיום האימון."*
+   *
+   * The first rest was already one rest late (an alert is armed as its rest STARTS), a phone
+   * pocketed before it never showed the ask at all, and Well Done then raised it with
+   * `if (askNotifications) return <ask>` — before one pixel of the result was drawn.
+   */
+  it('⛔ it is asked as the first workout OPENS — before anything is lifted', () => {
+    expect(stage).toContain("const opening = session.displayPhase === 'SET_PRESENTED' && session.nothingLoggedYet;");
+    // The store's word for "nothing lifted yet" is the session's own record, not a guess.
+    expect(read('state/stores/sessionStore.tsx')).toContain('nothingLoggedYet: (state.session?.sets?.length ?? 0) === 0,');
+    // A session resumed mid-way is not "opening": it still waits for a rest (the bar rule above).
+    expect(stage).toMatch(/if \(!opening && session\.displayPhase !== 'REST_INTER' && session\.displayPhase !== 'REST_TRANSITION'\) return;/);
+  });
+
+  it('⛔ the one ask of the session is not spent on a screen that could not show it', () => {
+    // It waits while another overlay is up, and the ref is set only where the ask is raised.
+    expect(stage).toContain("if (!firstWorkout || askedThisSessionRef.current || overlay !== 'none') return;");
+    const effect = stage.slice(stage.indexOf('const opening = session.displayPhase'), stage.indexOf("const isTransition = session.displayPhase === 'REST_TRANSITION';"));
+    expect(effect).toMatch(/if \(cur !== 'none'\) return cur;\s*askedThisSessionRef\.current = true;\s*return 'notifyAsk';/);
+    expect(effect).toContain('[firstWorkout, session.displayPhase, session.nothingLoggedYet, overlay]');
+  });
+
+  it('⛔ Well Done never draws the ask in front of the result — only on the way out', () => {
+    const wellDone = read('screens/session/WellDone.tsx');
+    const code = wellDone.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    // The old gate is gone: nothing returns the ask merely because one is owed.
+    expect(code).not.toMatch(/if \(askNotifications\) \{\s*return \(/);
+    expect(code).toMatch(/if \(askingOnTheWayOut\) \{/);
+    // It is raised in exactly one place — the door every exit passes through.
+    expect(code.match(/setAskingOnTheWayOut\(true\)/g)).toHaveLength(1);
+    const leave = code.slice(code.indexOf('function leave(exit: () => void) {'), code.indexOf('useEffect(() => {', code.indexOf('function leave(exit: () => void) {')));
+    expect(leave).toMatch(/if \(askNotifications\) \{\s*exitAfterAsk\.current = exit;\s*setAskingOnTheWayOut\(true\);\s*return;\s*\}\s*exit\(\);/);
+    // …and both back roads use that door: the exit queued before history landed, and the milestone's.
+    expect(code).toContain('leave(queued);');
+    expect(code).toContain('onPress={() => leave(pendingExit.current ?? goHome)}');
+    expect(code).not.toContain('(pendingExit.current ?? goHome)()');
+  });
+
+  it('the ask leads with the reason that is true in the next two minutes, and promises nothing that is off', () => {
+    const ask = read('screens/onboarding/NotificationAsk.tsx').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ');
+    expect(ask.indexOf("t('notifAsk.willRest')")).toBeGreaterThan(-1);
+    expect(ask.indexOf("t('notifAsk.willRest')")).toBeLessThan(ask.indexOf("t('notifAsk.willWeekly')"));
+    // Open training is hidden (2026-09-29): the kilometre report is not something this product sends.
+    expect(ask).not.toContain('willReport');
+  });
+
   it('⛔ and NOTHING raises a system dialog from under a loaded bar', () => {
     /* The schedulers ask only whether permission EXISTS; the prompt belongs to a screen.
        ⚠️ COMMENTS ARE STRIPPED FIRST: both files EXPLAIN in prose why they never call

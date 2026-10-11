@@ -32,8 +32,12 @@ const DEFAULT_PCT: Record<ExperimentName, number> = {
   /* 50/50 — the report's recommendation is the new arm; the founder's ruling is the old one. */
   signInAfterFirstWorkout: 50,
   /* 50/50 (founder 2026-09-28): the paywall after workout ONE against the default after THREE —
-     the one placement question no published benchmark answers for this model. */
-  paywallAfterFirstWorkout: 50,
+     the one placement question no published benchmark answers for this model.
+     ⛔ OFF SINCE 2026-10-11. The wall now falls after her first REPEATED workout, because that is
+     the first screen on which the app shows what it decided from her sets; an arm that walls after
+     one workout asks for money before the product has done the thing it sells. The arm and its
+     remote switch are kept — the server can raise this — but no install is put on it by default. */
+  paywallAfterFirstWorkout: 0,
 };
 
 const pct: Record<ExperimentName, number> = { ...DEFAULT_PCT };

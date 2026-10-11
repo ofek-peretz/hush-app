@@ -86,7 +86,7 @@ import { dayTitle } from '@/i18n/dayTitle';
 import type { OnboardingInputs } from '@/data/local/models';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
-import { freeSessionsRemaining } from '@/domain/entitlement';
+import { applyCycleTrial, freeSessionsRemaining } from '@/domain/entitlement';
 import { intakeHandoff } from '@/app/intakeHandoff';
 import { PRO_TRIAL_DAYS } from '@/platform/billing';
 import * as haptics from '@/platform/haptics';
@@ -110,6 +110,10 @@ export function ProgramCreated({ route, navigation }: Props) {
   }, []);
   const name = inputs.name ?? app.pendingName(); // the profile is written by the CTA below
   /* What this device still has of the free workouts — the ledger outlives a reinstall (see the deal below). */
+  /* ⛔ COUNTED FROM THE WEEK SHE WAS JUST GIVEN (2026-10-11): her cycle and its first repeat. There is
+     no profile yet, so the allowance is set here from the week's own days — the same number
+     `completeOnboarding` stamps a moment later. A phone that already has a profile keeps its stamp. */
+  if (!app.profile) applyCycleTrial(inputs.daysPerWeek);
   const freeLeft = freeSessionsRemaining(app.modeState.completedSessions);
   /* A member is promised nothing here and owed no offer: her membership already opens every workout. */
   const member = app.entitlement.active;
@@ -125,7 +129,7 @@ export function ProgramCreated({ route, navigation }: Props) {
       units: inputs.units,
       repBand: DEFAULT_REP_BAND,
       bodyMap: inputs.bodyMap,
-      workoutMinutes: inputs.workoutMinutes ?? 60,
+      ...(inputs.workoutMinutes != null ? { workoutMinutes: inputs.workoutMinutes } : {}),
     }) as Profile,
     [inputs],
   );

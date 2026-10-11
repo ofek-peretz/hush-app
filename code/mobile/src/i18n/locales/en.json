@@ -840,7 +840,7 @@
     "decidedFrom": "Decided from your body map and your hour"
   },
   "budgetNote": {
-    "over": "This one runs to about {{min}} min — longer than the {{budget}} you asked for. Every muscle here is down to its last exercise, so there was nothing left to cut.",
+    "over": "This one runs to about {{min}} min — longer than {{budget}}. Every muscle here is down to its last exercise, so there was nothing left to cut.",
     "short": "This one comes to about {{min}} min. What you left switched on doesn’t hold a longer session — turn a muscle back on, or ask for fewer minutes."
   },
   "weekNotice": {

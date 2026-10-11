@@ -54,9 +54,11 @@ describe('the sheet says what is known and nothing else', () => {
     expect(sheetFor(beforeSheHasSaidAnything).minutes).toBeUndefined();
   });
 
-  it('carries them once she has, unchanged', () => {
+  it('carries her days once she has said them, unchanged — and a session length never', () => {
+    // 2026-10-11: no screen asks for a length, and every profile carried an invented 60 that the
+    // reviewer read as her limit (`theCoachIsToldOnlyWhatSheSaid`). The field is off the sheet.
     const said = sheetFor({ ...beforeSheHasSaidAnything, daysPerWeek: 3, workoutMinutes: 45 });
-    expect({ days: said.daysPerWeek, minutes: said.minutes }).toEqual({ days: 3, minutes: 45 });
+    expect({ days: said.daysPerWeek, minutes: said.minutes }).toEqual({ days: 3, minutes: undefined });
   });
 
   it('⚠️ tells the coach what an absent number MEANS, or absence is just a gap it fills itself', () => {

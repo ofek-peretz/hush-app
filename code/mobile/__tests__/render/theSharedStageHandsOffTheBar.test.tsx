@@ -65,6 +65,7 @@ const liveSet = {
   straightInto: null,
   superset: null,
   nextSuperset: null,
+  nothingLoggedYet: false,
   nextExerciseId: null,
   nextExercise: null,
   nextTarget: null,

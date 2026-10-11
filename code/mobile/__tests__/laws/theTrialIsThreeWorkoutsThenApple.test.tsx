@@ -63,7 +63,9 @@ afterEach(() => entitlement.__resetTrialForTest());
 describe('1 · the free part is three workouts, ten days', () => {
   it('the defaults', () => {
     expect(entitlement.FREE_SESSION_LIMIT).toBe(3);
-    expect(entitlement.TRIAL_MAX_DAYS).toBe(10);
+    // Fourteen since 2026-10-11 (was ten): a cycle and its first repeat is eight days with no day
+    // missed, and ten left two days of slack before the calendar cut the workout the allowance is for.
+    expect(entitlement.TRIAL_MAX_DAYS).toBe(14);
     expect(entitlement.TRIAL_NEWS_AT).toBe(1);
     expect(entitlement.isTrainingGated(2, false)).toBe(false);
     expect(entitlement.isTrainingGated(3, false)).toBe(true);
@@ -97,7 +99,85 @@ describe('1 · the free part is three workouts, ten days', () => {
   it('the placement experiment: workout one on the new arm, and an explicit server word outranks the coin', () => {
     const cfg = read('src/platform/remoteConfig.ts');
     expect(cfg).toMatch(/if \(typeof lastLimitWord === 'number'\) return;\s*if \(await onNewArm\('paywallAfterFirstWorkout'\)\) applyTrialLimitOverride\(1\);/);
-    expect(read('src/platform/experiments.ts')).toMatch(/paywallAfterFirstWorkout: 50/);
+    // ⛔ OFF BY DEFAULT since 2026-10-11 — see the next block. The arm and its switch remain.
+    expect(read('src/platform/experiments.ts')).toMatch(/paywallAfterFirstWorkout: 0,/);
+  });
+});
+
+/*
+ * ════ ⛔ THE FREE WORKOUTS RUN THROUGH THE FIRST REPEAT (founder, 2026-10-11) ════
+ *
+ * Walked as a man who trains five days a week: the wall fell at the start of workout four —
+ * Wednesday of week one — before any workout had come round again, so before he had seen the app
+ * move one weight from what he did. That is the thing the paywall sells. Three is the floor she
+ * was always promised; the allowance is her own cycle and its first repeat.
+ */
+describe('1b · the allowance is her cycle and the first workout of the next', () => {
+  it('two days → three (the floor); five days → six; the count is one past her cycle', () => {
+    expect([1, 2, 3, 4, 5, 6].map((d) => entitlement.freeSessionsForCycle(d))).toEqual([3, 3, 4, 5, 6, 7]);
+    // Nothing known about her week yet, or nonsense: the floor, never fewer and never a crash.
+    for (const unknown of [0, -1, 2.5, Number.NaN, null, undefined]) {
+      expect(entitlement.freeSessionsForCycle(unknown as never)).toBe(entitlement.FREE_SESSION_FLOOR);
+    }
+    expect(entitlement.FREE_SESSION_FLOOR).toBe(3);
+  });
+
+  it('⛔ a five-day athlete trains her whole week and its first repeat before the wall', () => {
+    entitlement.applyCycleTrial({ trialSessions: entitlement.freeSessionsForCycle(5) });
+    // Workouts 1–5 are her week; workout 6 is the first one she has done before — the first screen
+    // that shows what the app decided. The gate is asked BEFORE a workout, with the count done so far.
+    for (let done = 0; done <= 5; done += 1) expect(entitlement.isTrainingGated(done, false)).toBe(false);
+    expect(entitlement.isTrainingGated(6, false)).toBe(true);
+    expect(entitlement.freeSessionsRemaining(5)).toBe(1);
+  });
+
+  it('the stamp wins over the days she trains now — editing the week does not move the wall', () => {
+    entitlement.applyCycleTrial({ trialSessions: 4, daysPerWeek: 6 });
+    expect(entitlement.FREE_SESSION_LIMIT).toBe(4);
+    entitlement.__resetTrialForTest();
+    // A 2026-09-28 profile: the model's stamp, no count — read from the days it trains.
+    entitlement.applyCycleTrial({ daysPerWeek: 5 });
+    expect(entitlement.FREE_SESSION_LIMIT).toBe(6);
+    entitlement.__resetTrialForTest();
+    // The Ready screen, before any profile: the week's own days.
+    entitlement.applyCycleTrial(4);
+    expect(entitlement.FREE_SESSION_LIMIT).toBe(5);
+  });
+
+  it('⛔ it never takes a promise back and never overrides the server', () => {
+    entitlement.grandfatherTrial({ memberSince: '2026-09-20T10:00:00.000Z' });
+    entitlement.applyCycleTrial({ trialSessions: 4 });
+    expect(entitlement.FREE_SESSION_LIMIT).toBe(14); // the fourteen she was promised stand
+    entitlement.__resetTrialForTest();
+    entitlement.applyTrialLimitOverride(2); // the server's word (or an arm's)
+    entitlement.applyCycleTrial({ trialSessions: 6 });
+    expect(entitlement.FREE_SESSION_LIMIT).toBe(2);
+    entitlement.__resetTrialForTest();
+    entitlement.applyCycleTrial(null);
+    expect(entitlement.FREE_SESSION_LIMIT).toBe(3); // a phone with no one on it: the floor
+  });
+
+  it('it is stamped when her week is written, read at boot, and counted on the Ready screen', () => {
+    const store = read('src/state/stores/appStore.tsx');
+    expect(store).toContain('trialSessions: freeSessionsForCycle(inputs.daysPerWeek),');
+    expect(store).toMatch(/grandfatherTrial\(storedProfile\);[\s\S]{0,160}applyCycleTrial\(storedProfile\);/);
+    // …and it holds in the run of the app that enrolled her, not only from the next boot.
+    expect(store).toMatch(/applyCycleTrial\(profile\);\s*dispatch\(\{ type: 'ONBOARDED'/);
+    const ready = read('src/screens/onboarding/ProgramCreated.tsx');
+    expect(ready).toMatch(/if \(!app\.profile\) applyCycleTrial\(inputs\.daysPerWeek\);\s*const freeLeft = freeSessionsRemaining/);
+    // The day count that reaches both is the week that was WRITTEN, not the wheel she turned.
+    expect(read('src/screens/onboarding/BuildingProgramme.tsx')).toContain('inputs: authoredDays.current ? { ...inputs, daysPerWeek: authoredDays.current } : inputs,');
+  });
+
+  it('every screen that states the allowance reads the one live number', () => {
+    for (const f of ['src/screens/home/Home.tsx', 'src/screens/onboarding/ProgramCreated.tsx', 'src/screens/profile/ProfileSheet.tsx']) {
+      expect(read(f)).toContain('freeSessionsRemaining(');
+    }
+    // No string in either language says "three" or "3" about the free workouts.
+    const he = read('src/i18n/locales/he.json');
+    const en = read('src/i18n/locales/en.json');
+    expect(he).not.toMatch(/"(?:3|שלושה|שלושת) (?:ה)?אימונים (?:ה)?ראשונים/);
+    expect(en).not.toMatch(/first (?:3|three) workouts|(?:3|three) free workouts/i);
   });
 });
 

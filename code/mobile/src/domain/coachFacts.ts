@@ -876,7 +876,15 @@ export function coachFacts({ profile, brief, decided, plan, history, justFinishe
       units: profile.units,
       ...(profile.startWeightKg != null ? { startWeightKg: profile.startWeightKg } : {}),
       language,
-      ...(profile.workoutMinutes != null ? { minutes: profile.workoutMinutes } : {}),
+      /*
+       * ⛔ `minutes` IS NOT ON THE SHEET (2026-10-11). It was sent whenever the profile carried one —
+       * and every profile carried `60`, written by `completeOnboarding` for an athlete nobody had
+       * asked. The reviewer read it as her limit and defended a two-set exercise with it. No screen
+       * asks for a session length (founder, 2026-09-16: the model has "full freedom" there), so there
+       * is no honest value to send; an athlete who has a limit writes it, and it reaches the coach in
+       * her own words as `trainingFor`. Every profile on a phone today still holds the invented 60,
+       * which is why the line is deleted here rather than merely no longer written there.
+       */
       /*
        * ⛔ `band` AND `bandByMuscle` ARE NOT SENT, because neither was ever hers.
        *

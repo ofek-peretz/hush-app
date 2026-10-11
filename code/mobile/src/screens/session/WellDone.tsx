@@ -365,6 +365,9 @@ export function WellDone({ navigation, route }: Props) {
    */
 
   const [askNotifications, setAskNotifications] = useState(false);
+  /** The ask is raised only as she LEAVES this screen — see the note where it is drawn. */
+  const [askingOnTheWayOut, setAskingOnTheWayOut] = useState(false);
+  const exitAfterAsk = useRef<null | (() => void)>(null);
   useEffect(() => {
     if (notStarted) return;
     let active = true;
@@ -735,6 +738,12 @@ export function WellDone({ navigation, route }: Props) {
       setPhase('milestone');
       return;
     }
+    // The last thing before the door: the notification ask, if this athlete was never asked.
+    if (askNotifications) {
+      exitAfterAsk.current = exit;
+      setAskingOnTheWayOut(true);
+      return;
+    }
     exit();
   }
 
@@ -751,7 +760,7 @@ export function WellDone({ navigation, route }: Props) {
       setPhase('milestone');
       return;
     }
-    queued();
+    leave(queued); // through the same door — the ask on the way out included
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, celebration]);
 
@@ -821,7 +830,7 @@ export function WellDone({ navigation, route }: Props) {
               size="act"
               block
               label={t('milestones.continue')}
-              onPress={() => (pendingExit.current ?? goHome)()}
+              onPress={() => leave(pendingExit.current ?? goHome)}
             />
           </View>
         </SafeAreaView>
@@ -894,10 +903,24 @@ export function WellDone({ navigation, route }: Props) {
       ? t('complete.partialSavedShort')
       : t('complete.logged');
 
-  // 8.2 — the ask stands OVER the completion, once ever, and hands it back on either answer. It is
-  // deliberately after this screen has been earned: the handoff asks for it "right after your first
-  // session", never at onboarding, before value is felt.
-  if (askNotifications) {
+  /*
+   * ⛔ THE ASK NEVER STANDS IN FRONT OF THE RESULT (founder, 2026-10-11: *"ויותר גרוע מזה — זה הראה
+   * את זה לפני שהוא הראה את מסך סיום האימון"*). It used to: `if (askNotifications) return <ask>`
+   * ran before anything of this screen was drawn, so the first thing a first workout earned was a
+   * permission sheet.
+   *
+   * The ask belongs to the START of the first workout now (`SessionFlow`). This is only what is
+   * left for a workout that never showed its stage — begun and run from the wrist, phone in a bag —
+   * and it waits for her to leave: the result first, whole, and the question on the way out.
+   */
+  if (askingOnTheWayOut) {
+    const onward = () => {
+      setAskNotifications(false);
+      setAskingOnTheWayOut(false);
+      const exit = exitAfterAsk.current;
+      exitAfterAsk.current = null;
+      exit?.();
+    };
     return (
       <NotificationAsk
         onAllow={async () => {
@@ -906,13 +929,13 @@ export function WellDone({ navigation, route }: Props) {
           // She said yes seconds ago — the Saturday letter arms NOW, not at the next cold boot.
           // (Without this line a granted permission scheduled nothing until the app relaunched.)
           void notifier.scheduleWeeklyUpdate();
-          setAskNotifications(false);
+          onward();
         }}
         onDecline={() => {
           // "Not now" spends nothing: the system prompt is untouched, and we never ask from here
           // again — iOS gives one, and burning it on someone who just declined loses it for good.
           void markNotificationsAsked();
-          setAskNotifications(false);
+          onward();
         }}
       />
     );

@@ -308,6 +308,7 @@ const sessionFixture = {
   straightInto: null,
   superset: null,
   nextSuperset: null,
+  nothingLoggedYet: false,
   nextExerciseId: 'bb_bench_press',
   setLabel: { n: 2, m: 4 },
   /* ⛔ `emphases` STOOD HERE with two of the coach's KEY POINTS — a surface the founder deleted on

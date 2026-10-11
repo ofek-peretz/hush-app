@@ -60,7 +60,7 @@ import { rollClosedCycles } from '@/data/local/cycleRoll';
 import { loadCoachLink, onCoachLinkChange } from '@/state/coachOutbox';
 import { weekIsLockedToCoach } from '@/domain/coachTrack';
 import { readRecord as readAthleteRecord, restoreVerdict } from '@/domain/record';
-import { NO_COACH_PLAN, NO_ENTITLEMENT, entitlementNow, grandfatherTrial, withCoachLink, withCoachPlan, type CoachPlan, type Entitlement } from '@/domain/entitlement';
+import { NO_COACH_PLAN, NO_ENTITLEMENT, applyCycleTrial, entitlementNow, freeSessionsForCycle, grandfatherTrial, withCoachLink, withCoachPlan, type CoachPlan, type Entitlement } from '@/domain/entitlement';
 
 /** Derive the calibration mode from the backend's completed-session count
  *  (source of truth, §2.3). Reinstall/device-change safe. */
@@ -644,6 +644,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       let profile = storedProfile;
       // A member from before the three-workout model keeps the fourteen she was promised (2026-09-28).
       grandfatherTrial(storedProfile);
+      // …and everyone since trains free through her first repeated workout (2026-10-11).
+      applyCycleTrial(storedProfile);
       // Her week-opening day applies BEFORE anything derives from the cadence this boot — read off
       // the phone's own first weekday, never asked (founder 2026-09-16, `weekOpenDowForDevice`).
       applyWeekOpenDow(weekOpenDowForDevice(Localization.getCalendars()[0]?.firstWeekday));
@@ -933,6 +935,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           memberSince: new Date().toISOString(),
           // The deal the Ready screen just promised her — see `Profile.trialModel` (2026-09-28).
           trialModel: 'three',
+          // Her cycle and its first repeat — stamped now, from the week that was just written.
+          trialSessions: freeSessionsForCycle(inputs.daysPerWeek),
           // Engine v5 (Revision 7): onboarding puts every NEW athlete on v5. `repBand` is the cohort
           // switch — its presence routes generation, progression and the weekly mirror through v5.
           // It is NOT asked (register Part 9 §A): the rep band defaults to 8-10, editable per-muscle in
@@ -940,9 +944,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           // map itself comes from the body-map screen (all-normal when skipped → a full-body v5 plan).
           repBand: DEFAULT_REP_BAND,
           bodyMap: inputs.bodyMap,
-          // Rev 7: the time budget is a 60-minute ceiling by default (S-64), editable in Settings —
-          // and hers when she told the coach how long she actually has (`withLearned`).
-          workoutMinutes: inputs.workoutMinutes ?? 60,
+          /*
+           * ⛔ NOBODY ASKED HER, SO NOTHING IS WRITTEN (founder, 2026-10-11, reading the coach's reply
+           * to *"why only two sets?"* — "…adding sets could stretch the workout past an hour":
+           * *"מאיפה הוא יודע שאסור לו לעבור את השעה אימון בכלל?"*).
+           *
+           * From here. This line wrote `60` into every profile ("editable in Settings" — no such
+           * setting was ever built), `coachFacts` then stated it on her sheet as `minutes`, a field
+           * its own type documents as "absent until she has said — never 60 by default", and the
+           * reviewer reasoned from a limit she never set. The local engine does not read this
+           * field either (F-15, `MAX_SESSION_MIN`). It is hers when she says it and absent until then.
+           */
+          ...(inputs.workoutMinutes != null ? { workoutMinutes: inputs.workoutMinutes } : {}),
         };
         const live = modelRef.current; // the fixture — the v8 engine's local data layer
 
@@ -1018,6 +1031,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           persistMode(m),
         ]);
         setGender(profile.sex);
+        // The allowance she was just promised holds for THIS run of the app too, not only from the next boot.
+        applyCycleTrial(profile);
         dispatch({ type: 'ONBOARDED', profile, program, mode: m, snapshots, weekOpenMs });
         // `experience` shipped here as a permanent undefined — its question left the intake long
         // ago (audit P5). The event now carries only what is actually asked; `workoutMinutes` is

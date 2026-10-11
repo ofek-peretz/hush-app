@@ -191,7 +191,9 @@ describe('coach facts — the message the coach is sent', () => {
       }, plan: null , history, justFinished: history[0], nowMs: now,
     });
     expect(f.athlete.resting).toEqual([{ muscle: 'Shoulders', severity: 'twinge', untilMs: now + 999 }]);
-    expect(f.athlete.minutes).toBe(55);
+    // No session length rides the sheet, even when the profile carries one (2026-10-11 — every
+    // profile carried an invented 60, and the reviewer reasoned from it: `theCoachIsToldOnlyWhatSheSaid`).
+    expect(f.athlete.minutes).toBeUndefined();
     // Neither of the two engine-era fields rides along, even when the profile carries both.
     expect('emphasis' in f.athlete).toBe(false);
     expect('bandByMuscle' in f.athlete).toBe(false);
@@ -231,7 +233,7 @@ describe('coach facts — the message the coach is sent', () => {
       // `language` is on the athlete because everything the coach writes is read by HER — see
       // `thePreambleIsTheSameForEveryone`, which holds it below the cache breakpoint.
       // ⚠️ `band` left this list on 2026-08-05 — see the test above for why it was never hers.
-      ['daysPerWeek', 'language', 'minutes', 'sex', 'startWeightKg', 'units', 'weightKg'].sort(),
+      ['daysPerWeek', 'language', 'sex', 'startWeightKg', 'units', 'weightKg'].sort(),
     );
   });
 

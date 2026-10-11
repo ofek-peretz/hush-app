@@ -79,15 +79,16 @@ export function NotificationAsk({ onAllow, onDecline }: NotificationAskProps) {
             kilometre. Two of them are one promise here, because "a tap when your rest ends" is how
             the athlete experiences both. */}
         <View style={styles.rows}>
-          <Row kind="will" text={t('notifAsk.willWeekly')} />
+          {/*
+            ⛔ THE REST LEADS, AND THE KILOMETRE IS GONE (founder, 2026-10-11). This screen is asked as
+            the first workout OPENS now — *"הרי יש גם התראות במהלך האימון"* — so the reason that is
+            true in the next two minutes stands first: the touch when a rest ends. The third row
+            promised "every kilometre, with its pace"; open training has been off the product since
+            2026-09-29, and the note above says what a promise the product does not keep is worth
+            on this screen. It returns with the run.
+          */}
           <Row kind="will" text={t('notifAsk.willRest')} />
-          {/* ⛔ THIS LINE ENDED `— הטלפון נשאר בכיס` UNTIL 2026-08-27, and so did the one above
-              it (`כדי שהטלפון יישאר בכיס`) — the same promise, twice, on a three-line list. This is
-              the screen that asks her to let the app interrupt her, where every word has to earn
-              the yes; a reason repeated is a reason weakened. It stays on the REST line, where the
-              pocket is the whole point of a tap, and comes off here, where the value is the
-              kilometre and its pace. Same edit in both languages. */}
-          <Row kind="will" text={t('notifAsk.willReport')} last />
+          <Row kind="will" text={t('notifAsk.willWeekly')} last />
         </View>
       </View>
 
