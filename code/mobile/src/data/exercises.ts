@@ -54,6 +54,7 @@ export type LoadStyle =
   | 'fixed_barbell' // a pre-weighted fixed bar → "Use the 30 kg bar"
   | 'dumbbell' // one dumbbell per hand → "20 kg / hand"
   | 'kettlebell' // one cast bell → "the 16 kg bell" (the headline IS the whole figure)
+  | 'added' // weight ADDED to her own — a belt, a dumbbell between the feet → "+20 kg" (2026-10-11)
   | 'selectorized' // a pin-selected weight stack → "Set the pin to 24"
   | 'cable' // a pin-selected cable stack → "Set the pin to 28"
   | 'plate_loaded' // a lever machine loaded with plates → "30 + 30 / side"
@@ -317,6 +318,8 @@ export const EXERCISES: Exercise[] = [
   { id: 'incline_machine_press', name: 'Incline Machine Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_incline', support: 'supported', equipment: 'machine', tier: 'compound', baseKg: 30, cues: ['Set the handles at upper-chest height.', 'Press up and slightly in.', 'Control the return.'], synonyms: ['incline machine'] },
   { id: 'machine_chest_press', name: 'Machine Chest Press', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'supported', equipment: 'machine', tier: 'compound', baseKg: 35, cues: ['Set the seat height.', 'Press smoothly.', 'Control the return.'] },
   { id: 'chest_dip', name: 'Chest Dip', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_decline', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Lean slightly forward.', 'Lower to a deep stretch.', 'Press to lockout.'], synonyms: ['dips'] },
+  // Weighted (2026-10-11): the dip with a load axis — see the note at `weighted_pull_up`.
+  { id: 'weighted_dip', name: 'Weighted Dip', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_decline', support: 'free', equipment: 'dumbbell', loadStyle: 'added', tier: 'compound', baseKg: 5, cues: ['Lean slightly forward.', 'Lower to a deep stretch.', 'Press to lockout.'] },
   { id: 'push_up', name: 'Push-Up', capability: 'horizontal_push', muscle: 'Chest', pattern: 'press_flat', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Body in a straight line.', 'Lower the chest to the floor.', 'Press the floor away.'] },
   { id: 'pec_deck', name: 'Pec Deck Fly', capability: 'horizontal_push', muscle: 'Chest', pattern: 'fly', support: 'supported', equipment: 'machine', tier: 'isolation', baseKg: 25, cues: ['Soft elbows.', 'Squeeze the chest together.', 'Open slowly.'], synonyms: ['chest fly', 'machine fly'] },
   { id: 'cable_fly', name: 'Cable Fly', capability: 'horizontal_push', muscle: 'Chest', pattern: 'fly', support: 'guided', equipment: 'cable', tier: 'isolation', baseKg: 12, cues: ['Slight forward lean.', 'Hug the arms together.', 'Control the stretch.'] },
@@ -352,6 +355,22 @@ export const EXERCISES: Exercise[] = [
   { id: 'bb_row', name: 'Barbell Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'free', equipment: 'barbell', tier: 'compound', baseKg: 40, bwScaled: true, cues: ['Hinge to about 45°.', 'Pull to your lower ribs.', 'Control the descent.'] },
   { id: 'pull_up', name: 'Pull-Up', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Start from a dead hang.', 'Drive the elbows down.', 'Chin over the bar.'] },
   { id: 'chin_up', name: 'Chin-Up', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'free', equipment: 'bodyweight', tier: 'compound', bodyweight: true, cues: ['Underhand grip.', 'Pull the chest to the bar.', 'Lower under control.'] },
+  /*
+   * ── WEIGHTED (founder, 2026-10-11) — the same bar, with a load axis ──
+   *
+   * Walked live as a man who wrote "pull-ups with 20 kg for 8": the week's title said "+20", the
+   * week saved a load of 20 on `pull_up`, and the stage showed "bodyweight" — a bodyweight lift has
+   * no load axis anywhere in the engine (S-51), so the number had nowhere to live. His ruling on
+   * the open item: *"טפל … ותוודא בצורה הרמטית שזה סגור ונעול."*
+   *
+   * These are LOADED lifts — no `bodyweight` flag — so everything a loaded lift has, they have: an
+   * opening load (hers, or the model's), a rung to step by, a load that moves from what she lifts.
+   * The load is what she ADDS (`loadStyle: 'added'`), never her own weight plus it. They are hers
+   * and the model's to choose; no engine pool assigns them. The film is the bodyweight lift's own
+   * (`motion/registry`) — the movement is the same movement.
+   */
+  { id: 'weighted_pull_up', name: 'Weighted Pull-Up', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'free', equipment: 'dumbbell', loadStyle: 'added', tier: 'compound', baseKg: 5, cues: ['Start from a dead hang.', 'Drive the elbows down.', 'Chin over the bar.'] },
+  { id: 'weighted_chin_up', name: 'Weighted Chin-Up', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'free', equipment: 'dumbbell', loadStyle: 'added', tier: 'compound', baseKg: 5, cues: ['Underhand grip.', 'Pull the chest to the bar.', 'Lower under control.'] },
   { id: 'lat_pulldown', station: 'lat_pulldown', name: 'Lat Pulldown', capability: 'horizontal_pull', muscle: 'Back', pattern: 'pulldown', support: 'supported', equipment: 'cable', tier: 'compound', baseKg: 35, cues: ['Tall chest.', 'Pull to the collarbone.', 'Control the bar up.'], synonyms: ['pulldown'] },
   { id: 'cable_row', name: 'Seated Cable Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row_supported', support: 'supported', equipment: 'cable', tier: 'compound', baseKg: 35, cues: ['Tall chest.', 'Pull to your waist.', 'Release slowly.'] },
   { id: 'db_row', name: 'Dumbbell Row', capability: 'horizontal_pull', muscle: 'Back', pattern: 'row', support: 'free', unilateral: true, equipment: 'dumbbell', tier: 'compound', baseKg: 18, cues: ['Keep a flat back.', 'Row to your hip.', 'Control the way down.'], synonyms: ['db row'] },
@@ -615,7 +634,25 @@ export const CHOICE_ONLY_IDS: ReadonlySet<string> = new Set([
   'bw_squat', 'split_squat',
   'kb_goblet_squat', 'kb_rdl', 'kb_swing',
   'band_curl', 'band_pushdown', 'band_row', 'band_pull_apart', 'band_pull_through',
+  /*
+   * ⛔ THE WEIGHTED BAR (2026-10-11) — hers and the model's to choose, never the engine's. Admitted
+   * to the pools they answered "a woman of 52 kg, two days a week" with a weighted pull-up in the
+   * place of her lat pulldown (the week-balance board said so at once: no vertical pull in ten
+   * programmes). A load hung on a pull-up is something an athlete SAYS she does.
+   */
+  'weighted_pull_up', 'weighted_chin_up', 'weighted_dip',
 ]);
+
+/**
+ * A weighted lift and the bodyweight lift it is the loaded form of — one map, read by the film
+ * registry (same movement, same rig) and by the swap menu (offered against its own twin, and not
+ * handed to someone whose lat pulldown is taken).
+ */
+export const WEIGHTED_FORM_OF: Readonly<Record<string, string>> = {
+  weighted_pull_up: 'pull_up',
+  weighted_chin_up: 'chin_up',
+  weighted_dip: 'chest_dip',
+};
 
 /**
  * The choice-only lifts a DECLARED room may have programmed for her, and the family each needs.

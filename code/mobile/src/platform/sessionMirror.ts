@@ -61,7 +61,22 @@ export interface MirrorLoadSetup {
 
 /** One step of the live plan, name-resolved, as the projection needs it. Decoupled
  *  from the session store's internal `Step` so this module stays pure. */
+/**
+ * A superset, as the wrist is told it (2026-10-11): which round of how many, and which of the
+ * round's lifts. Four small integers — the wrist's job is POSITION; the announcement, the two
+ * films and the names are the phone's (`screens/session/SupersetBlock`).
+ */
+export interface MirrorSuperset {
+  round: number;
+  rounds: number;
+  position: number;
+  count: number;
+}
+
 export interface MirrorStep {
+  /** The superset this step is part of, when it is — read from the plan by the one rule the phone's
+   *  own stage uses (`domain/supersetView`). Absent on every ordinary set. */
+  superset?: MirrorSuperset;
   exerciseName: string;
   /** Primary muscle group label (Active Set legend). */
   exerciseGroup?: string;
@@ -246,6 +261,8 @@ export interface SessionMirror {
   nextLoadDeltaKg: number;
   /** The current lift's ordinal among the session's distinct exercises + the total
    *  ("Lift 1/6") — ambient exercises-remaining context on the top strip. */
+  /** The superset in play — see `MirrorSuperset`. Absent outside one. */
+  superset?: MirrorSuperset;
   liftIndex: number;
   liftCount: number;
   /** The session's workout name (program day) — shown on the Complete screen. */
@@ -703,6 +720,15 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     completedExerciseName: isTransition ? cur.exerciseName : null,
     canMarkBusy,
     // Active set: the current set's signed load change (the LoadDelta mark).
+    /*
+     * ⛔ THE WRIST IS TOLD (founder, 2026-10-11 — the superset "is not clear at all"; the phone was
+     * rebuilt first and the wrist still counted "exercise 4/6 … 5/6 … 4/6" through every pair).
+     * On a set: the superset the set is part of. On a rest: the one the rest LEADS INTO — the same
+     * choice every other "next" field on a rest frame makes. Null on every ordinary set.
+     */
+    // Present only inside a superset: an absent key and a null are different frames to a comparer,
+    // and every ordinary set must stay byte-for-byte the frame it was.
+    ...((resting ? next?.superset : cur.superset) ? { superset: resting ? next!.superset : cur.superset } : {}),
     loadDeltaKg: phase === 'active_set' ? signedDelta(cur) : 0,
     // Transition rest: the upcoming exercise's first-set change (the card's delta).
     nextLoadDeltaKg: isTransition ? signedDelta(next) : 0,

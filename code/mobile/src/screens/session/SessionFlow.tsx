@@ -2834,9 +2834,11 @@ function ActiveSet({
         ? t('load.perHand')
         : eq.style === 'selectorized' || eq.style === 'cable'
           ? t('load.pinLabel')
-          : eq.style === 'fixed_barbell'
+          : eq.style === 'fixed_barbell' || eq.style === 'kettlebell'
             ? t('editResult.weight')
-            : t('load.aSide');
+            : eq.style === 'added'
+              ? t('load.added') // a weighted pull-up: what she hangs on herself (2026-10-11)
+              : t('load.aSide');
 
   /** What the pad is filling, as a number — or null while it says nothing yet. */
   const draftValue = draft === '' || draft === '.' ? null : Number(draft);

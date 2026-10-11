@@ -427,6 +427,9 @@ final class LocalWorkoutEngine {
       nextLoadDeltaKg: nil,
       liftIndex: lift.index,
       liftCount: lift.count,
+      // The wrist ALONE lists each lift's sets in a row — it has never alternated a pair, so there
+      // is no superset here to name (`theWristIsToldASuperset`). Said, not left out.
+      superset: nil,
       // WT13c · GLANCE — the standalone engine owes the wrist the SAME two live figures the phone
       // sends, or a phone-absent workout glances at a blank. Same arithmetic as the closing
       // summary's `volumeKg` (bodyweight contributes 0), read off the sets already logged here.

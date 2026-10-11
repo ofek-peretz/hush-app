@@ -41,6 +41,7 @@ import {
   patternFamily,
   SUPPORT_RANK,
   type Exercise,
+  WEIGHTED_FORM_OF,
 } from '@/data/exercises';
 import { inRoom } from '@/domain/room';
 
@@ -263,6 +264,9 @@ export function swapCandidates(currentId: string, ctx: SwapContext): Exercise[] 
   const excluded = excludedSet(ctx.sessionExerciseIds);
   const pool = exercisesForMuscle(current.muscle)
     .filter((e) => admissible(current, e, excluded))
+    // A weighted bar is offered against the lift it is the loaded form of, and against another
+    // weighted bar — never handed to an athlete whose lat pulldown is taken (2026-10-11).
+    .filter((e) => !WEIGHTED_FORM_OF[e.id] || WEIGHTED_FORM_OF[e.id] === current.id || WEIGHTED_FORM_OF[current.id] != null)
     // The room (see `SwapContext.equipment`): the scored pool respects it; the pinned lifts below
     // are her own standing word and are deliberately NOT run through this filter.
     .filter((e) => inRoom(e, ctx.equipment));

@@ -175,6 +175,9 @@ enum WatchCopy {
   static var upNext: String { L("upNext", "Up next") }
   // WT4 up-next card legend words (uppercased at the call site).
   static var liftWord: String { L("liftWord", "LIFT") }
+  /// A superset's two words (2026-10-11) — "SUPERSET 1/2 · ROUND 2/3" on the strip.
+  static var supersetWord: String { L("supersetWord", "SUPERSET") }
+  static var roundWord: String { L("roundWord", "ROUND") }
   static var setWord: String { L("setWord", "SET") }
   /// The warm-up ramp's label (2026-08-24) — used wherever a bridge step would otherwise say SET.
   static var warmupWord: String { L("warmupWord", "WARM-UP") }

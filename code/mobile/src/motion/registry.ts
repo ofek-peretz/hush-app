@@ -7,6 +7,7 @@
 // 
 
 import type { Rig } from './types';
+import { WEIGHTED_FORM_OF } from '@/data/exercises';
 import { bbBenchPress } from './library/bbBenchPress';
 import { bbBackSquat } from './library/bbBackSquat';
 import { bbRow } from './library/bbRow';
@@ -120,6 +121,18 @@ const RIGS: Rig[] = [
 ];
 
 export const EXERCISE_MOTION: Record<string, Rig> = Object.fromEntries(RIGS.map((r) => [r.id, r]));
+
+/*
+ * ⛔ A WEIGHTED PULL-UP IS A PULL-UP (2026-10-11). The loaded variants are catalogue lifts of their
+ * own because they need a load axis (`data/exercises`); the MOVEMENT is the bodyweight lift's, joint
+ * for joint, so they are drawn by its rig rather than by a copy that could drift from it.
+ */
+for (const [id, of] of Object.entries(WEIGHTED_FORM_OF)) {
+  const rig = EXERCISE_MOTION[of];
+  // Under its OWN name (`everyLiftLearnsToMove`: a rig answers for the lift it is filed under), and
+  // made here from the twin's rig, so there is no second set of joints to keep in step.
+  if (rig) EXERCISE_MOTION[id] = { ...rig, id };
+}
 
 export function exerciseMotion(exerciseId: string | null | undefined): Rig | null {
   if (!exerciseId) return null;

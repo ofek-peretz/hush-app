@@ -185,6 +185,8 @@ export function loadLine(exerciseId: string | null, kg: number | null, l: VoiceL
       return tg('voice.loadDumbbell', { perHand: total });
     case 'kettlebell':
       return tg('voice.loadKettlebell', { bell: total });
+    case 'added':
+      return tg('voice.loadAdded', { total });
     case 'selectorized':
     case 'cable':
       return total;
@@ -269,6 +271,8 @@ export function nextLoadPhrase(exerciseId: string, kg: number | null, l: VoiceLo
       return tg('voice.loadDumbbell', { perHand: spokenLoad(kg, l) });
     case 'kettlebell':
       return tg('voice.loadKettlebell', { bell: spokenLoad(kg, l) });
+    case 'added':
+      return tg('voice.loadAdded', { total: spokenLoad(kg, l) });
     case 'band':
       return null;
     case 'bodyweight':

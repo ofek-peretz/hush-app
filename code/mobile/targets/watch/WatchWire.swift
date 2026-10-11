@@ -112,6 +112,15 @@ struct WireCorrection: Codable, Equatable {
 /// Read-only projection of the live session (subset rendered on the watch). The
 /// fields added for the stage design are optional so a version-skewed frame still
 /// decodes; the model/views coalesce them.
+/// A superset as the wrist is told it: which round of how many, and which of the round's lifts.
+/// Position only — the announcement and the two lifts' films are the phone's.
+struct WireSuperset: Codable, Equatable {
+  var round: Int
+  var rounds: Int
+  var position: Int
+  var count: Int
+}
+
 struct WireMirror: Codable, Equatable {
   var schema: Int
   var phase: String // active_set | rest_inter | rest_transition | paused | complete
@@ -183,6 +192,10 @@ struct WireMirror: Codable, Equatable {
   var nextLoadDeltaKg: Double?
   var liftIndex: Int?
   var liftCount: Int?
+  /// The superset in play (2026-10-11): on a set, the one the set is part of; on a rest, the one
+  /// the rest leads into. Absent on every ordinary set — and on a frame from a phone that does not
+  /// send it yet, which then draws exactly what it always drew.
+  var superset: WireSuperset?
   /// WT13c · GLANCE — her own work so far, live. The summary carries the same pair but only on the
   /// terminal frame, so a glance mid-session had nothing of HERS to read (heart and burn come from
   /// the OS; these are the only two figures about her lifting).

@@ -1315,8 +1315,8 @@ export function nextSetAlert(next: Step, units: Parameters<typeof displayWeight>
       ? tg('notifications.nextSetPerHand', { value: eq.value })
       : eq.style === 'selectorized' || eq.style === 'cable'
         ? tg('notifications.nextSetPin', { value: eq.value })
-        : eq.style === 'fixed_barbell'
-          ? null
+        : eq.style === 'fixed_barbell' || eq.style === 'kettlebell' || eq.style === 'added'
+          ? null // one object, and the headline IS it — "a side" would be a second, wrong instruction
           : tg('notifications.nextSetAside', { value: eq.value });
   const reps = next.target?.recommendedReps;
   const pos = stepPosition(next);
@@ -1451,8 +1451,13 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
   // a Barbell Back Squat. Both surfaces now ask the SAME function, and the exclusion is not an
   // optional argument anybody can forget.
   const sessionExerciseIds = [...new Set(plan.map((st) => st.exerciseId))];
-  return plan.flatMap((st) => {
+  return plan.flatMap((st, at) => {
     const ex = exerciseById(st.exerciseId);
+    // The same description the stage draws from (`sessionSupersetAt`), reduced to what a wrist shows.
+    const round = sessionSupersetAt(plan, at);
+    const superset = round
+      ? { superset: { round: round.round, rounds: round.rounds, position: round.position, count: round.exerciseIds.length } }
+      : {};
     // WHEN the verb is offered is a law, not a local opinion — `isSwapMoment` owns it, and the
     // phone's stage asks the same function. This used to be a bare `=== 0` here and a different
     // hard-coded rule on the stage, which is exactly how the two surfaces came to disagree.
@@ -1502,6 +1507,7 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
         swapOptions,
         loadSetup: null,
         hold: item.kind === 'time' ? { seconds: item.seconds } : { metres: item.metres },
+        ...superset,
       };
     }
     const setup = loadSetup(st.exerciseId, st.target.recommendedWeight, 'kg');
@@ -1518,6 +1524,7 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
       repBandHi: st.target.repBandHi,
       reasonType: st.target.reasonType,
       reasonDelta: st.target.reasonDelta,
+      ...superset,
       ...(st.warmup ? { warmup: st.warmup } : {}),
       swapOptions,
       loadSetup: setup

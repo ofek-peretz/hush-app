@@ -118,10 +118,21 @@ function restFrame(): SessionMirror {
   });
 }
 
+/** Mid-set inside a superset (2026-10-11) — the one frame that carries `superset`; an ordinary set
+ *  sends no such key, which is the point (`theWristIsToldASuperset`). */
+function supersetFrame(): SessionMirror {
+  const pair = (position: number) => ({ superset: { round: 1, rounds: 1, position, count: 2 } });
+  return frame({
+    steps: [{ ...STEPS[0], totalSetsInExercise: 1, ...pair(1) }, { ...STEPS[2], globalIndex: 1, ...pair(2) }],
+    total: 2,
+    machine: { phase: 'SET_PRESENTED', setIndex: 0, paused: false },
+  });
+}
+
 /** Every key the phone can ever put on the wire, gathered across all four phases. */
 function everyKeyThePhoneSends(): Set<string> {
   const keys = new Set<string>();
-  for (const frame of [widestMirror(), activeFrame(), restFrame()]) {
+  for (const frame of [widestMirror(), activeFrame(), restFrame(), supersetFrame()]) {
     for (const k of Object.keys(JSON.parse(JSON.stringify(frame)) as object)) keys.add(k);
   }
   return keys;

@@ -768,6 +768,23 @@ private struct DrawCheck: View {
   }
 }
 
+// MARK: A superset's line
+
+/// What the wrist says of a superset, in her words (`WatchCopy`): the strip's one line, on a set
+/// and on a rest alike, and the shorter form it gives way to beside the clock.
+///
+/// ⛔ THE WORD IS THE LAST THING TO GO (the photographs, 2026-10-11). The first cut wrote "SUPERSET
+/// 1/2 · ROUND 2/3" and gave way to "1/2 · ROUND 2/3" — and on BOTH cases it gave way, so what
+/// reached the glass was two fractions and no word: the one thing the line exists to say was the
+/// part that did not fit. The position is dropped instead (the lift's own name, a line below, is
+/// which of the two she is on), and the short form keeps the word: "SUPERSET 2/3".
+extension WireSuperset {
+  /// "SUPERSET · ROUND 2/3"
+  var line: String { "\(WatchCopy.supersetWord.uppercased()) · \(WatchCopy.roundWord.uppercased()) \(round)/\(rounds)" }
+  /// "SUPERSET 2/3" — the round, with the word still on it.
+  var lineBrief: String { "\(WatchCopy.supersetWord.uppercased()) \(round)/\(rounds)" }
+}
+
 // MARK: The brand
 
 /// THE FERROX MARK (2026-09-16) — two horns whose flat middle is a bar, with a notch that cradles
@@ -2244,9 +2261,22 @@ struct ActiveSetScreen: View {
       ClockLane {
         // "ירך אחורית · 2/5" is wider than the clock leaves it on 40 mm, and what an ellipsis took
         // was the COUNT ("…2 · ירך אחורית", photographed 2026-10-10). The muscle gives way first.
-        ViewThatFits(in: .horizontal) {
-          positionLine(setPosition)
-          positionLine(setCount).minimumScaleFactor(0.75)
+        /*
+         * ⛔ IN A SUPERSET THE LINE SAYS SO (founder, 2026-10-11). The phone alternated the pair and
+         * this row read "SHOULDERS · 2/3", then "TRICEPS · 2/3", then "SHOULDERS · 3/3" — two lifts
+         * with nothing saying they were one piece of work. It reads which of the two she is on and
+         * the round: "SUPERSET · ROUND 2/3", and "SUPERSET 2/3" where that does not fit (see the extension).
+         */
+        if let pair = mirror.superset {
+          ViewThatFits(in: .horizontal) {
+            positionLine(pair.line)
+            positionLine(pair.lineBrief).minimumScaleFactor(0.75)
+          }
+        } else {
+          ViewThatFits(in: .horizontal) {
+            positionLine(setPosition)
+            positionLine(setCount).minimumScaleFactor(0.75)
+          }
         }
         /*
          * ⛔ THE DOTS ARE DELETED (founder 2026-08-05, from his own screenshot). "QUADS · 1/4"
@@ -2960,7 +2990,12 @@ struct InterRestScreen: View {
      */
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
-        TopStrip(lift: (mirror.liftIndex ?? 1, mirror.liftCount ?? 1), controlsHint: true)
+        // A rest that leads into a superset's round names the round — not "lift 4/6" (2026-10-11).
+        if let pair = mirror.superset {
+          TopStrip(text: pair.line, short: pair.lineBrief, controlsHint: true)
+        } else {
+          TopStrip(lift: (mirror.liftIndex ?? 1, mirror.liftCount ?? 1), controlsHint: true)
+        }
         Spacer(minLength: Fit.s(2))
         HStack(alignment: .center, spacing: Fit.s(8)) {
           RestRing(
@@ -3089,7 +3124,13 @@ struct TransitionRestScreen: View {
      */
     WristScreen {
       VStack(alignment: .leading, spacing: 0) {
-        TopStrip(text: crossing, short: crossingShort, controlsHint: true)
+        // Into a superset's round the strip names the superset and the round; "lift 3 → 4" would
+        // count the pair's first lift as a station of its own, again and again (2026-10-11).
+        if let pair = mirror.superset {
+          TopStrip(text: pair.line, short: pair.lineBrief, controlsHint: true)
+        } else {
+          TopStrip(text: crossing, short: crossingShort, controlsHint: true)
+        }
         Spacer(minLength: Fit.s(2))
         HStack(alignment: .center, spacing: Fit.s(8)) {
           RestRing(
