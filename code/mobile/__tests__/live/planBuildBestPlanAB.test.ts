@@ -90,7 +90,23 @@ function variant(arm, who) {
   if (arm === 'C') stable = old.replace(BASE, STANDARD).replace('\n\n·', `\n\n${NO_CLOCK}\n·`);
   if (arm === 'D') stable = old.replace(BASE, STANDARD).replace('\n\n·', `\n\n${NEED_ONLY}\n·`);
   if (arm === 'E') stable = old.replace(BASE, STANDARD).replace('\n\n·', `\n\n${NEED_ONLY}\n${CRAFT}\n·`);
-  return { blocks: [{ text: stable }, { text: her }], think: req.think, schema: req.schema, v: req.v };
+  /*
+   * G / H — THE PROMPT AS SHIPPED, WITH ONE SCHEMA SENTENCE CHANGED (founder, 2026-10-11: two-set
+   * lifts are "מוזר… יכול להיות שיש משהו שמגביל אותה שם"). The only words of ours that touch a set
+   * count are the `sets` description, which opens "Working sets only." — a coach's term for the
+   * HARD sets, and a plausible reason a model counts two where a sheet says three.
+   *   G  the field with no description at all
+   *   H  the same facts, without the loaded opening
+   */
+  let schema = req.schema;
+  if (arm === 'G' || arm === 'H') {
+    schema = JSON.parse(JSON.stringify(req.schema));
+    const sets = schema.properties.days.items.properties.lifts.items.properties.sets;
+    if (!sets?.description?.startsWith('Working sets only.')) throw new Error('the sets description moved — re-anchor G/H');
+    if (arm === 'G') delete sets.description;
+    if (arm === 'H') sets.description = 'How many sets of this exercise the athlete does. Do not count warm-up sets: the app offers those on the day. The app also decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts.';
+  }
+  return { blocks: [{ text: stable }, { text: her }], think: req.think, schema, v: req.v };
 }
 
 function score(week) {
