@@ -161,11 +161,11 @@ describe('the best plan, with no clock — live A/B', () => {
           let week = null;
           try { week = readCoachWeek(JSON.parse(reply.text)); } catch {}
           if (!week) { rows.push({ ms, fail: 'unreadable' }); continue; }
-          rows.push({ ms, ...score(week), title: week.name ?? '', shape: week.days.map((d) => `${d.name} [${d.lifts.map((l) => `${l.ex}×${l.sets}${l.pair ? '+' : ''}`).join(', ')}]`).join('\n        ') });
+          rows.push({ ms, think: reply.usage?.output_tokens_details?.reasoning_tokens ?? null, ...score(week), title: week.name ?? '', shape: week.days.map((d) => `${d.name} [${d.lifts.map((l) => `${l.ex}×${l.sets}${l.pair ? '+' : ''}`).join(', ')}]`).join('\n        ') });
         }
         out.push(`ATHLETE ${who} · ARM ${arm}\n` + rows.map((r) => r.fail
           ? `   FAIL ${r.fail} (${r.ms}ms)`
-          : `   ${Math.round(r.ms / 1000)}s  days=${r.days} lifts/day=${r.liftsDay} sets/day=${r.setsDay} total=${r.total} thin=${r.thin} twice=${r.twice}/7 dose=${r.dose}/7 back+shoulders=${r.heard}\n      sets=${JSON.stringify(r.sets)}\n      "${r.title}"${process.env.AB_SHAPE ? `\n        ${r.shape}` : ''}`).join('\n'));
+          : `   ${Math.round(r.ms / 1000)}s  thinking=${r.think} (${r.think == null ? '?' : r.think > 1000 ? 'DEEP' : 'FALLBACK'})  days=${r.days} lifts/day=${r.liftsDay} sets/day=${r.setsDay} total=${r.total} thin=${r.thin} twice=${r.twice}/7 dose=${r.dose}/7 back+shoulders=${r.heard}\n      sets=${JSON.stringify(r.sets)}\n      "${r.title}"${process.env.AB_SHAPE ? `\n        ${r.shape}` : ''}`).join('\n'));
       }
     }
     // eslint-disable-next-line no-console
