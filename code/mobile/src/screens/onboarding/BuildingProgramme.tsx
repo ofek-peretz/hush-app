@@ -76,6 +76,8 @@ type Props = NativeStackScreenProps<OnboardingParamList, 'BuildingProgramme'>;
  * everything after it is that body filling.
  */
 export const OPENING_MS = 1500;
+/** When "this usually takes…" gives way to "still building…" — just past the usual build (20–45 s). */
+export const STILL_BUILDING_AFTER_MS = 40_000;
 /**
  * ⛔ AND EVERY OTHER NUMBER HERE IS DERIVED FROM THE ANIMATION, NOT SET BESIDE IT.
  *
@@ -309,6 +311,20 @@ export function BuildingProgramme({ navigation, route }: Props) {
   const [shownMuscles, setShownMuscles] = useState(0);
 
   const [built, setBuilt] = useState<{ muscles: BuildMuscle[]; name: ProgrammeName | null; lifts: number; days: number; week: BuildWeekLift[] } | null>(null);
+  /*
+   * ⛔ PAST FORTY SECONDS THE SCREEN SAYS IT IS STILL WORKING (founder-approved plan, 2026-10-11).
+   * The strong model now has up to 107 s for a week (`PLAN_BUILD_SAID_MS`), and the line under the
+   * athlete said "this usually takes about half a minute" for all of it — true of the usual build
+   * and, a minute in, a sentence that reads as something having gone wrong. One line replaces it
+   * once the usual time has passed: still building, and why it is worth the wait. A wall-clock
+   * timer is enough — a backgrounded app freezes it, and she is not reading the screen then.
+   */
+  const [longWait, setLongWait] = useState(false);
+  useEffect(() => {
+    if (built) return;
+    const id = setTimeout(() => setLongWait(true), STILL_BUILDING_AFTER_MS);
+    return () => clearTimeout(id);
+  }, [built]);
   /** When the show began — wall-clock, so a background gap costs nothing (see the catch-up below). */
   const startedAtMs = useRef(Date.now());
   /** …and when the answer landed, which is what everything after the fill is scheduled from. */
@@ -810,7 +826,7 @@ export function BuildingProgramme({ navigation, route }: Props) {
       brief={askingTheCoach ? waitBrief : undefined}
       library={askingTheCoach ? waitLibrary : undefined}
       libraryCount={askingTheCoach ? offeredLiftIds().length : undefined}
-      waitHint={askingTheCoach ? t('ob.buildUsually') : null}
+      waitHint={askingTheCoach ? t(longWait ? 'ob.buildStill' : 'ob.buildUsually') : null}
       week={built && muscles.length ? built.week : undefined}
     />
   );

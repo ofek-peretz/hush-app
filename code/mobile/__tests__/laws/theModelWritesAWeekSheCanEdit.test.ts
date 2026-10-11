@@ -617,7 +617,13 @@ describe('4 · it can never strand her — and it can never fail her in silence'
     // 45 s clears every healthy answer ever recorded here (slowest 21.5 s) with room for two more
     // attempts; the old 18.5 s was the placeholder walk's length, which no longer bounds anything.
     expect(PLAN_BUILD_SAID_MS).toBeGreaterThanOrEqual(40_000);
-    expect(PLAN_BUILD_SAID_MS).toBeLessThanOrEqual(60_000);
+    /*
+     * ⛔ 60 → 120 s ON 2026-10-11 (founder: *"מאשר הכל… העיקר שהוא יקבל את התוכנית הטובה ביותר"*):
+     * the strong model's answers for an athlete who states her lifts sat ON its old 47 s deadline
+     * (five in at 37–45 s, two out), and a miss is the low-effort week. It is still a ceiling — two
+     * minutes, and not a second more without this line saying so.
+     */
+    expect(PLAN_BUILD_SAID_MS).toBeLessThanOrEqual(120_000);
     // ⛔ 2026-09-27, founder: *"תשים את OPUS גם למי שלא כתב כלום"* — the words no longer buy a longer
     // wait; every build waits long enough for the strong model. Never longer than a sentence's.
     expect(PLAN_BUILD_BUDGET_MS).toBeLessThanOrEqual(PLAN_BUILD_SAID_MS);

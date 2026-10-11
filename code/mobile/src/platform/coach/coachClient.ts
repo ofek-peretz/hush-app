@@ -138,6 +138,26 @@ export type CoachReply =
 const TIMEOUT_MS = 180_000;
 
 /**
+ * The reply's JSON, whichever way the Worker sent it.
+ *
+ * A build that declared a wait is answered as an event stream (see `beat` in `askCoach`): comment
+ * lines while the model thinks, then ONE `data:` line that is exactly the JSON a plain reply
+ * holds. Everything else — and every Worker that predates the heartbeat — answers with that JSON
+ * as the whole body, and is read as it always was.
+ *
+ * ⚠️ THE LAST `data:` LINE, AND ONLY A WHOLE ONE. A line cut before its end is a stream that died,
+ * and it throws like any unreadable body — never half an answer handed on as an answer.
+ */
+export async function readReply(response: Response): Promise<unknown> {
+  const type = response.headers?.get?.('content-type') ?? '';
+  if (!type.includes('text/event-stream')) return response.json();
+  const raw = await response.text();
+  const data = raw.split('\n').filter((line) => line.startsWith('data: '));
+  if (data.length === 0) throw new Error('no data event');
+  return JSON.parse(data[data.length - 1].slice(6));
+}
+
+/**
  * Ask the coach.
  *
  * `schema` is `COACH_PLAN_SCHEMA` when a programme is wanted and absent when prose is — a chat
@@ -229,6 +249,16 @@ export async function askCoach(
         ...(images?.length ? { images } : {}),
         kind,
         ...(wait && wait > 0 ? { wait: Math.round(wait) } : {}),
+        /*
+         * ⛔ "I CAN READ A HEARTBEAT" (2026-10-11) — sent with every build that declares a wait.
+         * The Worker then answers on a line it keeps alive (`readReply` below), which is the only
+         * way that wait may pass a minute: a connection silent for sixty seconds is cut by the
+         * phone's own networking (React Native leaves `NSURLSession`'s idle timeout at its default
+         * — `RCTNetworking.mm` passes `timeout: 0`), so the strong model's deadline was pinned
+         * under it, and one build in three for an athlete who states her lifts was being written
+         * by the fast lane instead.
+         */
+        ...(kind === 'build' && wait && wait > 0 ? { beat: true } : {}),
       }),
       signal: controller.signal,
     });
@@ -247,10 +277,20 @@ export async function askCoach(
   if (response.status === 429) return { ok: false, reason: 'rate_limited' };
   if (!response.ok) return { ok: false, reason: 'upstream' };
 
-  let body: { text?: unknown; model?: unknown; usage?: unknown; finishReason?: unknown };
+  let body: { text?: unknown; model?: unknown; usage?: unknown; finishReason?: unknown; http?: unknown };
   try {
-    body = (await response.json()) as typeof body;
+    body = (await readReply(response)) as typeof body;
   } catch {
+    return { ok: false, reason: 'upstream' };
+  }
+  /*
+   * On a kept-alive line the status was spent on the first heartbeat, so a failure inside the model
+   * stage rides in the body as `http` — the status the plain reply would have carried. It is read
+   * here exactly as a status is read above.
+   */
+  if (typeof body.http === 'number' && body.http !== 200) {
+    if (body.http === 401) return { ok: false, reason: 'refused' };
+    if (body.http === 429) return { ok: false, reason: 'rate_limited' };
     return { ok: false, reason: 'upstream' };
   }
 

@@ -61,7 +61,9 @@ describe('1 · the strong call is a model call like any other', () => {
 describe('2 · bounded, and every miss is the fast model’s', () => {
   it('the deadline leaves the reserve, and the declared wait is capped', () => {
     expect(worker).toContain('deadlineMs: wait - BUILD_FALLBACK_RESERVE_MS,');
-    expect(worker).toMatch(/Math\.min\(call\.wait, BUILD_WAIT_CAP_MS\)/);
+    // Twice the cap for an app that keeps the line alive, and only for it (2026-10-11).
+    expect(worker).toContain('Math.min(call.wait, call.beat === true ? BUILD_WAIT_CAP_BEAT_MS : BUILD_WAIT_CAP_MS)');
+    expect(num('BUILD_WAIT_CAP_MS')).toBe(60_000);
   });
 
   it('a hit answers as a finished reply; a miss falls through with its reason', () => {
@@ -84,7 +86,8 @@ describe('2 · bounded, and every miss is the fast model’s', () => {
 describe('3 · the arithmetic', () => {
   const min = num('BUILD_STRONG_MIN_WAIT_MS');
   const reserve = num('BUILD_FALLBACK_RESERVE_MS');
-  const cap = num('BUILD_WAIT_CAP_MS');
+  /* The cap an app of today meets: it sends `beat` with every build that declares a wait. */
+  const cap = num('BUILD_WAIT_CAP_BEAT_MS');
 
   it('⛔ an empty ask buys the strong model too (founder, 2026-09-27: "תשים את OPUS גם למי שלא כתב כלום")', () => {
     expect(PLAN_BUILD_BUDGET_MS).toBeGreaterThanOrEqual(min);
@@ -99,6 +102,35 @@ describe('3 · the arithmetic', () => {
   it('the fast model’s reserve clears its measured tail (p90 ~11 s), and the strong one gets real time', () => {
     expect(reserve).toBeGreaterThanOrEqual(11_000);
     expect(min - reserve).toBeGreaterThanOrEqual(15_000);
+  });
+});
+
+describe('3b · ⛔ the strong model has the time its answers actually take (2026-10-11)', () => {
+  const reserve = num('BUILD_FALLBACK_RESERVE_MS');
+  const client = read('src/platform/coach/coachClient.ts');
+
+  it('measured: 37–45 s in, the misses just past 47 — so the deadline is past a minute and a half', () => {
+    expect(PLAN_BUILD_SAID_MS - reserve).toBeGreaterThanOrEqual(100_000);
+    expect(PLAN_BUILD_BUDGET_MS - reserve).toBeGreaterThanOrEqual(100_000);
+    expect(num('BUILD_WAIT_CAP_BEAT_MS')).toBeGreaterThanOrEqual(PLAN_BUILD_SAID_MS);
+  });
+
+  it('⛔ a wait past a minute exists ONLY on a line that is kept alive', () => {
+    // the app says it can read the heartbeat on exactly the calls that declare a wait
+    expect(client).toContain("...(kind === 'build' && wait && wait > 0 ? { beat: true } : {}),");
+    // the Worker answers such a build through the heartbeat, and nothing else
+    expect(worker).toMatch(/if \(call\.kind === 'build' && call\.beat === true\) \{[\s\S]{0,220}?return withHeartbeat\(modelStage\(\),/);
+    expect(worker).toContain('return modelStage();');
+    // the beat is far inside the sixty silent seconds a phone allows
+    expect(num('BEAT_MS')).toBeLessThanOrEqual(15_000);
+    // …and no compressor may hold it back
+    expect(worker).toContain("'content-encoding': 'identity',");
+    expect(worker).toContain("'cache-control': 'no-store, no-transform',");
+  });
+
+  it('the app reads the answer off that line, and a status that rode in the body is a status', () => {
+    expect(client).toContain("if (!type.includes('text/event-stream')) return response.json();");
+    expect(client).toContain("if (typeof body.http === 'number' && body.http !== 200) {");
   });
 });
 

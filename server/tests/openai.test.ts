@@ -171,3 +171,96 @@ test("OpenAI's refusal is relayed by its status alone — never its text", async
   assert.equal(body.why, undefined);
   assert.doesNotMatch(JSON.stringify(body), /secret/);
 });
+
+/*
+ * ════ THE HEARTBEAT (2026-10-11) ════
+ *
+ * Founder: *"מאשר הכל… העיקר שהוא יקבל את התוכנית הטובה ביותר עבורו."* The strong model needs more
+ * than the 47 s it had for an athlete who states her lifts; a phone cuts a connection that is silent
+ * for sixty. So a build whose app says `beat: true` is answered as an event stream that is never
+ * silent, and only that build may declare the longer wait.
+ */
+
+/** A fake OpenAI that takes `ms` to answer — long enough for beats to go out first. */
+const slow = (ms: number, answer: (asked: Asked) => Response) =>
+  fakeOpenAI(() => new Response(null)) && (globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url !== 'https://api.openai.com/v1/responses') throw new Error(`unexpected network call: ${url}`);
+    await new Promise((r) => setTimeout(r, ms));
+    return answer(JSON.parse(String(init?.body)) as Asked);
+  }) as typeof fetch);
+
+/** The stream as the app reads it: every line, and the JSON of the one `data:` event. */
+async function readBeat(res: Response): Promise<{ beats: number; data: Reply & { http?: number }; raw: string }> {
+  const raw = await res.text();
+  const lines = raw.split('\n').filter((l) => l.length > 0);
+  const data = lines.filter((l) => l.startsWith('data: '));
+  assert.equal(data.length, 1, 'exactly one data event');
+  assert.equal(lines[lines.length - 1], data[0], 'the answer is the last thing on the line');
+  return { beats: lines.filter((l) => l === ': beat').length, data: JSON.parse(data[0].slice(6)), raw };
+}
+
+test('⛔ a build that reads a heartbeat is answered on a line that is never silent', async () => {
+  slow(70, (a) => finished('{"v":7}', a.model));
+  const res = await worker.fetch(
+    post({ blocks: [{ text: 'build' }], kind: 'build', schema: SCHEMA, wait: 100_000, beat: true }),
+    env({ BEAT_MS: '10' }),
+  );
+  assert.equal(res.status, 200);
+  assert.match(String(res.headers.get('content-type')), /^text\/event-stream/);
+  // a compressor would hold the beats back until the body ends — the same silence by another road
+  assert.equal(res.headers.get('content-encoding'), 'identity');
+  assert.match(String(res.headers.get('cache-control')), /no-transform/);
+  const { beats, data, raw } = await readBeat(res);
+  assert.ok(raw.startsWith(': beat\n\n'), 'the first byte goes out at once');
+  assert.ok(beats >= 3, `beats went out while the model thought (${beats})`);
+  // …and the answer is exactly the reply the plain road gives
+  assert.equal(data.text, '{"v":7}');
+  assert.equal(data.finishReason, 'STOP');
+  assert.equal(data.model, 'gpt-6-sol');
+  assert.equal(data.effort, 'high');
+  assert.equal(data.http, undefined);
+});
+
+test('⛔ the same build WITHOUT the word is answered as it always was — one JSON body', async () => {
+  fakeOpenAI((a) => finished('{"v":8}', a.model));
+  const res = await worker.fetch(post({ blocks: [{ text: 'build' }], kind: 'build', schema: SCHEMA, wait: 40_000 }), env({ BEAT_MS: '10' }));
+  assert.match(String(res.headers.get('content-type')), /^application\/json/);
+  assert.equal(((await res.json()) as Reply).text, '{"v":8}');
+  // …and so is anything that is not a build, whatever it says
+  const review = await worker.fetch(post({ blocks: [{ text: 'my week' }], kind: 'review', schema: SCHEMA, beat: true }), env({ BEAT_MS: '10' }));
+  assert.match(String(review.headers.get('content-type')), /^application\/json/);
+});
+
+test('a miss of the hard-thinking call still lands the fast week at the end of the same stream', async () => {
+  const seen = fakeOpenAI((a) =>
+    a.reasoning.effort === 'high'
+      ? new Response('{"error":{"message":"You exceeded your current quota"}}', { status: 429 })
+      : finished('{"v":9}', a.model),
+  );
+  const res = await worker.fetch(
+    post({ blocks: [{ text: 'build' }], kind: 'build', schema: SCHEMA, wait: 100_000, beat: true }),
+    env({ BEAT_MS: '10' }),
+  );
+  const { data } = await readBeat(res);
+  assert.equal(data.effort, 'low');
+  assert.equal(data.text, '{"v":9}');
+  assert.match(String(data.strongMiss), /^http_429/);
+  assert.deepEqual(seen.map((a) => `${a.model}@${a.reasoning.effort}`), ['gpt-6-sol@high', 'gpt-6-sol@low']);
+});
+
+test('⛔ a wall still answers with its own status — the stream starts only where the model does', async () => {
+  fakeOpenAI(() => {
+    throw new Error('a wall let a request through to the model');
+  });
+  const bad = new Request('https://hush-coach.test', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-hush-token': 'wrong' },
+    body: JSON.stringify({ blocks: [{ text: 'build' }], kind: 'build', schema: SCHEMA, wait: 100_000, beat: true }),
+  });
+  const res = await worker.fetch(bad, env({ BEAT_MS: '10' }));
+  assert.equal(res.status, 401);
+  assert.match(String(res.headers.get('content-type')), /^application\/json/);
+  const empty = await worker.fetch(post({ blocks: [], kind: 'build', schema: SCHEMA, beat: true }), env({ BEAT_MS: '10' }));
+  assert.equal(empty.status, 400);
+});

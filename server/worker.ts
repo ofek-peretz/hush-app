@@ -42,6 +42,8 @@ export interface Env {
    * production, the headers are ignored.
    */
   PROBE?: string;
+  /** Test seam: the heartbeat's interval in ms (`BEAT_MS` otherwise). Never set in `[vars]`. */
+  BEAT_MS?: string;
   /** The bake-off's Claude arms only (`probeProviders.ts`, PROBE). Unused by production since 2026-09-28. */
   ANTHROPIC_API_KEY?: string;
   /**
@@ -316,6 +318,22 @@ const BUILD_FALLBACK_RESERVE_MS = 13_000;
 /** A client may say it waits longer than it does; the strong model is never given more than this. */
 const BUILD_WAIT_CAP_MS = 60_000;
 /**
+ * ⛔ …AND TWICE THAT FOR AN APP THAT KEEPS THE LINE ALIVE (founder, 2026-10-11: *"מאשר הכל… העיקר
+ * שהוא יקבל את התוכנית הטובה ביותר עבורו"*).
+ *
+ * Measured the same day on this Worker, seven builds for an athlete who states her lifts (every
+ * lift of the week priced): five answered by Sol @ high in 37–45 s, two missed the 47 s deadline
+ * (`wait − reserve`) and were written by the fast lane at ~58 s — the low-effort week, after the
+ * longer wait. The distribution sits ON the old deadline. A hundred and twenty seconds of declared
+ * wait gives the strong model 107; the fast model keeps its reserve after it, as before.
+ *
+ * Only with `beat`: a client that cannot read the heartbeat is a client whose connection dies at
+ * sixty silent seconds, and promising it more would turn a slow week into no week.
+ */
+const BUILD_WAIT_CAP_BEAT_MS = 120_000;
+/** How often the heartbeat goes out while a build is being written — well inside any idle timeout. */
+const BEAT_MS = 10_000;
+/**
  * ⛔ THIS CAP INCLUDES THINKING, AND AT 8192 IT WAS CUTTING PROGRAMMES IN HALF.
  *
  * ⚠️ WATCHED HAPPEN, 2026-08-02: two replies came back as JSON that stopped mid-string. The app
@@ -383,6 +401,17 @@ interface CoachCall {
    * app before that date — means the fast model alone, because nothing said there was time.
    */
   wait?: number;
+  /**
+   * ════ "I CAN READ A HEARTBEAT" (2026-10-11) ════
+   *
+   * Sent by an app that reads the reply as an event stream. With it, a `build` is answered as
+   * `text/event-stream`: a comment line every `BEAT_MS` while the model thinks, then ONE `data:`
+   * line holding exactly the JSON this Worker would otherwise have returned (see `withHeartbeat`).
+   * It is what lets `wait` go past a minute — a connection that is silent for sixty seconds is cut
+   * by the phone's own networking, so the strong model's deadline could never be longer than that.
+   * Absent — every app before that date — nothing changes: one JSON body, the old cap.
+   */
+  beat?: boolean;
   /**
    * ════ WHAT SHE SHOWED IT ════
    *
@@ -473,6 +502,81 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json; charset=utf-8', ...CORS },
+  });
+}
+
+/**
+ * ════ THE SAME ANSWER, WITH THE LINE KEPT ALIVE WHILE IT IS WRITTEN (2026-10-11) ════
+ *
+ * `work` is the reply this Worker would have returned. It goes out unchanged as the last event of
+ * a `text/event-stream`, after a comment line every `everyMs` — the standard keep-alive of that
+ * format, which every intermediary passes through unbuffered and no client mistakes for data.
+ *
+ *   : beat                      ← at once, then every ten seconds
+ *
+ *   data: {"text":"…","finishReason":"STOP",…}      ← once, the JSON `json()` would have sent
+ *
+ * ⚠️ THE STATUS LINE IS SPENT ON THE FIRST BYTE. Everything decided BEFORE the model (the token,
+ * the ceilings, the size walls) is still answered as plain JSON with its real status, because
+ * the stream does not start until the model stage does. A failure INSIDE that stage can no longer
+ * change the status, so it rides in the body as `http` — the status the plain reply would have
+ * carried — and the app reads it exactly as it reads a status.
+ *
+ * ⚠️ `content-encoding: identity` + `no-transform`: a compressor holds back small early chunks
+ * until the body ends, which would deliver every heartbeat together with the answer — the same
+ * silence, by another road.
+ */
+function withHeartbeat(work: Promise<Response>, everyMs: number): Response {
+  const enc = new TextEncoder();
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stop = () => {
+    if (timer) clearInterval(timer);
+    timer = undefined;
+  };
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const say = (text: string) => {
+        try {
+          controller.enqueue(enc.encode(text));
+        } catch {
+          stop(); // the phone hung up; there is nobody to keep a line open for
+        }
+      };
+      say(': beat\n\n');
+      timer = setInterval(() => say(': beat\n\n'), everyMs);
+      work
+        .then(async (res) => {
+          const text = await res.text();
+          if (res.status === 200) return text;
+          try {
+            return JSON.stringify({ ...(JSON.parse(text) as Record<string, unknown>), http: res.status });
+          } catch {
+            return JSON.stringify({ error: 'upstream_error', http: res.status });
+          }
+        })
+        .catch(() => JSON.stringify({ error: 'upstream_error', http: 502 }))
+        .then((line) => {
+          stop();
+          say(`data: ${line}\n\n`);
+          try {
+            controller.close();
+          } catch {
+            /* already closed by a hang-up */
+          }
+        });
+    },
+    cancel() {
+      stop();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-store, no-transform',
+      'content-encoding': 'identity',
+      ...CORS,
+    },
   });
 }
 
@@ -785,6 +889,13 @@ export default {
       if (img.data.length > MAX_IMAGE_BYTES) return json({ error: 'image_too_large' }, 413);
     }
 
+    /*
+     * ⛔ EVERYTHING FROM HERE TO THE END IS THE MODEL STAGE, AS ONE FUNCTION (2026-10-11). Every wall
+     * above has already answered with its own status; what is left is the part that takes time —
+     * and a build that says it can read a heartbeat gets this same function's reply at the end of
+     * a kept-alive stream instead of after a silence (`withHeartbeat`). One body builds both.
+     */
+    const modelStage = async (): Promise<Response> => {
     const probing = env.PROBE === '1';
     const probeModel = probing ? (request.headers.get('x-probe-model') ?? '').trim() : '';
     const isBuild = call.kind === 'build';
@@ -858,7 +969,7 @@ export default {
      * miss of any kind — no key, no credit, a refusal, a cut or unreadable answer, the deadline —
      * falls through to the fast model below, and the reply says which model answered.
      */
-    const wait = typeof call.wait === 'number' && Number.isFinite(call.wait) ? Math.min(call.wait, BUILD_WAIT_CAP_MS) : 0;
+    const wait = typeof call.wait === 'number' && Number.isFinite(call.wait) ? Math.min(call.wait, call.beat === true ? BUILD_WAIT_CAP_BEAT_MS : BUILD_WAIT_CAP_MS) : 0;
     let strongMiss: string | undefined;
     if (isBuild && call.schema && !probing && wait >= BUILD_STRONG_MIN_WAIT_MS) {
       const strong = await askStrongModel(
@@ -1172,5 +1283,12 @@ export default {
       // Why the strong model did not write this week, when it was asked to — the one trace of a miss.
       ...(strongMiss ? { strongMiss: strongMiss.slice(0, 160) } : {}),
     });
+    };
+    // A build whose app reads a heartbeat: the line is kept alive while the week is written.
+    if (call.kind === 'build' && call.beat === true) {
+      const every = Number(env.BEAT_MS);
+      return withHeartbeat(modelStage(), Number.isFinite(every) && every > 0 ? every : BEAT_MS);
+    }
+    return modelStage();
   },
 };

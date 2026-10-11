@@ -101,7 +101,7 @@ export const PLAN_BUILD_ATTEMPTS = 3;
  * hand it to Claude Opus 5.5. The wait screen can hold it — it is a breathing body, not a finite
  * walk (2026-09-14) — and a miss without a sentence still lands the local week, as before.
  */
-export const PLAN_BUILD_BUDGET_MS = 60_000;
+export const PLAN_BUILD_BUDGET_MS = 120_000;
 /**
  * ⛔ AND SHE WAITS LONGER ONLY WHEN SHE HAS SOMETHING TO LOSE (2026-08-30).
  *
@@ -147,8 +147,18 @@ export const PLAN_BUILD_BUDGET_MS = 60_000;
  * A sentence she wrote is now answered by Claude Opus 5.5 (~13 s to its first token, then a week at
  * ~80 tokens/s), with 13 s of this kept back for the fast model should it miss — see the Worker's
  * `BUILD_STRONG_MIN_WAIT_MS`. Since the same day the empty ask waits as long (`PLAN_BUILD_BUDGET_MS`).
+ *
+ * ⛔ 60 → 120 s ON 2026-10-11, AND THE REASON IS MEASURED (founder: *"מאשר הכל… העיקר שהוא יקבל את
+ * התוכנית הטובה ביותר עבורו"*). Seven builds for an athlete who states her lifts, as the app sends
+ * them: five written by the strong model in 37–45 s, two that missed its 47 s deadline (60 − the
+ * fast lane's 13) and were written by the low-effort fallback at ~58 s — the weaker week, after the
+ * longer wait. The distribution sat on the deadline. With 120 s declared the strong model has 107.
+ *
+ * ⚠️ IT IS ONLY POSSIBLE BECAUSE THE LINE IS KEPT ALIVE (`coachClient`'s `beat`): a phone cuts a
+ * connection that is silent for sixty seconds, which is what held this number at sixty. And it is a
+ * CEILING, not a wait: the typical build still lands in 20–45 s; only the slow tail uses the room.
  */
-export const PLAN_BUILD_SAID_MS = 60_000;
+export const PLAN_BUILD_SAID_MS = 120_000;
 
 /**
  * Ask the model for a week. Never throws; never retries; never writes.

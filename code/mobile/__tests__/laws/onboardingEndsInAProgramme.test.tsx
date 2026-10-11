@@ -219,7 +219,14 @@ describe('⛔ the intake never freezes', () => {
      * pinned is that the reveal is still BOUNDED — a wait, one fill, a name — and never a second
      * minute: nothing may be added to it without this number saying so.
      */
-    expect({ worstMs: worst, underAMinuteAndAQuarter: worst <= 75_000 }).toEqual({ worstMs: worst, underAMinuteAndAQuarter: true });
+    /*
+     * ⛔ AND THE MINUTE BECAME TWO ON 2026-10-11, BY THE FOUNDER'S WORD (*"מאשר הכל"*, on a plan that
+     * said so: "in a rare case the wait reaches two minutes"). The strong model was missing its
+     * deadline on one build in three for an athlete who states her lifts, and a miss is the weaker
+     * week. The TYPICAL reveal is unchanged — a 20–45 s answer, a fill, a name; this is the ceiling
+     * for the slow tail, and it is still a ceiling: a wait, one fill, a name.
+     */
+    expect({ worstMs: worst, underTwoMinutesAndAQuarter: worst <= 135_000 }).toEqual({ worstMs: worst, underTwoMinutesAndAQuarter: true });
   });
 });
 

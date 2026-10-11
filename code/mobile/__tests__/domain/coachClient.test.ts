@@ -234,3 +234,70 @@ describe('what it never does', () => {
     expect('plan' in r).toBe(false);
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════
+ * ⛔ THE BUILD'S LINE IS KEPT ALIVE, AND THE ANSWER IS READ OFF IT (2026-10-11).
+ *
+ * The strong model needs more than a minute's worth of room for an athlete who states her lifts,
+ * and a phone cuts a connection that is silent for sixty seconds. So a build that declares a wait
+ * says it can read a heartbeat, and the Worker answers as an event stream: comment lines while the
+ * model thinks, then one `data:` line that is the same JSON a plain reply holds.
+ * ═══════════════════════════════════════════════════════════
+ */
+describe('a build answered on a kept-alive line', () => {
+  const stream = (text: string) => ({
+    headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'text/event-stream; charset=utf-8' : null) },
+    text: async () => text,
+    json: async () => {
+      throw new Error('an event stream is not one JSON body');
+    },
+  });
+  const week = { text: '{"days":[]}', model: 'gpt-6-sol', finishReason: 'STOP', usage: { output_tokens: 5 }, effort: 'high' };
+
+  it('⛔ the app says it can read a heartbeat on a build that declares a wait — and only there', async () => {
+    const { askCoach } = load();
+    const spy = fetchOnce({ json: async () => week });
+    await askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000);
+    expect(JSON.parse(spy.mock.calls[0][1].body)).toMatchObject({ kind: 'build', wait: 120_000, beat: true });
+    // a review, a chat, a build with no wait: nothing new on the wire
+    const quiet = fetchOnce({ json: async () => week });
+    await askCoach(request, { type: 'object' }, 'low', undefined, 'review');
+    await askCoach(request, { type: 'object' }, 'low', undefined, 'build');
+    for (const call of quiet.mock.calls) expect(JSON.parse(call[1].body)).not.toHaveProperty('beat');
+  });
+
+  it('⛔ the answer is the one `data:` line, whatever number of beats came before it', async () => {
+    const { askCoach } = load();
+    fetchOnce(stream(`: beat\n\n: beat\n\n: beat\n\ndata: ${JSON.stringify(week)}\n\n`));
+    await expect(askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000)).resolves.toEqual({
+      ok: true,
+      text: '{"days":[]}',
+      model: 'gpt-6-sol',
+      usage: { output_tokens: 5 },
+    });
+  });
+
+  it('⛔ a failure inside the model stage rides in the body as `http`, and is read as a status', async () => {
+    const { askCoach } = load();
+    fetchOnce(stream(`: beat\n\ndata: ${JSON.stringify({ error: 'upstream_error', http: 502 })}\n\n`));
+    await expect(askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000)).resolves.toEqual({ ok: false, reason: 'upstream' });
+    fetchOnce(stream(`: beat\n\ndata: ${JSON.stringify({ error: 'rate_limited', http: 429 })}\n\n`));
+    await expect(askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000)).resolves.toEqual({ ok: false, reason: 'rate_limited' });
+  });
+
+  it('⛔ a line that died before its answer is a failure — beats alone are not a week', async () => {
+    const { askCoach } = load();
+    fetchOnce(stream(': beat\n\n: beat\n\n'));
+    await expect(askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000)).resolves.toEqual({ ok: false, reason: 'upstream' });
+    // …and neither is an answer cut in half
+    fetchOnce(stream(': beat\n\ndata: {"text":"{\\"days\\":['));
+    await expect(askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000)).resolves.toEqual({ ok: false, reason: 'upstream' });
+  });
+
+  it('a Worker that predates the heartbeat still answers this app: one JSON body, read as always', async () => {
+    const { askCoach } = load();
+    fetchOnce({ json: async () => week });
+    await expect(askCoach(request, { type: 'object' }, 'low', undefined, 'build', 120_000)).resolves.toMatchObject({ ok: true, text: '{"days":[]}' });
+  });
+});
