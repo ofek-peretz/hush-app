@@ -275,7 +275,24 @@ describe('1b · the model is not locked in — a free hand, one vocabulary', () 
      * attached, which is why something has to watch this number.
      */
     const instructionsOnly = whole.slice(0, whole.indexOf(CATALOGUE_HEADER));
-    expect(instructionsOnly.length).toBeLessThan(380);
+    /*
+     * ⛔ 337 → 555, AND THE 218 CHARACTERS ARE THE FOUNDER'S OWN TWO SENTENCES (2026-10-11): *"את
+     * תוכנית האימון הטובה ביותר המותאמת אליו, כך שכל מאמן כולל הכי טובים בעולם יתרשמו… מבלי
+     * להתייחס למגבלת הזמן, העיקר שהוא יקבל את מה שהוא צריך."* The block had never named a standard,
+     * and the model's own default was a compact week. The size is still a law in both directions —
+     * the ceiling moves by exactly what he asked for and stays a ceiling — and what it bought was
+     * measured on the live Worker before it shipped (`buildPrompt.instructions`, `planBuildBestPlanAB`).
+     */
+    expect(instructionsOnly.length).toBeLessThan(580);
+    expect(instructionsOnly.length).toBeGreaterThan(500);
+    expect(instructionsOnly).toContain('Write the best training week this athlete could be given — one the world’s best coaches would respect.');
+    expect(instructionsOnly).toContain('Session length is no constraint: choose every exercise and every set count only by what this athlete needs.');
+    // …and it takes time OUT of the decision; it does not ask for more (the wording that did was measured and dropped).
+    for (const more of ['Never trim', 'more sets', 'more exercises', 'as long as']) {
+      expect({ more, present: instructionsOnly.includes(more) }).toEqual({ more, present: false });
+    }
+    // the title's language is said outright — "the athlete's language" has nothing to read when she asked for nothing
+    expect(instructionsOnly).toContain('Write the week’s title and each day’s name in Hebrew.');
     // the day count is hers; the catalogue is a vocabulary; load/reps/rest are the engine's; the
     // day name is read by her. Nothing else.
     expect(instructionsOnly).toContain('Exactly the number of days the athlete asked for');

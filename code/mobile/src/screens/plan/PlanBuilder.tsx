@@ -628,6 +628,19 @@ export function PlanBuilderView(props: PlanBuilderViewProps) {
   const adviceLine = (f: WeekFinding): string | null => {
     switch (f.rule) {
       case 'session_length':
+        /*
+         * ⛔ THE CLOCK IS NOT A JUDGE OF HER WEEK (founder, 2026-10-11): *"שיבנה את התוכנית הטובה
+         * ביותר עבור מתאמן מבלי להתייחס למגבלת הזמן, העיקר שהוא יקבל את מה שהוא צריך."*
+         *
+         * Walked the same day: under a week the coach had just written for him, "my reading" told
+         * the athlete that four of his five days were "under the 45-minute floor" — the app
+         * marking its own coach's work down for a rule about minutes that he has now struck. The
+         * coach is briefed to decide every exercise and every set by need alone (`buildPrompt`),
+         * so a day is as long as what it holds; the minutes are still PRINTED on the day, as a
+         * fact, and are no longer an opinion. A human coach writing for a trainee (`fa`) keeps the
+         * line — there it is one professional's arithmetic handed to another.
+         */
+        if (!fa) return null;
         // The judge reports BOTH bounds under one rule: `limit` is the bound that was crossed.
         return f.measured < f.limit
           ? t('builder.advice.session_short', { day: f.subject, min: f.measured, floor: f.limit })

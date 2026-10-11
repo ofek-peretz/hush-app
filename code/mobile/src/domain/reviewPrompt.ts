@@ -41,12 +41,26 @@ import { languageName, type PromptBlock } from '@/domain/coachPrompt';
 import { BUILDER_SETS_DEFAULT, BUILDER_SETS_MAX, BUILDER_SETS_MIN } from '@/domain/planBuilder';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const REVIEW_PROMPT_VERSION = 1;
+export const REVIEW_PROMPT_VERSION = 2;
 
 /** The cached half: identical for every athlete, so it goes first (OpenAI caches the prefix). */
 function instructions(): string {
   return [
     'Review a training week an athlete has in this app, and reply with the edits you would make to it.',
+    /*
+     * ⛔ THE CLOCK IS STRUCK HERE TOO — AS A FACT, NOT AS A VERDICT (founder, 2026-10-11; see
+     * `buildPrompt.instructions`). The reviewer is the second coach she meets, and on 2026-10-10 it
+     * defended two-set lifts with "so the session stays inside the hour" — an hour nobody had set.
+     * The invented fact came off its sheet that day; this says the true one: in this app the
+     * length of a session is not a thing her week is traded against.
+     *
+     * ⚠️ ONLY THAT. The builder is also told what the week is measured against ("the best week…
+     * one the world's best coaches would respect"); this block is not, because
+     * `theReviewIsToldTheTruthAndDecidesItself` refuses any steering word here — a review is
+     * handed the truth and decides for itself. "Time is not a constraint" is a truth about the
+     * product; "be the best" would be a verdict it is pushed towards.
+     */
+    'Session length is no constraint in this app: every exercise and every set count is judged only by what she needs.',
     '',
     'WHAT YOU ARE GIVEN',
     '· "programme" — her week as it stands. Every day carries "number", its number in her week: the "day" of',

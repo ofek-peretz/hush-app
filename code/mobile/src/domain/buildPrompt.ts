@@ -90,7 +90,7 @@ import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
 import { statedLiftsLine, type StatedLift } from '@/domain/statedLifts';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 7;
+export const BUILD_PROMPT_VERSION = 8;
 
 /**
  * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
@@ -433,7 +433,8 @@ export function catalogueLines({ regressions = false }: { regressions?: boolean 
 }
 
 /**
- * The instructions — 337 characters, and only what the founder named.
+ * The instructions — 555 characters since 2026-10-11 (337 before the standard was named; see the
+ * note above `instructions`), and only what the founder named.
  *
  * ⛔ HIS LIST, VERBATIM (2026-08-30): *"הכי קצר שיש ושיכיל את כל התרגילים, ובמידה והוא מנסה להשתמש
  * בתרגיל שלא קיים במאגר שזה יתריע לנו שנוסיף את זה, ושלא יהיה מצב שהוא מתכוון לתרגיל מסוים והוא לא
@@ -478,16 +479,62 @@ export function catalogueLines({ regressions = false }: { regressions?: boolean 
  * back. And there are no EXAMPLES of any kind: an example is the strongest instruction a prompt
  * contains, which is what *"אני לא רוצה דוגמאות כלשהן כך שתנעל את הבינה"* is about.
  */
+/*
+ * ════ ⛔ THE STANDARD IS NAMED, AND THE CLOCK IS STRUCK (founder, 2026-10-11) ════
+ *
+ *   > *"אני לא מחפש אימונים מלאים יותר — אני מחפש את האימונים הטובים ביותר שיתנו למתאמן את תוכנית
+ *   > האימון הטובה ביותר המותאמת אליו, כך שכל מאמן כולל הכי טובים בעולם יתרשמו מהתוכנית הזאת.
+ *   > שיבנה את התוכנית הטובה ביותר עבור מתאמן מבלי להתייחס למגבלת הזמן, העיקר שהוא יקבל את מה
+ *   > שהוא צריך."*
+ *
+ * This block has never named a time limit. It had never named a STANDARD either — it said "write a
+ * training week" — and left to itself the model wrote a compact one: 35–45 minute days, two-set
+ * accessories, and for an advanced man (bench 100 × 6) six sets of quad work a week. Nobody told it
+ * to; nobody told it not to. Two sentences now, both his: what the week is measured against, and
+ * that the length of a session is not a thing it may trade against.
+ *
+ * ── MEASURED ON THE LIVE WORKER, ON THE MODEL HER INTAKE GETS (`planBuildBestPlanAB`) ───────────
+ * The wait rides along (60 s), so this is the strong lane, not the fast one. One athlete per row,
+ * sets a week by muscle (direct work only):
+ *
+ *     athlete                         before (v7)                     after (v8)
+ *     ─────────────────────────────   ─────────────────────────────   ─────────────────────────────
+ *     advanced man, 5 days, "PPL,     73 sets · quads 6 · chest 10     92 sets · quads 10 · chest 10
+ *     emphasis on back + shoulders"   biceps 5 · triceps 5 · no core   biceps 8 · triceps 10 · core 3
+ *                                     back 22 · shoulders 13           back 25 · shoulders 13
+ *     second-year man, 4 days,        65 sets · chest 8 · shoulders 5  77 sets · chest 11 · shoulders 8
+ *     nothing asked                   half the lifts at two sets       a third of them
+ *     beginner woman, 3 days,         37 sets                          36 sets
+ *     "glutes, legs, a strong back"
+ *
+ * ⚠️ READ THE THIRD ROW BEFORE THE FIRST TWO. The sentence does not ask for MORE — a wording that
+ * did ("never trim exercises, sets or weekly volume") wrote 102 sets and a nine-lift leg day, and
+ * was dropped for it. This one takes time OUT of the decision and leaves need in it: the beginner's
+ * week did not grow, because a beginner does not need it to; the two trained men's weeks did,
+ * exactly where they were thin. That is "the best", not "fuller", and it is the founder's own
+ * distinction.
+ *
+ * ⚠️ HER OWN SENTENCE IS STILL THE LOUDEST THING IN THE WEEK, which is the cost this block's length
+ * has always been watched for (the table below). The muscles she named took MORE sets, not fewer
+ * (35 → 38); their SHARE fell (0.48 → 0.41) only because the muscles the old week had starved were
+ * brought up beside them.
+ *
+ * ⚠️ AND THE TITLE'S LANGUAGE IS SAID. It rode on "in the athlete's language" in the schema; with
+ * nothing asked there is no Hebrew of hers to read it from, and one run of this experiment came
+ * back titled in English over five Hebrew day names. The line that names the day's language names
+ * the title's too.
+ */
 function instructions(locale: 'en' | 'he'): string {
   return [
-    'Write a training week for the athlete below.',
+    'Write the best training week this athlete could be given — one the world’s best coaches would respect.',
     '',
+    '· Session length is no constraint: choose every exercise and every set count only by what this athlete needs.',
     '· Exactly the number of days the athlete asked for.',
     '· Only ids from the CATALOGUE. A line is `id = name | name | name` — one lift under all the',
     '  names we know it by. Never invent an id.',
     '· A lift you want that is not there: put the name in `missing` — name it, do not silently swap it.',
 
-    `· Write each day’s name in ${locale === 'he' ? 'Hebrew' : 'English'}.`,
+    `· Write the week’s title and each day’s name in ${locale === 'he' ? 'Hebrew' : 'English'}.`,
   ].join('\n');
 }
 
