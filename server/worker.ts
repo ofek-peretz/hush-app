@@ -327,8 +327,11 @@ const BUILD_WAIT_CAP_MS = 60_000;
  * longer wait. The distribution sits ON the old deadline. A hundred and twenty seconds of declared
  * wait gives the strong model 107; the fast model keeps its reserve after it, as before.
  *
- * Only with `beat`: a client that cannot read the heartbeat is a client whose connection dies at
- * sixty silent seconds, and promising it more would turn a slow week into no week.
+ * Only with `beat`: the longer wait is promised on a line this Worker keeps alive, never on a
+ * silent one. (Measured 2026-10-12 on iOS's networking — `code/mobile/native-tests/net-probe`: a
+ * request left at URLSession's default is cut after sixty silent seconds; the app's own requests
+ * set that timeout to 0 and survived 76; with the beat a 110 s answer arrived with no silence
+ * over 11 s. The beat makes the wait independent of which of those a client is.)
  */
 const BUILD_WAIT_CAP_BEAT_MS = 120_000;
 /** How often the heartbeat goes out while a build is being written — well inside any idle timeout. */
@@ -407,8 +410,8 @@ interface CoachCall {
    * Sent by an app that reads the reply as an event stream. With it, a `build` is answered as
    * `text/event-stream`: a comment line every `BEAT_MS` while the model thinks, then ONE `data:`
    * line holding exactly the JSON this Worker would otherwise have returned (see `withHeartbeat`).
-   * It is what lets `wait` go past a minute — a connection that is silent for sixty seconds is cut
-   * by the phone's own networking, so the strong model's deadline could never be longer than that.
+   * It is what lets `wait` go past a minute: the longer wait is given only on a line that is
+   * never silent for more than `BEAT_MS` (see `BUILD_WAIT_CAP_BEAT_MS` for what was measured).
    * Absent — every app before that date — nothing changes: one JSON body, the old cap.
    */
   beat?: boolean;

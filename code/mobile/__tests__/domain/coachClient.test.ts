@@ -240,7 +240,8 @@ describe('what it never does', () => {
  * ⛔ THE BUILD'S LINE IS KEPT ALIVE, AND THE ANSWER IS READ OFF IT (2026-10-11).
  *
  * The strong model needs more than a minute's worth of room for an athlete who states her lifts,
- * and a phone cuts a connection that is silent for sixty seconds. So a build that declares a wait
+ * and that wait is given only on a line that is never silent (`coachClient`'s `beat` holds what a
+ * quiet line survives on iOS, measured). So a build that declares a wait
  * says it can read a heartbeat, and the Worker answers as an event stream: comment lines while the
  * model thinks, then one `data:` line that is the same JSON a plain reply holds.
  * ═══════════════════════════════════════════════════════════

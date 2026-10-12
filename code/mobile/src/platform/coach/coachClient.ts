@@ -251,12 +251,20 @@ export async function askCoach(
         ...(wait && wait > 0 ? { wait: Math.round(wait) } : {}),
         /*
          * ⛔ "I CAN READ A HEARTBEAT" (2026-10-11) — sent with every build that declares a wait.
-         * The Worker then answers on a line it keeps alive (`readReply` below), which is the only
-         * way that wait may pass a minute: a connection silent for sixty seconds is cut by the
-         * phone's own networking (React Native leaves `NSURLSession`'s idle timeout at its default
-         * — `RCTNetworking.mm` passes `timeout: 0`), so the strong model's deadline was pinned
-         * under it, and one build in three for an athlete who states her lifts was being written
-         * by the fast lane instead.
+         * The Worker then answers on a line it keeps alive (`readReply` below), and only such a
+         * build may wait past a minute — which is what lets the strong model finish: its answers
+         * for an athlete who states her lifts take 41–61 s, and half of them were being cut at
+         * the old 47 s deadline and written by the fast lane instead.
+         *
+         * ⚠️ WHAT THE BEAT IS FOR, MEASURED RATHER THAN ASSUMED (2026-10-12,
+         * `native-tests/net-probe`, on iOS's own networking in the simulator). Apple's request
+         * timeout is an IDLE timer, 60 s by default, reset whenever data arrives — and a request
+         * left at that default WAS cut at 60.3 s on a silent line. React Native does not leave it
+         * at the default: `RCTNetworking.mm` sends `timeoutInterval = 0`, and with that a line
+         * silent for 76 s still arrived. So on this app's own settings the sixty seconds were
+         * never the wall I first took them for; the beat is what makes the wait independent of
+         * that setting (and of every router between her phone and the edge that drops an idle
+         * connection). With a beat every 10 s, a 110 s answer arrived with no silence over 11 s.
          */
         ...(kind === 'build' && wait && wait > 0 ? { beat: true } : {}),
       }),

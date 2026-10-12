@@ -176,9 +176,9 @@ test("OpenAI's refusal is relayed by its status alone — never its text", async
  * ════ THE HEARTBEAT (2026-10-11) ════
  *
  * Founder: *"מאשר הכל… העיקר שהוא יקבל את התוכנית הטובה ביותר עבורו."* The strong model needs more
- * than the 47 s it had for an athlete who states her lifts; a phone cuts a connection that is silent
- * for sixty. So a build whose app says `beat: true` is answered as an event stream that is never
- * silent, and only that build may declare the longer wait.
+ * than the 47 s it had for an athlete who states her lifts, and the longer wait is promised only on
+ * a line that is kept alive. So a build whose app says `beat: true` is answered as an event stream
+ * that is never silent, and only that build may declare the longer wait.
  */
 
 /** A fake OpenAI that takes `ms` to answer — long enough for beats to go out first. */

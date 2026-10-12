@@ -1,7 +1,7 @@
 # How long Apple's networking waits on a quiet line — ON DEMAND ONLY.
 #
-# The week's build may take up to 107 s; a phone cuts a connection that is silent for sixty; the
-# coach Worker therefore keeps the line alive with a beat every ten seconds. Whether that holds is a
+# The week's build may take up to 107 s; Apple's request timeout is an idle timer of sixty seconds;
+# the coach Worker keeps the line alive with a beat every ten seconds. Whether that holds is a
 # fact about URLSession, and no Swift runs on the machine this code is written on — so this job
 # asks URLSession itself, natively on macOS and inside the iOS simulator, with the settings React
 # Native uses (`code/mobile/native-tests/net-probe/probe.swift` holds the question and the

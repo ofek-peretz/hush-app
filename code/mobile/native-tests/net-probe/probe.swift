@@ -19,6 +19,18 @@
 //
 // Built twice by `probe.sh`: for macOS, and for the iOS SIMULATOR (run with `simctl spawn`, so the
 // networking under it is iOS's own).
+//
+// THE ANSWER, 2026-10-12 — iOS simulator, runtime 26.5 (iPhone 17 Pro), commit 8794052:
+//   defaults   configuration.timeoutIntervalForRequest = 60 s · a new URLRequest.timeoutInterval = 60 s
+//   E  silent 75 s, request at its default         CUT after 60.3 s  (NSURLErrorDomain -1001)
+//   A  silent 75 s, timeoutInterval 0 (RN's)       ARRIVED after 76.7 s
+//   D  headers, then silent 75 s, timeoutInterval 0 ARRIVED after 76.6 s
+//   B  a beat every 10 s for 75 s                  ARRIVED after 75.8 s · longest silence 10.7 s
+//   C  a beat every 10 s for 110 s (worst case)    ARRIVED after 110.3 s · longest silence 10.9 s
+// So: the sixty-second cut is real for a request left at its default, React Native's `0` switches it
+// off, and the beat holds the line either way. B and C arrived — the design is sound; A arrived —
+// on this app's settings the beat is insurance, not a rescue. (The macOS run agreed in kind; its
+// clock was starved by the simulator booting beside it, so its seconds are not quoted.)
 
 import Foundation
 

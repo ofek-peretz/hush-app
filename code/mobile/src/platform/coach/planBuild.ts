@@ -154,8 +154,9 @@ export const PLAN_BUILD_BUDGET_MS = 120_000;
  * fast lane's 13) and were written by the low-effort fallback at ~58 s — the weaker week, after the
  * longer wait. The distribution sat on the deadline. With 120 s declared the strong model has 107.
  *
- * ⚠️ IT IS ONLY POSSIBLE BECAUSE THE LINE IS KEPT ALIVE (`coachClient`'s `beat`): a phone cuts a
- * connection that is silent for sixty seconds, which is what held this number at sixty. And it is a
+ * ⚠️ AND THE LINE IS KEPT ALIVE FOR ALL OF IT (`coachClient`'s `beat`, where the measurement of
+ * what a quiet line survives on iOS is written down), so the wait does not rest on any timeout
+ * setting between her phone and the Worker. And it is a
  * CEILING, not a wait: the typical build still lands in 20–45 s; only the slow tail uses the room.
  *
  * ✅ MEASURED AFTER THE WORKER WAS DEPLOYED (2026-10-12, `__tests__/live/beatOnTheEdge`), ten builds
