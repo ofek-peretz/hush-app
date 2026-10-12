@@ -9,7 +9,7 @@
 // 
 
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, View, type ViewStyle } from 'react-native';
+import { AccessibilityInfo, AppState, View, type AppStateStatus, type ViewStyle } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Polyline, Rect } from 'react-native-svg';
 import type { FigureSex, Primitive, Rig } from '../types';
 import { buildFrame, stageFrame, VIEWBOX } from '../frame';
@@ -80,6 +80,37 @@ interface Props {
   stillRom?: number;
 }
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ NO FRAME IS DRAWN FOR NOBODY — iOS WAS KILLING THE APP FOR IT (founder's phone, build 79,
+ * 2026-10-12)
+ *
+ * His report: on the wrist "מתחבר מחדש" on almost every press, the coach saying "חזרתי" again and
+ * again, no call at the end of a rest. His voice journal showed the app starting from nothing ten
+ * times in twenty-five minutes. Apple's own report said why — `FERROX.cpu_resource_fatal`:
+ *
+ *     Event: cpu usage · Action taken: Process killed
+ *     48 seconds cpu time over 58 seconds (83% cpu average), exceeding limit of 80% cpu over 60 seconds
+ *     Primary state: Non-Frontmost App · User Activity: Idle
+ *     heaviest stack: ONE thread — the JS thread's run loop, firing timers into Hermes
+ *
+ * That thread was this loop. `requestAnimationFrame` re-arms itself every frame and each frame
+ * rebuilds the athlete — and off glass React Native's frame clock is not the display's any more:
+ * with no screen to wait for, the callback comes back as fast as the thread can run it. The
+ * workout keeps its process awake in a pocket on purpose (the silent keep-alive, 2026-09-09, so the
+ * lock screen, the wrist and the voice all answer) — which is exactly what let this loop run flat
+ * out behind a locked screen, drawing a figure nobody could see, until iOS shot the app sixty
+ * seconds later. Every press after that woke a fresh process: "חזרתי". The same thing explains
+ * the unexplained 2026-10-06 report on build 76 — it has been there since the two met.
+ *
+ * So the loop runs only while the app is ACTIVE. Locked, minimised, behind a notification shade:
+ * it stops, and it picks up from the pose it left when she is back — the time away is not
+ * animated through. One loop feeds every figure in the product (the stage, the rest, Today, the
+ * programme, the build screen), so this is the one place the rule has to hold.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+const offGlass = (state: AppStateStatus | undefined): boolean => state === 'background' || state === 'inactive';
+
 function useMotionRom(rig: Rig, fps?: number, speed?: number, stillRom = 0): number {
   const [rom, setRom] = useState(0);
   const start = useRef<number>(Date.now());
@@ -108,8 +139,10 @@ function useMotionRom(rig: Rig, fps?: number, speed?: number, stillRom = 0): num
        drinking rigs on a timer and relies on one shared timeline for the cut to be invisible
        (`life.test`); a reset here would restart each at rom 0 on its own schedule. The loop's
        `lastTick` carries across the swap, so no frame is lost or doubled either. */
+    let away = offGlass(AppState.currentState);
     const tick = () => {
-      if (!alive) return;
+      raf.current = null;
+      if (!alive || away) return; // off glass the loop simply ends here; the listener below starts it again
       const now = Date.now();
       virt.current += lastTick.current == null ? 0 : (now - lastTick.current) * rate.current;
       lastTick.current = now;
@@ -120,10 +153,25 @@ function useMotionRom(rig: Rig, fps?: number, speed?: number, stillRom = 0): num
       }
       raf.current = requestAnimationFrame(tick);
     };
-    raf.current = requestAnimationFrame(tick);
+    if (!away) raf.current = requestAnimationFrame(tick);
+    const glass = AppState.addEventListener('change', (state) => {
+      const gone = offGlass(state);
+      if (gone === away) return;
+      away = gone;
+      if (gone) {
+        if (raf.current != null) cancelAnimationFrame(raf.current);
+        raf.current = null;
+        return;
+      }
+      // Back on glass: from the pose she left, not from wherever the minutes away would have put it.
+      lastTick.current = null;
+      if (alive && raf.current == null) raf.current = requestAnimationFrame(tick);
+    });
     return () => {
       alive = false;
+      glass.remove();
       if (raf.current != null) cancelAnimationFrame(raf.current);
+      raf.current = null;
     };
     // loop is derived from the rig; re-run only when the rig identity changes
   }, [rig]);
