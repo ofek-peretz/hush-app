@@ -157,6 +157,12 @@ export const PLAN_BUILD_BUDGET_MS = 120_000;
  * ⚠️ IT IS ONLY POSSIBLE BECAUSE THE LINE IS KEPT ALIVE (`coachClient`'s `beat`): a phone cuts a
  * connection that is silent for sixty seconds, which is what held this number at sixty. And it is a
  * CEILING, not a wait: the typical build still lands in 20–45 s; only the slow tail uses the room.
+ *
+ * ✅ MEASURED AFTER THE WORKER WAS DEPLOYED (2026-10-12, `__tests__/live/beatOnTheEdge`), ten builds
+ * for that same athlete: TEN written by the strong model — 41 · 42 · 43 · 44 · 45 · 49 · 50 · 51 ·
+ * 54 · 61 s. Five of the ten are past the old 47 s deadline: half her weeks, not a third, had been
+ * going to the fallback. The heartbeat crossed the edge unbuffered on every one (longest silence on
+ * the line 10.0 s, first byte in under a second). What only a phone can still prove is the iOS half.
  */
 export const PLAN_BUILD_SAID_MS = 120_000;
 
