@@ -32,12 +32,18 @@ const read = (rel: string): string => fs.readFileSync(path.join(SRC, rel), 'utf8
 describe('⛔ the ask lands where the alerts are needed', () => {
   const stage = read('screens/session/SessionFlow.tsx');
 
-  it('the workout screen raises the pre-ask on a REST, and only on a first workout', () => {
+  it('the workout screen raises the pre-ask on a REST or at the opening — for anyone not yet asked', () => {
     expect(stage).toContain("'notifyAsk'");
     expect(stage).toContain('shouldAskForNotifications');
     expect(stage).toContain('<NotificationAsk');
-    // the two conditions, stated in code rather than implied
-    expect(stage).toContain('(app.modeState?.completedSessions ?? 0) === 0');
+    /*
+     * ⛔ NOT GATED ON A FIRST WORKOUT ANY MORE (founder, build 79, 2026-10-12). "Once" is kept by
+     * `shouldAskForNotifications` alone — never answered on this install, iOS undecided — so an
+     * athlete with a history on a phone iOS never asked (a reinstall, a restored record) is asked
+     * as her workout opens, not after it.
+     */
+    expect(stage).not.toContain('const firstWorkout = (app.modeState?.completedSessions ?? 0) === 0;');
+    expect(stage).not.toMatch(/if \(!firstWorkout \|\|/);
     expect(stage).toMatch(/displayPhase !== 'REST_INTER' && [^\n]*displayPhase !== 'REST_TRANSITION'/);
   });
 
@@ -67,10 +73,10 @@ describe('⛔ the ask lands where the alerts are needed', () => {
 
   it('⛔ the one ask of the session is not spent on a screen that could not show it', () => {
     // It waits while another overlay is up, and the ref is set only where the ask is raised.
-    expect(stage).toContain("if (!firstWorkout || askedThisSessionRef.current || overlay !== 'none') return;");
+    expect(stage).toContain("if (askedThisSessionRef.current || overlay !== 'none') return;");
     const effect = stage.slice(stage.indexOf('const opening = session.displayPhase'), stage.indexOf("const isTransition = session.displayPhase === 'REST_TRANSITION';"));
     expect(effect).toMatch(/if \(cur !== 'none'\) return cur;\s*askedThisSessionRef\.current = true;\s*return 'notifyAsk';/);
-    expect(effect).toContain('[firstWorkout, session.displayPhase, session.nothingLoggedYet, overlay]');
+    expect(effect).toContain('[session.displayPhase, session.nothingLoggedYet, overlay]');
   });
 
   it('⛔ Well Done never draws the ask in front of the result — only on the way out', () => {

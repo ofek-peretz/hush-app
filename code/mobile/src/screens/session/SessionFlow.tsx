@@ -1091,10 +1091,19 @@ export function SessionFlow({ navigation, route }: Props) {
    * the overlay was known to be free — the first-gym card up at that instant, and the one chance
    * of the session was gone. It is set only when the ask is actually raised.
    */
-  const firstWorkout = (app.modeState?.completedSessions ?? 0) === 0;
+  /*
+   * ⛔ NOT ONLY ON A FIRST WORKOUT (founder, build 79, 2026-10-12: *"לא ראיתי שהופיע בקשת התראות"*).
+   * This was gated on `completedSessions === 0`, on top of the two rules that already make the ask
+   * happen once (`shouldAskForNotifications`: never answered on this install, and iOS undecided).
+   * The extra gate bought nothing for a new athlete and cost everyone else the moment: a phone
+   * she reinstalled the app on, or a new phone her record was restored to, has a history AND an
+   * iOS that was never asked — so the opening passed in silence, every rest of that workout ran
+   * without its alert, and the ask waited for the way out of Well Done. Whoever has not been
+   * asked is asked as the workout opens; whoever has, never again.
+   */
   const askedThisSessionRef = useRef(false);
   useEffect(() => {
-    if (!firstWorkout || askedThisSessionRef.current || overlay !== 'none') return;
+    if (askedThisSessionRef.current || overlay !== 'none') return;
     const opening = session.displayPhase === 'SET_PRESENTED' && session.nothingLoggedYet;
     if (!opening && session.displayPhase !== 'REST_INTER' && session.displayPhase !== 'REST_TRANSITION') return;
     let alive = true;
@@ -1113,7 +1122,7 @@ export function SessionFlow({ navigation, route }: Props) {
     return () => {
       alive = false;
     };
-  }, [firstWorkout, session.displayPhase, session.nothingLoggedYet, overlay]);
+  }, [session.displayPhase, session.nothingLoggedYet, overlay]);
 
   const isTransition = session.displayPhase === 'REST_TRANSITION';
   /** A crossing into a RUN has no form clip and nothing to swap for — see `swapPool`. */
