@@ -1,0 +1,9 @@
+system: Version 26.5 (Build 23F77) · iOS simulator runtime 26.5
+defaults: configuration.timeoutIntervalForRequest = 60.0s · a new URLRequest.timeoutInterval = 60.0s
+E  silent for 75s, then the answer            (request left at its default) => CUT after 60.3s  [NSURLErrorDomain -1001: The request timed out.]  http -1, 0 chunks
+B  a beat every 10s for 75s, then the answer  (timeoutInterval 0) => ARRIVED after 75.8s  http 200, 9 chunks, 107 bytes, longest silence 10.7s
+D  headers at once, then silent for 75s       (timeoutInterval 0) => ARRIVED after 76.6s  http 200, 1 chunks, 43 bytes, longest silence 75.9s
+A  silent for 75s, then the answer            (timeoutInterval 0 — what React Native sends) => ARRIVED after 76.7s  http 200, 1 chunks, 35 bytes, longest silence 76.7s
+C  a beat every 10s for 110s, then the answer (timeoutInterval 0) — our worst case => ARRIVED after 110.3s  http 200, 12 chunks, 131 bytes, longest silence 10.9s
+done
+exit 0
