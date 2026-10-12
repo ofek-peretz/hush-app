@@ -19,8 +19,13 @@
  * steerable voice model) in `marin` — the most natural of its voices. Measure with
  * `server/voiceBakeoff.cjs` after the first credit. With `PROBE === '1'` a preview version accepts
  * `x-probe-ear` / `x-probe-voice` so candidates run through this exact code.
+ *
+ * The mouth is not asked once and believed (2026-10-12): see ONE VOICE, MEASURED above `say`, and
+ * `server/voiceDrift.cjs` — the instrument that showed why, and that reads the result after a deploy.
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
+
+import { wavPitch, type ClipPitch } from './voicePitch.ts';
 
 export interface VoiceKeys {
   OPENAI_API_KEY?: string;
@@ -35,7 +40,21 @@ export interface HearContext {
 }
 
 export type HearResult = { ok: true; text: string; model: string; ms: number } | { ok: false; why: string; ms: number };
-export type SayResult = { ok: true; wav: Uint8Array; model: string; voice: string; ms: number } | { ok: false; why: string; ms: number };
+export type SayResult =
+  | {
+      ok: true;
+      wav: Uint8Array;
+      /** The model as the app names it — the tail of the voice id it asked for, unchanged. */
+      model: string;
+      voice: string;
+      ms: number;
+      /** The dated version that actually spoke (`PINNED_MODEL`). */
+      spoke: string;
+      /** How many takes this one was chosen from, and its own pitch (0 = too short to measure). */
+      takes: number;
+      hz: number;
+    }
+  | { ok: false; why: string; ms: number };
 
 /** The ear and the voice the app gets unless a probe asks otherwise. OpenAI's, by the founder's ruling. */
 export const DEFAULT_EAR = 'openai:gpt-transcribe';
@@ -181,21 +200,86 @@ const STYLE_HE = 'מאמנת כושר אישית ישראלית באמצע אי�
 const SPEED = 1.15;
 const STYLE_EN = 'A personal trainer mid-workout in a gym: clear, confident and to the point, warm but not excited. A natural, brisk pace with no long pauses between sentences; numbers said clearly.';
 
-export async function say(keys: VoiceKeys, text: string, lang: string, voice = DEFAULT_VOICE, deadlineMs = 12_000): Promise<SayResult> {
-  const [provider, model, voiceName] = voice.split(':');
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), deadlineMs);
-  try {
-    if (provider === 'openai') return await sayOpenAI(keys, text, lang, model, voiceName, controller.signal);
-    return { ok: false, why: 'unknown_voice', ms: 0 };
-  } finally {
-    clearTimeout(timer);
-  }
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ ONE VOICE, MEASURED — NOT ONE VOICE, ASKED FOR (founder's phone, build 79, 2026-10-12)
+ *
+ *   > *"זה בוודאות לא נאמר באותו הקול. היה גם פעם אחת את הקול של כרמית ופעם אחת את הקול של נקבה של
+ *   > OpenAI ופעם אחת היה קול של גבר ונראה לי גם הוא מ-OpenAI."*
+ *
+ * He was right three times, and each was measured the same evening (`server/voiceDrift.cjs`, 175
+ * clips of `marin` through this Worker; the pitch is `voicePitch.ts`):
+ *
+ *   · CARMIT. The phone waits four seconds for a line and then says it itself. 18–39% of requests
+ *     to the model's unversioned name hung until the twelve-second deadline here; asked in the same
+ *     minutes, its dated version answered 18 of 18 in 1.3 s. → `PINNED_MODEL`.
+ *   · ANOTHER WOMAN. One named voice, the same word: "קדימה." between 166 and 250 Hz. The model does
+ *     not hold a voice from one request to the next, and a short line gives it least to hold on to
+ *     (a long line stays within about a tenth). → a short line is asked for THREE times at once and
+ *     the take nearest the voice's own pitch is the line (`VOICE_PITCH_HZ`). On the measured clips
+ *     that brings "קדימה." from 175–235 Hz down to 179–198.
+ *   · A MAN. One clip in 175 came back at a steady 95 Hz from a woman's voice. → a take that far
+ *     from the voice is REFUSED, and no line at all is better than that one: the phone keeps every
+ *     clip for good, so a bad take of "נרשם." is not heard once — it is heard after every set.
+ *
+ * And a request that says nothing is not waited on alone: past `HEDGE_*` with nothing in hand,
+ * one more is sent, and whichever answers is the line.
+ *
+ * What this cannot do is hear a timbre. It measures pitch — the largest part of "another woman" by
+ * the numbers, and the only part of it a Worker can afford. If two women are still heard after
+ * this, the next question is the style direction below (reports say it makes the drift worse), and
+ * that one is settled by ears, not by this file.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+/** OpenAI's unversioned name → the dated version this Worker asks for. The app's ids do not change. */
+export const PINNED_MODEL: Readonly<Record<string, string>> = { 'gpt-4o-mini-tts': 'gpt-4o-mini-tts-2025-12-15' };
+
+/**
+ * Each offered voice's own pitch, Hz — the median over real coach lines on the pinned model, read
+ * with `voicePitch.ts` (2026-10-12). A voice not here (a probe's candidate) is never refused, and
+ * the middle take of its three is the line.
+ */
+export const VOICE_PITCH_HZ: Readonly<Record<string, number>> = {
+  marin: 191, // 226 clips
+  coral: 201, // 24 clips each from here down — enough for a middle, and re-measured with `voiceDrift.cjs`
+  sage: 181,
+  shimmer: 154,
+  nova: 169,
+};
+
+/** A line this short is asked for three times; a longer one holds its voice and is asked for once. */
+export const SHORT_LINE_CHARS = 40;
+const TAKES_SHORT = 3;
+/** Asks beyond the first ones — a refused take, a dead answer, or a silence past the hedge. */
+const EXTRA_ASKS = 2;
+/**
+ * Not her. Of 322 clips of the five voices, every reading of `marin`, `sage`, `shimmer` and `nova`
+ * sat between 0.83 and 1.33 of the voice's own pitch; the man sat at 0.49, and two takes of `coral`
+ * saying "קדימה." at 1.5 — half as high again as herself, and refused with him.
+ */
+const NOT_HER_BELOW = 0.75;
+const NOT_HER_ABOVE = 1.45;
+/** Fewer voiced frames than this (20 ms each) and a clip is too short to judge — and is never refused for it. */
+const MIN_VOICED = 8;
+/** With a take in hand, the others are waited on this long and no longer. */
+const SETTLE_MS = 2_200;
+/** With nothing in hand after this long — longer for a longer line — one more request is sent. */
+const HEDGE_BASE_MS = 2_500;
+const HEDGE_PER_CHAR_MS = 10;
+
+/** For tests: the two waits, shortened. */
+export interface SayTuning {
+  settleMs?: number;
+  hedgeMs?: number;
 }
 
-function sayOpenAI(keys: VoiceKeys, text: string, lang: string, model: string, voiceName: string, signal: AbortSignal): Promise<SayResult> {
-  return timed<SayResult>(async () => {
-    if (!keys.OPENAI_API_KEY) return { ok: false, why: 'no_key' };
+type Reply = { ok: true; wav: Uint8Array } | { ok: false; why: string };
+/** A result before `timed` stamps it — each arm of the union without its `ms`. */
+type Unstamped = SayResult extends infer R ? (R extends unknown ? Omit<R, 'ms'> : never) : never;
+
+async function oneTake(keys: VoiceKeys, text: string, lang: string, model: string, voiceName: string, signal: AbortSignal): Promise<Reply> {
+  try {
     const res = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${keys.OPENAI_API_KEY}` },
@@ -213,7 +297,118 @@ function sayOpenAI(keys: VoiceKeys, text: string, lang: string, model: string, v
     const bytes = new Uint8Array(await res.arrayBuffer());
     // The phone plays and caches exactly this file — anything but a RIFF WAV is not a line.
     if (!isWav(bytes)) return { ok: false, why: 'not_wav' };
-    return { ok: true, wav: bytes, model, voice: voiceName };
+    return { ok: true, wav: bytes };
+  } catch (e) {
+    return { ok: false, why: String((e as Error)?.message ?? e).slice(0, 160) };
+  }
+}
+
+interface Take {
+  wav: Uint8Array;
+  pitch: ClipPitch;
+}
+
+const measured = (p: ClipPitch) => p.voiced >= MIN_VOICED && p.hz > 0;
+/** How far a clip is from a pitch — by its WORSE reading (`voicePitch.ts` says why there are two). */
+const farFrom = (p: ClipPitch, hz: number) => Math.max(Math.abs(p.hz - hz), Math.abs(p.strong - hz));
+/** A clip that can be heard, and is not this voice. */
+function notHer(p: ClipPitch, hers: number): boolean {
+  if (!hers || !measured(p)) return false;
+  return Math.min(p.hz, p.strong) < hers * NOT_HER_BELOW || Math.max(p.hz, p.strong) > hers * NOT_HER_ABOVE;
+}
+
+/** The take that is the line: nearest her pitch — or, for a voice with no pitch on file, the middle one. */
+function chosen(takes: readonly Take[], hers: number): Take {
+  const heard = takes.filter((t) => measured(t.pitch));
+  if (heard.length === 0) return takes[0];
+  if (hers) return heard.reduce((best, t) => (farFrom(t.pitch, hers) < farFrom(best.pitch, hers) ? t : best));
+  return [...heard].sort((a, b) => a.pitch.hz - b.pitch.hz)[Math.floor(heard.length / 2)];
+}
+
+/** A refused take, a reply that was no WAV, a provider's own fault: worth one more ask. A 4xx is not. */
+const worthAnother = (why: string) => why === 'not_her_voice' || why === 'not_wav' || /^http_5/.test(why);
+
+export function say(keys: VoiceKeys, text: string, lang: string, voice = DEFAULT_VOICE, deadlineMs = 12_000, tune: SayTuning = {}): Promise<SayResult> {
+  const [provider, model, voiceName] = voice.split(':');
+  return timed<SayResult>(async () => {
+    if (provider !== 'openai') return { ok: false, why: 'unknown_voice' };
+    if (!keys.OPENAI_API_KEY) return { ok: false, why: 'no_key' };
+    const spoke = PINNED_MODEL[model] ?? model;
+    const hers = VOICE_PITCH_HZ[voiceName] ?? 0;
+    const want = text.length <= SHORT_LINE_CHARS ? TAKES_SHORT : 1;
+    const settleMs = tune.settleMs ?? SETTLE_MS;
+    const hedgeMs = tune.hedgeMs ?? HEDGE_BASE_MS + HEDGE_PER_CHAR_MS * text.length;
+    const stop = new AbortController();
+
+    return await new Promise<Unstamped>((resolve) => {
+      const good: Take[] = [];
+      let asks = 0;
+      let back = 0;
+      let settled = false;
+      let over = false;
+      let why = 'timeout';
+      let again = false;
+      const timers: ReturnType<typeof setTimeout>[] = [];
+      const end = (r: Unstamped) => {
+        if (over) return;
+        over = true;
+        for (const t of timers) clearTimeout(t);
+        stop.abort(); // whatever is still on its way is not waited on, and not paid attention to
+        resolve(r);
+      };
+      const line = () => {
+        const take = chosen(good, hers);
+        end({ ok: true, wav: take.wav, model, voice: voiceName, spoke, takes: good.length, hz: measured(take.pitch) ? take.pitch.hz : 0 });
+      };
+      const weigh = () => {
+        if (over) return;
+        if (back < asks) {
+          // Some are still out: with a take in hand they are waited on until `settleMs`, and no longer.
+          if (settled && good.length > 0) line();
+          return;
+        }
+        if (good.length > 0) return line();
+        if (again && asks < want + EXTRA_ASKS) {
+          again = false;
+          return ask();
+        }
+        end({ ok: false, why });
+      };
+      const ask = () => {
+        asks += 1;
+        void oneTake(keys, text, lang, spoke, voiceName, stop.signal).then((r) => {
+          back += 1;
+          if (over) return;
+          if (r.ok) {
+            const pitch = wavPitch(r.wav);
+            if (notHer(pitch, hers)) {
+              why = 'not_her_voice';
+              again = true;
+            } else {
+              good.push({ wav: r.wav, pitch });
+            }
+          } else {
+            why = r.why;
+            if (worthAnother(r.why)) again = true;
+          }
+          weigh();
+        });
+      };
+      for (let i = 0; i < want; i++) ask();
+      timers.push(
+        setTimeout(() => {
+          settled = true;
+          weigh();
+        }, settleMs),
+      );
+      // Nothing in hand and at least one request still silent: it is not waited on alone.
+      timers.push(
+        setTimeout(() => {
+          if (!over && good.length === 0 && back < asks && asks < want + EXTRA_ASKS) ask();
+        }, hedgeMs),
+      );
+      timers.push(setTimeout(() => (good.length > 0 ? line() : end({ ok: false, why: back < asks ? 'timeout' : why })), deadlineMs));
+    });
   });
 }
 

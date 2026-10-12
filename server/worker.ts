@@ -292,7 +292,10 @@ export interface Env {
  *   a chat turn                  gpt-6-sol      low         short, and she is waiting
  *   the voice: hearing           gpt-transcribe             `voice.ts` — OpenAI's recommended STT (07/2026)
  *   the voice: speaking          gpt-4o-mini-tts, marin     `voice.ts` — its only TTS model; marin is the
- *                                                           most natural of its voices
+ *                                                           most natural of its voices. Asked for by its
+ *                                                           DATED version (the bare name hung on one
+ *                                                           request in five, 2026-10-12), a short line
+ *                                                           three times, the take nearest her pitch kept
  *
  * Sol ($2 / $10 per million) is OpenAI's "complex work" tier. I first gave the week Astra ($10 / $50)
  * @ medium; the founder, the same day: *"שים את sol בחשיבה גבוהה במקום astra 6 אני מעריך שזה יעשה
@@ -679,7 +682,10 @@ async function voiceRoute(request: Request, env: Env, path: string, sub: string 
   // Her choice, if it is one of ours; otherwise the default. A probe may try any voice.
   const asked = String(body.voice ?? '');
   const r = await say(keys, String(body.text).trim(), lang, probeVoice || (VOICES.includes(asked) ? asked : DEFAULT_VOICE));
-  if (r.ok === true) return json({ audio: toBase64(r.wav), voice: `${r.model}:${r.voice}`, ms: r.ms });
+  // `voice` is the id's tail exactly as the app asked for it; `model`, `takes` and `hz` say which dated
+  // version spoke, how many takes this one was chosen from, and its pitch (`voice.ts`, 2026-10-12) —
+  // nothing the phone reads, everything `voiceDrift.cjs` needs to see that the gate is in play.
+  if (r.ok === true) return json({ audio: toBase64(r.wav), voice: `${r.model}:${r.voice}`, model: r.spoke, takes: r.takes, hz: r.hz, ms: r.ms });
   const why = (r as { why: string }).why;
   return json({ error: 'upstream', why: probing ? why : why.slice(0, 24), ms: r.ms }, 502);
 }
