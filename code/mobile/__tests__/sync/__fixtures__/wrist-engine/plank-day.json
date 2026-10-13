@@ -1,0 +1,410 @@
+{
+ "name": "plank-day",
+ "says": "a day with a plank in it",
+ "agrees": {
+  "gap": "a day with a hold in it is not sent to the wrist at all",
+  "stage": 1
+ },
+ "workoutId": "w_today",
+ "plan": null,
+ "start": {
+  "phase": "active_set",
+  "exerciseName": "Barbell Bench Press",
+  "setNumber": 1,
+  "setsInExercise": 2,
+  "globalIndex": 0,
+  "totalSets": 6,
+  "targetWeight": 60,
+  "targetReps": 8,
+  "targetRepsHi": 10,
+  "restTotalS": null,
+  "nextExerciseName": null,
+  "nextSetNumber": null,
+  "nextSetsInExercise": null,
+  "nextTargetWeight": null,
+  "nextTargetReps": null,
+  "completedExerciseName": null,
+  "liftIndex": 1,
+  "liftCount": 3,
+  "superset": null,
+  "setsSoFar": [],
+  "loadsSoFar": [],
+  "liveSets": 0,
+  "liveVolumeKg": 0,
+  "holdSeconds": null,
+  "holdMetres": null,
+  "isWarmup": false
+ },
+ "steps": [
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 0,
+    "totalSets": 6,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 150,
+    "nextExerciseName": "Barbell Bench Press",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 60,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     60
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 6,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     60
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 6,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 120,
+    "nextExerciseName": "Plank",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": null,
+    "nextTargetReps": 0,
+    "completedExerciseName": "Barbell Bench Press",
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8,
+     8
+    ],
+    "loadsSoFar": [
+     60,
+     60
+    ],
+    "liveSets": 2,
+    "liveVolumeKg": 960,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Plank",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 960,
+    "holdSeconds": 45,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Plank",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": 45,
+    "nextExerciseName": "Plank",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": null,
+    "nextTargetReps": 0,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 960,
+    "holdSeconds": 45,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Plank",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 3,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 960,
+    "holdSeconds": 45,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Plank",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 3,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": 120,
+    "nextExerciseName": "Barbell Row",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 50,
+    "nextTargetReps": 8,
+    "completedExerciseName": "Plank",
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 960,
+    "holdSeconds": 45,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Row",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 4,
+    "totalSets": 6,
+    "targetWeight": 50,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 960,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Row",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 4,
+    "totalSets": 6,
+    "targetWeight": 50,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Barbell Row",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 50,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     50
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 1360,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Row",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 5,
+    "totalSets": 6,
+    "targetWeight": 50,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     50
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 1360,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "complete",
+    "summarySets": 4,
+    "summaryVolumeKg": 1760,
+    "summaryLifts": [
+     "Barbell Bench Press 60 × 8",
+     "Barbell Row 50 × 8"
+    ]
+   }
+  }
+ ],
+ "logged": [
+  {
+   "exerciseId": "bb_bench_press",
+   "setIndex": 0,
+   "weight": 60,
+   "reps": 8
+  },
+  {
+   "exerciseId": "bb_bench_press",
+   "setIndex": 1,
+   "weight": 60,
+   "reps": 8
+  },
+  {
+   "exerciseId": "bb_row",
+   "setIndex": 0,
+   "weight": 50,
+   "reps": 8
+  },
+  {
+   "exerciseId": "bb_row",
+   "setIndex": 1,
+   "weight": 50,
+   "reps": 8
+  }
+ ]
+}

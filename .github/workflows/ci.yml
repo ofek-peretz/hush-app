@@ -141,3 +141,10 @@ jobs:
         run: |
           xcrun swiftc code/mobile/targets/watch/WatchWire.swift code/mobile/targets/watch/WatchCopy.swift code/mobile/native-tests/wire-fixtures/main.swift -o wirecheck
           ./wirecheck code/mobile/__tests__/sync/__fixtures__
+      # ════ THE WRIST RUNS WHAT THE PHONE RUNS (2026-10-13) ════
+      # The watch's own engine — what runs a workout when the phone is in a locker — compiled for this
+      # Mac and played against the scripts the phone's session store already ran
+      # (`__tests__/sync/theWristRunsWhatThePhoneRuns`). Every fact the phone states is held against
+      # what the engine itself draws; a scenario written down as a gap must still differ.
+      - name: The wrist's own engine, against the phone
+        run: bash code/mobile/native-tests/wrist-engine/run.sh
