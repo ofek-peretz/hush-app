@@ -684,9 +684,26 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   // canMarkOccupied).
   // …at ANY set since 2026-09-07 (the board): the lift's remainder goes one run later (phone parity —
   // `canMarkOccupied` / `markEquipmentOccupied`).
+  /*
+   * ⛔ IN A SUPERSET, ON ITS FIRST LIFT ONLY — AND ONLY WITH SOMEWHERE TO GO (2026-10-13).
+   *
+   * The line above asked "is there a different lift ahead?", and inside a superset the answer is
+   * always yes: the partner. So the wrist offered "taken" on both halves of every round, including
+   * a superset that ENDS the workout — and since that day the phone moves a superset as one thing
+   * and lands nothing inside a round she has begun (`sessionStore.unitSpan`), a press on the second
+   * half was accepted, buzzed, and changed nothing she could see. A control that answers with
+   * nothing is the dead end `theWristIsWhereASetIsTold` exists to forbid.
+   *
+   * On the first lift of a round the whole superset steps aside for the next thing in the plan — so
+   * the offer needs a step that lies BEYOND every round of it still standing here.
+   */
+  const pair = cur.superset;
+  const leftOfPair = pair ? (pair.rounds - pair.round + 1) * pair.count - (pair.position - 1) : 0;
   const canMarkBusy =
     phase === 'active_set' &&
-    steps.slice(idx + 1).some((s) => s.exerciseName !== cur.exerciseName);
+    (pair
+      ? pair.position === 1 && steps.length > idx + leftOfPair
+      : steps.slice(idx + 1).some((s) => s.exerciseName !== cur.exerciseName));
 
   return {
     schema: MIRROR_SCHEMA_VERSION,

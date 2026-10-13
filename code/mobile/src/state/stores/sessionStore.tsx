@@ -3924,6 +3924,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const cur = plan[machine.setIndex];
         if (!cur) return;
         const boundary = reorderBoundary(machine);
+        // The second lift of a superset's round is not a station she can leave: its first half is
+        // logged and says "straight on". The wrist is not offered the verb there (`sessionMirror`
+        // `canMarkBusy`); this is the same answer for a press that arrives anyway (2026-10-13).
+        const round = plan[boundary] ? sessionSupersetAt(plan, boundary) : null;
+        if (round && round.position > 1) return;
         const nextLift = aheadExercisesFrom(plan, boundary)[0];
         if (!nextLift) return; // already last — nothing to move past
         const newPlan = bringForward(plan, boundary, nextLift);

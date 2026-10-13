@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildMirrorSteps } from '@/state/stores/sessionStore';
+import { projectSessionMirror } from '@/platform/sessionMirror';
 import he from '@/i18n/locales/he.json';
 import en from '@/i18n/locales/en.json';
 
@@ -143,5 +144,46 @@ describe('⛔ the wrist says it — on both lifts and on the rest between rounds
     for (const shot of ['23-superset-first', '24-superset-second', '25-superset-rest']) expect(frames).toContain(`'${shot}'`);
     expect(frames).toContain('superset: { round: 2, rounds: 3, position: 1, count: 2 }');
     expect(frames).toContain('superset: { round: 2, rounds: 3, position: 2, count: 2 }');
+  });
+});
+
+/*
+ * ⛔ "TAKEN", INSIDE A SUPERSET (2026-10-13). The phone now moves a superset as one thing and lands
+ * nothing inside a round she has begun (`aSupersetIsOnlyEverWritten`). The wrist's offer asked only
+ * "is there a different lift ahead?" — and inside a superset the partner always is. So it offered
+ * the verb on both halves of every round, and on a superset that ends the workout; pressed on the
+ * second half it was accepted, buzzed, and changed nothing she could see.
+ */
+describe('⛔ the wrist offers "taken" only where pressing it moves something', () => {
+  const frame = (plan, setIndex) =>
+    projectSessionMirror({
+      steps: buildMirrorSteps(plan),
+      total: plan.length,
+      machine: { phase: 'SET_PRESENTED', resumePhase: null, setIndex, isLastSetOfSession: setIndex === plan.length - 1, earlyFinish: false },
+      restInterS: 90,
+      restTransitionS: 120,
+      restStartedAtMs: null,
+      nowMs: Date.UTC(2026, 9, 13, 10, 0, 0),
+    });
+
+  it('on an ordinary lift, as it always was: yes while another lift lies ahead, no on the last', () => {
+    expect(frame(PLAN, 0).canMarkBusy).toBe(true);
+    expect(frame(PLAN, 8).canMarkBusy).toBe(false);
+  });
+
+  it('on the FIRST lift of a round — the whole superset steps aside — and never on the second', () => {
+    expect([2, 4, 6].map((i) => frame(PLAN, i).canMarkBusy)).toEqual([true, true, true]);
+    expect([3, 5, 7].map((i) => frame(PLAN, i).canMarkBusy)).toEqual([false, false, false]);
+  });
+
+  it('a superset that ENDS the workout has nowhere to step aside to: not offered at all', () => {
+    const ending = PLAN.slice(0, 8).map((st, i) => ({ ...st, lastSetOfSession: i === 7 }));
+    expect([2, 3, 4, 5, 6, 7].map((i) => frame(ending, i).canMarkBusy)).toEqual([false, false, false, false, false, false]);
+    expect(frame(ending, 0).canMarkBusy).toBe(true); // the bench before it can still step past it
+  });
+
+  it('…and a press that arrives anyway on the second half moves nothing on the phone either', () => {
+    const store = code(read('src/state/stores/sessionStore.tsx'));
+    expect(store).toMatch(/markEquipmentOccupied\(\) \{[\s\S]{0,400}?const round = plan\[boundary\] \? sessionSupersetAt\(plan, boundary\) : null;\s+if \(round && round\.position > 1\) return;/);
   });
 });
