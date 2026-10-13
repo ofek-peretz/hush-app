@@ -134,6 +134,20 @@ export interface CoachRow {
   say?: string;
   /** A linked human coach's note on the lift (the coach track, law 7) — attributed where drawn. */
   coachNote?: string;
+  /**
+   * ⛔ THIS ROW AND THE NEXT ARE DONE BACK TO BACK — a superset, or one lap of a circuit
+   * (founder, 2026-10-13: *"לא היה סופרסט בתוכנית ופתאום הופיע במהלך האימון דרישה לסופרסט"*).
+   *
+   * A session's blocks are flattened into rows here, and the flattening threw the one fact a block
+   * of two items carries: that its lifts belong to each other. Every screen that prints a plan —
+   * Today, the programme tab, the pre-workout card, the first week — drew a couple as two ordinary
+   * lifts, and the workout then asked for a superset the plan had never shown. The model can write
+   * one (`buildPrompt` `pair`), she can write one (the builder's seam), and only the builder said so.
+   *
+   * True on every item of a multi-item block but its last — so a couple is one mark, a circuit of
+   * three is two, and a reader never needs the block to know who belongs with whom.
+   */
+  withNext?: true;
 }
 
 /**
@@ -287,7 +301,7 @@ export function coachRows(plan: CoachPlan | null | undefined, workoutId: string)
 
   const rows: CoachRow[] = [];
   for (const block of session.blocks) {
-    for (const item of block.items) {
+    block.items.forEach((item, i) => {
       rows.push({
         ex: item.ex,
         name: nameOf(item.ex),
@@ -298,8 +312,10 @@ export function coachRows(plan: CoachPlan | null | undefined, workoutId: string)
         ...(item.kind === 'distance' ? { metres: item.metres, ...(item.load != null ? { load: item.load } : {}) } : {}),
         ...(item.say ? { say: item.say } : {}),
         ...(item.coachNote ? { coachNote: item.coachNote } : {}),
+        // The block's own fact, kept through the flattening — see `CoachRow.withNext`.
+        ...(i < block.items.length - 1 ? { withNext: true as const } : {}),
       });
-    }
+    });
   }
   return rows;
 }
@@ -329,11 +345,19 @@ export function coachSession(plan: CoachPlan | null | undefined, workoutId: stri
 export function coachPlanRows(
   rows: CoachRow[] | null,
   units: 'kg' | 'lb',
-): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; detail?: string; coachNote?: string }[] | null {
+): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; detail?: string; coachNote?: string; withNext?: true }[] | null {
   if (!rows) return null;
   return rows.map((r) => {
-    /* The coach track's note rides the row (law 7) — the card draws it, attributed; Today does not. */
-    const base = { exerciseId: r.ex, name: r.name, sets: r.rounds, band: [0, 0] as [number, number], ...(r.coachNote ? { coachNote: r.coachNote } : {}) };
+    /* The coach track's note rides the row (law 7) — the card draws it, attributed; Today does not.
+       The couple rides it too (`CoachRow.withNext`), and EVERY screen draws that one. */
+    const base = {
+      exerciseId: r.ex,
+      name: r.name,
+      sets: r.rounds,
+      band: [0, 0] as [number, number],
+      ...(r.coachNote ? { coachNote: r.coachNote } : {}),
+      ...(r.withNext ? { withNext: true as const } : {}),
+    };
     switch (r.kind) {
       case 'reps':
         // The one shape the existing assembly already says correctly.

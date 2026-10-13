@@ -734,6 +734,7 @@
     "itemDone": "Done",
     "itemCarrying": "Carrying {{load}} {{unit}}",
     "superset": "Superset",
+    "supersetNoRest": "no rest between them",
     "supersetRound": "Superset · round {{n}} of {{m}}",
     "supersetHowTwo": "Two exercises back to back, no rest between them. Rest only after both.",
     "supersetHowMany": "{{n}} exercises back to back, no rest between them. Rest only after the last.",

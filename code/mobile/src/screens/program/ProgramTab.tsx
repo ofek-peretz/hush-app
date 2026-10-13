@@ -41,6 +41,7 @@ import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 /* The app's ONE assembly of a prescription — see the note over `figure`. */
 import { figureLoad, figureUnit, figureScheme, type PlanLift, FigureCells} from '@/components/PlanLifts';
+import { CoupledRow, coupleSeat } from '@/components/CoupledRow';
 import { coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
 import { color, font, radius, ramp, rampLine, textScale, tracking, trackingPx } from '@/design/tokens';
@@ -68,6 +69,8 @@ interface Row {
   sets: number;
   band: [number, number];
   detail?: string;
+  /** This lift and the next are done back to back — a superset (`CoachRow.withNext`). */
+  withNext?: boolean;
 }
 
 /*
@@ -373,8 +376,11 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
               paused={motionPaused || w.id !== performingId}
               style={styles.dayMotion}
             />
-            {w.rows.map((r) => (
-              <View key={`${w.id}:${r.exerciseId}`} style={styles.liftRow}>
+            {w.rows.map((r, ri) => (
+              /* ⛔ A COUPLE IS DRAWN AS ONE (2026-10-13): the programme is a reference, so the
+                 legend also says what a superset IS — see `CoupledRow`. */
+              <CoupledRow key={`${w.id}:${r.exerciseId}`} seat={coupleSeat(w.rows, ri)} how>
+              <View style={styles.liftRow}>
                 {/* Two lines, not an ellipsis — "הרמת עקבים בישיבה עם מ…" cut the word that told
                     the machine variant apart from the standing one (eye-pass 2026-08-26). */}
                 <Text style={styles.liftName} numberOfLines={2}>
@@ -395,6 +401,7 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
                   bandWord={t('workout.bandWord')}
                 />
               </View>
+              </CoupledRow>
             ))}
           </Pressable>
         ))}

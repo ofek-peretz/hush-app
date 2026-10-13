@@ -30,6 +30,7 @@ import { color, font, radius, textScale, directionTone, type LoadDirection } fro
 import { MotionThumb } from '@/motion/render/MotionThumb';
 import { ReorderRows } from '@/components/ReorderRows';
 import { CoachNoteLine } from '@/components/CoachNoteLine';
+import { SupersetLegend, coupleRail, coupleSeat } from '@/components/CoupledRow';
 
 import { exerciseMotion } from '@/motion/registry';
 import type { FigureSex } from '@/motion/types';
@@ -68,6 +69,8 @@ export interface PlanLift {
   loadUndecided?: boolean;
   /** A linked coach's note on this lift (the coach track, law 7) — drawn only where `coachName` is given. */
   coachNote?: string;
+  /** This lift and the next are done back to back — a superset (`CoachRow.withNext`, `CoupledRow`). */
+  withNext?: boolean;
 }
 
 export interface PlanLiftsProps {
@@ -135,15 +138,22 @@ export interface PlanLiftsProps {
 
 export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReorder, onDragging, coachName, insteadOf }: PlanLiftsProps) {
   const { t } = useCopy();
-  const rows = lifts.map((lift, i) => (grip: React.ReactNode = null, lifted = false) => (
+  const rows = lifts.map((lift, i) => (grip: React.ReactNode = null, lifted = false) => {
+    /* ⛔ A COUPLE IS DRAWN AS ONE (2026-10-13 — `CoupledRow` has the whole story). The row IS the
+       drag item, so it carries the rail on its own box and the legend inside itself, above the name:
+       rule → "superset" → lift, and the two rows read as bracketed together down the start edge. */
+    const seat = coupleSeat(lifts, i);
+    const figureSaid = lift.pending ? lift.name : `${lift.name} · ${planFigureLabel(lift, units)}`;
+    return (
         <Pressable
           key={`${lift.exerciseId}_${i}`}
           accessibilityRole="button"
-          accessibilityLabel={lift.pending ? lift.name : `${lift.name} · ${planFigureLabel(lift, units)}`}
+          accessibilityLabel={seat ? `${figureSaid} · ${t('workout.superset')}` : figureSaid}
           accessibilityHint={onWhy ? t('weekly.whyLink') : undefined}
           onPress={() => (onWhy ? onWhy(lift.exerciseId) : onForm(lift.exerciseId))}
           style={({ pressed }) => [
             styles.planRow,
+            seat && coupleRail,
             // The table is CLOSED — the last row carries the bottom rule, so the plan reads as a
             // block of facts rather than a list that trails off.
             i === lifts.length - 1 && styles.planRowLast,
@@ -151,6 +161,7 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
             lifted && styles.planRowLifted,
           ]}
         >
+          {seat === 'first' ? <SupersetLegend how /> : null}
           {/*
             ════════════════════════════════════════════════════════════════════════════════════
             ⛔ THE NAME GETS ITS OWN LINE (2026-08-27) — IT WAS BREAKING ONE WORD PER LINE.
@@ -282,7 +293,8 @@ export function PlanLifts({ lifts, units, figure, onForm, onWhy, onSwap, onReord
           ) : null}
           {coachName && lift.coachNote ? <CoachNoteLine note={lift.coachNote} coachName={coachName} style={styles.coachNote} /> : null}
         </Pressable>
-  ));
+    );
+  });
   if (onReorder) {
     return (
       <ReorderRows

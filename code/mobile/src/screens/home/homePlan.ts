@@ -25,7 +25,8 @@ import type { HomePlanLift } from '@/screens/home/HomeView';
 
 /** The shape of a programme day this module needs — its slots, in order. */
 export interface HomePlanDay {
-  slots: { exerciseId: string; setCount: number }[];
+  /** `pairedWithNext`: her superset mark (models.ts) — carried so the row can say so (`CoupledRow`). */
+  slots: { exerciseId: string; setCount: number; pairedWithNext?: boolean }[];
 }
 
 /**
@@ -40,7 +41,9 @@ export function homePlanRows(
 ): HomePlanLift[] | null {
   if (!day) return null;
   const pending = targets == null;
-  return day.slots.map((slot) => {
+  return day.slots.map((slot, i) => {
+    // A mark on the last seat couples nothing — the same reading `coachPlanFromProgram` gives it.
+    const withNext = slot.pairedWithNext === true && i < day.slots.length - 1;
     const first = targets?.find((x) => x.exerciseId === slot.exerciseId && x.setIndex === 0);
     // HER BAND, from the engine's own immutable pair. `recommendedReps` is Tlo — the FLOOR — and
     // an athlete's edit overwrites it mid-session, so it is the wrong field to read a prescription
@@ -54,6 +57,7 @@ export function homePlanRows(
       sets: slot.setCount,
       band: [lo, hi] as [number, number],
       changed: changed[slot.exerciseId],
+      ...(withNext ? { withNext: true } : null),
       // While pending, `load` and `band` hold placeholder values that are NEVER drawn — the view
       // draws no figure at all for a pending row. Keeping them typed rather than optional means the
       // row that finally lands is the same shape, so nothing about the row changes but its figure.

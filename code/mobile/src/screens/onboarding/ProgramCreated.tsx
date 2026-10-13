@@ -82,6 +82,7 @@ import { previewWeekPlan } from '@/data/local/weekPlan';
 import { coachPlanRows, coachRows, coachWeek } from '@/domain/coachWeek';
 import { plannedMinutes } from '@/domain/duration';
 import { FigureCells, type PlanLift } from '@/components/PlanLifts';
+import { CoupledRow, coupleSeat } from '@/components/CoupledRow';
 import { DayInMotion } from '@/components/DayInMotion';
 import { dayTitle } from '@/i18n/dayTitle';
 import type { OnboardingInputs } from '@/data/local/models';
@@ -450,8 +451,15 @@ export function ProgramCreated({ route, navigation }: Props) {
                         style={styles.dayMotion}
                       />
                     ) : null}
-                    {w.rows.map((r) => (
-                      <View key={`${w.id}:${r.exerciseId}`} style={styles.liftRow}>
+                    {w.rows.map((r, ri) => {
+                      /* ⛔ A COUPLE IS DRAWN AS ONE — on the first week she ever reads, most of all
+                         (2026-10-13, `CoupledRow`). These rows are RULED, so the legend takes the
+                         rule and the first lift of the couple gives its own up: rule → "superset" →
+                         lift, and the word never reads as the tail of the row above. */
+                      const seat = coupleSeat(w.rows, ri);
+                      return (
+                      <CoupledRow key={`${w.id}:${r.exerciseId}`} seat={seat} how legendStyle={styles.coupleLegend}>
+                      <View style={[styles.liftRow, seat === 'first' && styles.liftRowUnderLegend]}>
                         <Text style={styles.liftName} numberOfLines={3}>{bidi(r.name)}</Text>
                         <FigureCells
                           lift={{ load: r.load, sets: r.sets, band: r.band, ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift}
@@ -460,7 +468,9 @@ export function ProgramCreated({ route, navigation }: Props) {
                           bandWord={t('workout.bandWord')}
                         />
                       </View>
-                    ))}
+                      </CoupledRow>
+                      );
+                    })}
                   </View>
                 ))}
               </View>
@@ -635,6 +645,9 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(241,238,229,0.08)',
   },
   liftName: { flex: 1, minWidth: 0, fontFamily: font.sans, fontSize: 17, lineHeight: 22, color: color.textPrimary, textAlign: 'left' },
+  /* A couple's legend carries the rule its first lift would have drawn — same ink, same air above. */
+  coupleLegend: { paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(241,238,229,0.08)' },
+  liftRowUnderLegend: { borderTopWidth: 0, paddingTop: 4 },
 
   // "— hush" — the italic serif signature.
   signature: { fontFamily: font.serif, fontSize: textScale.md, color: color.textSecondary, textAlign: 'left' },

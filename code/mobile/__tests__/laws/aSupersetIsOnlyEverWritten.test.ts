@@ -30,6 +30,7 @@
 
 import {
   addWorkingSet,
+  aheadExercisesFrom,
   bringForward,
   buildPlanFromCoach,
   deferCurrentExercise,
@@ -180,5 +181,103 @@ describe('a couple the coach DID write comes through exactly as written — and 
     expect(couples(p)).toEqual([pair]);
     expect(p[p.length - 1].lastSetOfSession).toBe(true);
     expect(flowsStraightOn(p[p.length - 1])).toBe(false); // nothing to flow into
+  });
+
+  /*
+   * ⛔ AND THE COUPLE ITSELF MOVES AS ONE (found the same day, walking the fix above on the glass).
+   * With a real couple in the plan, "start this now" on one of its lifts brought forward that lift's
+   * FIRST SET ALONE — in a superset a run is one set — and it arrived saying "straight on to my
+   * partner" with a stranger behind it. `stationOrder` has said it since the day it was written:
+   * blocks move, never items.
+   */
+
+  /** Every step that runs straight on must be the couple's first lift going to its second — and nothing else. */
+  const tornOrMade = (p: Step[]): string[] =>
+    p.flatMap((st, i) =>
+      !st.lastSetOfSession && restAfterStep(st) <= REST_SKIP_THRESHOLD_S && !(st.exerciseId === LIFTS[1] && p[i + 1]?.exerciseId === LIFTS[2])
+        ? [`${st.exerciseId}→${p[i + 1]?.exerciseId}`]
+        : [],
+    );
+  const whole = (p: Step[]) => {
+    expect(couples(p)).toEqual([pair]);
+    expect(tornOrMade(p)).toEqual([]);
+  };
+
+  it('starting EITHER of its lifts from the map brings every round of it, in its own order', () => {
+    for (const tapped of [LIFTS[1], LIFTS[2]]) {
+      const moved = bringForward(plan, 0, tapped);
+      expect(moved.slice(0, 6).map((st) => st.exerciseId)).toEqual([LIFTS[1], LIFTS[2], LIFTS[1], LIFTS[2], LIFTS[1], LIFTS[2]]);
+      whole(moved);
+      expect(sessionSupersetAt(moved, 0)).toMatchObject({ position: 1, round: 1, rounds: 3 });
+    }
+  });
+
+  it('standing on it, its other lift is not "another station" — and "taken" steps the whole couple aside', () => {
+    const at = firstOf(plan, LIFTS[1]);
+    expect(aheadExercisesFrom(plan, at)).toEqual([LIFTS[3], LIFTS[4]]);
+    expect(bringForward(plan, at, LIFTS[2])).toBe(plan); // the partner IS what is next
+    const aside = bringForward(plan, at, aheadExercisesFrom(plan, at)[0]); // the wrist's "taken"
+    expect(aside.slice(at, at + 3).every((st) => st.exerciseId === LIFTS[3])).toBe(true);
+    expect(aside.slice(at + 3, at + 9).map((st) => st.exerciseId)).toEqual([LIFTS[1], LIFTS[2], LIFTS[1], LIFTS[2], LIFTS[1], LIFTS[2]]);
+    whole(aside);
+    // the coach's "defer" makes the same move
+    expect(deferCurrentExercise(plan, at).map((st) => st.exerciseId)).toEqual(aside.map((st) => st.exerciseId));
+    // …and a lift BEFORE the couple steps past all of it, not past its first set
+    const past = deferCurrentExercise(plan, 0);
+    expect(past.slice(0, 6).map((st) => st.exerciseId)).toEqual([LIFTS[1], LIFTS[2], LIFTS[1], LIFTS[2], LIFTS[1], LIFTS[2]]);
+    whole(past);
+  });
+
+  it('nothing lands inside a round she has begun: mid-round, the lift she starts comes after her second half', () => {
+    const at = firstOf(plan, LIFTS[1]) + 1; // the first lift of round 1 is logged; she is on its partner
+    const moved = bringForward(plan, at, last);
+    expect(moved[at].exerciseId).toBe(LIFTS[2]); // still the second half of the round
+    expect(moved[at + 1].exerciseId).toBe(last); // …and THEN the lift she asked for
+    whole(moved);
+    // the rounds she stepped away from come back numbered as they were written — 2 of 3, not 1 of 2
+    const back = moved.findIndex((st, i) => i > at + 1 && st.exerciseId === LIFTS[1]);
+    expect(sessionSupersetAt(moved, back)).toMatchObject({ position: 1, round: 2, rounds: 3 });
+  });
+
+  it('leaving it after two rounds: the round that is left waits at the end — still a couple, still round 3 of 3', () => {
+    const at = firstOf(plan, LIFTS[1]) + 4; // two rounds done; the third is next
+    const moved = bringForward(plan, at, LIFTS[3], { remainderToEnd: true });
+    expect(moved.slice(-2).map((st) => st.exerciseId)).toEqual([LIFTS[1], LIFTS[2]]);
+    whole(moved);
+    expect(sessionSupersetAt(moved, moved.length - 2)).toMatchObject({ position: 1, round: 3, rounds: 3 });
+  });
+
+  it('"+1 סט" does not exist inside a superset — there a set is a round of two', () => {
+    const lastRound = firstOf(plan, LIFTS[1]) + 4;
+    expect(addWorkingSet(plan, lastRound, LIFTS[1])).toBe(plan);
+    expect(addWorkingSet(plan, lastRound + 1, LIFTS[2])).toBe(plan);
+  });
+
+  it('⛔ a thousand random workouts over a day WITH a couple: never torn, never joined by a stranger, no set lost', () => {
+    let seed = 13102026;
+    const rnd = (n: number) => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) % n);
+    const census = (p: Step[]) => JSON.stringify(LIFTS.map((ex) => p.filter((st) => st.exerciseId === ex).length));
+    for (let run = 0; run < 1000; run++) {
+      let p = buildPlanFromCoach(coupled());
+      let boundary = 0;
+      for (let move = 0; move < 8; move++) {
+        boundary = Math.min(p.length - 1, boundary + rnd(4));
+        const ahead = [...new Set(p.slice(boundary).map((st) => st.exerciseId))];
+        const pick = ahead[rnd(ahead.length)];
+        const before = census(p);
+        const verb = rnd(4);
+        if (verb === 0) p = bringForward(p, boundary, pick);
+        else if (verb === 1) p = bringForward(p, boundary, pick, { remainderToEnd: true });
+        else if (verb === 2) p = deferCurrentExercise(p, boundary);
+        else {
+          const movable = movableExercisesFrom(p, boundary);
+          if (movable.length > 1) p = reorderAheadOf(p, boundary, movable[rnd(movable.length)], rnd(movable.length));
+        }
+        const bad = tornOrMade(p);
+        if (bad.length || census(p) !== before) throw new Error(`run ${run}, move ${move} (verb ${verb}, ${pick} at ${boundary}): ${JSON.stringify(bad)} ${before} → ${census(p)}`);
+        expect(couples(p)).toEqual([pair]);
+        expect(p.filter((st) => st.lastSetOfSession).length).toBe(1);
+      }
+    }
   });
 });

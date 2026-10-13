@@ -850,6 +850,7 @@
     "itemCarrying": "נושא {{load}} {{unit}}",
     "itemCarrying_female": "נושאת {{load}} {{unit}}",
     "superset": "סופרסט",
+    "supersetNoRest": "בלי מנוחה ביניהם",
     "supersetRound": "סופרסט · סבב {{n}} מתוך {{m}}",
     "supersetHowTwo": "שני תרגילים ברצף, בלי מנוחה ביניהם. נחים רק אחרי שניהם.",
     "supersetHowMany": "{{n}} תרגילים ברצף, בלי מנוחה ביניהם. נחים רק אחרי האחרון.",

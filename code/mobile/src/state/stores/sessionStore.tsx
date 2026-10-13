@@ -174,17 +174,43 @@ function exerciseRuns(plan: Step[]): Step[][] {
  */
 export function deferCurrentExercise(plan: Step[], fromIndex: number): Step[] {
   if (fromIndex < 0 || fromIndex >= plan.length) return plan;
-  const runs = exerciseRuns(plan);
-  let acc = 0;
-  let cur = -1;
-  for (let r = 0; r < runs.length; r++) {
-    if (fromIndex < acc + runs[r].length) { cur = r; break; }
-    acc += runs[r].length;
-  }
-  if (cur < 0 || cur >= runs.length - 1) return plan; // already last → unchanged
-  const reordered = [...runs.slice(0, cur), runs[cur + 1], runs[cur], ...runs.slice(cur + 2)];
-  const flat = reordered.flat();
+  // Units, not runs (`unitSpan`): a superset steps aside as one thing, and is stepped past as one.
+  const [from, to] = unitSpan(plan, fromIndex);
+  if (to >= plan.length) return plan; // already last → unchanged
+  const [, nextTo] = unitSpan(plan, to);
+  const flat = [...plan.slice(0, from), ...plan.slice(to, nextTo), ...plan.slice(from, to), ...plan.slice(nextTo)];
   return flat.map((st, i) => ({ ...st, globalIndex: i, lastSetOfSession: i === flat.length - 1 }));
+}
+
+/**
+ * ════ WHAT MOVES AS ONE THING (2026-10-13) ════
+ *
+ * The span `[from, to)` of the unit step `i` belongs to: a lift's own run of sets — or, when the
+ * step is part of a superset or a circuit, EVERY round of it that stands together.
+ *
+ * ⛔ THE BOARD'S VERBS MOVED RUNS, AND IN A SUPERSET A RUN IS ONE SET. Found walking the fix for the
+ * superset nobody wrote (`aSupersetIsOnlyEverWritten`): with a real couple in the plan — A, B, A, B —
+ * "start this now" on A brought forward A's first set alone. It arrived still saying "no rest, and
+ * then my partner", with whatever lift she had been standing on behind it: the couple she was given
+ * was torn, and the stage announced a new one with a stranger. `stationOrder` wrote the law for the
+ * order BEFORE a workout — *"BLOCKS move, never items … reordering those would change the training,
+ * which is the one thing forbidden"* — and the verbs that reorder DURING one had never heard it.
+ *
+ * Read off the steps, with the same reading every screen uses (`supersetAt`): what she is TOLD is
+ * a superset is what moves as one.
+ */
+function unitSpan(plan: Step[], i: number): [number, number] {
+  const round = supersetAt(plan, i, flowsStraightOn);
+  if (round) {
+    const n = round.exerciseIds.length;
+    return [round.first - (round.round - 1) * n, round.first + (round.rounds - round.round + 1) * n];
+  }
+  const id = plan[i].exerciseId;
+  let from = i;
+  while (from > 0 && plan[from - 1].exerciseId === id) from -= 1;
+  let to = i + 1;
+  while (to < plan.length && plan[to].exerciseId === id) to += 1;
+  return [from, to];
 }
 
 /**
@@ -277,15 +303,27 @@ export function bringForward(
   opts?: { remainderToEnd?: boolean },
 ): Step[] {
   if (boundary < 0 || boundary > plan.length) return plan;
-  const ahead = plan.slice(boundary);
-  const start = ahead.findIndex((st) => st.exerciseId === exerciseId);
-  if (start <= 0) return plan; // not ahead (−1), or already the very next thing (0)
-  let end = start;
-  while (end < ahead.length && ahead[end].exerciseId === exerciseId) end += 1;
-  const run = ahead.slice(start, end);
-  let lead = 0; // the remainder of the lift at the boundary, when it is to wait at the end
-  if (opts?.remainderToEnd) while (lead < start && ahead[lead].exerciseId === ahead[0].exerciseId) lead += 1;
-  const flat = [...plan.slice(0, boundary), ...run, ...ahead.slice(lead, start), ...ahead.slice(end), ...ahead.slice(0, lead)];
+  /*
+   * ⛔ A SUPERSET MOVES AS ONE, AND NOTHING LANDS INSIDE A ROUND (2026-10-13 — `unitSpan`).
+   *
+   *   · WHERE it lands: at the boundary — unless the boundary is the second lift of a round she has
+   *     already begun. Then "next" is after that round: its first half is in the record, saying
+   *     "straight on to my partner", and a lift set down between the two would be read as the partner.
+   *   · WHAT moves: the lift's own run — or, when the lift is half of a superset, every round of the
+   *     superset still standing together, starting from the round's first lift.
+   *   · WHAT waits at the end (`remainderToEnd`): the rest of whatever she is standing on, by the
+   *     same measure — a lift's remaining sets, or a superset's remaining rounds.
+   */
+  let at = boundary;
+  const standing = at < plan.length ? supersetAt(plan, at, flowsStraightOn) : null;
+  if (standing && standing.position > 1) at = standing.first + standing.exerciseIds.length;
+  const start = plan.findIndex((st, i) => i >= at && st.exerciseId === exerciseId);
+  if (start < 0 || start === at) return plan; // not ahead, or already the very next thing
+  const [from, to] = unitSpan(plan, start);
+  if (from <= at) return plan; // the other half of the round she is in, or of the one that is next: it IS next
+  let lead = 0;
+  if (opts?.remainderToEnd && at < plan.length) lead = Math.min(unitSpan(plan, at)[1], from) - at;
+  const flat = [...plan.slice(0, at), ...plan.slice(from, to), ...plan.slice(at + lead, from), ...plan.slice(to), ...plan.slice(at, at + lead)];
   return flat.map((st, i) => ({ ...st, globalIndex: i, lastSetOfSession: i === flat.length - 1 }));
 }
 
@@ -327,6 +365,9 @@ export function addWorkingSet(plan: Step[], boundary: number, exerciseId: string
    * she adds her set when she is on its last run, where "the next number" is free.
    */
   if (plan.slice(pick.start + pick.run.length).some((st) => st.exerciseId === exerciseId)) return plan;
+  // …and never into a superset at all, its last round included (2026-10-13): there a "set" is a ROUND
+  // of two lifts, and one more of one of them is a set that runs straight out of its own twin.
+  if (supersetAt(plan, pick.start, flowsStraightOn)) return plan;
   const working = pick.run.filter((st) => !st.warmup);
   const last = working[working.length - 1];
   if (!last || !last.target) return plan; // a hold, a run, a bridge — nothing to copy
@@ -348,9 +389,13 @@ export function addWorkingSet(plan: Step[], boundary: number, exerciseId: string
 
 /** The lifts she could start now — every run still ahead of `boundary`, first-seen order, the one at the boundary excluded. */
 export function aheadExercisesFrom(plan: Step[], boundary: number): string[] {
-  const nextId = plan[boundary]?.exerciseId;
+  if (!plan[boundary]) return [];
+  // What is at the boundary is not "another station" — and when that is a superset, neither is its
+  // other lift: the partner is the same round, not a place to walk to (`unitSpan`, 2026-10-13).
+  const [, to] = unitSpan(plan, boundary);
+  const here = new Set(plan.slice(boundary, to).map((st) => st.exerciseId));
   const out: string[] = [];
-  for (const st of plan.slice(boundary)) if (st.exerciseId !== nextId && !out.includes(st.exerciseId)) out.push(st.exerciseId);
+  for (const st of plan.slice(boundary)) if (!here.has(st.exerciseId) && !out.includes(st.exerciseId)) out.push(st.exerciseId);
   return out;
 }
 
@@ -1290,8 +1335,15 @@ export interface SessionSuperset extends SupersetView {
 export function sessionSupersetAt(plan: readonly Step[], index: number): SessionSuperset | null {
   const view = supersetAt(plan, index, flowsStraightOn);
   if (!view) return null;
+  /* The round is the step's OWN number, not a count of its neighbours (2026-10-13): a superset she
+     stepped away from after its first round comes back as "round 2 of 3" — the way a lift she left
+     comes back as "set 3 of 4" — and not as a new superset of two rounds. `supersetAt` can only see
+     the rounds that stand together; the step has known which round it is since the plan was built. */
+  const own = plan[index];
   return {
     ...view,
+    round: Math.max(view.round, own.exerciseSetIndex + 1),
+    rounds: Math.max(view.rounds, own.totalSetsInExercise),
     lifts: view.exerciseIds.map((exerciseId, k) => {
       const target = plan[view.first + k]?.target;
       return { exerciseId, weightKg: target?.recommendedWeight ?? null, reps: target?.recommendedReps ?? null };

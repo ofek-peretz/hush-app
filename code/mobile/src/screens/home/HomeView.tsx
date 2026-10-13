@@ -75,6 +75,7 @@ import { sheetSegments } from '@/components/WeekMeter';
 /* The one place the app decides how a prescription READS — "54 kg · 4×8–10". The queued card's
    three headline rows borrow the assembly rather than growing a second one beside it. */
 import { figureLoad, figureUnit, figureScheme, FigureCells } from '@/components/PlanLifts';
+import { CoupledRow, coupleSeat } from '@/components/CoupledRow';
 import type { Weekday } from '@/domain/coachPlan';
 import { useCopy } from '@/i18n/useCopy';
 import { bidi, bidiName, ltrIsland } from '@/i18n/bidi';
@@ -192,6 +193,8 @@ export interface HomePlanLift {
   changed?: LoadDirection;
   /** …and by how much, in kg (signed). Absent when only the direction is known. */
   changedByKg?: number;
+  /** This lift and the next are done back to back — a superset (`CoachRow.withNext`, `CoupledRow`). */
+  withNext?: boolean;
   /**
    * THE FIGURE HAS NOT LANDED YET (founder A.12 — "tapping the chips flickers").
    *
@@ -937,9 +940,13 @@ export function HomeView(props: HomeViewProps) {
                     ) : null}
                     {props.plan && props.plan.length > 0 && !props.dayDone ? (
                       <View style={styles.todayLifts}>
-                        {props.plan.map((lift) => (
+                        {props.plan.map((lift, i) => (
+                          /* ⛔ A COUPLE IS DRAWN AS ONE, HERE TOO (2026-10-13). The plan could hold a
+                             superset and this card printed two ordinary lifts — the workout was where
+                             she found out. Today is a preview, so it carries the word and the rail and
+                             leaves the explaining to the card behind it (`CoupledRow`). */
+                          <CoupledRow key={lift.exerciseId} seat={coupleSeat(props.plan!, i)}>
                           <Pressable
-                            key={lift.exerciseId}
                             accessibilityRole="button"
                             accessibilityLabel={lift.name}
                             onPress={() => props.onForm(lift.exerciseId)}
@@ -996,6 +1003,7 @@ export function HomeView(props: HomeViewProps) {
                               />
                             )}
                           </Pressable>
+                          </CoupledRow>
                         ))}
                       </View>
                     ) : null}
