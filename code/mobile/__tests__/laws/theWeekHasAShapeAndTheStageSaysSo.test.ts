@@ -90,7 +90,11 @@ describe('a superset is visible as one', () => {
   } as PlannedSession);
 
   it('rests between the ROUNDS and not between the lifts — the behaviour that was already right', () => {
-    expect(superset.map(restAfterStep)).toEqual([0, 90, 0, 90, 0, 0]);
+    // The last step is the end of the workout (`lastSetOfSession`), not a sixth "no rest": that zero
+    // used to ride along when she moved a lift, and made a couple of whatever landed after it
+    // (2026-10-13, `aSupersetIsOnlyEverWritten`). What it holds now is never run — nothing follows it.
+    expect(superset.slice(0, 5).map(restAfterStep)).toEqual([0, 90, 0, 90, 0]);
+    expect(superset.at(-1)!.lastSetOfSession).toBe(true);
   });
 
   it('⚠️ the step with no rest after it is the one that must SAY so', () => {

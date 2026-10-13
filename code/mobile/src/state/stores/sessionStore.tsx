@@ -1059,7 +1059,28 @@ export function buildPlanFromCoach(session: PlannedSession): Step[] {
         : {}),
       item: st.item,
       where: { block: st.block, round: st.round, position: st.position },
-      restAfterS: st.restAfterS,
+      /*
+       * ⛔ THE LAST STEP KEEPS ITS OWN REST — NOT `planRun`'S CLOSING ZERO (founder, 2026-10-13).
+       *
+       *   > *"לפעמים במסך זה פתאום מציג סופרסט בזמן האימון… לא היה סופרסט בתוכנית ופתאום הופיע
+       *   > במהלך האימון דרישה לסופרסט."*
+       *
+       * `planRun` ends a session by writing "no rest" onto its last step: nothing follows it, so
+       * nothing is rested for. True of the POSITION — and this carried it as if it were true of the
+       * SET. The plan is not fixed once the workout starts: "תפוס", the session map, a drag, a lift
+       * left after two sets, "+1 סט" all move steps, and each of them re-derives which step is last
+       * and carries everything else. So the old last set arrived in the middle of the workout still
+       * saying "no rest", with a different lift after it — which is, word for word, what a superset
+       * is to every screen that reads one (`domain/supersetView`). The rest was skipped and the
+       * stage announced a couple nobody wrote.
+       *
+       * "Nothing follows" has its own field, read first by everything that acts on the end of a
+       * workout (`afterSetCompletion`, `flowsStraightOn`, the lock screen's intent). So the last
+       * step holds what it would hold anywhere else — its block's own closing rest, absent when the
+       * coach did not say — and a step that stops being last is simply an ordinary step.
+       * Law: `aSupersetIsOnlyEverWritten`.
+       */
+      restAfterS: st.last ? session.blocks[st.block - 1]?.restAfterS : st.restAfterS,
       lastSetOfExercise: lastOfExercise,
       lastSetOfSession: st.last,
     });

@@ -114,12 +114,17 @@ describe('every shape that is not reps carries NO target', () => {
     ]);
   });
 
-  it('carries the prescribed rest, and none after the final step', () => {
+  it('carries the prescribed rest — and the final step says "last", not "no rest"', () => {
     const plan = workOf(buildPlanFromCoach(session));
     // A block that states no rest carries UNDEFINED, not zero — the runner then rests her at her own
     // learned pace (S-17). Zero is an instruction ("straight on"), and handing it to every block
     // whose `restS` the coach left out would run four sets of squats back to back.
-    expect(plan.map((s) => s.restAfterS)).toEqual([undefined, 45, 45, undefined, undefined, 0]);
+    //
+    // ⛔ AND THE FINAL STEP IS NO EXCEPTION (2026-10-13). This pinned a 0 there — `planRun`'s "nothing
+    // follows, so nothing is rested for" — and that zero travelled with the step whenever she moved a
+    // lift mid-workout, arriving in the middle of the session as a superset nobody wrote
+    // (`laws/aSupersetIsOnlyEverWritten`). The end of the workout is `lastSetOfSession`, and only that.
+    expect(plan.map((s) => s.restAfterS)).toEqual([undefined, 45, 45, undefined, undefined, undefined]);
     expect(plan.at(-1)!.lastSetOfSession).toBe(true);
   });
 });
@@ -156,8 +161,11 @@ describe('a circuit', () => {
 
   it('rests between laps and not between the exercises of a lap', () => {
     // Every zero here is the coach's own instruction: inside a lap you go straight on to the next
-    // exercise, and after the last lap the block is over.
-    expect(buildPlanFromCoach(session).map((s) => s.restAfterS)).toEqual([0, 120, 0, 120, 0, 0]);
+    // exercise. After the last lap the block is over — and that is said by `lastSetOfSession`, not
+    // by a sixth zero (2026-10-13: a zero on the final step is a superset waiting for her to move it).
+    const plan = buildPlanFromCoach(session);
+    expect(plan.map((s) => s.restAfterS)).toEqual([0, 120, 0, 120, 0, undefined]);
+    expect(plan.at(-1)!.lastSetOfSession).toBe(true);
   });
 });
 
