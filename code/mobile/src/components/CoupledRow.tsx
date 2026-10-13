@@ -50,8 +50,12 @@ export function coupleSeat(rows: readonly { withNext?: boolean }[], i: number): 
   return withPrev ? 'last' : null;
 }
 
-/** How far the rail hangs into the gutter of whatever card holds the list. Every plan card pads ≥ 16. */
-export const COUPLE_RAIL_HANG = 12;
+/**
+ * How far the rail hangs into the gutter of whatever card holds the list. Every plan card pads ≥ 18.
+ * Ten, not twelve (photographed on her first week, 2026-10-13): a couple that closes a day runs its
+ * rail down to the card's foot, and at twelve it came within two points of the rounded corner.
+ */
+export const COUPLE_RAIL_HANG = 10;
 const RAIL_WIDTH = 2;
 
 const styles = StyleSheet.create({
