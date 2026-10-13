@@ -112,6 +112,7 @@ afterAll(() => jest.useRealTimers());
 // ── what she does ────────────────────────────────────────────────────────────────────────────────
 type Action =
   | { do: 'complete'; weight?: number | null; reps?: number } // as written when no figures are given
+  | { do: 'start' } // Ready on a hold: its one clock starts
   | { do: 'endRest' }
   | { do: 'addRest' } // +15
   | { do: 'pause' }
@@ -180,7 +181,8 @@ const SCENARIOS: Scenario[] = [
     says: 'she lifts lighter than written on the first set — the phone carries her weight to the sets that follow',
     day: { name: 'Upper A', blocks: [{ rounds: 3, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('bb_row', 50)] }] },
     script: [{ do: 'complete', weight: 55, reps: 9 }, { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }],
-    agrees: { gap: 'the wrist alone returns to the written weight on the next set', stage: 2 },
+    // ✅ CLOSED 2026-10-13 (stage 2): her own number is copied forward on the wrist, as on the phone.
+    agrees: true,
   },
   {
     name: 'out-of-the-band',
@@ -209,10 +211,19 @@ const SCENARIOS: Scenario[] = [
   },
   {
     name: 'plank-day',
-    says: 'a day with a plank in it',
+    says: 'a day with a plank in it — one hold started on its clock and finished, one finished outright',
     day: { name: 'Core', blocks: [{ rounds: 2, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, restS: 45, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] }, { rounds: 2, items: [reps('bb_row', 50)] }] },
-    script: [...done(2), { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, ...done(2).slice(0, -1)],
-    agrees: { gap: 'a day with a hold in it is not sent to the wrist at all', stage: 1 },
+    script: [...done(2), { do: 'start' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, ...done(2).slice(0, -1)],
+    // ✅ CLOSED 2026-10-13 (stage 1b): the day is sent (in `moreWorkouts`), the engine runs the hold on
+    // its own clock, and Done writes an item — not a set of zero reps.
+    agrees: true,
+  },
+  {
+    name: 'carry-day',
+    says: 'a bodyweight lift, a loaded carry measured in metres, a dumbbell lift — ended early inside the carry',
+    day: { name: 'Full B', blocks: [{ rounds: 2, items: [reps('push_up', null)] }, { rounds: 2, restS: 60, items: [{ kind: 'distance', ex: 'farmer_carry', metres: 40, load: 24 }] }, { rounds: 2, items: [reps('db_row', 20)] }] },
+    script: [...done(2), { do: 'complete' }, { do: 'pause' }, { do: 'resume' }, { do: 'endRest' }, { do: 'finishEarly' }],
+    agrees: true,
   },
 ];
 
@@ -244,6 +255,8 @@ const FACTS = [
   'liveVolumeKg',
   'holdSeconds',
   'holdMetres',
+  'nextHoldSeconds',
+  'nextHoldMetres',
 ] as const;
 
 function told(): Record<string, unknown> {
@@ -305,7 +318,8 @@ async function run(s: Scenario) {
       const own = a.reps != null;
       if (v.currentTarget) await act(async () => void (await v.completeSet(own ? { weight: a.weight ?? null, reps: a.reps! } : undefined)));
       else await act(async () => void (await v.completeItem()));
-    } else if (a.do === 'endRest') await act(async () => v.endRest());
+    } else if (a.do === 'start') await act(async () => v.markSetStarted());
+    else if (a.do === 'endRest') await act(async () => v.endRest());
     else if (a.do === 'addRest') await act(async () => v.extendRest(15));
     else if (a.do === 'pause') await act(async () => v.pause());
     else if (a.do === 'resume') await act(async () => v.resume());
@@ -314,7 +328,12 @@ async function run(s: Scenario) {
     await settle();
     steps.push({ ...a, phone: told() });
   }
-  const logged = (await db.loadHistory())[0]?.sets ?? view!.session?.sets ?? [];
+  const saved = (await db.loadHistory())[0] ?? view!.session ?? null;
+  const logged = saved?.sets ?? [];
+  // The holds and carries she finished — what `completeItem` wrote, less the lifts (which are `sets`).
+  const held = (saved?.items ?? [])
+    .filter((i) => i.kind === 'time' || i.kind === 'distance')
+    .map((i) => ({ exerciseId: i.ex, block: i.block, round: i.round, position: i.position, kind: i.kind, ...(i.kind === 'time' ? { seconds: i.seconds } : { metres: i.metres }), load: i.load ?? null }));
   act(() => tree!.unmount());
   return {
     name: s.name,
@@ -326,6 +345,7 @@ async function run(s: Scenario) {
     steps,
     // What the PHONE wrote down — the record a wrist-alone workout must bring home.
     logged: logged.filter((l) => !l.isApproach).map((l) => ({ exerciseId: l.exerciseId, setIndex: l.setIndex, weight: l.actualWeight ?? null, reps: l.actualReps })),
+    held,
   };
 }
 
@@ -360,9 +380,8 @@ describe('one script, two engines — the phone’s half', () => {
   });
 
   it('⛔ the gaps that are still open are exactly these — closing one is said here, in the same change', () => {
-    expect(SCENARIOS.filter((s) => s.agrees !== true).map((s) => `${s.name} · stage ${s.agrees.stage} · ${s.agrees.gap}`)).toEqual([
-      'her-own-weight · stage 2 · the wrist alone returns to the written weight on the next set',
-      'plank-day · stage 1 · a day with a hold in it is not sent to the wrist at all',
-    ]);
+    // None, as of 2026-10-13: a superset, a day with a hold or a carry, and her own weight carried
+    // forward all run on the wrist alone exactly as the phone runs them. A new gap is NAMED here.
+    expect(SCENARIOS.filter((s) => s.agrees !== true).map((s) => `${s.name} · stage ${s.agrees.stage} · ${s.agrees.gap}`)).toEqual([]);
   });
 });

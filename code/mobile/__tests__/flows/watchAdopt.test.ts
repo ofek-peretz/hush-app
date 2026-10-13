@@ -305,3 +305,82 @@ describe('⛔ adopted inside a superset, the phone stands in the same round', ()
     expect(adopted.plan.every((st) => st.restAfterS == null)).toBe(true);
   });
 });
+
+/*
+ * ⛔ A HOLD COMES HOME AS A HOLD (2026-10-13, stage 1b). The wrist alone now runs a plank on its own
+ * clock and a carry in metres. Whichever way that work reaches the phone — adopted mid-flight, or as
+ * the finished record — it must be the item `completeItem` would have written, never a set of zero
+ * reps, and a hold still on stage must still be a hold on the phone's stage.
+ */
+describe('⛔ a day with a hold in it: adopted mid-flight, and carried home', () => {
+  const { buildCoachWatchPlan } = require('@/platform/watch/watchPlan');
+  const { buildPlanFromCoach } = require('@/state/stores/sessionStore');
+  const { watchRecordToSession, applyWatchSessionRecord } = require('@/platform/watch/watchReconcile');
+  const { parseSessionRecord } = require('@/platform/watch/protocol');
+  const reps = (ex, load) => ({ kind: 'reps', ex, load, reps: [8, 12] });
+  const DAY = { name: 'Core', blocks: [{ rounds: 1, items: [reps('bb_bench_press', 60)] }, { rounds: 2, restS: 45, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] }, { rounds: 1, items: [reps('bb_row', 50)] }] };
+  const built = buildCoachWatchPlan({ sessions: [{ id: 'day_1', ...DAY }], history: [], nowMs: NOW, restInterS: 90, restTransitionS: 120 });
+  const sent = built.moreWorkouts[0].steps;
+  const set0 = { exerciseId: 'bb_bench_press', setIndex: 0, recommendedWeight: 60, recommendedReps: 8, actualWeight: 60, actualReps: 8, completedAt: new Date(NOW - 120_000).toISOString() };
+  const held = (round) => ({ exerciseId: 'plank', block: 2, round, position: 1, kind: 'time', seconds: 45, completedAt: new Date(NOW - 30_000).toISOString() });
+
+  it('the day travels in the second list, whole, and its hold says what it is', () => {
+    expect(built.workouts).toEqual([]);
+    expect(sent.map((s) => (s.holdSeconds ? `hold ${s.holdSeconds}` : s.exerciseId))).toEqual(['bb_bench_press', 'hold 45', 'hold 45', 'bb_row']);
+    expect(sent[1]).toMatchObject({ targetReps: 0, targetWeight: null, restAfterS: 45, restWritten: true, at: { block: 2, round: 1, position: 1 } });
+  });
+
+  it('adopted while the second plank is on stage: the phone stands on a HOLD, with the first one in the record', () => {
+    const offer = local({ steps: sent, currentIndex: 2, sets: [set0], items: [held(1)], phase: 'active_set' });
+    expect(parseWatchLocalSession(offer)).not.toBeNull();
+    const adopted = adoptWatchSession(offer, NOW);
+    const own = buildPlanFromCoach(DAY);
+    // The step she is on has no target — that is what sends it to the hold's stage and its Done to completeItem.
+    expect(adopted.plan[2].target).toBeUndefined();
+    expect(adopted.plan[2].item).toEqual({ kind: 'time', ex: 'plank', seconds: 45 });
+    expect(adopted.plan.map((st) => st.where)).toEqual(own.map((st) => st.where));
+    expect(adopted.plan.map((st) => !!st.target)).toEqual(own.map((st) => !!st.target));
+    // What she already held is an item in the session, where the plan had it.
+    expect(adopted.session.items).toEqual([{ ex: 'plank', block: 2, round: 1, position: 1, at: held(1).completedAt, kind: 'time', seconds: 45, askedSeconds: 45 }]);
+    expect(adopted.session.sets.length).toBe(1);
+    expect(adopted.holdStartedAtMs).toBeNull(); // no clock was running
+  });
+
+  it('a hold whose clock is RUNNING on the wrist keeps its end to the second', () => {
+    const endsAt = NOW + 20_000; // 25 s into a 45 s plank
+    const offer = local({ steps: sent, currentIndex: 1, sets: [set0], phase: 'active_set', holdEndsAt: new Date(endsAt).toISOString() });
+    const adopted = adoptWatchSession(parseWatchLocalSession(offer), NOW);
+    expect(adopted.holdStartedAtMs).toBe(endsAt - 45_000);
+  });
+
+  it('the finished record: sets are sets, holds are items — and a record of holds alone is still a workout', async () => {
+    const record = { v: WATCH_PROTOCOL_VERSION, type: 'session_record', recordId: 'rec-h', workoutId: 'day_1', workoutName: 'Core', startedAt: new Date(NOW - 600_000).toISOString(), endedAt: new Date(NOW).toISOString(), earlyFinish: false, sets: [set0], items: [held(1), held(2)] };
+    const session = watchRecordToSession(parseSessionRecord(JSON.parse(JSON.stringify(record))));
+    expect(session.sets.map((s) => s.exerciseId)).toEqual(['bb_bench_press']);
+    expect(session.items.map((i) => `${i.ex} ${i.kind} ${i.seconds}s b${i.block} r${i.round}`)).toEqual(['plank time 45s b2 r1', 'plank time 45s b2 r2']);
+
+    const saved = [];
+    const acked = [];
+    const deps = {
+      loadHistory: async () => [],
+      appendCompletedSession: async (s) => void saved.push(s),
+      recordSessionCompleted: async () => ({ unlockedPortrait: false }),
+      markWorkoutCompleted: async () => {},
+      recordToModel: async () => {},
+      enqueuePendingSync: async () => {},
+      track: () => {},
+      ack: (id) => void acked.push(id),
+    };
+    await applyWatchSessionRecord({ ...record, recordId: 'rec-only-holds', sets: [] }, deps);
+    expect(saved.map((s) => s.items?.length)).toEqual([2]); // not dropped as "empty"
+    await applyWatchSessionRecord({ ...record, recordId: 'rec-nothing', sets: [], items: [] }, deps);
+    expect(saved.length).toBe(1); // nothing at all is still not a workout
+    expect(acked).toEqual(['rec-only-holds', 'rec-nothing']);
+  });
+
+  it('a hold that is not whole refuses the frame it arrived in', () => {
+    const bad = { ...held(1), seconds: 0 };
+    expect(parseWatchLocalSession(local({ steps: sent, currentIndex: 2, sets: [set0], items: [bad] }))).toBeNull();
+    expect(parseWatchLocalSession(local({ steps: sent, currentIndex: 2, sets: [set0], items: [{ ...held(1), block: 0 }] }))).toBeNull();
+  });
+});

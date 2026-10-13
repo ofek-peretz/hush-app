@@ -620,12 +620,13 @@ export function Home({ navigation, route }: Props) {
     let cancelled = false;
 
     /*
-     * ════ THE WRIST GETS THE COACH'S WEEK, MINUS WHAT IT CANNOT RUN ════
+     * ════ THE WRIST GETS THE COACH'S WEEK — EVERY DAY IT CAN RUN, WHOLE ════
      *
-     * The watch protocol is reps-at-a-load and nothing else, so a session with a run or a hold in
-     * it is not offered standalone — see `buildCoachWatchPlan`. Sending the lifts and dropping the
-     * rest would have her do a different workout from the one the coach wrote, on the one device
-     * with no screen to say so.
+     * A session is sent with every step in it, in the order the phone itself would run it, or it is
+     * not sent: dropping what the wrist cannot do would have her finish a different workout from
+     * the one the coach wrote, on the one device with no screen to say so. Since 2026-10-13 that
+     * includes a day with a hold or a carry in it (`buildCoachWatchPlan` → `moreWorkouts`); what
+     * is still not sent is a shape the wrist has no way to draw.
      */
     void (async () => {
       // S-17 — the standalone watch plan ships HER learned rests, not a tier bootstrap. The phone is

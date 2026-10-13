@@ -1,0 +1,483 @@
+{
+ "name": "carry-day",
+ "says": "a bodyweight lift, a loaded carry measured in metres, a dumbbell lift — ended early inside the carry",
+ "agrees": true,
+ "workoutId": "w_today",
+ "plan": {
+  "schema": 1,
+  "planId": "plan_gd61g4",
+  "generatedAt": "2027-01-15T08:00:00.000Z",
+  "restInterS": 90,
+  "restTransitionS": 120,
+  "workouts": [],
+  "moreWorkouts": [
+   {
+    "id": "w_today",
+    "name": "Full B",
+    "muscles": "",
+    "steps": [
+     {
+      "exerciseId": "push_up",
+      "exerciseName": "Push-Up",
+      "exerciseGroup": "Chest",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 0,
+      "targetWeight": null,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "push_up",
+      "exerciseName": "Push-Up",
+      "exerciseGroup": "Chest",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 1,
+      "targetWeight": null,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "farmer_carry",
+      "exerciseName": "Farmer’s Carry",
+      "exerciseGroup": "",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 2,
+      "targetWeight": 24,
+      "targetReps": 0,
+      "holdMetres": 40,
+      "restAfterS": 60,
+      "restWritten": true,
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "farmer_carry",
+      "exerciseName": "Farmer’s Carry",
+      "exerciseGroup": "",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 3,
+      "targetWeight": 24,
+      "targetReps": 0,
+      "holdMetres": 40,
+      "restAfterS": 120,
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 4,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "dumbbell"
+      },
+      "restAfterS": 150,
+      "at": {
+       "block": 3,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 5,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "dumbbell"
+      },
+      "restAfterS": 120,
+      "at": {
+       "block": 3,
+       "round": 2,
+       "position": 1
+      }
+     }
+    ],
+    "seat": 0
+   }
+  ]
+ },
+ "start": {
+  "phase": "active_set",
+  "exerciseName": "Push-Up",
+  "setNumber": 1,
+  "setsInExercise": 2,
+  "globalIndex": 0,
+  "totalSets": 6,
+  "targetWeight": null,
+  "targetReps": 8,
+  "targetRepsHi": 12,
+  "restTotalS": null,
+  "nextExerciseName": null,
+  "nextSetNumber": null,
+  "nextSetsInExercise": null,
+  "nextTargetWeight": null,
+  "nextTargetReps": null,
+  "completedExerciseName": null,
+  "liftIndex": 1,
+  "liftCount": 3,
+  "superset": null,
+  "setsSoFar": [],
+  "loadsSoFar": [],
+  "liveSets": 0,
+  "liveVolumeKg": 0,
+  "holdSeconds": null,
+  "holdMetres": null,
+  "nextHoldSeconds": null,
+  "nextHoldMetres": null,
+  "isWarmup": false
+ },
+ "steps": [
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Push-Up",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 0,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Push-Up",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": null,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     null
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Push-Up",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     null
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Push-Up",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 6,
+    "targetWeight": null,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 120,
+    "nextExerciseName": "Farmer’s Carry",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 24,
+    "nextTargetReps": 0,
+    "completedExerciseName": "Push-Up",
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8,
+     8
+    ],
+    "loadsSoFar": [
+     null,
+     null
+    ],
+    "liveSets": 2,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": 40,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Farmer’s Carry",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 6,
+    "targetWeight": 24,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": 40,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Farmer’s Carry",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 6,
+    "targetWeight": 24,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": 60,
+    "nextExerciseName": "Farmer’s Carry",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 24,
+    "nextTargetReps": 0,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": 40,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": 40,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "pause",
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Farmer’s Carry",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 6,
+    "targetWeight": 24,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": 40,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "resume",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Farmer’s Carry",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 6,
+    "targetWeight": 24,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": 60,
+    "nextExerciseName": "Farmer’s Carry",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 24,
+    "nextTargetReps": 0,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": 40,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": 40,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Farmer’s Carry",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 3,
+    "totalSets": 6,
+    "targetWeight": 24,
+    "targetReps": 0,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": 40,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "finishEarly",
+   "phone": {
+    "phase": "complete",
+    "summarySets": 2,
+    "summaryVolumeKg": 0,
+    "summaryLifts": [
+     "Push-Up × 8"
+    ]
+   }
+  }
+ ],
+ "logged": [
+  {
+   "exerciseId": "push_up",
+   "setIndex": 0,
+   "weight": null,
+   "reps": 8
+  },
+  {
+   "exerciseId": "push_up",
+   "setIndex": 1,
+   "weight": null,
+   "reps": 8
+  }
+ ],
+ "held": [
+  {
+   "exerciseId": "farmer_carry",
+   "block": 2,
+   "round": 1,
+   "position": 1,
+   "kind": "distance",
+   "metres": 40,
+   "load": null
+  }
+ ]
+}

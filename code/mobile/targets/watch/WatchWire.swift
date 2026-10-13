@@ -322,6 +322,13 @@ struct WireCardioLive: Codable, Equatable {
 
 let WATCH_PLAN_SCHEMA_VERSION = 1
 
+/// Where a step sits in the day as the coach wrote it — block, round, position, all 1-based.
+struct WireStepPlace: Codable, Equatable {
+  var block: Int
+  var round: Int
+  var position: Int
+}
+
 struct WirePlanStep: Codable, Equatable {
   var exerciseId: String
   var exerciseName: String
@@ -376,6 +383,18 @@ struct WirePlanStep: Codable, Equatable {
   var restWritten: Bool?
   /// The superset this step is part of — what the strip says on a set, and on the rest before it.
   var superset: WireSuperset?
+  /// ⛔ A HOLD OR A CARRY, NOT A SET (2026-10-13). A plank's seconds, a carry's metres: the step then
+  /// has no reps (`targetReps` is 0) and `targetWeight` is what she carries, if anything. Until this
+  /// day a workout with one in it was not sent to the wrist at all.
+  var holdSeconds: Int?
+  var holdMetres: Int?
+  /// Where it sits in the day — it rides the record home so a hold is put back where it was held.
+  var at: WireStepPlace?
+}
+
+extension WirePlanStep {
+  /// Not a set: it is finished, not counted.
+  var isHold: Bool { holdSeconds != nil || holdMetres != nil }
 }
 
 struct WirePlanWorkout: Codable, Equatable {
@@ -383,6 +402,8 @@ struct WirePlanWorkout: Codable, Equatable {
   var name: String
   var muscles: String
   var steps: [WirePlanStep]
+  /// Its place in her week, 0-based — so `workouts` and `moreWorkouts` read back in one order.
+  var seat: Int?
 }
 
 struct WirePlan: Codable, Equatable {
@@ -392,6 +413,38 @@ struct WirePlan: Codable, Equatable {
   var restInterS: Int
   var restTransitionS: Int
   var workouts: [WirePlanWorkout]
+  /// The days with a hold or a carry in them. They travel apart from `workouts` so that a watch one
+  /// build behind — which knows only sets — never sees them; this build reads both.
+  var moreWorkouts: [WirePlanWorkout]?
+}
+
+extension WirePlan {
+  /// Every workout the wrist can run, in her week's order.
+  var allWorkouts: [WirePlanWorkout] {
+    guard let more = moreWorkouts, !more.isEmpty else { return workouts }
+    let numbered = Array((workouts + more).enumerated())
+    return numbered
+      .sorted { a, b in
+        let sa = a.element.seat ?? a.offset
+        let sb = b.element.seat ?? b.offset
+        return sa != sb ? sa < sb : a.offset < b.offset
+      }
+      .map { $0.element }
+  }
+}
+
+/// One hold or carry the watch finished by itself. Not a set — it has no reps — so it does not ride
+/// `sets`: the phone turns it into the item its own `completeItem` would have written.
+struct WireRecordItem: Codable, Equatable {
+  var exerciseId: String
+  var block: Int
+  var round: Int
+  var position: Int
+  var kind: String // "time" | "distance"
+  var seconds: Int?
+  var metres: Int?
+  var load: Double?
+  var completedAt: String
 }
 
 // ---- Watch-local session record (watch → phone reconciliation) --------------
@@ -425,6 +478,8 @@ struct WireSessionRecord: Codable, Equatable {
   /// sensor, so here the wrist is the authority and its number becomes the session's.
   var kcal: Int?
   var sets: [WireRecordSet]
+  /// The holds and carries of the workout, in the order she finished them (2026-10-13).
+  var items: [WireRecordItem]?
 }
 
 /// Watch → phone intent. The phone de-dupes on `intentId` and rejects stale/wrong-
@@ -504,6 +559,9 @@ struct WireLocalSession: Codable {
   var pausedRestRemainingS: Int?
   var steps: [WirePlanStep]
   var sets: [WireRecordSet]
+  /// …and the holds she has finished, and the end of one whose clock is running (2026-10-13).
+  var items: [WireRecordItem]?
+  var holdEndsAt: String?
   var sentAt: String
 }
 

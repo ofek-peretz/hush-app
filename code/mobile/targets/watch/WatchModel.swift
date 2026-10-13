@@ -586,6 +586,7 @@ final class WatchModel: ObservableObject {
     let prev = localMirror
     localMirror = frame
     syncRestHaptics(prev: prev, next: frame)
+    syncHoldHaptics(prev: prev, next: frame) // a hold the wrist runs alone ends on her wrist too
     syncWorkoutRuntime(phase: frame.phase)
     recompute()
   }
@@ -611,7 +612,7 @@ final class WatchModel: ObservableObject {
   /// provisional, so a late phone answer can still reclaim authority (see apply()).
   private func startLocalWorkout(viaFallback: Bool = false) {
     guard localEngine == nil, !gatedNow, let stored = store.loadPlan() else { return }
-    let remaining = stored.plan.workouts.filter { !stored.doneWorkoutIds.contains($0.id) }
+    let remaining = stored.plan.allWorkouts.filter { !stored.doneWorkoutIds.contains($0.id) }
     let targetId = offlineQueuedWorkoutId ?? lobby?.workoutId
     guard let workout = remaining.first(where: { $0.id == targetId }) ?? remaining.first else { return }
     offlineQueuedWorkoutId = nil
@@ -626,7 +627,7 @@ final class WatchModel: ObservableObject {
   /// watch is fully bootable on its own. Phone-published lobbies take precedence.
   private func offlineLobby() -> WireLobby? {
     guard let stored = store.loadPlan() else { return nil }
-    let remaining = stored.plan.workouts.filter { !stored.doneWorkoutIds.contains($0.id) }
+    let remaining = stored.plan.allWorkouts.filter { !stored.doneWorkoutIds.contains($0.id) }
     guard !remaining.isEmpty else { return nil }
     /*
      * WHAT THE PHONE OFFERED, then what she picked here, then the plan's order — in that order.
@@ -651,7 +652,7 @@ final class WatchModel: ObservableObject {
       // false, which preserves the standalone contract: an offline athlete who already
       // has a plan can train; the paywall is settled the next time the phone is present.
       gated: lastKnownGated,
-      workouts: stored.plan.workouts.map { w in
+      workouts: stored.plan.allWorkouts.map { w in
         WireLobbyWorkout(
           id: w.id,
           name: w.name,
@@ -691,6 +692,8 @@ final class WatchModel: ObservableObject {
       pausedRestRemainingS: s.pausedRestRemainingS,
       steps: s.steps,
       sets: s.sets,
+      items: s.items,
+      holdEndsAt: s.holdEndsAt,
       sentAt: WatchWire.iso(Date())
     )
     if let json = WatchWire.encodeLocalSession(offer) { manager.send(intentJSON: json) }
@@ -971,7 +974,13 @@ final class WatchModel: ObservableObject {
   /// hold — on stage starts now, on every surface, exactly as the lock card's Ready and her word
   /// start it. Only under phone authority: a workout the wrist runs alone has no voice to answer.
   func setReady() {
-    guard localEngine == nil, let m = effectiveMirror else { return }
+    // Alone, the wrist has no voice to answer — but a HOLD still has a clock to start, and its own
+    // engine starts it (2026-10-13).
+    if let engine = localEngine {
+      engine.startHold()
+      return
+    }
+    guard let m = effectiveMirror else { return }
     if !sendIntent(type: "set_ready", expectedIndex: m.globalIndex) { intentDidNotLeave() }
   }
 

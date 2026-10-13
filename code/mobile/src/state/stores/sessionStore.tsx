@@ -3363,6 +3363,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         restExtraSecondsRef.current = 0;
         pendingRestSRef.current = null;
         pauseStartedAtRef.current = anchor.pausedAtMs;
+        // A hold whose clock was running on her wrist keeps running here, to the same second
+        // (2026-10-13) — the one clock every surface counts a hold on (`holdRun`).
+        if (adopted.holdStartedAtMs != null && onStep) setHoldRun({ key: holdKeyOf(onStep), startedAtMs: adopted.holdStartedAtMs });
         /*
          * ⛔ BEFORE THE DISPATCH, NOT AFTER THE RESOLVE. Going live is what triggers the first
          * mirror frame, and that frame has to carry the ack — otherwise the wrist, which is still

@@ -34,7 +34,7 @@ import type { Session, SetLog, SetTarget } from '@/data/local/models';
 import type { SessionMachine, SessionPhase } from '@/state/machines/sessionState';
 import type { Step } from '@/state/stores/sessionStore';
 import type { WatchLocalSession, WatchPlanStep, WatchRecordSet } from './protocol';
-import { watchSessionId } from './watchReconcile';
+import { watchItemToResult, watchSessionId } from './watchReconcile';
 
 export interface AdoptedSession {
   /** The live session, ready for `db.saveActiveSession` and the store. */
@@ -50,6 +50,9 @@ export interface AdoptedSession {
   restEndsAtMs: number | null;
   /** A rest the wrist handed over PAUSED: what remained of it at the pause. Null otherwise. */
   pausedRestRemainingS: number | null;
+  /** A hold running on the wrist at the handover: the instant its clock began, so the phone's one
+   *  clock counts to the same end. Null when no hold was running. */
+  holdStartedAtMs: number | null;
 }
 
 const isRestPhase = (p: SessionPhase | null | undefined) => p === 'REST_INTER' || !!p?.startsWith('REST_TRANSITION');
@@ -101,12 +104,36 @@ function stepOf(s: WatchPlanStep, total: number, next: WatchPlanStep | undefined
     ...(s.targetRepsHi != null ? { repBandHi: s.targetRepsHi } : {}),
     ...(s.reasonType ? { reasonType: s.reasonType } : {}),
   };
+  /*
+   * ⛔ A HOLD COMES BACK AS A HOLD (2026-10-13, stage 1b). The stage branches on the step having no
+   * `target`: that is what sends a plank to `ItemStage` and its Done to `completeItem`. Rebuilt as a
+   * set it would arrive as "0 kg × 0" — the defect `completeItem`'s own header describes. So a hold
+   * carries its `item` (what the coach wrote) and its `where` (so a second Done is refused as
+   * already recorded), and no target at all.
+   */
+  const where = s.at ? { where: { block: s.at.block, round: s.at.round, position: s.at.position } } : {};
+  const rest = s.restWritten && s.restAfterS != null ? { restAfterS: s.restAfterS } : {};
+  const edges = { lastSetOfExercise: !next || next.exerciseId !== s.exerciseId, lastSetOfSession: s.globalIndex === total - 1 };
+  if (s.holdSeconds != null || s.holdMetres != null) {
+    const load = s.targetWeight != null ? { load: s.targetWeight } : {};
+    return {
+      exerciseId: s.exerciseId,
+      globalIndex: s.globalIndex,
+      exerciseSetIndex: s.setIndexInExercise,
+      totalSetsInExercise: s.totalSetsInExercise,
+      item: s.holdSeconds != null ? { kind: 'time', ex: s.exerciseId, seconds: s.holdSeconds, ...load } : { kind: 'distance', ex: s.exerciseId, metres: s.holdMetres as number, ...load },
+      ...where,
+      ...rest,
+      ...edges,
+    };
+  }
   return {
     exerciseId: s.exerciseId,
     globalIndex: s.globalIndex,
     exerciseSetIndex: s.setIndexInExercise,
     totalSetsInExercise: s.totalSetsInExercise,
     target,
+    ...where,
     /*
      * ⛔ THE WRIST'S STEPS ARE THE PHONE'S OWN RUN NOW, AND ARE READ BACK BY THE PHONE'S OWN RULES
      * (2026-10-13, stage 1). Two things here used to be guessed from a set's number:
@@ -208,6 +235,7 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
     state: 'ACTIVE',
     earlyFinish: false,
     sets: local.sets.map(setOf),
+    ...(local.items && local.items.length > 0 ? { items: local.items.map(watchItemToResult) } : {}),
   };
 
   const machine: SessionMachine = {
@@ -224,7 +252,13 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
       ? Math.max(0, Math.round(local.pausedRestRemainingS))
       : null;
 
-  return { session, plan, machine, restStartedAtMs, restRemainingS, restEndsAtMs, pausedRestRemainingS };
+  /* A hold in flight: its end is absolute on the wrist, and its length is on the step — so the
+     start is the one subtraction, and the phone's countdown lands on the same second. */
+  const onStep = local.steps[local.currentIndex];
+  const holdEnd = phase === 'SET_PRESENTED' && local.holdEndsAt && onStep?.holdSeconds ? Date.parse(local.holdEndsAt) : NaN;
+  const holdStartedAtMs = Number.isFinite(holdEnd) ? holdEnd - (onStep.holdSeconds as number) * 1000 : null;
+
+  return { session, plan, machine, restStartedAtMs, restRemainingS, restEndsAtMs, pausedRestRemainingS, holdStartedAtMs };
 }
 
 /**

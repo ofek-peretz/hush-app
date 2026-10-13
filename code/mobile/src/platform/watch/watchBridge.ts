@@ -281,7 +281,7 @@ export class WatchSession {
     if (plan) {
       this.d.track(WATCH_EVENTS.planPublished, {
         planId: plan.planId,
-        workouts: plan.workouts.length,
+        workouts: plan.workouts.length + (plan.moreWorkouts?.length ?? 0),
       });
     }
   }

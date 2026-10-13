@@ -318,6 +318,20 @@ export interface WatchPlanStep {
   /** The superset this step is part of — the same four integers the live mirror carries
    *  (`MirrorSuperset`), read by the same rule (`domain/supersetView`). Absent on an ordinary set. */
   superset?: { round: number; rounds: number; position: number; count: number };
+  /**
+   * ⛔ A HOLD OR A CARRY, NOT A SET (2026-10-13, stage 1b). A plank's seconds, a carry's metres — the
+   * step then has no reps (`targetReps` is 0) and `targetWeight` is what she carries, if anything.
+   *
+   * A day with one of these in it was not sent to the wrist AT ALL: the plan was "reps at a load and
+   * nothing else", so the whole workout could not be started with the phone in a locker and the
+   * Start screen offered a different day. The wrist has drawn a hold correctly since 2026-09-17 —
+   * for a session the PHONE runs. Now its own engine is told one too.
+   */
+  holdSeconds?: number;
+  holdMetres?: number;
+  /** Where the step sits in the day as the coach wrote it — block, round, position, 1-based
+   *  (`planRun`). It rides the record home, so a hold is put back exactly where it was held. */
+  at?: { block: number; round: number; position: number };
 }
 
 export interface WatchPlanWorkout {
@@ -325,6 +339,8 @@ export interface WatchPlanWorkout {
   name: string;
   muscles: string;
   steps: WatchPlanStep[];
+  /** Its place in her week, 0-based — so `workouts` and `moreWorkouts` read back in one order. */
+  seat?: number;
 }
 
 export interface WatchPlanSnapshot {
@@ -338,6 +354,15 @@ export interface WatchPlanSnapshot {
   restTransitionS: number;
   /** The week's REMAINING (not completed, non-rest) workouts, fully prescribed. */
   workouts: WatchPlanWorkout[];
+  /**
+   * ⛔ THE DAYS WITH A HOLD OR A CARRY IN THEM TRAVEL HERE, NOT IN `workouts` (2026-10-13).
+   *
+   * A watch one build behind knows only sets. Handed a plank inside `workouts` it would draw it as
+   * "set 1 of 2 · × 0" and write a set of zero reps into her record. It has never heard of this key,
+   * so it ignores it and is sent exactly the week it was always sent; a watch that knows a hold
+   * reads both lists and orders them by `seat`.
+   */
+  moreWorkouts?: WatchPlanWorkout[];
 }
 
 // ---- Watch-local session record (watch → phone reconciliation) --------------
@@ -352,6 +377,24 @@ export interface WatchRecordSet {
   recommendedReps: number;
   actualWeight: number | null;
   actualReps: number;
+  completedAt: string; // ISO
+}
+
+/**
+ * One hold or carry the watch finished by itself (2026-10-13). NOT a set — it has no reps — so it
+ * does not ride `sets`: it becomes an `ItemResult` on the phone, put back at the block, round and
+ * position the plan gave it, exactly as `completeItem` writes one for a session the phone ran.
+ */
+export interface WatchRecordItem {
+  exerciseId: string;
+  block: number;
+  round: number;
+  position: number;
+  kind: 'time' | 'distance';
+  /** What was asked — the wrist finishes a hold as prescribed (Done), it does not time her. */
+  seconds?: number;
+  metres?: number;
+  load?: number | null;
   completedAt: string; // ISO
 }
 
@@ -375,6 +418,8 @@ export interface WatchSessionRecord {
    *  read everywhere through `domain/energy.sessionKcal`, never re-estimated beside it. */
   kcal?: number;
   sets: WatchRecordSet[];
+  /** The holds and carries of the workout, in the order she finished them. Absent = none. */
+  items?: WatchRecordItem[];
 }
 
 /**
@@ -473,6 +518,25 @@ export function parseCardioRecord(raw: unknown): WatchCardioRecord | null {
   };
 }
 
+/** The holds of a record or of a live offer: absent, or every one of them whole. */
+function readableItems(raw: unknown): boolean {
+  if (raw == null) return true;
+  if (!Array.isArray(raw)) return false;
+  const whole = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 1;
+  for (const i of raw) {
+    if (!i || typeof i !== 'object') return false;
+    const it = i as Record<string, unknown>;
+    if (typeof it.exerciseId !== 'string' || it.exerciseId.length === 0) return false;
+    if (!whole(it.block) || !whole(it.round) || !whole(it.position)) return false;
+    if (it.kind !== 'time' && it.kind !== 'distance') return false;
+    const amount = it.kind === 'time' ? it.seconds : it.metres;
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return false;
+    if (it.load != null && (typeof it.load !== 'number' || !Number.isFinite(it.load))) return false;
+    if (typeof it.completedAt !== 'string' || Number.isNaN(Date.parse(it.completedAt))) return false;
+  }
+  return true;
+}
+
 /** Parse a wire-form session record defensively — anything unreadable is null,
  *  never a throw (the phone must survive any watch payload). */
 export function parseSessionRecord(raw: unknown): WatchSessionRecord | null {
@@ -498,6 +562,7 @@ export function parseSessionRecord(raw: unknown): WatchSessionRecord | null {
     if (typeof set.exerciseId !== 'string' || typeof set.setIndex !== 'number') return null;
     if (typeof set.actualReps !== 'number') return null;
   }
+  if (!readableItems(r.items)) return null;
   // `kcal` is the one field here the phone STORES as a measurement rather than re-deriving, so it
   // is the one field that must not ride the blanket cast below. Junk is dropped (the session falls
   // back to the estimate); it is never coerced, and never stamped as a measurement it is not.
@@ -1163,6 +1228,11 @@ export interface WatchLocalSession {
   steps: WatchPlanStep[];
   /** What she has logged so far, in order. */
   sets: WatchRecordSet[];
+  /** …and the holds and carries she has finished (2026-10-13). Absent = none. */
+  items?: WatchRecordItem[];
+  /** A hold whose clock is running on the wrist ends at this instant — kept to the second across
+   *  the handover, as a rest's end is. Absent when no hold is running. */
+  holdEndsAt?: string | null;
   sentAt: string; // ISO
 }
 
@@ -1219,6 +1289,10 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
     if (st.restAfterS != null && (typeof st.restAfterS !== 'number' || !Number.isFinite(st.restAfterS) || st.restAfterS < 0)) {
       return null;
     }
+    // A hold is so many seconds, a carry so many metres — or the step is a set and says neither.
+    for (const k of ['holdSeconds', 'holdMetres'] as const) {
+      if (st[k] != null && (typeof st[k] !== 'number' || !Number.isFinite(st[k] as number) || (st[k] as number) <= 0)) return null;
+    }
   }
   /** The presented step must exist in the plan she sent, or "where she is" means nothing. */
   if (r.currentIndex >= (r.steps as unknown[]).length) return null;
@@ -1234,6 +1308,8 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
     }
     if (typeof set.completedAt !== 'string' || Number.isNaN(Date.parse(set.completedAt))) return null;
   }
+  if (!readableItems(r.items)) return null;
+  if (r.holdEndsAt != null && (typeof r.holdEndsAt !== 'string' || Number.isNaN(Date.parse(r.holdEndsAt)))) return null;
   if (typeof r.sentAt !== 'string' || Number.isNaN(Date.parse(r.sentAt))) return null;
   return o as WatchLocalSession;
 }

@@ -1,29 +1,39 @@
 /**
  * ════ THE WATCH OFFERS ONLY WHAT IT CAN HONESTLY EXECUTE ════
  *
- * The wrist's protocol is reps-at-a-load and nothing else — `targetWeight`, `targetReps`,
- * `setIndexInExercise`. Three of the coach's four shapes have no field in it: a 400 m repeat, a
- * 45-second hold, and open work all have nowhere to go.
+ * Until 2026-10-13 the wrist's own protocol was reps-at-a-load and nothing else — `targetWeight`,
+ * `targetReps`, `setIndexInExercise` — and three of the coach's four shapes had no field in it. The
+ * tempting fix was to send the lifts and drop the rest, and this law existed to prevent exactly
+ * that: she starts "Intervals & Core" on her wrist, does the squats, never sees the running, and
+ * finishes a different workout from the one the coach wrote — on the one device with no screen to
+ * say so. So a session with anything the wrist could not run was NOT OFFERED standalone, and the
+ * header said so plainly: *"widening the protocol is native work … and until it lands, 'you cannot
+ * start this one from your wrist' is the honest answer."*
  *
- * The tempting fix is to send the lifts and drop the rest. That is the one thing this whole layer
- * exists to prevent: she starts "Intervals & Core" on her wrist, does the squats, never sees the
- * running, and finishes a different workout from the one the coach wrote — on the one device with
- * no screen to say so, and no phone in her pocket to say it either.
+ * It has landed (the wrist-alone plan, stage 1b). The founder: *"אני רוצה שהאימון בשעון יהיה ברמה
+ * הגבוהה ביותר."* A day with a plank in it could not be started with the phone in a locker, and the
+ * Start screen offered another day in its place. The wrist's engine now runs a hold on its own
+ * clock and a carry in metres, and brings each home as an item
+ * (`sync/theWristRunsWhatThePhoneRuns` plays both on the watch's real engine against the phone).
  *
- * So a session with anything the wrist cannot run is NOT OFFERED standalone. That is a true
- * statement about this device today. Widening the protocol is native work — Swift, a schema bump,
- * and a watch binary that installs asynchronously from the phone — and until it lands, "you cannot
- * start this one from your wrist" is the honest answer rather than a silent edit of her session.
+ * What the law still holds, in its new shape:
+ *
+ *   · THE WHOLE SESSION OR NONE OF IT. A day is sent with every step in it, in the phone's own
+ *     order. Nothing is ever dropped to make a session fit.
+ *   · A WATCH ONE BUILD BEHIND IS SENT ONLY SETS. A day with a hold or a carry travels in
+ *     `moreWorkouts`, a key that watch has never heard of — handed a plank inside `workouts` it would
+ *     draw "set 1 of 2 · × 0" and write a set of zero reps into her record.
+ *   · A SHAPE THE WRIST CANNOT DRAW IS STILL NOT SENT — the honest answer, where it is still true.
  */
 // @ts-nocheck
 
-// 
+//
 
 import { buildCoachWatchPlan } from '@/platform/watch/watchPlan';
 import { parseCoachPlan } from '@/domain/coachPlan';
 import { coachWorkoutId } from '@/domain/coachWeek';
 
-/** A week with one liftable session and one the wrist has no vocabulary for. */
+/** A week with one day of lifts, and one with four 400 m repeats ahead of its squats. */
 function week() {
   const r = parseCoachPlan(
     JSON.stringify({
@@ -54,15 +64,23 @@ const build = (sessions = week()) =>
   buildCoachWatchPlan({ sessions, nowMs: Date.parse('2026-08-01T09:00:00Z'), restInterS: 120, restTransitionS: 150 });
 
 describe('what reaches the wrist', () => {
-  it('offers the session it can run', () => {
+  it('a day of lifts travels where every watch looks', () => {
     const plan = build()!;
     expect(plan.workouts.map((w) => w.name)).toEqual(['Lower']);
   });
 
-  it('does NOT offer a session it would have to edit to fit', () => {
-    // The whole point. "Intervals & Core" is three squat rounds the wrist could run and four 400 m
-    // repeats it could not — and a workout with the running quietly missing is not that workout.
-    expect(build()!.workouts.some((w) => w.name === 'Intervals & Core')).toBe(false);
+  it('⛔ a day with a distance or a hold in it is sent WHOLE — and only where a watch that knows one looks', () => {
+    const plan = build()!;
+    // Never in `workouts`: a watch one build behind knows only sets.
+    expect(plan.workouts.some((w) => w.name === 'Intervals & Core')).toBe(false);
+    const [intervals] = plan.moreWorkouts!;
+    expect(intervals.name).toBe('Intervals & Core');
+    // Whole, in the order the phone would run it: four 400 m repeats, then three sets of squats.
+    expect(intervals.steps.map((s) => (s.holdMetres ? `${s.holdMetres} m` : s.exerciseId))).toEqual(['400 m', '400 m', '400 m', '400 m', 'bb_back_squat', 'bb_back_squat', 'bb_back_squat']);
+    // A repeat is not a set: no reps, and the rest the coach wrote after it.
+    expect(intervals.steps[0]).toMatchObject({ targetReps: 0, holdMetres: 400, restAfterS: 60, restWritten: true, at: { block: 1, round: 1, position: 1 } });
+    // …and the two lists read back in her week's order.
+    expect([plan.workouts[0].seat, intervals.seat]).toEqual([0, 1]);
   });
 
   it('expands rounds into the sets the wrist counts through', () => {
@@ -85,13 +103,19 @@ describe('what reaches the wrist', () => {
     expect(squat.restInterS).toBe(120);
   });
 
-  it('says NOTHING rather than showing an empty lobby when it can run none of them', () => {
-    /*
-     * An empty plan on the wrist reads as "you have no workouts". She has a week — just not one
-     * this device can run by itself, which is a different sentence and the honest one.
-     */
+  it('a week of nothing but such days leaves `workouts` EMPTY for an older watch — "nothing left to run", not a stale week', () => {
     const cardioOnly = week().filter((s) => s.name === 'Intervals & Core');
-    expect(build(cardioOnly)).toBeNull();
+    const plan = build(cardioOnly)!;
+    expect(plan.workouts).toEqual([]);
+    expect(plan.moreWorkouts!.map((w) => w.name)).toEqual(['Intervals & Core']);
+  });
+
+  it('says NOTHING when there is nothing at all, and does not send a shape it cannot draw', () => {
     expect(build([])).toBeNull();
+    // An item of a kind the wrist has no way to draw: the day is not sent, in either list.
+    const strange = [{ id: 'w_x', name: 'Mobility', blocks: [{ rounds: 1, items: [{ kind: 'open', ex: 'mobility_flow' }] }] }];
+    expect(build(strange)).toBeNull();
+    const mixed = build([...week(), ...strange])!;
+    expect([...mixed.workouts, ...(mixed.moreWorkouts ?? [])].map((w) => w.name)).toEqual(['Lower', 'Intervals & Core']);
   });
 });

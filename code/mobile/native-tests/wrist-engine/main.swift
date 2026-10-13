@@ -141,7 +141,7 @@ for file in files {
     diffs.append("the wrist was sent NO plan for this day — it cannot be started here at all")
   } else if let planData = try? JSONSerialization.data(withJSONObject: root["plan"]!),
             let plan = try? JSONDecoder().decode(WirePlan.self, from: planData),
-            let workout = plan.workouts.first(where: { $0.id == workoutId }) {
+            let workout = plan.allWorkouts.first(where: { $0.id == workoutId }) {
     let e = LocalWorkoutEngine(workout: workout, plan: plan, store: WatchStore())
     e.onFrame = { last = $0 }
     e.onComplete = { r, frame in
@@ -165,6 +165,7 @@ for file in files {
         let weight: Double? = own ? (step["weight"] as? NSNumber)?.doubleValue : last?.targetWeight
         let reps: Int = own ? ((step["reps"] as? NSNumber)?.intValue ?? 0) : (last?.targetReps ?? 0)
         engine.completeSet(weight: weight, reps: reps)
+      case "start": engine.startHold()
       case "endRest": engine.endRest()
       case "addRest": engine.addRest(seconds: 15)
       case "pause": engine.pause()
@@ -185,6 +186,18 @@ for file in files {
     }
     if !same(logged, home) {
       diffs.append("the record — PHONE \(show(logged)) / WRIST \(show(home))")
+    }
+    // …and every hold and carry she finished: where the plan had it, and what was asked.
+    let heldOnPhone = root["held"] as? [[String: Any]] ?? []
+    let heldOnWrist: [[String: Any]] = (record?.items ?? engine.state.items ?? []).map { i in
+      var row: [String: Any] = ["exerciseId": i.exerciseId, "block": i.block, "round": i.round, "position": i.position, "kind": i.kind]
+      if let s = i.seconds { row["seconds"] = s }
+      if let m = i.metres { row["metres"] = m }
+      if let l = i.load { row["load"] = l }
+      return row
+    }
+    if !same(heldOnPhone, heldOnWrist) {
+      diffs.append("the holds — PHONE \(show(heldOnPhone)) / WRIST \(show(heldOnWrist))")
     }
   }
 

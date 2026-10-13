@@ -5,7 +5,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_4syim3",
+  "planId": "plan_rp8lq4",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -33,7 +33,12 @@
         20
        ]
       },
-      "restAfterS": 150
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_bench_press",
@@ -53,7 +58,12 @@
         20
        ]
       },
-      "restAfterS": 150
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 2,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_bench_press",
@@ -73,7 +83,12 @@
         20
        ]
       },
-      "restAfterS": 120
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 3,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_row",
@@ -93,7 +108,12 @@
         15
        ]
       },
-      "restAfterS": 150
+      "restAfterS": 150,
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_row",
@@ -113,9 +133,15 @@
         15
        ]
       },
-      "restAfterS": 120
+      "restAfterS": 120,
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 1
+      }
      }
-    ]
+    ],
+    "seat": 0
    }
   ]
  },
@@ -145,6 +171,8 @@
   "liveVolumeKg": 0,
   "holdSeconds": null,
   "holdMetres": null,
+  "nextHoldSeconds": null,
+  "nextHoldMetres": null,
   "isWarmup": false
  },
  "steps": [
@@ -180,6 +208,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -215,6 +245,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -250,6 +282,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -285,6 +319,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -320,6 +356,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -355,6 +393,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -390,6 +430,8 @@
     "liveVolumeKg": 480,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -427,6 +469,8 @@
     "liveVolumeKg": 960,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -464,6 +508,8 @@
     "liveVolumeKg": 960,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -503,6 +549,8 @@
     "liveVolumeKg": 1440,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -534,6 +582,8 @@
     "liveVolumeKg": 1440,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -569,6 +619,8 @@
     "liveVolumeKg": 1840,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -610,5 +662,6 @@
    "weight": 50,
    "reps": 8
   }
- ]
+ ],
+ "held": []
 }

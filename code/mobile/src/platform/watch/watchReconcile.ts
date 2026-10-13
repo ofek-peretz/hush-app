@@ -22,12 +22,12 @@
 
 // 
 
-import type { CardioActivity, ProgramDay, Session, SetLog } from '@/data/local/models';
+import type { CardioActivity, ItemResult, ProgramDay, Session, SetLog } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
 import { sessionTrained } from '@/domain/completion';
 import { HttpError } from '@/data/api/httpErrors';
 import { WATCH_EVENTS } from '@/platform/events';
-import { parseCardioRecord, parseSessionRecord, type WatchCardioRecord, type WatchSessionRecord } from './protocol';
+import { parseCardioRecord, parseSessionRecord, type WatchCardioRecord, type WatchRecordItem, type WatchSessionRecord } from './protocol';
 
 /** One set in the shape the backend model sync expects (same as finalize()). */
 export interface WatchSyncSet {
@@ -104,7 +104,20 @@ export function watchRecordToSession(r: WatchSessionRecord): Session {
     // exactly as it always has.
     ...(r.kcal == null ? {} : { measuredKcal: r.kcal }),
     sets,
+    // The holds and carries she finished on the wrist, put back where the plan had them (2026-10-13).
+    ...(r.items && r.items.length > 0 ? { items: r.items.map(watchItemToResult) } : {}),
   };
+}
+
+/**
+ * A hold the wrist finished → the `ItemResult` `completeItem` would have written for it on the
+ * phone. The wrist finishes a hold AS PRESCRIBED (Done), so what was held is what was asked.
+ */
+export function watchItemToResult(i: WatchRecordItem): ItemResult {
+  const base = { ex: i.exerciseId, block: i.block, round: i.round, position: i.position, at: i.completedAt };
+  return i.kind === 'time'
+    ? { ...base, kind: 'time', seconds: i.seconds ?? 0, askedSeconds: i.seconds ?? 0, ...(i.load != null ? { load: i.load } : {}) }
+    : { ...base, kind: 'distance', metres: i.metres ?? 0, askedMetres: i.metres ?? 0, ...(i.load != null ? { load: i.load } : {}) };
 }
 
 /**
@@ -118,9 +131,10 @@ export async function applyWatchSessionRecord(raw: unknown, deps: WatchReconcile
     return; // unreadable — nothing to ack
   }
   try {
-    // Not a workout (zero sets logged) — never saved or counted, but acked so the
-    // watch stops re-sending it.
-    if (record.sets.length === 0) {
+    // Not a workout (nothing logged) — never saved or counted, but acked so the
+    // watch stops re-sending it. A hold she finished is work (2026-10-13): a record of holds alone
+    // is a workout, and dropping it as "empty" would lose the one thing she did.
+    if (record.sets.length === 0 && (record.items?.length ?? 0) === 0) {
       deps.track(WATCH_EVENTS.recordReceived, {
         outcome: 'rejected',
         reason: 'empty',

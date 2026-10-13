@@ -234,11 +234,22 @@ export function buildCoachWatchPlan(inp: {
   restInterSFor?: (exerciseId: string) => number | null;
 }): WatchPlanSnapshot | null {
   const workouts: WatchPlanWorkout[] = [];
+  /** The days with a hold or a carry in them — see `WatchPlanSnapshot.moreWorkouts`. */
+  const more: WatchPlanWorkout[] = [];
   const lastOf = lastTimeLookup(inp.history);
 
   for (const session of inp.sessions) {
-    const everyItemIsALift = session.blocks.every((b) => b.items.every((i) => i.kind === 'reps'));
-    if (!everyItemIsALift) continue;
+    /*
+     * ⛔ A DAY WITH A HOLD IN IT IS SENT NOW (2026-10-13, stage 1b). This guard was "every item is a
+     * lift, or the day is not sent" — so a week with one plank in it had a workout she could not
+     * start with her phone in a locker, and the wrist's Start screen offered another day in its
+     * place. A hold and a carry are steps the wrist has known how to DRAW since 2026-09-17; its own
+     * engine runs them now (`LocalWorkoutEngine` — the hold's clock, Done, the item in the record).
+     * What is still not sent is a shape the wrist cannot draw at all.
+     */
+    const kinds = session.blocks.flatMap((b) => b.items.map((i) => i.kind));
+    if (!kinds.every((k) => k === 'reps' || k === 'time' || k === 'distance')) continue;
+    const everyItemIsALift = kinds.every((k) => k === 'reps');
 
     /*
      * ⛔ THE PHONE'S OWN RUN OF THE DAY, NOT A SECOND FLATTENING OF IT (2026-10-13, stage 1).
@@ -268,11 +279,36 @@ export function buildCoachWatchPlan(inp: {
     run.forEach((st, at) => {
       const item = st.item;
       const block = session.blocks[st.block - 1];
+      const round = supersetAt(shape, at, (s) => straightOn(shape.indexOf(s)));
+      /** What only the whole run can say about a step — the same for a set and for a hold. */
+      const placed = {
+        // After this step — see the note at the head of this loop.
+        restAfterS: Math.round(restAfter[at]), // an integer on the wire: the wrist decodes `Int`, and a fraction refuses the whole plan
+        ...(said[at] != null ? { restWritten: true } : {}),
+        ...(round ? { superset: { round: round.round, rounds: round.rounds, position: round.position, count: round.exerciseIds.length } } : {}),
+        at: { block: st.block, round: st.round, position: st.position },
+      };
+      if (item.kind === 'time' || item.kind === 'distance') {
+        // A hold or a carry: its seconds or its metres, what she carries if anything, and no reps.
+        steps.push({
+          exerciseId: item.ex,
+          exerciseName: exerciseDisplayName(item.ex),
+          exerciseGroup: '',
+          setIndexInExercise: st.round - 1,
+          totalSetsInExercise: block.rounds,
+          globalIndex: global,
+          targetWeight: item.load ?? null,
+          targetReps: 0,
+          ...(item.kind === 'time' ? { holdSeconds: Math.round(item.seconds) } : { holdMetres: Math.round(item.metres) }),
+          ...placed,
+        });
+        global += 1;
+        return;
+      }
       if (item.kind !== 'reps') return; // unreachable given the guard; the narrowing is for TS
       const ex = exerciseById(item.ex);
       const setup = loadSetup(item.ex, item.load, 'kg');
       const r = st.round - 1;
-      const round = supersetAt(shape, at, (s) => straightOn(shape.indexOf(s)));
       steps.push({
         exerciseId: item.ex,
         // Her language's name — the same one the phone's mirror carries (`buildMirrorSteps`),
@@ -312,32 +348,32 @@ export function buildCoachWatchPlan(inp: {
         ...(setup
           ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
           : {}),
-        // After this step — see the note at the head of this loop.
-        restAfterS: Math.round(restAfter[at]), // an integer on the wire: the wrist decodes `Int`, and a fraction refuses the whole plan
-        ...(said[at] != null ? { restWritten: true } : {}),
-        ...(round ? { superset: { round: round.round, rounds: round.rounds, position: round.position, count: round.exerciseIds.length } } : {}),
+        ...placed,
       });
       global += 1;
     });
     if (steps.length === 0) continue;
-    workouts.push({
+    // A watch one build behind knows only sets: a day with a hold goes where it does not look.
+    (everyItemIsALift ? workouts : more).push({
       id: session.id,
       name: session.name,
       // The coach names its own sessions, so there is no muscle line to derive — and inventing one
       // would be a claim about a week nobody made.
       muscles: '',
       steps,
+      seat: inp.sessions.indexOf(session),
     });
   }
 
-  if (workouts.length === 0) return null;
+  if (workouts.length === 0 && more.length === 0) return null;
   return {
     schema: WATCH_PLAN_SCHEMA_VERSION,
-    planId: contentHash(workouts),
+    planId: contentHash([...workouts, ...more]),
     generatedAt: new Date(inp.nowMs).toISOString(),
     restInterS: inp.restInterS,
     restTransitionS: inp.restTransitionS,
     workouts,
+    ...(more.length > 0 ? { moreWorkouts: more } : {}),
   };
 }
 

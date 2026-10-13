@@ -28,7 +28,7 @@ import {
   WATCH_PROTOCOL_VERSION, WATCH_PLAN_SCHEMA_VERSION, makeStateEnvelope, parseWatchIntent,
   parseSessionRecord, parseCardioRecord,
   type WatchIntent, type WatchLobby, type WatchLobbyWorkout, type WatchPlanSnapshot,
-  type WatchPlanStep, type WatchPlanWorkout, type WatchRecordSet, type WatchSessionRecord,
+  type WatchPlanStep, type WatchPlanWorkout, type WatchRecordItem, type WatchRecordSet, type WatchSessionRecord,
   type WatchCardioRecord,
 } from '@/platform/watch/protocol';
 
@@ -391,12 +391,17 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       /* The rest after THIS step, whether the plan wrote it, and the superset it is in (2026-10-13,
          the wrist-alone plan, stage 1) — what lets the wrist alternate a couple by itself. */
       restAfterS: 0, restWritten: true, superset: { round: 1, rounds: 3, position: 1, count: 2 },
+      /* …and a hold or a carry, and where the step sits in the day (stage 1b): what lets the wrist run
+         a day with a plank in it, and bring the plank home as an item. A real step carries one of
+         the two amounts; the sample carries both so each is proven to cross. */
+      holdSeconds: 45, holdMetres: 40, at: { block: 2, round: 1, position: 1 },
     };
-    const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step] };
+    const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step], seat: 0 };
     const plan: WatchPlanSnapshot = {
       schema: WATCH_PLAN_SCHEMA_VERSION, planId: 'p1', generatedAt: new Date(NOW).toISOString(),
-      restInterS: 90, restTransitionS: 120, workouts: [workout],
+      restInterS: 90, restTransitionS: 120, workouts: [workout], moreWorkouts: [workout],
     };
+    joined('WireStepPlace', keysOf(step.at!));
     joined('WirePlanStep', keysOf(step));
     joined('WirePlanWorkout', keysOf(workout));
     joined('WirePlan', keysOf(plan));
@@ -407,11 +412,17 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       exerciseId: 'db_bench_press', setIndex: 0, blockId: 'b1', recommendedWeight: 20,
       recommendedReps: 8, actualWeight: 20, actualReps: 9, completedAt: new Date(NOW).toISOString(),
     };
+    // A hold she finished on the wrist (stage 1b, 2026-10-13) — an ITEM, not a set of zero reps.
+    const item: WatchRecordItem = {
+      exerciseId: 'plank', block: 2, round: 1, position: 1, kind: 'time', seconds: 45, metres: 40, load: 24,
+      completedAt: new Date(NOW).toISOString(),
+    };
     const record: WatchSessionRecord = {
       v: WATCH_PROTOCOL_VERSION, type: 'session_record', recordId: 'r1', planId: 'p1',
       workoutId: 'd1', workoutName: 'Upper A', startedAt: new Date(NOW).toISOString(),
-      endedAt: new Date(NOW).toISOString(), earlyFinish: false, kcal: 412, sets: [set],
+      endedAt: new Date(NOW).toISOString(), earlyFinish: false, kcal: 412, sets: [set], items: [item],
     };
+    joined('WireRecordItem', keysOf(item));
     joined('WireRecordSet', keysOf(set));
     joined('WireSessionRecord', keysOf(record));
     // The phone must be able to READ what the wrist writes — the reconciliation, end to end.
@@ -470,6 +481,9 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       pausedRestRemainingS: 30,
       steps: [],
       sets: [],
+      // The holds she has finished, and the end of one whose clock is running (stage 1b).
+      items: [],
+      holdEndsAt: new Date(NOW + 30_000).toISOString(),
       sentAt: new Date(NOW).toISOString(),
     };
     joined('WireLocalSession', keysOf(offer));

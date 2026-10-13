@@ -1,14 +1,11 @@
 {
  "name": "her-own-weight",
  "says": "she lifts lighter than written on the first set — the phone carries her weight to the sets that follow",
- "agrees": {
-  "gap": "the wrist alone returns to the written weight on the next set",
-  "stage": 2
- },
+ "agrees": true,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_4syim3",
+  "planId": "plan_rp8lq4",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -36,7 +33,12 @@
         20
        ]
       },
-      "restAfterS": 150
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_bench_press",
@@ -56,7 +58,12 @@
         20
        ]
       },
-      "restAfterS": 150
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 2,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_bench_press",
@@ -76,7 +83,12 @@
         20
        ]
       },
-      "restAfterS": 120
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 3,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_row",
@@ -96,7 +108,12 @@
         15
        ]
       },
-      "restAfterS": 150
+      "restAfterS": 150,
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
      },
      {
       "exerciseId": "bb_row",
@@ -116,9 +133,15 @@
         15
        ]
       },
-      "restAfterS": 120
+      "restAfterS": 120,
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 1
+      }
      }
-    ]
+    ],
+    "seat": 0
    }
   ]
  },
@@ -148,6 +171,8 @@
   "liveVolumeKg": 0,
   "holdSeconds": null,
   "holdMetres": null,
+  "nextHoldSeconds": null,
+  "nextHoldMetres": null,
   "isWarmup": false
  },
  "steps": [
@@ -185,6 +210,8 @@
     "liveVolumeKg": 495,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -220,6 +247,8 @@
     "liveVolumeKg": 495,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -257,6 +286,8 @@
     "liveVolumeKg": 935,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -294,6 +325,8 @@
     "liveVolumeKg": 935,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -333,6 +366,8 @@
     "liveVolumeKg": 1375,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -364,6 +399,8 @@
     "liveVolumeKg": 1375,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -399,6 +436,8 @@
     "liveVolumeKg": 1775,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -434,6 +473,8 @@
     "liveVolumeKg": 1775,
     "holdSeconds": null,
     "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
     "isWarmup": false
    }
   },
@@ -481,5 +522,6 @@
    "weight": 50,
    "reps": 8
   }
- ]
+ ],
+ "held": []
 }

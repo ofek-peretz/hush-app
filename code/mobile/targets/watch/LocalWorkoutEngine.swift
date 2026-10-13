@@ -40,6 +40,13 @@ struct LocalSessionState: Codable {
   var restTransitionS: Int
   var steps: [WirePlanStep]
   var sets: [WireRecordSet]
+  /// The holds and carries she has finished (2026-10-13). Optional so a session persisted by the
+  /// build before this one still restores.
+  var items: [WireRecordItem]?
+  /// A hold whose clock is running ends at this instant — wall-clock, like a rest's end.
+  var holdEndsAt: String?
+  /// What remained of that hold when she paused.
+  var pausedHoldRemainingS: Int?
 }
 
 final class LocalWorkoutEngine {
@@ -73,7 +80,10 @@ final class LocalWorkoutEngine {
       restInterS: plan.restInterS,
       restTransitionS: plan.restTransitionS,
       steps: workout.steps,
-      sets: []
+      sets: [],
+      items: nil,
+      holdEndsAt: nil,
+      pausedHoldRemainingS: nil
     )
   }
 
@@ -102,16 +112,39 @@ final class LocalWorkoutEngine {
   func completeSet(weight: Double?, reps: Int) {
     guard !finished, state.phase == "active_set" else { return }
     let step = state.steps[state.currentIndex]
-    state.sets.append(WireRecordSet(
-      exerciseId: step.exerciseId,
-      setIndex: step.setIndexInExercise,
-      blockId: step.blockId,
-      recommendedWeight: step.targetWeight,
-      recommendedReps: step.targetReps,
-      actualWeight: weight,
-      actualReps: reps,
-      completedAt: WatchWire.iso(Date())
-    ))
+    if step.isHold {
+      // ⛔ A HOLD IS FINISHED, NOT COUNTED (2026-10-13). Done on a plank writes an ITEM — what was
+      // asked, where the plan had it — and never a set of zero reps: that is the difference between
+      // "she held a plank" and "she did a lift called plank for nothing" in her record.
+      var items = state.items ?? []
+      items.append(WireRecordItem(
+        exerciseId: step.exerciseId,
+        block: step.at?.block ?? 1,
+        round: step.at?.round ?? step.setIndexInExercise + 1,
+        position: step.at?.position ?? 1,
+        kind: step.holdSeconds != nil ? "time" : "distance",
+        seconds: step.holdSeconds,
+        metres: step.holdMetres,
+        // What she carried is on the PLAN, and the phone's own record of a hold does not repeat it
+        // (`itemResultOf`) — so neither does this one: one record, whichever device wrote it.
+        load: nil,
+        completedAt: WatchWire.iso(Date())
+      ))
+      state.items = items
+      state.holdEndsAt = nil
+    } else {
+      state.sets.append(WireRecordSet(
+        exerciseId: step.exerciseId,
+        setIndex: step.setIndexInExercise,
+        blockId: step.blockId,
+        recommendedWeight: step.targetWeight,
+        recommendedReps: step.targetReps,
+        actualWeight: weight,
+        actualReps: reps,
+        completedAt: WatchWire.iso(Date())
+      ))
+      carryForward(from: state.currentIndex, weight: weight)
+    }
     let isLast = state.currentIndex >= state.steps.count - 1
     if isLast {
       finish(early: false)
@@ -130,6 +163,18 @@ final class LocalWorkoutEngine {
       return
     }
     beginRest(transition: transition)
+  }
+
+  /// "Ready" on a timed hold — its one clock starts, and every surface of the wrist counts to the
+  /// same end (the set screen's countdown, the haptic at zero). Idempotent: a second Ready never
+  /// restarts a hold already running. Nothing is written at zero — Done writes it (founder, 2026-09-09).
+  func startHold() {
+    guard !finished, state.phase == "active_set", state.holdEndsAt == nil else { return }
+    let step = state.steps[state.currentIndex]
+    guard let seconds = step.holdSeconds, seconds > 0 else { return } // a carry has no clock
+    state.holdEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(seconds)))
+    persist()
+    emit()
   }
 
   /// "Ready" — end the running rest now.
@@ -159,6 +204,11 @@ final class LocalWorkoutEngine {
     if isResting(state.phase), let end = WatchWire.parseDate(state.restEndsAt) {
       state.pausedRestRemainingS = max(0, Int(end.timeIntervalSince(Date()).rounded()))
     }
+    // A hold in flight freezes too: what remained of it comes back when she resumes.
+    if let end = WatchWire.parseDate(state.holdEndsAt) {
+      state.pausedHoldRemainingS = max(0, Int(end.timeIntervalSince(Date()).rounded()))
+      state.holdEndsAt = nil
+    }
     state.phase = "paused"
     state.restEndsAt = nil
     persist()
@@ -171,6 +221,10 @@ final class LocalWorkoutEngine {
     let from = state.pausedFrom ?? "active_set"
     state.phase = from
     state.pausedFrom = nil
+    if let left = state.pausedHoldRemainingS {
+      state.pausedHoldRemainingS = nil
+      state.holdEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(left)))
+    }
     if isResting(from) {
       let remaining = state.pausedRestRemainingS ?? 0
       state.pausedRestRemainingS = nil
@@ -226,6 +280,28 @@ final class LocalWorkoutEngine {
 
   // MARK: Internals
 
+  /// ⛔ THE WEIGHT SHE LIFTED IS THE WEIGHT THE REST OF THE LIFT OPENS AT (2026-10-13).
+  ///
+  /// The founder's ruling for a workout in flight (2026-08-26): she is a logger — *"אם נתנו לו משקל X
+  /// והוא עושה Y אנחנו קופצים למשקל שהוא עשה"* — and nothing else moves her plates between sets. The
+  /// phone has done exactly this since (`carryWeightForward`); the wrist alone logged her 55 and put
+  /// 60 back on the next set (`theWristRunsWhatThePhoneRuns`, scenario `her-own-weight`: 17 facts
+  /// apart). The same rule, to the letter: every LATER set of the same lift, a hold never, a
+  /// bodyweight set (no weight) carries nothing.
+  ///
+  /// ⚠️ This is not a second engine on the wrist. Nothing is computed: her own number is copied
+  /// forward. The plate breakdown that was worked out for the WRITTEN weight is dropped with it —
+  /// the wrist cannot do plate arithmetic, and no breakdown is better than the wrong one.
+  private func carryForward(from index: Int, weight: Double?) {
+    guard let weight, index + 1 < state.steps.count else { return }
+    let lift = state.steps[index].exerciseId
+    for i in (index + 1)..<state.steps.count {
+      guard state.steps[i].exerciseId == lift, !state.steps[i].isHold, state.steps[i].targetWeight != weight else { continue }
+      state.steps[i].targetWeight = weight
+      state.steps[i].loadSetup = nil
+    }
+  }
+
   private func isResting(_ phase: String) -> Bool {
     phase == "rest_inter" || phase == "rest_transition"
   }
@@ -251,6 +327,7 @@ final class LocalWorkoutEngine {
     state.phase = "active_set"
     state.restEndsAt = nil
     state.restTotalS = nil
+    state.holdEndsAt = nil // a new step: no hold is running on it yet
     persist()
     emit()
   }
@@ -295,12 +372,14 @@ final class LocalWorkoutEngine {
       endedAt: WatchWire.iso(Date()),
       earlyFinish: early,
       kcal: measuredKcal,
-      sets: state.sets
+      sets: state.sets,
+      items: state.items
     )
     // Durability order: the record enters the outbox BEFORE the active session is
     // cleared — a crash between the two re-offers a completed workout to the
-    // outbox, never loses one (the phone de-dupes).
-    if !record.sets.isEmpty {
+    // outbox, never loses one (the phone de-dupes). A hold she finished is work: a record of
+    // holds alone goes home too.
+    if !record.sets.isEmpty || !(record.items ?? []).isEmpty {
       store.enqueueRecord(record)
       store.markWorkoutDone(state.workoutId)
     }
@@ -478,15 +557,18 @@ final class LocalWorkoutEngine {
     func better(_ a: WireRecordSet, _ b: WireRecordSet) -> Bool {
       volume(a) != volume(b) ? volume(a) > volume(b) : a.actualReps > b.actualReps
     }
-    for (i, step) in state.steps.enumerated() where i < frontier {
-      // The logged sets are written in step order, so set i belongs to step i.
-      guard i < state.sets.count else { break }
-      let set = state.sets[i]
-      if let cur = best[step.exerciseName] {
-        if better(set, cur) { best[step.exerciseName] = set }
+    // ⚠️ BY THE SET'S OWN LIFT, NOT BY ITS INDEX (2026-10-13). This read "set i belongs to step i",
+    // true while every step was a set. A hold is a step that writes no set, so past the first plank
+    // every set was read back under the NEXT step's name.
+    var names: [String: String] = [:]
+    for step in state.steps where names[step.exerciseId] == nil { names[step.exerciseId] = step.exerciseName }
+    for set in state.sets.prefix(frontier) {
+      let name = names[set.exerciseId] ?? set.exerciseId
+      if let cur = best[name] {
+        if better(set, cur) { best[name] = set }
       } else {
-        order.append(step.exerciseName)
-        best[step.exerciseName] = set
+        order.append(name)
+        best[name] = set
       }
     }
     return order.map { name in
@@ -522,15 +604,25 @@ final class LocalWorkoutEngine {
       var p = baseMirror(cur: cur, phase: "paused")
       // A pause keeps the superset of what it froze: the set she was on, or the round the rest led into.
       p.superset = isResting(state.pausedFrom ?? "active_set") ? next?.superset : cur.superset
+      p.holdSeconds = cur.holdSeconds
+      p.holdMetres = cur.holdMetres
       return p
     }
 
     var m = baseMirror(cur: cur, phase: state.phase)
+    // ⛔ A HOLD IS SAID AS A HOLD ON EVERY FRAME (2026-10-13): its seconds or its metres on the step
+    // she is on — and, on a rest, on the step that rest leads into. The wrist's screens have drawn
+    // these since 2026-09-17 for a session the phone runs; the engine now states them for its own.
+    m.holdSeconds = cur.holdSeconds
+    m.holdMetres = cur.holdMetres
     if state.phase == "active_set" {
       m.loadDeltaKg = signedDelta(cur)
       m.loadSetup = cur.loadSetup
-      m.toLoad = toLoad(cur)
+      m.toLoad = cur.isHold ? false : toLoad(cur)
       m.superset = cur.superset
+      m.holdEndsAt = state.holdEndsAt
+      m.isWarmup = false
+      m.awaitingReady = false
       return m
     }
 
@@ -552,11 +644,9 @@ final class LocalWorkoutEngine {
     // parity contract with the phone's projector holds.
     m.isWarmup = false
     m.nextIsWarmup = false
-    // Nor is a hold (2026-09-17): the standalone plan carries sets only, so no step here is one.
-    m.holdSeconds = nil
-    m.holdMetres = nil
-    m.nextHoldSeconds = nil
-    m.nextHoldMetres = nil
+    // The hold this rest leads into, when it is one (2026-10-13 — the plan carries holds now).
+    m.nextHoldSeconds = next?.holdSeconds
+    m.nextHoldMetres = next?.holdMetres
     // Nor a voice (2026-09-28): the wrist alone has no loading dialogue to offer Ready for, and no
     // hold whose one clock could run — both said explicitly, for the parity contract.
     m.awaitingReady = false
