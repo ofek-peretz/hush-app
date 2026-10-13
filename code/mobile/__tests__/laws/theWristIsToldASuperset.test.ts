@@ -13,9 +13,10 @@
  * rule the phone's own stage uses, and the wrist's strip says them: on a set which of the pair she
  * is on and which round, on a rest which round it leads into.
  *
- * ⚠️ WHAT THIS DOES NOT COVER, said so it is not mistaken for a gap: a workout the wrist runs ALONE
- * (phone absent) lists each lift's sets in a row and has never alternated a pair, so there is no
- * superset there to name.
+ * ⚠️ A WORKOUT THE WRIST RUNS ALONE (phone absent) used to list each lift's sets in a row and never
+ * alternate a pair — "so there is no superset there to name", this note said. Since 2026-10-13 it
+ * runs the phone's own order and names the superset from the step (`theWristRunsWhatThePhoneRuns`
+ * plays that on the watch's real engine; the last describe here pins the source).
  * ════════════════════════════════════════════════════════════════════════════════════════════
  */
 
@@ -95,8 +96,16 @@ describe('⛔ the frame carries the superset that matters NOW', () => {
     // Optional, declared the way every other optional of the frame is — `watchWireParity` reads the
     // `?` to know a frame without it still decodes.
     expect(wire).toMatch(/var superset: WireSuperset\?\s*\n/);
-    // The wrist ALONE never alternates a pair, and says so rather than leaving the field out.
-    expect(read('targets/watch/LocalWorkoutEngine.swift')).toContain('superset: nil,');
+    // The wrist ALONE names it too (2026-10-13): off the step on a set, off the NEXT step on a rest —
+    // the same choice the phone's projector makes — and a pause keeps the one it froze.
+    const engine = read('targets/watch/LocalWorkoutEngine.swift');
+    expect(engine).toContain('m.superset = cur.superset');
+    expect(engine).toContain('m.superset = next?.superset');
+    expect(engine).toContain('p.superset = isResting(state.pausedFrom ?? "active_set") ? next?.superset : cur.superset');
+    // …and it goes straight on inside a round, by the phone's own line.
+    expect(engine).toContain('if let said = step.restAfterS, said <= REST_SKIP_THRESHOLD_S {');
+    expect(wire).toContain('let REST_SKIP_THRESHOLD_S = 5');
+    expect(read('src/state/machines/sessionState.ts')).toContain('export const REST_SKIP_THRESHOLD_S = 5;');
   });
 });
 

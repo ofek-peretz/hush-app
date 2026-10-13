@@ -57,7 +57,7 @@ import { reconcileResume, salvageOrphanSession, RESUME_WINDOW_MS, type SalvageRe
 import { HttpError } from '@/data/api/httpErrors';
 import { track, trackFirst } from '@/platform/telemetry';
 import { carryWeightForward } from '@/engine/v5/liveSession';
-import { refreshLearnedRests, restTransitionSeconds, restTransitionIsLearned, restInterSecondsFor, restIsLearnedFor, isRestSample, REST_UNSTATED_S } from '@/domain/restPrescription';
+import { refreshLearnedRests, restAfterRun, restTransitionSeconds, restTransitionIsLearned, restInterSecondsFor, restIsLearnedFor, isRestSample, REST_UNSTATED_S } from '@/domain/restPrescription';
 import { warmupRamp, WARMUP_REST_S, type WarmupSet } from '@/domain/warmupRamp';
 import { nudgeAfterS, nudgeApplies, learnedExecSFor } from '@/domain/setDwell';
 import { weightStepFor } from '@/domain/weightStep';
@@ -1352,13 +1352,11 @@ export function sessionSupersetAt(plan: readonly Step[], index: number): Session
 }
 
 export function restAfterStep(step: Step): number {
-  if (step.restAfterS != null) return step.restAfterS; // the coach said so; 0 is "straight on"
-  // S-17 · the two kinds of rest, split by a fact the step already carries. The walk to the next
-  // station is her pooled pace; the rest between sets of a lift is that lift's own number.
-  // B-11 — and the between-sets rest reads the PRESCRIPTION's floor, not only the lift's tier: a
-  // seat the model wrote at 4-6 reps is near-maximal work and earns minutes. Her measured median
-  // still outranks it the moment she has one (`restInterSecondsFor`).
-  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId, step.target?.repBandLo);
+  // The coach said so (0 is "straight on"); otherwise S-17's two kinds of rest, split by a fact the
+  // step already carries — the walk to the next station is her pooled pace, the rest between sets of
+  // a lift is that lift's own number, read off the PRESCRIPTION's floor (B-11). The rule itself lives
+  // in `restAfterRun`, where the plan her wrist runs alone asks the same question (2026-10-13).
+  return restAfterRun({ said: step.restAfterS, lastSetOfExercise: step.lastSetOfExercise, exerciseId: step.exerciseId, bandLo: step.target?.repBandLo });
 }
 
 /**

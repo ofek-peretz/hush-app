@@ -25,9 +25,12 @@
 import type { ProgramDay, SetTarget, Session } from '@/data/local/models';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { exerciseById, exerciseDisplayName, muscleGroupsLabel } from '@/data/exercises';
-import type { PlannedItem } from '@/domain/coachPlan';
+import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
 import { loadSetup } from '@/domain/loadPresentation';
-import { restInterSecondsFor } from '@/domain/restPrescription';
+import { restAfterRun, restInterSecondsFor } from '@/domain/restPrescription';
+import { runSteps } from '@/domain/planRun';
+import { supersetAt } from '@/domain/supersetView';
+import { REST_SKIP_THRESHOLD_S } from '@/state/machines/sessionState';
 import {
   WATCH_PLAN_SCHEMA_VERSION,
   type WatchPlanSnapshot,
@@ -201,7 +204,7 @@ export function buildWatchPlanSnapshot(inp: WatchPlanInputs): WatchPlanSnapshot 
  * she has a week — just not one this device can run by itself.
  */
 export function buildCoachWatchPlan(inp: {
-  sessions: { id: string; name: string; blocks: { rounds: number; restS?: number; items: PlannedItem[] }[] }[];
+  sessions: { id: string; name: string; blocks: { rounds: number; restS?: number; restAfterS?: number; items: PlannedItem[] }[] }[];
   nowMs: number;
   restInterS: number;
   restTransitionS: number;
@@ -237,58 +240,85 @@ export function buildCoachWatchPlan(inp: {
     const everyItemIsALift = session.blocks.every((b) => b.items.every((i) => i.kind === 'reps'));
     if (!everyItemIsALift) continue;
 
+    /*
+     * ⛔ THE PHONE'S OWN RUN OF THE DAY, NOT A SECOND FLATTENING OF IT (2026-10-13, stage 1).
+     *
+     * This loop used to walk block → item → round, so a couple of two lifts for three rounds went to
+     * the wrist as A, A, A, B, B, B — and the engine there ran it that way, with a full rest after
+     * every set. `planRun` is the one place that knows what a round is (it is what the phone's own
+     * session is built from), so the wrist is sent ITS order: A, B, A, B, A, B.
+     *
+     * And each step is told the two things only the whole run can say: how long she rests after it
+     * (`restAfterRun` — the same rule the live session asks, zero inside a round included), and
+     * which round of which superset it is (`supersetAt` — the same reading every screen draws from).
+     * `theWristRunsWhatThePhoneRuns` plays the result on the watch's real engine against the phone.
+     */
+    const run = runSteps({ name: session.name, blocks: session.blocks } as PlannedSession);
+    const lastOfLift = (i: number) => i === run.length - 1 || run[i + 1].item.ex !== run[i].item.ex;
+    // What the plan itself says after each step. The session's closing zero is a fact about the
+    // POSITION, not the step (`laws/aSupersetIsOnlyEverWritten`) — the last step keeps its block's own.
+    const said = run.map((st) => (st.last ? session.blocks[st.block - 1]?.restAfterS : st.restAfterS));
+    const restAfter = run.map((st, i) =>
+      restAfterRun({ said: said[i], lastSetOfExercise: lastOfLift(i), exerciseId: st.item.ex, bandLo: st.item.kind === 'reps' ? st.item.reps[0] : null }),
+    );
+    const shape = run.map((st) => ({ exerciseId: st.item.ex }));
+    const straightOn = (i: number) => restAfter[i] <= REST_SKIP_THRESHOLD_S && !run[i].last;
     const steps: WatchPlanStep[] = [];
     let global = 0;
-    for (const block of session.blocks) {
-      for (const item of block.items) {
-        if (item.kind !== 'reps') continue; // unreachable given the guard; the narrowing is for TS
-        const ex = exerciseById(item.ex);
-        const setup = loadSetup(item.ex, item.load, 'kg');
-        for (let r = 0; r < block.rounds; r++) {
-          steps.push({
-            exerciseId: item.ex,
-            // Her language's name — the same one the phone's mirror carries (`buildMirrorSteps`),
-            // so a workout begun on the wrist reads as it would have from the phone.
-            exerciseName: exerciseDisplayName(item.ex),
-            exerciseGroup: ex?.muscle ?? '',
-            setIndexInExercise: r,
-            totalSetsInExercise: block.rounds,
-            globalIndex: global,
-            ...lastFields(lastOf(item.ex)),
-            targetWeight: item.load,
-            targetReps: item.reps[0],
-            // Her band's ceiling, so the wrist draws the same ruler standalone that it draws mirrored.
-            targetRepsHi: item.reps[1],
-            /*
-             * The coach's own rest for this block, else HER learned rest on this lift — the same two
-             * tiers, in the same order, that `restAfterStep` runs on the phone (S-17/S-48).
-             *
-             * ⛔ AND THE WRIST IS NOW TOLD WHICH OF THE TWO IT GOT. `restIsLearned` is set on the
-             * second branch ONLY: `Home` passes `restInterSFor` as "her median, or null if she has
-             * not earned one yet", so reaching that branch at all is the proof. The first branch is
-             * a number the COACH wrote, and it must never wear her name.
-             */
-            /*
-             * ⛔ AND WITH NEITHER, THE WRIST NOW GETS THE PHONE'S OWN BOOTSTRAP (B-11, 2026-09-10).
-             * It used to send nothing and let the standalone wrist fall back to one flat 90 seconds
-             * for every lift in the week — so an athlete training away from her phone rested the
-             * same before a heavy triple and a set of fifteen. `restInterSecondsFor` with the seat's
-             * floor is exactly what `restAfterStep` would answer on the phone, and it is deliberately
-             * NOT marked `restIsLearned`: it is a prescription, not her measured median.
-             */
-            ...(block.restS != null
-              ? { restInterS: block.restS }
-              : inp.restInterSFor?.(item.ex) != null
-                ? { restInterS: inp.restInterSFor(item.ex) as number, restIsLearned: true }
-                : { restInterS: restInterSecondsFor(item.ex, item.reps[0]) }),
-            ...(setup
-              ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
-              : {}),
-          });
-          global += 1;
-        }
-      }
-    }
+    run.forEach((st, at) => {
+      const item = st.item;
+      const block = session.blocks[st.block - 1];
+      if (item.kind !== 'reps') return; // unreachable given the guard; the narrowing is for TS
+      const ex = exerciseById(item.ex);
+      const setup = loadSetup(item.ex, item.load, 'kg');
+      const r = st.round - 1;
+      const round = supersetAt(shape, at, (s) => straightOn(shape.indexOf(s)));
+      steps.push({
+        exerciseId: item.ex,
+        // Her language's name — the same one the phone's mirror carries (`buildMirrorSteps`),
+        // so a workout begun on the wrist reads as it would have from the phone.
+        exerciseName: exerciseDisplayName(item.ex),
+        exerciseGroup: ex?.muscle ?? '',
+        setIndexInExercise: r,
+        totalSetsInExercise: block.rounds,
+        globalIndex: global,
+        ...lastFields(lastOf(item.ex)),
+        targetWeight: item.load,
+        targetReps: item.reps[0],
+        // Her band's ceiling, so the wrist draws the same ruler standalone that it draws mirrored.
+        targetRepsHi: item.reps[1],
+        /*
+         * The coach's own rest for this block, else HER learned rest on this lift — the same two
+         * tiers, in the same order, that `restAfterStep` runs on the phone (S-17/S-48).
+         *
+         * ⛔ AND THE WRIST IS NOW TOLD WHICH OF THE TWO IT GOT. `restIsLearned` is set on the
+         * second branch ONLY: `Home` passes `restInterSFor` as "her median, or null if she has
+         * not earned one yet", so reaching that branch at all is the proof. The first branch is
+         * a number the COACH wrote, and it must never wear her name.
+         */
+        /*
+         * ⛔ AND WITH NEITHER, THE WRIST NOW GETS THE PHONE'S OWN BOOTSTRAP (B-11, 2026-09-10).
+         * It used to send nothing and let the standalone wrist fall back to one flat 90 seconds
+         * for every lift in the week — so an athlete training away from her phone rested the
+         * same before a heavy triple and a set of fifteen. `restInterSecondsFor` with the seat's
+         * floor is exactly what `restAfterStep` would answer on the phone, and it is deliberately
+         * NOT marked `restIsLearned`: it is a prescription, not her measured median.
+         */
+        ...(block.restS != null
+          ? { restInterS: block.restS }
+          : inp.restInterSFor?.(item.ex) != null
+            ? { restInterS: inp.restInterSFor(item.ex) as number, restIsLearned: true }
+            : { restInterS: restInterSecondsFor(item.ex, item.reps[0]) }),
+        ...(setup
+          ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
+          : {}),
+        // After this step — see the note at the head of this loop.
+        restAfterS: Math.round(restAfter[at]), // an integer on the wire: the wrist decodes `Int`, and a fraction refuses the whole plan
+        ...(said[at] != null ? { restWritten: true } : {}),
+        ...(round ? { superset: { round: round.round, rounds: round.rounds, position: round.position, count: round.exerciseIds.length } } : {}),
+      });
+      global += 1;
+    });
     if (steps.length === 0) continue;
     workouts.push({
       id: session.id,

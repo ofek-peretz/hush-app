@@ -388,6 +388,9 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
          her name on a number she had never produced. The phone states it now, and this sample is
          what proves the phone really sends it: exactly the check that caught `lastReps`. */
       restIsLearned: true,
+      /* The rest after THIS step, whether the plan wrote it, and the superset it is in (2026-10-13,
+         the wrist-alone plan, stage 1) — what lets the wrist alternate a couple by itself. */
+      restAfterS: 0, restWritten: true, superset: { round: 1, rounds: 3, position: 1, count: 2 },
     };
     const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step] };
     const plan: WatchPlanSnapshot = {

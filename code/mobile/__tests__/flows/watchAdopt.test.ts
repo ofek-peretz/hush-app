@@ -263,3 +263,45 @@ describe('decideAdoption', () => {
     ).toBe('duplicate');
   });
 });
+
+/*
+ * ⛔ A SUPERSET SHE IS HALF-WAY THROUGH IS STILL A SUPERSET ON THE PHONE (2026-10-13, stage 1).
+ *
+ * The wrist alone now alternates a couple (`theWristRunsWhatThePhoneRuns`). The handover used to
+ * rebuild the phone's steps from set numbers alone — no rest carried, "last set of the lift" guessed
+ * from the index — so a workout adopted inside a round arrived as six ordinary sets with a full rest
+ * after each: she opened the phone and her superset was gone from the stage.
+ */
+describe('⛔ adopted inside a superset, the phone stands in the same round', () => {
+  const { buildCoachWatchPlan } = require('@/platform/watch/watchPlan');
+  const { sessionSupersetAt, restAfterStep, buildPlanFromCoach } = require('@/state/stores/sessionStore');
+  const reps = (ex, load) => ({ kind: 'reps', ex, load, reps: [8, 12] });
+  const DAY = { name: 'Arms', blocks: [{ rounds: 2, items: [reps('bb_bench_press', 60)] }, { rounds: 3, items: [reps('db_curl', 12), reps('rope_pushdown', 25)] }, { rounds: 2, items: [reps('lateral_raise', 8)] }] };
+  // The plan her wrist was sent for the day, by the builder Home calls — and so the steps it hands back.
+  const sent = buildCoachWatchPlan({ sessions: [{ id: 'day_1', ...DAY }], history: [], nowMs: NOW, restInterS: 90, restTransitionS: 120 }).workouts[0].steps;
+  const logged = (i) => ({ exerciseId: sent[i].exerciseId, setIndex: sent[i].setIndexInExercise, recommendedWeight: sent[i].targetWeight, recommendedReps: sent[i].targetReps, actualWeight: sent[i].targetWeight, actualReps: sent[i].targetReps, completedAt: new Date(NOW - 60_000).toISOString() });
+
+  it('on the second lift of round one: same couple, same round, and the rest clock asks the same questions', () => {
+    // bench ×2 done, the curl of round 1 done — she is on the pushdown of round 1
+    const offer = local({ steps: sent, currentIndex: 3, sets: [0, 1, 2].map(logged), phase: 'active_set' });
+    expect(parseWatchLocalSession(offer)).not.toBeNull();
+    const adopted = adoptWatchSession(offer, NOW);
+    expect(sessionSupersetAt(adopted.plan, 3)).toMatchObject({ exerciseIds: ['db_curl', 'rope_pushdown'], position: 2, round: 1, rounds: 3 });
+    // …and every step rests as the phone's own plan of that day would
+    const own = buildPlanFromCoach(DAY);
+    expect(adopted.plan.slice(0, -1).map(restAfterStep)).toEqual(own.slice(0, -1).map(restAfterStep));
+    expect(adopted.plan.map((st) => st.lastSetOfExercise)).toEqual(own.map((st) => st.lastSetOfExercise));
+    expect(adopted.plan.map((st) => `${st.exerciseId}#${st.exerciseSetIndex}`)).toEqual(own.map((st) => `${st.exerciseId}#${st.exerciseSetIndex}`));
+  });
+
+  it('a rest she is told to take must be a number of seconds — a frame that says otherwise is refused whole', () => {
+    const bad = sent.map((st, i) => (i === 2 ? { ...st, restAfterS: -4 } : st));
+    expect(parseWatchLocalSession(local({ steps: bad, currentIndex: 0, sets: [] }))).toBeNull();
+  });
+
+  it('a wrist one build behind sends no rest and no superset — and is adopted exactly as it always was', () => {
+    const old = sent.map(({ restAfterS, restWritten, superset, ...st }) => st);
+    const adopted = adoptWatchSession(local({ steps: old, currentIndex: 0, sets: [] }), NOW);
+    expect(adopted.plan.every((st) => st.restAfterS == null)).toBe(true);
+  });
+});

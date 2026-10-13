@@ -20,6 +20,9 @@ let WATCH_PROTOCOL_VERSION = 1
 /// second session for a workout already running here — and `WatchModel.apply` can only surrender
 /// authority before her first set. See the note on `WATCH_START_GRACE_MS`.
 let WATCH_START_GRACE_S: TimeInterval = 3
+/// A rest this short is not a rest: the next step presents at once. The phone's own line
+/// (`sessionState.REST_SKIP_THRESHOLD_S`, §1.14) — it is how the inside of a superset is run.
+let REST_SKIP_THRESHOLD_S = 5
 let MIRROR_SCHEMA_VERSION = 1
 
 struct WireSwapOption: Codable, Equatable {
@@ -358,6 +361,21 @@ struct WirePlanStep: Codable, Equatable {
   /// Optional, and NOT a schema bump (as `lastReps` was not): an older phone omits it and this
   /// decodes `nil`, which draws exactly what it drew before.
   var restIsLearned: Bool?
+  /// ⛔ HOW LONG SHE RESTS AFTER THIS STEP — the phone's own answer, per step (2026-10-13).
+  ///
+  /// The engine had this lift's `restInterS`, the plan's one `restTransitionS`, and one rule to pick
+  /// between them: "is the next step a different lift?" That cannot say what a superset is made of —
+  /// NO rest after its first lift, one after its second — so a couple ran as two lifts in a row.
+  /// The steps now arrive in the order the phone itself would run them, each with the rest the
+  /// phone would give (`restAfterRun`); `REST_SKIP_THRESHOLD_S` or under is "straight on".
+  ///
+  /// Optional: a plan from an older phone decodes `nil` and the old rule stands, exactly as before.
+  var restAfterS: Int?
+  /// The number above was WRITTEN by the plan (a block's rest, a round's inner zero), not her pace.
+  /// The wrist does not read it; it rides to the phone with the steps at a handover.
+  var restWritten: Bool?
+  /// The superset this step is part of — what the strip says on a set, and on the rest before it.
+  var superset: WireSuperset?
 }
 
 struct WirePlanWorkout: Codable, Equatable {

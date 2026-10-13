@@ -89,7 +89,7 @@ const PHASE: Record<string, SessionPhase> = {
   paused: 'PAUSED',
 };
 
-function stepOf(s: WatchPlanStep, total: number): Step {
+function stepOf(s: WatchPlanStep, total: number, next: WatchPlanStep | undefined): Step {
   const target: SetTarget = {
     exerciseId: s.exerciseId,
     setIndex: s.setIndexInExercise,
@@ -107,7 +107,23 @@ function stepOf(s: WatchPlanStep, total: number): Step {
     exerciseSetIndex: s.setIndexInExercise,
     totalSetsInExercise: s.totalSetsInExercise,
     target,
-    lastSetOfExercise: s.setIndexInExercise === s.totalSetsInExercise - 1,
+    /*
+     * ⛔ THE WRIST'S STEPS ARE THE PHONE'S OWN RUN NOW, AND ARE READ BACK BY THE PHONE'S OWN RULES
+     * (2026-10-13, stage 1). Two things here used to be guessed from a set's number:
+     *
+     *   · "the last set of this lift" was `setIndex === total − 1`. True of a lift whose sets stand
+     *     in a row; in a superset (A, B, A, B) every step is the last of its lift until the partner
+     *     has gone — which is `buildPlanFromCoach`'s rule, and the one the rest clock asks.
+     *   · the rest after a step was not carried at all, so a workout adopted in the MIDDLE of a
+     *     superset arrived on the phone as six ordinary sets with a full rest after each: the couple
+     *     she was half-way through was gone from the stage the moment she opened the phone.
+     *
+     * A rest the plan WROTE (a block's own, or a round's inner zero) stays on the step — that zero
+     * is what a superset is, to every screen that reads one (`domain/supersetView`). Her own pace is
+     * NOT pinned: the phone re-reads it from her record, exactly as it does for a session it began.
+     */
+    ...(s.restWritten && s.restAfterS != null ? { restAfterS: s.restAfterS } : {}),
+    lastSetOfExercise: !next || next.exerciseId !== s.exerciseId,
     lastSetOfSession: s.globalIndex === total - 1,
   };
 }
@@ -160,7 +176,7 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
     resumePhase = from as SessionMachine['resumePhase'];
   }
 
-  const plan = local.steps.map((s) => stepOf(s, total));
+  const plan = local.steps.map((s, i) => stepOf(s, total, local.steps[i + 1]));
 
   /*
    * ⚠️ REST IS TAKEN FROM THE ABSOLUTE INSTANT, NEVER A COUNT. `restEndsAt` is wall-clock, which is

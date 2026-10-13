@@ -121,6 +121,14 @@ final class LocalWorkoutEngine {
     // the next set presents when the rest ends.
     let next = state.steps[state.currentIndex + 1]
     let transition = next.exerciseId != step.exerciseId
+    // ⛔ STRAIGHT ON (2026-10-13). The first lift of a superset's round is followed by its partner,
+    // not by a rest — the phone's machine skips the rest screen for any rest of five seconds or
+    // under (`afterSetCompletion`), and the step now says how long its rest is. A plan from an older
+    // phone says nothing (`nil`), and rests as it always did.
+    if let said = step.restAfterS, said <= REST_SKIP_THRESHOLD_S {
+      advancePastRest()
+      return
+    }
     beginRest(transition: transition)
   }
 
@@ -225,8 +233,10 @@ final class LocalWorkoutEngine {
   private func beginRest(transition: Bool) {
     // Per-tier rest (S2): the just-completed step carries its exercise's between-sets rest;
     // the plan-level value is the fallback for a snapshot from an older phone build.
-    let stepRestS = state.steps.indices.contains(state.currentIndex) ? state.steps[state.currentIndex].restInterS : nil
-    let restS = transition ? state.restTransitionS : (stepRestS ?? state.restInterS)
+    let step = state.steps.indices.contains(state.currentIndex) ? state.steps[state.currentIndex] : nil
+    // The phone's own answer for THIS step when the plan carries one (2026-10-13) — the rest between
+    // a superset's rounds is neither "this lift's rest" nor "the walk", it is what the plan says.
+    let restS = step?.restAfterS ?? (transition ? state.restTransitionS : (step?.restInterS ?? state.restInterS))
     state.phase = transition ? "rest_transition" : "rest_inter"
     state.restEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(restS)))
     state.restTotalS = restS
@@ -421,8 +431,9 @@ final class LocalWorkoutEngine {
       nextLoadDeltaKg: nil,
       liftIndex: lift.index,
       liftCount: lift.count,
-      // The wrist ALONE lists each lift's sets in a row — it has never alternated a pair, so there
-      // is no superset here to name (`theWristIsToldASuperset`). Said, not left out.
+      // Filled in by `project()`, which knows whether this frame is a set (the superset it is in)
+      // or a rest (the one it leads into) — the choice the phone's projector makes. Until 2026-10-13
+      // the wrist alone listed each lift's sets in a row and there was never one to name.
       superset: nil,
       // WT13c · GLANCE — the standalone engine owes the wrist the SAME two live figures the phone
       // sends, or a phone-absent workout glances at a blank. Same arithmetic as the closing
@@ -505,8 +516,13 @@ final class LocalWorkoutEngine {
   private func project() -> WireMirror {
     let cur = state.steps[min(state.currentIndex, state.steps.count - 1)]
 
+    let next = state.currentIndex + 1 < state.steps.count ? state.steps[state.currentIndex + 1] : nil
+
     if state.phase == "paused" {
-      return baseMirror(cur: cur, phase: "paused")
+      var p = baseMirror(cur: cur, phase: "paused")
+      // A pause keeps the superset of what it froze: the set she was on, or the round the rest led into.
+      p.superset = isResting(state.pausedFrom ?? "active_set") ? next?.superset : cur.superset
+      return p
     }
 
     var m = baseMirror(cur: cur, phase: state.phase)
@@ -514,12 +530,13 @@ final class LocalWorkoutEngine {
       m.loadDeltaKg = signedDelta(cur)
       m.loadSetup = cur.loadSetup
       m.toLoad = toLoad(cur)
+      m.superset = cur.superset
       return m
     }
 
     // Resting: the presented step is the just-completed one; the NEXT step is the
     // set the rest leads into (phone parity).
-    let next = state.currentIndex + 1 < state.steps.count ? state.steps[state.currentIndex + 1] : nil
+    m.superset = next?.superset
     m.restEndsAt = state.restEndsAt
     if let end = WatchWire.parseDate(state.restEndsAt) {
       m.restRemainingS = max(0, Int(end.timeIntervalSince(Date()).rounded()))

@@ -409,6 +409,32 @@ export function restTransitionSeconds(): number {
 }
 
 /**
+ * ════ HOW LONG SHE RESTS AFTER ONE STEP — the rule, where BOTH devices can reach it (2026-10-13) ════
+ *
+ * The coach's number when the coach gave one — zero included, which is how the inside of a superset
+ * is written — and otherwise her own pace: the walk between stations after a lift's last set, the
+ * lift's own rest between its sets.
+ *
+ * It lived inside the session store (`restAfterStep`), which is the right owner and the wrong
+ * address: the plan her WRIST runs alone is built in `platform/watch/watchPlan`, which may not pull
+ * a React store in behind a number — so that builder kept its own, smaller idea of a rest (one
+ * figure per lift, one for every walk), and a superset's "straight on" had nowhere to be said. One
+ * rule now, asked by the store for the live session and by the builder for the plan the watch is
+ * sent; `theWristRunsWhatThePhoneRuns` holds the two results against each other on a Mac.
+ */
+export function restAfterRun(step: {
+  /** What the plan itself says: the block's rest, or a round's inner zero. Absent = the coach did not say. */
+  said?: number | null;
+  lastSetOfExercise: boolean;
+  exerciseId: string;
+  /** The prescription's floor — a seat written at 4–6 reps earns minutes (B-11). */
+  bandLo?: number | null;
+}): number {
+  if (step.said != null) return step.said;
+  return step.lastSetOfExercise ? restTransitionSeconds() : restInterSecondsFor(step.exerciseId, step.bandLo);
+}
+
+/**
  * ════ WHAT SHE ACTUALLY RESTED ════
  *
  * The number the learned-rest beat reports, and the sample her median moves on.

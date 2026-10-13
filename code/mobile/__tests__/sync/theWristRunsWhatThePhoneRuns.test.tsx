@@ -203,7 +203,9 @@ const SCENARIOS: Scenario[] = [
       blocks: [{ rounds: 2, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 3, items: [reps('db_curl', 12), reps('rope_pushdown', 25, [10, 15])] }, { rounds: 2, items: [reps('lateral_raise', 8, [12, 20])] }],
     },
     script: [...done(2), { do: 'complete' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }, { do: 'complete' }, { do: 'endRest' }, ...done(2).slice(0, -1)],
-    agrees: { gap: 'the wrist alone runs a superset as two lifts in a row', stage: 1 },
+    // ✅ CLOSED 2026-10-13 (stage 1): the plan is the phone's own run of the day, each step says how
+    // long its rest is, and the engine goes straight on where that is nothing. 147 facts apart → none.
+    agrees: true,
   },
   {
     name: 'plank-day',
@@ -360,7 +362,6 @@ describe('one script, two engines — the phone’s half', () => {
   it('⛔ the gaps that are still open are exactly these — closing one is said here, in the same change', () => {
     expect(SCENARIOS.filter((s) => s.agrees !== true).map((s) => `${s.name} · stage ${s.agrees.stage} · ${s.agrees.gap}`)).toEqual([
       'her-own-weight · stage 2 · the wrist alone returns to the written weight on the next set',
-      'superset · stage 1 · the wrist alone runs a superset as two lifts in a row',
       'plank-day · stage 1 · a day with a hold in it is not sent to the wrist at all',
     ]);
   });

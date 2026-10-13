@@ -1,14 +1,11 @@
 {
  "name": "superset",
  "says": "a lift, then a couple of two lifts for three rounds, then a lift",
- "agrees": {
-  "gap": "the wrist alone runs a superset as two lifts in a row",
-  "stage": 1
- },
+ "agrees": true,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_tebmys",
+  "planId": "plan_7au6wv",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -35,7 +32,8 @@
        "plates": [
         20
        ]
-      }
+      },
+      "restAfterS": 150
      },
      {
       "exerciseId": "bb_bench_press",
@@ -54,7 +52,8 @@
        "plates": [
         20
        ]
-      }
+      },
+      "restAfterS": 120
      },
      {
       "exerciseId": "db_curl",
@@ -69,36 +68,14 @@
       "restInterS": 75,
       "loadSetup": {
        "style": "dumbbell"
-      }
-     },
-     {
-      "exerciseId": "db_curl",
-      "exerciseName": "Dumbbell Curl",
-      "exerciseGroup": "Biceps",
-      "setIndexInExercise": 1,
-      "totalSetsInExercise": 3,
-      "globalIndex": 3,
-      "targetWeight": 12,
-      "targetReps": 8,
-      "targetRepsHi": 12,
-      "restInterS": 75,
-      "loadSetup": {
-       "style": "dumbbell"
-      }
-     },
-     {
-      "exerciseId": "db_curl",
-      "exerciseName": "Dumbbell Curl",
-      "exerciseGroup": "Biceps",
-      "setIndexInExercise": 2,
-      "totalSetsInExercise": 3,
-      "globalIndex": 4,
-      "targetWeight": 12,
-      "targetReps": 8,
-      "targetRepsHi": 12,
-      "restInterS": 75,
-      "loadSetup": {
-       "style": "dumbbell"
+      },
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 1,
+       "rounds": 3,
+       "position": 1,
+       "count": 2
       }
      },
      {
@@ -107,13 +84,43 @@
       "exerciseGroup": "Triceps",
       "setIndexInExercise": 0,
       "totalSetsInExercise": 3,
-      "globalIndex": 5,
+      "globalIndex": 3,
       "targetWeight": 25,
       "targetReps": 10,
       "targetRepsHi": 15,
       "restInterS": 75,
       "loadSetup": {
        "style": "cable"
+      },
+      "restAfterS": 120,
+      "superset": {
+       "round": 1,
+       "rounds": 3,
+       "position": 2,
+       "count": 2
+      }
+     },
+     {
+      "exerciseId": "db_curl",
+      "exerciseName": "Dumbbell Curl",
+      "exerciseGroup": "Biceps",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 3,
+      "globalIndex": 4,
+      "targetWeight": 12,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "dumbbell"
+      },
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 2,
+       "rounds": 3,
+       "position": 1,
+       "count": 2
       }
      },
      {
@@ -122,13 +129,43 @@
       "exerciseGroup": "Triceps",
       "setIndexInExercise": 1,
       "totalSetsInExercise": 3,
-      "globalIndex": 6,
+      "globalIndex": 5,
       "targetWeight": 25,
       "targetReps": 10,
       "targetRepsHi": 15,
       "restInterS": 75,
       "loadSetup": {
        "style": "cable"
+      },
+      "restAfterS": 120,
+      "superset": {
+       "round": 2,
+       "rounds": 3,
+       "position": 2,
+       "count": 2
+      }
+     },
+     {
+      "exerciseId": "db_curl",
+      "exerciseName": "Dumbbell Curl",
+      "exerciseGroup": "Biceps",
+      "setIndexInExercise": 2,
+      "totalSetsInExercise": 3,
+      "globalIndex": 6,
+      "targetWeight": 12,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "dumbbell"
+      },
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 3,
+       "rounds": 3,
+       "position": 1,
+       "count": 2
       }
      },
      {
@@ -144,6 +181,13 @@
       "restInterS": 75,
       "loadSetup": {
        "style": "cable"
+      },
+      "restAfterS": 120,
+      "superset": {
+       "round": 3,
+       "rounds": 3,
+       "position": 2,
+       "count": 2
       }
      },
      {
@@ -159,7 +203,8 @@
       "restInterS": 60,
       "loadSetup": {
        "style": "dumbbell"
-      }
+      },
+      "restAfterS": 60
      },
      {
       "exerciseId": "lateral_raise",
@@ -174,7 +219,8 @@
       "restInterS": 60,
       "loadSetup": {
        "style": "dumbbell"
-      }
+      },
+      "restAfterS": 120
      }
     ]
    }

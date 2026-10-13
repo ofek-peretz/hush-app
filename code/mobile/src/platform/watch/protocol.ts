@@ -290,6 +290,34 @@ export interface WatchPlanStep {
    * decodes `nil` — which draws exactly what it drew before. The Swift half is `WirePlanStep`.
    */
   restIsLearned?: boolean;
+  /**
+   * ⛔ HOW LONG SHE RESTS AFTER THIS STEP — the phone's own answer, per step (2026-10-13, the
+   * wrist-alone plan, stage 1).
+   *
+   * The wrist alone had two numbers to choose a rest from — this lift's `restInterS`, the plan's
+   * one `restTransitionS` — and one rule to choose with: *is the next step a different lift?* That
+   * cannot say the one thing a superset is made of: after its first lift there is NO rest, and after
+   * its second there is one. So the plan listed a couple as two lifts in a row and the engine ran
+   * them that way (`theWristRunsWhatThePhoneRuns`, scenario `superset`: 147 facts apart).
+   *
+   * Now every step carries what `restAfterRun` answers for it on the phone — the coach's number or
+   * her own pace, already resolved — and the steps arrive in the order the phone itself would run
+   * them. Five seconds or under is "straight on", by the machine's own line
+   * (`REST_SKIP_THRESHOLD_S`).
+   *
+   * ⚠️ OPTIONAL, NO SCHEMA BUMP — as every key since `lastReps`. An older watch ignores it and rests
+   * after every step by its old rule: the alternation is still right, only slower.
+   */
+  restAfterS?: number;
+  /**
+   * …and whether that number was WRITTEN — the block's own rest, or a round's inner zero — rather
+   * than her pace. A workout the phone adopts mid-flight keeps a written rest on the step and
+   * re-reads a learned one from her record, which may have moved since the plan was sent.
+   */
+  restWritten?: boolean;
+  /** The superset this step is part of — the same four integers the live mirror carries
+   *  (`MirrorSuperset`), read by the same rule (`domain/supersetView`). Absent on an ordinary set. */
+  superset?: { round: number; rounds: number; position: number; count: number };
 }
 
 export interface WatchPlanWorkout {
@@ -1185,6 +1213,10 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
     if (typeof st.totalSetsInExercise !== 'number' || st.totalSetsInExercise <= 0) return null;
     if (typeof st.targetReps !== 'number' || !Number.isFinite(st.targetReps) || st.targetReps < 0) return null;
     if (st.targetWeight != null && (typeof st.targetWeight !== 'number' || !Number.isFinite(st.targetWeight))) {
+      return null;
+    }
+    // A rest she is told to take is a number of seconds, or it is not said at all (stage 1, 2026-10-13).
+    if (st.restAfterS != null && (typeof st.restAfterS !== 'number' || !Number.isFinite(st.restAfterS) || st.restAfterS < 0)) {
       return null;
     }
   }
