@@ -409,6 +409,12 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
          2026-10-17) — what lets the wrist alone offer "+ Warm-up" and run the ramp she asks for. */
       ramp: [{ weightKg: 10, reps: 5, loadSetup: { style: 'dumbbell', perHand: 10 } }],
       warmup: { index: 0, count: 2 },
+      /* The lifts she may swap it for, as the phone would offer them (stage 4) — each ready to stand
+         in, with what the phone offers for it in turn. */
+      swaps: [{
+        id: 'bb_bench_press', name: 'Bench', group: 'chest', loadSetup: { style: 'barbell', perSide: 20 },
+        lastReps: [8, 8], lastLoadKg: 60, ramp: [{ weightKg: 30, reps: 5 }], swaps: [{ id: 'db_bench_press', name: 'DB Bench' }],
+      }],
     };
     const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step], seat: 0 };
     const plan: WatchPlanSnapshot = {
@@ -418,6 +424,7 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
     joined('WireStepPlace', keysOf(step.at!));
     joined('WireWarmupRung', keysOf(...step.ramp!));
     joined('WireWarmupPlace', keysOf(step.warmup!));
+    joined('WireSwapChoice', keysOf(...step.swaps!));
     joined('WirePlanStep', keysOf(step));
     joined('WirePlanWorkout', keysOf(workout));
     joined('WirePlan', keysOf(plan));

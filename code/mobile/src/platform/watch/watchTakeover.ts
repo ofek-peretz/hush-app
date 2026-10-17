@@ -40,7 +40,7 @@ import type { WarmupSet } from '@/domain/warmupRamp';
 import type { LastTime } from '@/domain/lastTimeOn';
 import { exerciseById, exerciseDisplayName } from '@/data/exercises';
 import { rampRungs, wireSetup } from './watchLoad';
-import type { WatchPlanStep, WatchRecordItem, WatchRecordSet, WatchTakeoverKit } from './protocol';
+import type { WatchPlanStep, WatchRecordItem, WatchRecordSet, WatchSwapChoice, WatchTakeoverKit } from './protocol';
 
 /** What only the session store can answer about its own plan — handed in, so this stays pure. */
 export interface TakeoverStepFacts {
@@ -54,6 +54,8 @@ export interface TakeoverStepFacts {
   warmupAt: (i: number) => readonly WarmupSet[] | null;
   /** What she did last time on this lift — the ghosts in the wrist's set row. */
   lastOf: (exerciseId: string) => LastTime | null;
+  /** The swaps the phone would offer on the walk to step `i` (stage 4) — asked only at a lift's first step. */
+  swapsAt?: (i: number) => WatchSwapChoice[] | undefined;
 }
 
 const lastFields = (last: LastTime | null): { lastReps?: number[]; lastLoadKg?: number | null } =>
@@ -74,6 +76,8 @@ export function takeoverSteps(plan: readonly Step[], facts: TakeoverStepFacts): 
     const st = plan[i];
     const rest = Math.round(facts.restAfter(st));
     const round = facts.superset(i);
+    // The swaps on the walk to a lift — on its first step only, the one a crossing leads into.
+    const swaps = i === 0 || plan[i - 1].exerciseId !== st.exerciseId ? facts.swapsAt?.(i) : undefined;
     const placed = {
       restInterS: rest,
       restAfterS: rest,
@@ -81,6 +85,7 @@ export function takeoverSteps(plan: readonly Step[], facts: TakeoverStepFacts): 
       ...(facts.restLearned(st) ? { restIsLearned: true } : {}),
       ...(round ? { superset: { round: round.round, rounds: round.rounds, position: round.position, count: round.count } } : {}),
       ...(st.where ? { at: { block: st.where.block, round: st.where.round, position: st.where.position } } : {}),
+      ...(swaps && swaps.length > 0 ? { swaps } : {}),
     };
     if (!st.target) {
       const item = st.item;

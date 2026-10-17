@@ -16,7 +16,7 @@
  * drawn and writes the same record — is played on the watch's REAL engine on a Mac
  * (`sync/theWristRunsWhatThePhoneRuns`, the five `phone-dies-*` scenarios). This file holds the
  * phone's half: the rule, when the plan rides a frame, how a takeover comes home, and the store
- * taking a workout back from the wrist. And the wrist's three triggers, read from its source.
+ * taking a workout back from the wrist. And the wrist's two triggers, read from its source.
  *
  * STAGE 5 rides with it: every set the wrist logs carries its place in the day and the rest she took
  * before it, so the phone writes the canonical record (`items`) a set of its own would have — which
@@ -401,7 +401,7 @@ describe('⛔ a workout come home sends the wrist its next week — wherever she
 });
 
 // ── 6 · THE WRIST'S HALF, READ FROM ITS SOURCE ───────────────────────────────────────────────────
-describe('the wrist’s three triggers, and its one guard (it is compiled and RUN on a Mac by the instrument)', () => {
+describe('the wrist’s two triggers, and its one guard (it is compiled and RUN on a Mac by the instrument)', () => {
   const model = swift('WatchModel.swift');
   const engine = swift('LocalWorkoutEngine.swift');
   const between = (src: string, a: string, b: string) => src.slice(src.indexOf(a), src.indexOf(b, src.indexOf(a)));
@@ -421,9 +421,27 @@ describe('the wrist’s three triggers, and its one guard (it is compiled and RU
     expect(grace).toMatch(/self\.takeOver\("unreachable"\) != nil \{ return \}/);
   });
 
-  it('a rest that ran out with no word from the phone hands it over', () => {
-    expect(model).toMatch(/armSilenceWatch\(mirror\)/);
-    expect(between(model, 'private func armSilenceWatch', 'private var lastKitAsk')).toContain('self.takeOver("rest_ran_out")');
+  it('⛔ NOT a rest that ran out in silence — a pocketed phone never moves past a rest by itself', () => {
+    /*
+     * A third trigger stood here for one day: "the rest ran out and no frame came for eight seconds".
+     * The phone's own source says why that is the ordinary case and not a dead phone — its JS clock
+     * sleeps in a pocket and catches up when she taps or opens it (`applyClock`). The trigger would
+     * have taken the workout over after nearly every rest, leaving the phone and the lock card behind.
+     */
+    const store = fs.readFileSync(path.join(ROOT, 'src', 'state', 'stores', 'sessionStore.tsx'), 'utf8');
+    expect(store).toContain('A JS timer does not run in a pocket');
+    expect(model).not.toMatch(/armSilenceWatch|silenceWatch|rest_ran_out/);
+  });
+
+  it('⛔ a takeover with nothing of its own is OFFERED to a relaunched phone’s Today — never dropped there', () => {
+    // A phone relaunched after the kill boots onto Today with her workout on disk, not live. Dropping
+    // the takeover there would put the wrist on the Start screen mid-workout; offering it lets the phone
+    // carry the workout on from the wrist (`decideTakeover`: nothing live, not saved → proceed).
+    const reclaim = model.split('\n').find((l) => l.includes('let engine = localEngine, phoneLive ||'));
+    expect(reclaim).toBeDefined();
+    expect(reclaim).not.toContain('lobby');
+    expect(model).toContain('if let engine = localEngine, envelope.mirror == nil || engine.isTakeover, Date().timeIntervalSince(lastLocalOfferAt) > 5');
+    expect(decideTakeover({ takeoverOf: 's1', splitAt: 3, wristWork: 3, live: null, historyIds: [] })).toBe('proceed');
   });
 
   it('the kit is kept with the frame it came on, and dropped with a frame that carries none', () => {

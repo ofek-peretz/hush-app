@@ -6,7 +6,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_9g5g6y",
+  "planId": "plan_1toa0dw",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -54,7 +54,73 @@
        "block": 1,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "meadows_row",
+        "name": "Meadows Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 0,
+         "plates": [],
+         "barKg": 20
+        },
+        "swaps": [
+         {
+          "id": "db_row",
+          "name": "Dumbbell Row"
+         },
+         {
+          "id": "smith_row",
+          "name": "Smith Machine Row"
+         }
+        ]
+       },
+       {
+        "id": "smith_row",
+        "name": "Smith Machine Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 10,
+         "plates": [
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 10,
+          "reps": 5,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 5,
+           "plates": [
+            5
+           ]
+          }
+         },
+         {
+          "weightKg": 15,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 7.5,
+           "plates": [
+            5,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "db_row",
@@ -134,6 +200,7 @@
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
   "warmupOffered": 2,
+  "nextSwapOptions": null,
   "isWarmup": false
  },
  "steps": [
@@ -172,6 +239,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -212,6 +280,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -251,6 +320,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -290,6 +360,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -328,6 +399,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -367,6 +439,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -405,6 +478,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -445,6 +519,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -484,6 +559,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -524,6 +600,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -565,6 +642,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -610,7 +688,7 @@
     "workoutId": "w_today",
     "workoutName": "Pull",
     "startedAt": "2027-01-15T08:00:00.000Z",
-    "rev": "kit_1kcpn63_3",
+    "rev": "kit_1tve8th_3",
     "steps": [
      {
       "exerciseId": "db_row",
@@ -633,6 +711,72 @@
        "round": 1,
        "position": 1
       },
+      "swaps": [
+       {
+        "id": "meadows_row",
+        "name": "Meadows Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 0,
+         "plates": [],
+         "barKg": 20
+        },
+        "swaps": [
+         {
+          "id": "db_row",
+          "name": "Dumbbell Row"
+         },
+         {
+          "id": "smith_row",
+          "name": "Smith Machine Row"
+         }
+        ]
+       },
+       {
+        "id": "smith_row",
+        "name": "Smith Machine Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 10,
+         "plates": [
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 10,
+          "reps": 5,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 5,
+           "plates": [
+            5
+           ]
+          }
+         },
+         {
+          "weightKg": 15,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 7.5,
+           "plates": [
+            5,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         }
+        ]
+       }
+      ],
       "ramp": [
        {
         "weightKg": 10,
@@ -708,7 +852,7 @@
     "workoutId": "w_today",
     "workoutName": "Pull",
     "startedAt": "2027-01-15T08:00:00.000Z",
-    "rev": "kit_1kcpn63_3",
+    "rev": "kit_1tve8th_3",
     "cursor": 0,
     "phase": "paused",
     "pausedFrom": "rest_inter",

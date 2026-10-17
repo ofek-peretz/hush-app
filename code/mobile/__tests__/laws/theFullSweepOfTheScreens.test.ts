@@ -196,8 +196,10 @@ describe('the wrist and the lock screen say what the phone says', () => {
   it('⛔ every mirrored step carries her language’s name — never the catalogue’s English key', () => {
     expect(steps.match(/exerciseName: exerciseDisplayName\(st\.exerciseId\),/g)).toHaveLength(2);
     expect(steps).not.toMatch(/exerciseName: ex\?\.name/);
-    // the swap options are matched against that name on the wrist (Undo), so they speak it too
-    expect(steps).toContain('name: exerciseDisplayName(c.exercise.id)');
+    // the swap options are matched against that name on the wrist (Undo), so they speak it too — asked
+    // through the ONE definition the live mirror and the wrist-alone plan share (2026-10-17, stage 4)
+    expect(steps).toContain('wristSwapOptions(st.exerciseId, sessionExerciseIds, equipment)');
+    expect(code(read('src/platform/watch/watchLoad.ts'))).toContain('name: exerciseDisplayName(c.exercise.id)');
     expect(code(read('src/platform/watch/watchPlan.ts'))).toContain('exerciseName: exerciseDisplayName(item.ex),');
   });
 

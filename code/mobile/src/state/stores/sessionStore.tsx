@@ -22,7 +22,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ItemResult, ProgramDay, Session, SessionSummary, SetLog, SetTarget } from '@/data/local/models';
 import { exerciseById, catalogIdFromEngine, exerciseDisplayName, muscleOf, type Exercise } from '@/data/exercises';
-import { swapChoices } from '@/domain/swapPool';
+import { wristSwapOptions, swapChoicesFor } from '@/platform/watch/watchLoad';
 import { foldSessionSwaps, learnedLeaveIts } from '@/domain/swapLearning';
 import { db } from '@/data/local/db';
 import type { PlannedItem, PlannedSession } from '@/domain/coachPlan';
@@ -1564,13 +1564,8 @@ export function buildMirrorSteps(plan: Step[], equipment?: readonly import('@/da
      * with the lift she did them on and the REMAINDER becomes the lift she swapped to. A station
      * that becomes taken between set 2 and set 3 is the ordinary case the board exists for.
      */
-    const swapOptions = ex
-      ? swapChoices(ex.id, { sessionExerciseIds, equipment }, 2)
-          .filter((c) => c.sameMovement)
-          /* The name is the wrist's KEY for "is this the lift on stage" (Undo matches it against
-             `exerciseName`), so it is the same spoken name the step carries — see below. */
-          .map((c) => ({ id: c.exercise.id, name: exerciseDisplayName(c.exercise.id) }))
-      : [];
+    // One definition, asked here for every frame and in advance for the wrist alone (`watchLoad`).
+    const swapOptions = ex ? wristSwapOptions(st.exerciseId, sessionExerciseIds, equipment) : [];
     /*
      * ⛔ A HOLD CROSSES AS A HOLD (sync simulator, 2026-09-17). It used to be dropped here — "publishing
      * zeros would put 0 kg × 0 on her wrist" — and the cursor translated into set-space. The result
@@ -2471,6 +2466,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (mirror && mirror.phase !== 'complete' && state.session && plan.length > 0) {
       if (kitStepsRef.current?.plan !== plan) {
         const seen = new Map<string, ReturnType<typeof lastTimeOn>>();
+        const lastOf = (ex: string) => {
+          if (!seen.has(ex)) seen.set(ex, lastTimeOn(ex, historyRef.current, { excludeSessionId: sessionRef.current?.id }));
+          return seen.get(ex) ?? null;
+        };
         kitStepsRef.current = {
           plan,
           steps: takeoverSteps(plan, {
@@ -2481,9 +2480,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
               return r ? { round: r.round, rounds: r.rounds, position: r.position, count: r.exerciseIds.length } : null;
             },
             warmupAt: (i) => warmupOffer(plan, i)?.ramp ?? null,
-            lastOf: (ex) => {
-              if (!seen.has(ex)) seen.set(ex, lastTimeOn(ex, historyRef.current, { excludeSessionId: sessionRef.current?.id }));
-              return seen.get(ex) ?? null;
+            lastOf,
+            /*
+             * The swaps the wrist may make on its own after taking over (stage 4) — the phone's own
+             * options, asked as its live mirror asks them. Only where the phone's swap would carry the
+             * written weights across unchanged (a coach's session: no target table); where a table
+             * would re-weigh the new lift, the wrist offers nothing it could not do exactly.
+             */
+            swapsAt: (i) => {
+              if (state.targets.length > 0) return undefined;
+              const st = plan[i];
+              return swapChoicesFor(st.exerciseId, [...new Set(plan.map((s) => s.exerciseId))], i, st.target?.recommendedWeight ?? st.item?.load ?? null, {
+                liftsAfter: (at, id) => [...new Set(retargetPlanForSwap(plan, state.targets, at, id).map((s) => s.exerciseId))],
+                warmupAfter: (at, id) => warmupOffer(retargetPlanForSwap(plan, state.targets, at, id), at)?.ramp ?? null,
+                lastOf,
+                equipment: appRef.current?.profile?.equipment,
+              });
             },
           }),
         };

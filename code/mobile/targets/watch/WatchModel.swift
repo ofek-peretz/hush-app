@@ -406,6 +406,10 @@ final class WatchModel: ObservableObject {
     }
 
     let prev = mirror
+    /// The wrist just handed its own session back to the phone (released or discarded, below): the
+    /// phone's frame then drives the haptics afresh, even when it describes the very rest the phone
+    /// was already showing — the wrist's own beats were cancelled with its engine.
+    var handedBack = false
     mirror = envelope.mirror
     lobby = envelope.lobby
     if let l = envelope.lobby {
@@ -465,6 +469,7 @@ final class WatchModel: ObservableObject {
       localMirror = nil
       fallbackStarted = false
       cancelRestHaptics() // beats scheduled against the released local rest
+      handedBack = true
     }
 
     // ⛔ `fallbackStarted` WAS PART OF THIS CONDITION, AND IT LET TWO AUTHORITIES RUN.
@@ -483,16 +488,20 @@ final class WatchModel: ObservableObject {
     // on a hold had real work and no sets), is still the truth and still keeps authority, because
     // the alternative is throwing away work she performed.
     //
-    // ⛔ AND A TAKEOVER THAT HAS DONE NOTHING YIELDS TO ANY WORD FROM THE PHONE (stage 3). It carries
-    // only the phone's own account; the phone speaking again — live, or with the workout finished, or
-    // back on its lobby — is the phone holding that account itself, and the wrist goes back to the
-    // phone's stage with nothing lost.
-    if let engine = localEngine, phoneLive || (engine.isTakeover && (envelope.lobby != nil || envelope.mirror?.phase == "complete")), !engine.hasWork {
+    // ⛔ AND A TAKEOVER THAT HAS DONE NOTHING YIELDS TO THE PHONE HOLDING THE WORKOUT (stage 3): live
+    // again, or finished. It carries only the phone's own account, so nothing is lost.
+    //
+    // ⚠️ NEVER TO A LOBBY. A phone relaunched after the kill that started the takeover boots onto
+    // Today with her workout still on disk, not live — dropping the takeover there would put the wrist
+    // back on the Start screen in the middle of her workout, which is build 79 by another road. The
+    // takeover is OFFERED to that phone instead (below), and the phone carries it on from the wrist.
+    if let engine = localEngine, phoneLive || (engine.isTakeover && envelope.mirror?.phase == "complete"), !engine.hasWork {
       engine.discard()
       localEngine = nil
       localMirror = nil
       fallbackStarted = false
       cancelRestHaptics() // beats scheduled against the discarded local rest
+      handedBack = true
     }
 
     // The phone's run is ingested on every frame; it only drives the wrist when the wrist owns nothing.
@@ -557,9 +566,8 @@ final class WatchModel: ObservableObject {
       completeHold = m
       completeKcal = liveMetrics.activeKcal // BEFORE syncWorkoutRuntime finishes + clears them
     }
-    syncRestHaptics(prev: prev, next: mirror)
+    syncRestHaptics(prev: handedBack ? nil : prev, next: mirror)
     syncWorkoutRuntime(phase: mirror?.phase)
-    armSilenceWatch(mirror)
     recompute()
   }
 
@@ -572,13 +580,18 @@ final class WatchModel: ObservableObject {
    * מושלמת עם הפלאפון."* Build 79 is what this was before: the phone killed in a pocket, a set
    * pressed on the wrist that went nowhere, the honest viewer, and no way on but the phone.
    *
-   * Three moments say the phone is gone, and each hands the workout to this wrist's own engine,
+   * Two moments say the phone is gone, and each hands the workout to this wrist's own engine,
    * started from the phone's last word (`WireTakeoverKit`) — its plan as it stood, what she has
    * logged, where she is:
    *   · a tap the phone did not answer (`propose`): the tap is then carried out here;
-   *   · the phone out of reach past the grace that a dropped connection is allowed (`setReachable`);
-   *   · a rest that ran out with no word from the phone (`armSilenceWatch`): it would have presented
-   *     the next set within a second; eight seconds of nothing is a phone that cannot.
+   *   · the phone out of reach past the grace that a dropped connection is allowed (`setReachable`).
+   *
+   * ⚠️ NOT A REST THAT RAN OUT IN SILENCE. That was a third trigger, for one day, and it was wrong: a
+   * pocketed phone does not move past a rest by itself — its JS clock sleeps, and it catches up when
+   * she taps or opens it (`applyClock`) — so silence at the end of a rest is the ordinary case, not a
+   * dead phone. It would have taken the workout over after nearly every rest, and left the phone and
+   * the lock screen behind her. A dead phone is found the moment she next taps, which is the first
+   * moment it matters.
    * Nothing on the stage changes — the same frames, now from this wrist. When the phone answers
    * again the workout is offered back under its own session id (`offerLocalSession`), and the one
    * rule on the phone decides whose account stands.
@@ -591,8 +604,6 @@ final class WatchModel: ObservableObject {
     guard localEngine == nil, cardioGait == nil, phoneCardio == nil, completeHold == nil else { return nil }
     guard let m = mirror, ["active_set", "rest_inter", "rest_transition", "paused"].contains(m.phase) else { return nil }
     guard let kit = store.loadTakeoverKit(), let engine = LocalWorkoutEngine(takeover: kit, store: store) else { return nil }
-    silenceWatch?.cancel()
-    silenceWatch = nil
     graceWork?.cancel()
     graceWork = nil
     stageReturn?.cancel()
@@ -606,29 +617,6 @@ final class WatchModel: ObservableObject {
 
   /// Why the last takeover happened — kept for the record of this process, read by nothing yet.
   private(set) var lastTakeover: String?
-
-  /// The rest on the phone's stage ran out with no frame since — see `takeOver`.
-  private var silenceWatch: DispatchWorkItem?
-  private static let silenceAfterRestS: TimeInterval = 8
-
-  private func armSilenceWatch(_ m: WireMirror?) {
-    silenceWatch?.cancel()
-    silenceWatch = nil
-    guard localEngine == nil, let m, m.phase == "rest_inter" || m.phase == "rest_transition",
-          let end = WatchWire.parseDate(m.restEndsAt) else { return }
-    let seq = highestSeq
-    let work = DispatchWorkItem { [weak self] in
-      guard let self else { return }
-      self.silenceWatch = nil
-      // Still the same frame, still the same rest: nothing has come from the phone since it ran out.
-      guard self.highestSeq == seq, self.localEngine == nil, self.mirror?.phase == m.phase,
-            self.mirror?.globalIndex == m.globalIndex else { return }
-      self.takeOver("rest_ran_out")
-    }
-    silenceWatch = work
-    let delay = max(0, end.timeIntervalSinceNow) + WatchModel.silenceAfterRestS
-    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
-  }
 
   /// This wrist holds an older plan than the frame names — ask for it whole (throttled).
   private var lastKitAsk = Date.distantPast
@@ -658,6 +646,7 @@ final class WatchModel: ObservableObject {
     actualReps: Int? = nil,
     actualWeight: Double? = nil,
     seconds: Int? = nil,
+    exerciseId: String? = nil,
     heard: @escaping () -> Void = {},
     local: @escaping (LocalWorkoutEngine) -> Void
   ) {
@@ -670,7 +659,7 @@ final class WatchModel: ObservableObject {
       actualReps: actualReps,
       actualWeight: actualWeight,
       workoutId: nil,
-      exerciseId: nil,
+      exerciseId: exerciseId,
       seconds: seconds,
       severity: nil,
       area: nil,
@@ -1342,16 +1331,31 @@ final class WatchModel: ObservableObject {
   }
 
   private func swap(_ exerciseId: String, replacing originalName: String, context: SwapUndoContext) {
-    // Exercise selection belongs to the phone's model; the offline mirror offers no
-    // swap options, so this can only fire under phone authority. One-tap (founder
-    // 2026-07-10): Hush already picked the replacement — apply it immediately, ack by
-    // feel, and the next mirror frame shows the new lift (exact parity with the phone).
-    // The original's NAME is remembered so the post-swap frame can offer the way back.
-    guard localEngine == nil else { return }
+    // One-tap (founder 2026-07-10): Hush already picked the replacement — apply it immediately, ack
+    // by feel, and the next frame shows the new lift (exact parity with the phone). The original's
+    // NAME is remembered so the post-swap frame can offer the way back.
     // A nameless original (a version-skewed frame) simply gets no undo offer — it must never
     // cost the athlete the swap itself.
     pendingUndo = originalName.isEmpty ? nil : (name: originalName, at: Date(), context: context)
-    sendIntent(type: "swap_exercise", exerciseId: exerciseId)
+    /*
+     * ⛔ ALONE, THE WRIST SWAPS AS IT SWAPS WITH THE PHONE (stage 4, 2026-10-17). The options it shows
+     * alone are the phone's own, chosen in advance (`WirePlanStep.swaps`), and its engine applies the
+     * phone's swap to the letter. The undo is resolved off the engine's own frame, the same way.
+     */
+    if let engine = localEngine {
+      guard context == .next else {
+        pendingUndo = nil
+        return
+      }
+      engine.swapNext(to: exerciseId)
+      onEntryHaptic.send(.exerciseBusyApplied)
+      resolveUndo(with: localMirror)
+      return
+    }
+    propose("swap_exercise", exerciseId: exerciseId) { [weak self] engine in
+      engine.swapNext(to: exerciseId)
+      self?.resolveUndo(with: self?.localMirror)
+    }
     onEntryHaptic.send(.exerciseBusyApplied)
   }
 
@@ -1404,7 +1408,12 @@ final class WatchModel: ObservableObject {
   func undoSwap() {
     guard let u = undoOption else { return }
     clearUndo()
-    sendIntent(type: "swap_exercise", exerciseId: u.id)
+    // Alone, the engine swaps back to what was there, whole (stage 4); with the phone, the phone does.
+    if let engine = localEngine {
+      engine.swapNext(to: u.id)
+    } else {
+      propose("swap_exercise", exerciseId: u.id) { $0.swapNext(to: u.id) }
+    }
     onEntryHaptic.send(.exerciseBusyApplied)
   }
 

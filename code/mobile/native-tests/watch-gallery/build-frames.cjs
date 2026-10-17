@@ -76,6 +76,10 @@ const frames = {
   '06-set-bodyweight': set({ exerciseName: 'מתח', exerciseGroup: 'Back', setNumber: 2, targetWeight: null, targetReps: 6, targetRepsHi: 8, loadSetup: null, setsSoFar: [8], loadsSoFar: [null], lastReps: [7, 6, 6] }),
   '07-set-warmup': set({ isWarmup: true, setNumber: 1, setsInExercise: 2, targetWeight: 30, targetReps: 8, targetRepsHi: null, loadSetup: { style: 'barbell', perSide: 5, barKg: 20 } }),
   '08-set-heavy': set({ exerciseName: 'דדליפט', exerciseGroup: 'Hamstrings', setNumber: 2, setsInExercise: 5, targetWeight: 142.5, targetReps: 3, targetRepsHi: 5, loadSetup: { style: 'barbell', perSide: 61.25, barKg: 20 }, setsSoFar: [5], loadsSoFar: [140], lastReps: [5, 5, 4, 4, 3], lastLoadKg: 140 }),
+  // The warm-up offered on a compound's first set (stage 2, 2026-10-17): the quiet half of the row,
+  // beside Complete set — on a barbell, and on the longest name the week has, for the 40 mm case.
+  '26-set-warmup-offered': set({ exerciseName: 'סקוואט אחורי במוט', exerciseGroup: 'Quads', globalIndex: 0, liftIndex: 1, targetWeight: 100, targetReps: 5, targetRepsHi: 8, loadSetup: { style: 'barbell', perSide: 40, barKg: 20 }, lastReps: [6, 5, 5], lastLoadKg: 97.5, warmupOffered: 2 }),
+  '27-set-warmup-offered-long': set({ exerciseName: INCLINE, setNumber: 1, setsInExercise: 4, targetWeight: 24, targetReps: 8, targetRepsHi: 10, loadSetup: { style: 'dumbbell', perHand: 24 }, warmupOffered: 1 }),
   // A hold: before its start, and running.
   '09-hold-wait': set({ exerciseName: 'פלאנק', exerciseGroup: 'Core', setNumber: 1, setsInExercise: 1, targetWeight: null, targetReps: 1, targetRepsHi: null, loadSetup: null, holdSeconds: 45 }),
   '10-hold-run': set({ exerciseName: 'פלאנק', exerciseGroup: 'Core', setNumber: 1, setsInExercise: 1, targetWeight: null, targetReps: 1, targetRepsHi: null, loadSetup: null, holdSeconds: 45, holdEndsAt: '@HOLD_END@' }),

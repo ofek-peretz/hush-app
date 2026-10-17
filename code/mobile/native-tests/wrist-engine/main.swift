@@ -97,6 +97,8 @@ func drawn(_ m: WireMirror?) -> [String: Any] {
     for k in out.keys where k.hasPrefix("next") { out[k] = nil }
   }
   out["isWarmup"] = m.isWarmup == true
+  // The swaps offered on the walk, by id — as the phone's half writes them down.
+  if let offered = m.nextSwapOptions, !offered.isEmpty, m.phase == "rest_transition" { out["nextSwapOptions"] = offered.map { $0.id } } else { out["nextSwapOptions"] = nil }
   return out
 }
 
@@ -216,6 +218,7 @@ for file in files {
       case "finishEarly": engine.finishEarly()
       case "warmUp": engine.addWarmup()
       case "wait": break // she stands there; the clock has moved
+      case "swapNext", "swapBack": engine.swapNext(to: step["to"] as? String ?? "")
       default: diffs.append("step \(i): an action this program does not know — \(what)")
       }
       let phone = step["phone"] as? [String: Any] ?? [:]
