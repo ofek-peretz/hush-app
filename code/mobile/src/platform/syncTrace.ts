@@ -20,6 +20,7 @@
  *   R  the wrist RECEIVED a frame  seq · received                    (reported by the wrist)
  *   H  the wrist BUZZED            offsetS · fired · intended        (reported by the wrist)
  *   K  a lock-screen tap replayed  type · tapped
+ *   T  a lock-screen tap DRAWN     type · tapped · drawMs · processAgeS · drawn(1/0)   (2026-10-17)
  *   A  the phone armed its alert   restEnd
  *   V  the voice began a line      chars                             v  …and finished it
  *   S  the app changed state       active|background|inactive

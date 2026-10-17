@@ -32,7 +32,7 @@ import path from 'path';
 
 import { EXERCISES, exerciseById, isSwapOnly } from '@/data/exercises';
 import { BUILD_WEEK_SCHEMA, buildWeekRequest, BUILD_MAX_DAYS, BUILD_MAX_LIFTS, BUILD_MIN_DAYS } from '@/domain/buildPrompt';
-import { readCoachWeek, draftFromCoachWeek } from '@/domain/coachDraft';
+import { readCoachWeek, draftFromCoachWeek, MODEL_SETS_MIN } from '@/domain/coachDraft';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { PLAN_BUILD_BUDGET_MS, PLAN_BUILD_SAID_MS } from '@/platform/coach/planBuild';
 import { BUILDER_SETS_MAX, BUILDER_SETS_MIN, builderMinutes, sealAuthored } from '@/domain/planBuilder';
@@ -283,8 +283,18 @@ describe('1b · the model is not locked in — a free hand, one vocabulary', () 
      * the ceiling moves by exactly what he asked for and stays a ceiling — and what it bought was
      * measured on the live Worker before it shipped (`buildPrompt.instructions`, `planBuildBestPlanAB`).
      */
-    expect(instructionsOnly.length).toBeLessThan(580);
-    expect(instructionsOnly.length).toBeGreaterThan(500);
+    /*
+     * ⛔ 555 → ~1,690, AND EVERY ADDED LINE WAS ASKED FOR BY THE FOUNDER OR BY THE MODEL (2026-10-17).
+     * *"ממתי עושים 2 סטים… חשוב שנבדוק עם הבינה… ולא חסר לה שום מידע שהיא צריכה."* The model, asked
+     * on the live Worker what it had not been told, named how the week is used — so the facts block
+     * (`appFacts`) states it, every line pinned to the engine by `theCoachKnowsHowTheWeekIsUsed`; and
+     * two lines are rules (three sets at least; her words a priority, not a fence). Measured before it
+     * shipped: 0 two-set lifts (was 25–68%), the same weekly sets per muscle, her emphasis kept (back
+     * and shoulders led the advanced week; glutes led hers), confidence 4–5 of 10 unchanged or up.
+     * Still a law in both directions — the ceiling moved by what was measured and stays a ceiling.
+     */
+    expect(instructionsOnly.length).toBeLessThan(1_760);
+    expect(instructionsOnly.length).toBeGreaterThan(1_600);
     expect(instructionsOnly).toContain('Write the best training week this athlete could be given — one the world’s best coaches would respect.');
     expect(instructionsOnly).toContain('Session length is no constraint: choose every exercise and every set count only by what this athlete needs.');
     // …and it takes time OUT of the decision; it does not ask for more (the wording that did was measured and dropped).
@@ -529,7 +539,10 @@ describe('3 · what it says is checked, and what survives is a real week', () =>
       days: [{ name: 'Push', lifts: [{ ex: 'bb_bench_press', sets: 40 }, { ex: 'lat_pulldown', sets: 0 }] }],
     })!;
     const sets = drafted.days[0]!.slots.map((s) => s.setCount);
-    expect(sets).toEqual([BUILDER_SETS_MAX, BUILDER_SETS_MIN]);
+    // ⛔ The MODEL's floor is three (founder 2026-10-17, `coachDraft.MODEL_SETS_MIN`); her own edits
+    // in the builder still reach `BUILDER_SETS_MIN`.
+    expect(sets).toEqual([BUILDER_SETS_MAX, MODEL_SETS_MIN]);
+    expect(BUILDER_SETS_MIN).toBeLessThan(MODEL_SETS_MIN);
   });
 
   it('⛔ drops an empty day whole, and answers NULL when nothing at all survived', () => {

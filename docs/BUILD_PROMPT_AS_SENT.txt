@@ -1,5 +1,5 @@
-FERROX — the week-build prompt, exactly as the app sends it (prompt version 8)
-Generated 2026-10-11T07:30:54.321Z by __tests__/live/showBuildPrompt.test.ts from buildWeekRequest().
+FERROX — the week-build prompt, exactly as the app sends it (prompt version 9)
+Generated 2026-10-17T10:47:22.333Z by __tests__/live/showBuildPrompt.test.ts from buildWeekRequest().
 
 ════════════════════════════════════════════════════════════════════════════════════════════════════
 HOW IT TRAVELS
@@ -15,7 +15,7 @@ Model settings are the Worker's, not the phone's:
 The schema is sent as text.format json_schema, strict: false, with numeric/array bounds stripped.
 
 ════════════════════════════════════════════════════════════════════════════════════════════════════
-TEXT 1 of 2 — OUR LINES (555 characters). Identical for every athlete.
+TEXT 1 of 2 — OUR LINES (1687 characters). Identical for every athlete.
 ════════════════════════════════════════════════════════════════════════════════════════════════════
 Write the best training week this athlete could be given — one the world’s best coaches would respect.
 
@@ -25,6 +25,14 @@ Write the best training week this athlete could be given — one the world’s b
   names we know it by. Never invent an id.
 · A lift you want that is not there: put the name in `missing` — name it, do not silently swap it.
 · Write the week’s title and each day’s name in Hebrew.
+· Every exercise gets at least 3 working sets. When a muscle needs fewer weekly sets than that, give it fewer exercises — never fewer sets per exercise, and never more work than the athlete needs.
+· What the athlete asked for names what matters most to them; it is not a list of the only things they train.
+
+HOW THE APP USES THIS WEEK (facts about the app)
+· This week is the athlete’s programme. It repeats unchanged, week after week, until the athlete asks for a new one. Nothing rotates the exercises.
+· The set count you write is permanent: nothing in the app adds or removes sets later. It is the number they will do every week, not a starting dose for someone to adjust.
+· Loads progress by themselves from what is logged: when every working set reaches at least 2 reps above the bottom of its range (10 in an 8–12 range), the next session adds one step; a missed set holds the load; a repeated stall backs it off. When the logs show broad fatigue, the app lightens every load for a week.
+· One set of a one-sided exercise (lunge, split squat, single-arm row) covers both sides. A dumbbell load is the weight of one dumbbell.
 
 
 ════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -239,7 +247,7 @@ THE REPLY SCHEMA — the model reads every "description" below as part of the pr
                 },
                 "sets": {
                   "type": "integer",
-                  "description": "Working sets only. The app offers warm-up sets on the day, decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts."
+                  "description": "Working sets only, at least 3. The app offers warm-up sets on the day, decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts."
                 },
                 "pair": {
                   "type": "boolean",
@@ -266,56 +274,47 @@ THE REPLY SCHEMA — the model reads every "description" below as part of the pr
 }
 
 ════════════════════════════════════════════════════════════════════════════════════════════════════
-ONE LIVE CALL, MADE AS THE APP MAKES IT — answered in 59 s
+ONE LIVE CALL, MADE AS THE APP MAKES IT — answered in 46 s
 ════════════════════════════════════════════════════════════════════════════════════════════════════
 model that answered: gpt-6-sol
-usage as the provider reported it: {"input_tokens":3705,"input_tokens_details":{"cache_write_tokens":3702,"cached_tokens":0},"output_tokens":1353,"output_tokens_details":{"reasoning_tokens":173},"total_tokens":5058}
+usage as the provider reported it: {"input_tokens":3967,"input_tokens_details":{"cache_write_tokens":3964,"cached_tokens":0},"output_tokens":4689,"output_tokens_details":{"reasoning_tokens":3624},"total_tokens":8656}
 
 RAW REPLY:
 {
  "missing": [],
- "name": "PPL עם יום עליון בדגש גב וכתפיים",
+ "name": "PPL עם עדיפות לגב ולכתפיים, ובנץ׳ וסקוואט כבדים",
  "days": [
   {
-   "name": "משיכה: גב, כתף אחורית ויד קדמית",
+   "name": "משיכה: גב, כתפיים ויד קדמית",
    "lifts": [
     {
-     "ex": "bb_deadlift",
-     "sets": 2,
-     "pair": false,
-     "load": 160,
-     "reps": [
-      5,
-      6
-     ]
-    },
-    {
-     "ex": "weighted_pull_up",
-     "sets": 3,
-     "pair": false,
-     "load": 10,
-     "reps": [
-      6,
-      10
-     ]
-    },
-    {
-     "ex": "incline_db_row",
-     "sets": 3,
-     "pair": false,
-     "load": 32
-    },
-    {
      "ex": "lat_pulldown",
-     "sets": 2,
-     "pair": false,
+     "sets": 4,
+     "load": 70
+    },
+    {
+     "ex": "bb_row",
+     "sets": 4,
+     "load": 75
+    },
+    {
+     "ex": "cable_row",
+     "sets": 3,
      "load": 65
     },
     {
      "ex": "reverse_pec_deck",
      "sets": 3,
-     "pair": false,
      "load": 35,
+     "reps": [
+      12,
+      20
+     ]
+    },
+    {
+     "ex": "cable_lateral_raise",
+     "sets": 3,
+     "load": 7.5,
      "reps": [
       12,
       20
@@ -324,12 +323,7 @@ RAW REPLY:
     {
      "ex": "incline_db_curl",
      "sets": 3,
-     "pair": false,
-     "load": 12,
-     "reps": [
-      10,
-      15
-     ]
+     "load": 12
     }
    ]
   },
@@ -339,69 +333,63 @@ RAW REPLY:
     {
      "ex": "bb_bench_press",
      "sets": 3,
-     "pair": false,
      "load": 100,
      "reps": [
-      6,
+      4,
       8
      ]
     },
     {
      "ex": "bb_overhead_press",
      "sets": 3,
-     "pair": false,
      "load": 60,
      "reps": [
-      8,
+      6,
       10
      ]
     },
     {
      "ex": "incline_db_press",
      "sets": 3,
-     "pair": false,
-     "load": 32
+     "load": 30
     },
     {
-     "ex": "cable_lateral_raise",
-     "sets": 4,
-     "pair": false,
-     "load": 7.5,
+     "ex": "lateral_raise",
+     "sets": 3,
+     "load": 10,
      "reps": [
       12,
       20
      ]
     },
     {
-     "ex": "overhead_triceps_ext",
+     "ex": "rope_pushdown",
      "sets": 3,
-     "pair": false,
-     "load": 20,
-     "reps": [
-      10,
-      15
-     ]
+     "load": 30
     }
    ]
   },
   {
-   "name": "רגליים: ירך קדמית ואחורית, ישבן ושוקיים",
+   "name": "רגליים, ישבן, גב תחתון, שוקיים ובטן",
    "lifts": [
     {
      "ex": "bb_back_squat",
      "sets": 3,
-     "pair": false,
      "load": 130,
      "reps": [
-      5,
+      3,
       6
      ]
     },
     {
-     "ex": "leg_press",
+     "ex": "bb_rdl",
      "sets": 3,
-     "pair": false,
-     "load": 200,
+     "load": 100
+    },
+    {
+     "ex": "leg_extension",
+     "sets": 3,
+     "load": 60,
      "reps": [
       10,
       15
@@ -409,8 +397,7 @@ RAW REPLY:
     },
     {
      "ex": "seated_leg_curl",
-     "sets": 4,
-     "pair": false,
+     "sets": 3,
      "load": 45,
      "reps": [
       10,
@@ -418,16 +405,18 @@ RAW REPLY:
      ]
     },
     {
-     "ex": "bulgarian_split_squat",
-     "sets": 2,
-     "pair": false,
-     "load": 20
-    },
-    {
      "ex": "standing_calf_raise",
      "sets": 4,
-     "pair": false,
-     "load": 80,
+     "load": 85,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "cable_crunch",
+     "sets": 3,
+     "load": 40,
      "reps": [
       10,
       15
@@ -436,116 +425,102 @@ RAW REPLY:
    ]
   },
   {
-   "name": "פלג גוף עליון: גב, כתפיים, חזה וזרועות",
+   "name": "פלג גוף עליון: גב, חזה, כתפיים וזרועות",
    "lifts": [
     {
-     "ex": "bb_row",
-     "sets": 3,
-     "pair": false,
-     "load": 75,
-     "reps": [
-      6,
-      10
-     ]
+     "ex": "incline_db_row",
+     "sets": 4,
+     "load": 30
     },
     {
      "ex": "close_grip_pulldown",
      "sets": 3,
-     "pair": false,
      "load": 65
     },
     {
      "ex": "machine_chest_press",
      "sets": 3,
-     "pair": false,
-     "load": 70
+     "load": 75
+    },
+    {
+     "ex": "db_shoulder_press",
+     "sets": 3,
+     "load": 22
+    },
+    {
+     "ex": "reverse_pec_deck",
+     "sets": 3,
+     "load": 35,
+     "reps": [
+      12,
+      20
+     ]
     },
     {
      "ex": "machine_lateral_raise",
-     "sets": 4,
-     "pair": false,
-     "load": 30,
-     "reps": [
-      12,
-      20
-     ]
-    },
-    {
-     "ex": "face_pull",
      "sets": 3,
-     "pair": false,
-     "load": 25,
+     "load": 30,
      "reps": [
       12,
       20
      ]
     },
     {
-     "ex": "cable_curl",
-     "sets": 2,
-     "pair": false,
-     "load": 25,
-     "reps": [
-      10,
-      15
-     ]
+     "ex": "hammer_curl",
+     "sets": 3,
+     "load": 14
     },
     {
-     "ex": "rope_pushdown",
-     "sets": 2,
-     "pair": false,
-     "load": 30,
-     "reps": [
-      10,
-      15
-     ]
+     "ex": "triceps_pushdown",
+     "sets": 3,
+     "load": 30
     }
    ]
   },
   {
-   "name": "רגליים: ירך אחורית וקדמית, ישבן ושוקיים",
+   "name": "רגליים, ישבן, גב תחתון, שוקיים ובטן",
    "lifts": [
     {
-     "ex": "bb_rdl",
+     "ex": "bb_deadlift",
      "sets": 3,
-     "pair": false,
-     "load": 105,
+     "load": 160,
      "reps": [
-      6,
-      10
+      3,
+      6
      ]
     },
     {
-     "ex": "hack_squat",
+     "ex": "leg_press",
      "sets": 3,
-     "pair": false,
-     "load": 90
+     "load": 190
     },
     {
-     "ex": "hip_thrust",
+     "ex": "bulgarian_split_squat",
      "sets": 3,
-     "pair": false,
-     "load": 120,
-     "reps": [
-      8,
-      12
-     ]
+     "load": 18
     },
     {
-     "ex": "leg_extension",
-     "sets": 2,
-     "pair": false,
-     "load": 55,
+     "ex": "leg_curl",
+     "sets": 3,
+     "load": 45,
      "reps": [
-      12,
+      10,
       15
      ]
     },
     {
      "ex": "seated_calf_raise",
-     "sets": 4,
-     "pair": false,
+     "sets": 3,
      "load": 45,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "cable_woodchop",
+     "sets": 3,
+     "load": 17.5,
      "reps": [
       10,
       15

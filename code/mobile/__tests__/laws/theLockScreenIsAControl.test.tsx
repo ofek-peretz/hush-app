@@ -24,7 +24,7 @@ import { AppContext } from '@/state/stores/appStore';
 import { SessionProvider, useSession, restAfterStep, type SessionView } from '@/state/stores/sessionStore';
 import { db } from '@/data/local/db';
 import { nudgeAfterS } from '@/domain/setDwell';
-import { LOCK_INTENT_TYPES, parseLockIntents } from '@/platform/liveActivity';
+import { LOCK_INTENT_TYPES, parseLockIntents, parseLockTimings } from '@/platform/liveActivity';
 import type { PlannedSession } from '@/domain/coachPlan';
 
 jest.mock('@/platform/restHaptics', () => ({
@@ -52,21 +52,116 @@ describe('⛔ the native half: three intents, one queue, two targets', () => {
     // Five intents: the three verbs of the stage, the voice's "מוכן" (a verb on the wire, spec §3.2),
     // and the stepper turn — which is NOT a verb on the wire.
     expect((intents.match(/: LiveActivityIntent \{/g) ?? []).length).toBe(5);
-    // Every verb writes the queue BEFORE it projects — the queue is the truth, the card a guess.
-    for (const kind of ['completeSet', 'addRest', 'endRest', 'setReady']) {
-      const i = intents.search(new RegExp(`HushLockIntentBus\\.push\\(\\.${kind}[,)]`));
-      const j = intents.indexOf(`HushLockProjection.${kind}(`, i);
-      expect({ kind, pushed: i > -1, projectedAfter: j > i }).toEqual({ kind, pushed: true, projectedAfter: true });
+    // Every verb writes the queue AT THE TAP — before anything is drawn or waited on, under the lane's
+    // lock, stamped with the tap's own instant (2026-10-17) — and whistles the phone only once the card
+    // has answered or `whistleAfterAtMostS` has passed: the thumb sees the card move first, and a
+    // stalled draw can never leave the phone deaf to a tap.
+    const done = intents.slice(intents.indexOf('struct HushCompleteSetIntent'), intents.indexOf('struct HushAdjustFigureIntent'));
+    const recorded = done.indexOf('HushLockIntentBus.record(.completeSet, atMs: atMs');
+    const drawn = done.indexOf('return { await HushLockProjection.completeSet(at: at) }');
+    expect({ recorded: recorded > -1, drawnAfter: drawn > recorded }).toEqual({ recorded: true, drawnAfter: true });
+    expect(done).toContain('await HushLockTapRun.tap(HushLockIntentKind.completeSet.rawValue, whistles: true, leaves: true)');
+    for (const kind of ['addRest', 'endRest', 'setReady']) {
+      expect(intents).toContain(`await HushLockTapRun.verb(.${kind}) { _ in await HushLockProjection.${kind}() }`);
     }
+    const run = intents.slice(intents.indexOf('enum HushLockTapRun'), intents.indexOf('// MARK: - The three intents'));
+    const verb = run.slice(run.indexOf('static func verb('));
+    expect(verb.indexOf('HushLockIntentBus.record(kind, atMs: atMs)')).toBeLessThan(verb.indexOf('return { await draw(at) }'));
+    const tap = run.slice(run.indexOf('static func tap('), run.indexOf('static func verb('));
+    const capped = tap.indexOf('try? await Task.sleep(nanoseconds: UInt64(whistleAfterAtMostS * 1_000_000_000))');
+    const waited = tap.indexOf('await HushLockSerial.waitAtMost(lane, seconds: HushLockSerial.drawCapS)');
+    const after = tap.indexOf('if whistles { told.run { HushLockIntentBus.whistle() } }');
+    expect({ capped: capped > -1, drawThenWhistle: after > waited && waited > -1 }).toEqual({ capped: true, drawThenWhistle: true });
+    expect(intents).toContain('static let whistleAfterAtMostS: Double = 0.4');
+    expect(intents).not.toContain('HushLockIntentBus.push(');
+  });
+
+  it('⛔ the delay (founder 2026-10-17): decided at the tap, drawn in one lane, counted from her last turn, the bar the phone draws, every tap timed', () => {
+    // Every intent runs through the one runner: decided at once, drawn in the lane.
+    const perform = [...intents.matchAll(/func perform\(\) async throws -> some IntentResult \{([\s\S]*?)\n {2}\}/g)].map((m) => m[1]);
+    expect(perform).toHaveLength(5);
+    for (const body of perform) expect(/HushLockTapRun\.(tap|verb)\(/.test(body)).toBe(true);
+    // The decision and its place in the lane are ONE critical section, so draws keep the taps' order;
+    // no lock is taken inside an async function.
+    const serial = intents.slice(intents.indexOf('final class HushLockSerial'), intents.indexOf('final class HushLockDrawn'));
+    const decide = serial.slice(serial.indexOf('func decide('), serial.indexOf('func landed()'));
+    expect(decide.indexOf('guard let draw = body(&leavingTheSet) else { return nil }')).toBeLessThan(decide.indexOf('tail = mine'));
+    // synchronous: its lock is never held in an async function
+    expect(decide).toContain('func decide(_ body: (inout Int) -> (@Sendable () async -> Void)?) -> Task<Void, Never>? {');
+    expect(serial).toContain('if let previous { await HushLockSerial.waitAtMost(previous, seconds: HushLockSerial.waitForPreviousS) }');
+    expect(serial).toContain('static let waitForPreviousS: Double = 2');
+    expect(serial).toContain('static let drawCapS: Double = 3');
+    // A stepper is COUNTED at the tap from the figures parked by the turn before it, and DRAWN from the
+    // latest count; while a "Done" is on its way to the card, a turn — or a second "Done" — is refused.
+    const count = intents.slice(intents.indexOf('static func count(field: String, delta: Int) -> Bool'), intents.indexOf('static func drawFigures()'));
+    const parked = count.indexOf('if let p = HushLockPending.read(), p.key == key {');
+    expect(parked).toBeGreaterThan(-1);
+    expect(count.indexOf('if field == "reps"')).toBeGreaterThan(parked);
+    expect(count).not.toContain('await');
+    expect(intents).toContain('guard leaving == 0, HushLockProjection.count(field: field, delta: delta) else { return nil }');
+    const done = intents.slice(intents.indexOf('struct HushCompleteSetIntent'), intents.indexOf('struct HushAdjustFigureIntent'));
+    expect(done.indexOf('guard leaving == 0 else { return nil }')).toBeLessThan(done.indexOf('HushLockIntentBus.record(.completeSet'));
+    // …and a "Done" stops counting as on its way exactly once — when it lands, or when the tap stops waiting.
+    const tap = intents.slice(intents.indexOf('static func tap('), intents.indexOf('static func verb('));
+    expect((tap.match(/if leaves \{ land\.run \{ HushLockSerial\.shared\.landed\(\) \} \}/g) ?? []).length).toBe(2);
+    // +15 moves the END and keeps the bar's yardstick — exactly what the phone's mirror publishes.
+    const addRest = intents.slice(intents.indexOf('static func addRest('), intents.indexOf('static func setReady()'));
+    expect(addRest).toContain('s.restEndDate = newEnd');
+    expect(addRest).not.toMatch(/s\.restTotalS\s*=/);
+    // One key per tap and per timing — a drain can never erase a row being written beside it — and the
+    // timing row is written after the tap stops waiting, never inside the lane.
+    expect(intents).toContain('static let entryPrefix = "hush.lockIntent."');
+    expect(module).toContain('static let entryPrefix = "hush.lockIntent."');
+    expect(intents).toContain('static let prefix = "hush.lockTimings."');
+    expect(module).toContain('static let timingPrefix = "hush.lockTimings."');
+    expect(module).toContain('for (k, v) in store.dictionaryRepresentation() where k.hasPrefix(prefix) {');
+    expect(tap.indexOf('HushLockTimings.note(kind, atMs: atMs, drawnMs: result.atMs')).toBeGreaterThan(tap.indexOf('await HushLockSerial.waitAtMost(lane'));
+    expect(intents).toContain('info.kp_proc.p_un.__p_starttime');
+    expect(module).toContain('AsyncFunction("drainLockTimings")');
+    // The phone's draws run in one lane; each re-reads her parked figures at draw time, and a card that
+    // already shows it is skipped only once the draw before it has LANDED.
+    const lane = module.slice(module.indexOf('private func draw(_ next:'), module.indexOf('static func waitAtMost('));
+    const waited = lane.indexOf('if let previous { settled = await HushActivityController.waitAtMost(previous, seconds: 2) }');
+    const merged = lane.indexOf('let state = LockPending.merged(next)');
+    const skip = lane.indexOf('if settled, HushActivityController.showsAlready(a.content.state, state) { return }');
+    expect({ waited: waited > -1, mergedAfter: merged > waited, skipAfter: skip > merged }).toEqual({ waited: true, mergedAfter: true, skipAfter: true });
+    // A fresh parked figure survives a republish of another card (the app woken BY a tap republishes
+    // the card it remembers); only a stale one is dropped. Cleared on a NEW card and at the end — never
+    // when a live card is re-adopted, which goes through the lane like every other draw.
+    expect(module).toContain('} else if let p = LockPending.read(), !LockPending.isFresh(p) {');
+    expect(module).toContain('static let freshS: Double = 120');
+    expect(intents).toContain('"atMs": Date().timeIntervalSince1970 * 1000]');
+    const start = module.slice(module.indexOf('func start(_ r: ActivityRecord)'), module.indexOf('func update(_ r: ActivityRecord)'));
+    expect(start.indexOf('LockPending.clear()')).toBeGreaterThan(start.indexOf('if let a = live.first {'));
+    expect(start.indexOf('LockPending.clear()')).toBeLessThan(start.indexOf('attributes: HushSessionAttributes()'));
+    expect(start).toContain('draw(strengthState(r), on: a)');
+    expect(module).toContain('LockPending.clear() // the card is gone');
+    // The phone journals the timings AFTER it replays the taps, without waiting on them.
+    const store = read('src/state/stores/sessionStore.tsx');
+    expect(store.indexOf('void drainLockTimings().then(')).toBeGreaterThan(store.indexOf('await applyLockIntentsRef.current(list);'));
+    // …and what it journals parses strictly.
+    expect(parseLockTimings([
+      { k: 'complete_set', atMs: 1000, drawnMs: 1400, ageS: 812.5, drawn: true },
+      { k: 'adjust_weight', atMs: 900, drawnMs: 950, ageS: -1, drawn: false },
+      { k: 'Bad Kind', atMs: 1, drawnMs: 2 },
+      { k: 'end_rest', atMs: 'x', drawnMs: 2 },
+    ])).toEqual([
+      { kind: 'adjust_weight', atMs: 900, drawMs: 50, ageS: null, drawn: false },
+      { kind: 'complete_set', atMs: 1000, drawMs: 400, ageS: 812.5, drawn: true },
+    ]);
   });
 
   it('⛔ her figures (2026-09-08): a stepper turn queues nothing; "Done" carries the parked figures, read before they are cleared', () => {
     const adjust = intents.slice(intents.indexOf('struct HushAdjustFigureIntent'), intents.indexOf('struct HushAddRestIntent'));
-    expect(adjust).toContain('HushLockProjection.adjust(field: field, delta: delta)');
-    expect(adjust).not.toContain('HushLockIntentBus.push(');
+    expect(adjust).toContain('HushLockProjection.count(field: field, delta: delta)');
+    expect(adjust).toContain('await HushLockProjection.drawFigures()');
+    expect(adjust).not.toContain('HushLockIntentBus.record(');
+    expect(adjust).not.toContain('HushLockIntentBus.whistle(');
     // The set intent sends the parked figures WITH the tap, and reads them before the projection clears them.
     const done = intents.slice(intents.indexOf('struct HushCompleteSetIntent'), intents.indexOf('struct HushAdjustFigureIntent'));
-    expect(done).toContain('HushLockIntentBus.push(.completeSet, figures: HushLockProjection.pendingForCurrentSet())');
+    const read = done.indexOf('HushLockIntentBus.record(.completeSet, atMs: atMs, figures: HushLockProjection.pendingForCurrentSet())');
+    expect(read).toBeGreaterThan(-1);
+    expect(done.indexOf('HushLockPending.clear()')).toBeGreaterThan(read);
     // The parked figures live under one key in both targets, keyed by the set they were typed for.
     for (const src of [intents, module]) {
       expect(src).toContain('"hush.lockPending"');
@@ -161,7 +256,7 @@ describe('⛔ the native half: three intents, one queue, two targets', () => {
   });
 
   it('the intents and the module agree on the queue — suite, key, whistle', () => {
-    for (const literal of ['"group.com.hushfitness.app"', '"hush.lockIntents"', '"com.hushfitness.app.lockIntent"']) {
+    for (const literal of ['"group.com.hushfitness.app"', '"hush.lockIntents"', '"hush.lockIntent."', '"com.hushfitness.app.lockIntent"']) {
       expect(intents).toContain(literal);
       expect(module).toContain(literal);
     }

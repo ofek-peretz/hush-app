@@ -81,6 +81,8 @@ function analyse(texts) {
   const wristLate = [];
   const wristRefused = [];
   const lockLate = [];
+  const lockDraw = []; // T rows (2026-10-17): the card's own answer to a tap
+  const lockCold = [];
   const alertVsWrist = [];
   let lastEnd = null;
   let pendingLa = [];
@@ -124,6 +126,12 @@ function analyse(texts) {
         if (tapped !== '') lockLate.push(r.at - abs(r, tapped));
         break;
       }
+      case 'T': {
+        const [type, , drawMs, ageS] = r.f;
+        if (drawMs !== '') lockDraw.push(Number(drawMs));
+        if (ageS !== '' && Number(ageS) < 5) lockCold.push(type);
+        break;
+      }
       case 'A': {
         const [end] = r.f;
         if (lastEnd != null && end !== '') alertVsWrist.push(abs(r, end) - lastEnd);
@@ -156,6 +164,8 @@ function analyse(texts) {
     wristTapToPhoneMs: stats(wristLate),
     wristTapsRefused: wristRefused,
     lockTapToPhoneMs: stats(lockLate),
+    lockTapToCardMs: stats(lockDraw),
+    lockTapsThatLaunchedTheApp: lockCold,
     phoneAlertVsPublishedEndMs: stats(alertVsWrist.map(Math.abs)),
   };
 }

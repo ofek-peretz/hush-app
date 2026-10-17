@@ -39,6 +39,7 @@ import { dayTitle } from '@/i18n/dayTitle';
 import { View, StyleSheet } from 'react-native';
 import { daysAfterStarting } from '@/domain/weekBoard';
 import { coachSession } from '@/domain/coachWeek';
+import { sessionWithoutResting } from '@/domain/restingToday';
 import { useSession } from '@/state/stores/sessionStore';
 import { isTrainingGated } from '@/domain/entitlement';
 import { WEEK_ORDER } from '@/domain/trainingDays';
@@ -192,14 +193,20 @@ export function PreWorkoutScreen({ navigation, route }: Props) {
   const workouts = React.useMemo(() => coachWeek(plan), [plan]);
   const workout = workouts.find((w) => w.id === route.params.workoutId) ?? null;
 
-  /* The day as she will train it: the coach's session with today's swaps applied, and nothing else. */
+  /* The day as she will train it: the coach's session with today's swaps applied — and, while a pain
+     report rests a movement, without it (`domain/restingToday`, 2026-10-17): exactly what `startCoach`
+     runs, so the card never shows a lift the workout will not ask for. */
+  const painEases = app.profile?.painEases;
   const shownPlan = React.useMemo<CoachPlan | null>(() => {
-    if (!plan || !workout || todaySwaps.length === 0) return plan;
+    if (!plan || !workout) return plan;
     const i = workouts.indexOf(workout);
     const session = plan.sessions[i];
     if (!session) return plan;
-    return { ...plan, sessions: plan.sessions.map((x, k) => (k === i ? swapForToday(session, todaySwaps) : x)) };
-  }, [plan, workout, workouts, todaySwaps]);
+    const swapped = todaySwaps.length === 0 ? session : swapForToday(session, todaySwaps);
+    const today = sessionWithoutResting(swapped, painEases, Date.now());
+    if (today === session) return plan;
+    return { ...plan, sessions: plan.sessions.map((x, k) => (k === i ? today : x)) };
+  }, [plan, workout, workouts, todaySwaps, painEases]);
   const insteadOf = React.useMemo(
     () => Object.fromEntries(todaySwaps.map((x) => [x.to, exerciseDisplayName(x.from)])) as Record<string, string>,
     [todaySwaps],

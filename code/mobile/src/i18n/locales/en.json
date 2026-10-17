@@ -1480,6 +1480,7 @@
   },
   "profile": {
     "syncTestOn": "Sync test is on",
+    "lockTaps": "Lock-screen taps",
     "units": "Units",
     "membership": "Membership",
     "memberSince": "Member since",

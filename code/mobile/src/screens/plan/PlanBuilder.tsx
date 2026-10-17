@@ -56,8 +56,8 @@ import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
 import { FUNNEL_EVENTS } from '@/platform/events';
 import { clearImport } from '@/domain/pendingImport';
-import { intakeStepsFor } from '@/domain/statedLifts';
-import type { OnboardingInputs, Program, ProgramDay } from '@/data/local/models';
+import { intakeStepsFor, liftsFromHistory } from '@/domain/statedLifts';
+import type { OnboardingInputs, Program, ProgramDay, Session } from '@/data/local/models';
 import { EXERCISES, exerciseById, exerciseCues, exerciseDisplayName, isSwapOnly, type Exercise, type EquipmentFamily } from '@/data/exercises';
 import { CANONICAL_MUSCLE_ORDER } from '@/engine/v5/constants';
 import { swapChoices, swapMore } from '@/domain/swapPool';
@@ -1553,13 +1553,29 @@ export function PlanBuilder({ navigation, route }: Props) {
           { text: t('ob.buildingRetry'), onPress: () => letTheModelBuild(daysPerWeek, ask) },
         ]);
       const failed = ask.trim() ? () => { setBuildBusy(false); askAgainOrNot(); } : assembleLocally;
-      void requestPlanBuild({
-        daysPerWeek,
-        sex: her.sex === 'female' ? 'female' : 'male',
-        ...(her.weightKg != null ? { weightKg: her.weightKg } : {}),
-        ...(her.experience ? { experience: her.experience } : {}),
-        ...(ask.trim() ? { ask: ask.trim() } : {}),
-      })
+      /*
+       * ⛔ HER OWN NUMBERS RIDE ALONG (2026-10-17). A week rebuilt here was written from her sex, her
+       * bodyweight and a chip — beside months of her own sets on this phone — and the model's opening
+       * load comes first for every lift she has not done yet. Her best recent set of each lift she
+       * trains (`liftsFromHistory`) is what a coach would read first; and her room, when she named one,
+       * is what the week must fit (`Profile.equipment`, which no week used to read).
+       */
+      const room = app.profile?.equipment;
+      void db
+        .loadHistory()
+        .catch((): Session[] => [])
+        .then((history) => {
+          const lifted = liftsFromHistory(history, Date.now());
+          return requestPlanBuild({
+            daysPerWeek,
+            sex: her.sex === 'female' ? 'female' : 'male',
+            ...(her.weightKg != null ? { weightKg: her.weightKg } : {}),
+            ...(her.experience ? { experience: her.experience } : {}),
+            ...(ask.trim() ? { ask: ask.trim() } : {}),
+            ...(lifted.length > 0 ? { lifts: lifted, liftsFrom: 'logs' as const } : {}),
+            ...(room && room.length > 0 ? { equipment: room } : {}),
+          });
+        })
         .then((res) => {
           if (!res.ok) return failed();
           const drafted = draftFromCoachWeek(res.week, {

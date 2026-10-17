@@ -87,10 +87,11 @@ import { EXERCISES, isSwapOnly } from '@/data/exercises';
 import heCopy from '@/i18n/locales/he.json';
 import type { PromptBlock } from '@/domain/coachPrompt';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
-import { statedLiftsLine, type StatedLift } from '@/domain/statedLifts';
+import { RAISE_HEADROOM_REPS } from '@/engine/v5/constants';
+import { LIFTS_FROM_LOG_WEEKS, statedLiftsLine, type StatedLift } from '@/domain/statedLifts';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 8;
+export const BUILD_PROMPT_VERSION = 9;
 
 /**
  * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
@@ -263,7 +264,7 @@ export const BUILD_WEEK_SCHEMA = {
                 sets: {
                   type: 'integer',
                   description:
-                    'Working sets only. The app offers warm-up sets on the day, decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts.',
+                    'Working sets only, at least 3. The app offers warm-up sets on the day, decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts.',
                 },
                 /*
                  * ⛔ THE ONE THING THE MODEL COULD NOT SAY, AND THE ATHLETE COULD (founder,
@@ -370,6 +371,16 @@ export interface BuildAsk {
    * as catalogue ids, so nothing is matched by name.
    */
   lifts?: readonly StatedLift[];
+  /**
+   * Where `lifts` came from: her own answer on the intake (`stated`, the default) or her own logged
+   * sets, read when she rebuilds a week she has trained on (`logs` — `statedLifts.liftsFromHistory`).
+   */
+  liftsFrom?: 'stated' | 'logs';
+  /**
+   * The equipment families her room holds, when she said (`Profile.equipment`, 2026-09-01). Absent is
+   * a full gym — the same default the engine and the swap pool read. Every week used to ignore it.
+   */
+  equipment?: readonly string[];
   /** Her language, so the DAY NAMES come back in it — they are the only prose in the answer. */
   locale?: 'en' | 'he';
 }
@@ -535,7 +546,73 @@ function instructions(locale: 'en' | 'he'): string {
     '· A lift you want that is not there: put the name in `missing` — name it, do not silently swap it.',
 
     `· Write the week’s title and each day’s name in ${locale === 'he' ? 'Hebrew' : 'English'}.`,
+    /*
+     * ⛔ AT LEAST THREE SETS (founder, 2026-10-17): *"משום מה הבינה עושה 2 סטים לתרגילים מסוימים וזה
+     * קצת מוזר לי כי ממתי עושים 2 סטים."* He had raised it before; this time the model was ASKED
+     * (`__tests__/live/askTheCoachAboutItsWeek`): it wrote most of its 2s as "a starting dose to adjust
+     * later" — in an app where nothing ever adjusts them (`appFacts` below). With the rule, measured on
+     * the live Worker: 0 two-set lifts in every week (was 25–68%), the same sets per muscle a week, two
+     * or three fewer exercises, and the model's own confidence in its week unchanged or higher. The
+     * second half is what kept the advanced athlete's week from growing to 99 sets.
+     */
+    '· Every exercise gets at least 3 working sets. When a muscle needs fewer weekly sets than that, give it fewer exercises — never fewer sets per exercise, and never more work than the athlete needs.',
+    /*
+     * ⛔ HER WORDS NAME A PRIORITY, NOT A FENCE (2026-10-17). A beginner who wrote "glutes, legs and
+     * a strong back" got a week with no pushing, no shoulders and no core at all — and the model,
+     * asked about it, said itself it "should not assume that wanting a strong back means wanting no
+     * upper-body pushing". With this line the same athlete's week kept her emphasis and gained a press.
+     */
+    '· What the athlete asked for names what matters most to them; it is not a list of the only things they train.',
   ].join('\n');
+}
+
+/**
+ * ════ HOW THE APP USES THE WEEK — FACTS, NOT INSTRUCTIONS (2026-10-17) ════
+ *
+ * Asked what it had not been told, the model named the same things on every athlete: how long the
+ * week runs, whether set counts ever change, how the weights move. Every answer is a fact of this
+ * app, verified in the code before it was written here:
+ *
+ *   · the week repeats until she builds another — `sealAuthored` stamps it, `engineMayRebuild`
+ *     refuses every automatic rebuild, and `requestPlanBuild` fires only on her tap;
+ *   · its set counts never change — Loop 3 (±1 set) feeds only `generateProgram`, which never runs
+ *     on an authored week; only her own edit (`balanceAuthoredWeek`) moves a set;
+ *   · the loads move by themselves — Loop 2 raises a lift when its worst set clears the floor by
+ *     `RAISE_HEADROOM_REPS` (2), holds on a miss, backs off a repeated stall; `deload.ts` lowers
+ *     every load 10% for a week on broad fatigue (sets untouched);
+ *   · one set of a one-sided lift is logged once, both sides (`restPrescription`), and a dumbbell
+ *     load is one dumbbell (`loadPresentation`).
+ *
+ * ⚠️ A FACT HERE THAT STOPS BEING TRUE IS A LIE TO THE COACH. `theCoachKnowsHowTheWeekIsUsed` pins
+ * each line to the constant it states; change the engine and that law fails before this does.
+ */
+export function appFacts(): string {
+  return [
+    'HOW THE APP USES THIS WEEK (facts about the app)',
+    '· This week is the athlete’s programme. It repeats unchanged, week after week, until the athlete asks for a new one. Nothing rotates the exercises.',
+    '· The set count you write is permanent: nothing in the app adds or removes sets later. It is the number they will do every week, not a starting dose for someone to adjust.',
+    `· Loads progress by themselves from what is logged: when every working set reaches at least ${RAISE_HEADROOM_REPS} reps above the bottom of its range (${8 + RAISE_HEADROOM_REPS} in an 8–12 range), the next session adds one step; a missed set holds the load; a repeated stall backs it off. When the logs show broad fatigue, the app lightens every load for a week.`,
+    '· One set of a one-sided exercise (lunge, split squat, single-arm row) covers both sides. A dumbbell load is the weight of one dumbbell.',
+  ].join('\n');
+}
+
+/**
+ * Her room as a coach reads it — the families in plain words, bodyweight once (it is in every room,
+ * `domain/room.inRoom`), never the app's own tokens (`fixed_barbell` is nobody's word for a bar).
+ */
+const ROOM_WORDS: Record<string, string> = {
+  barbell: 'barbell and plates',
+  fixed_barbell: 'fixed-weight barbells',
+  dumbbell: 'dumbbells',
+  kettlebell: 'kettlebells',
+  machine: 'machines',
+  cable: 'cable station',
+  band: 'resistance bands',
+};
+function roomLine(equipment: readonly string[] | undefined): string | null {
+  const words = [...new Set(equipment ?? [])].map((f) => ROOM_WORDS[f]).filter(Boolean);
+  if (words.length === 0) return null;
+  return `- equipment where they train: ${words.join(', ')}, and their own bodyweight (use only exercises these allow)`;
 }
 
 /** Her one-tap answer, as a coach would read it (AboutYou's three chips). */
@@ -558,6 +635,8 @@ export function buildWeekRequest({
   experience,
   ask,
   lifts,
+  liftsFrom = 'stated',
+  equipment,
   locale = 'en',
   cache = true,
 }: BuildAsk & { cache?: boolean }): {
@@ -566,7 +645,7 @@ export function buildWeekRequest({
   think: 'low';
   schema: Record<string, unknown>;
 } {
-  const stable = `${instructions(locale)}\n\nCATALOGUE\n${catalogueLines()}`;
+  const stable = `${instructions(locale)}\n\n${appFacts()}\n\nCATALOGUE\n${catalogueLines()}`;
   /*
    * ⚠️ HER WORDS GO LAST AND ARE LABELLED AS HERS. Last, because it is the freshest thing in the
    * context and the thing that should steer; labelled, because a sentence dropped in among our
@@ -598,7 +677,14 @@ export function buildWeekRequest({
     ...(experience ? [`- training experience: ${EXPERIENCE_WORDS[experience]}`] : []),
     `- default rep range: ${band} (every exercise you give no range runs on it)`,
     // A fact about her, in the catalogue's own ids — and what every load of the week is read from.
-    ...(lifts && lifts.length > 0 ? [`- weights they lift today: ${statedLiftsLine(lifts)}`] : []),
+    // Said for what it is: her own one-set answer, or her best recent set of each lift from her log.
+    ...(lifts && lifts.length > 0
+      ? [liftsFrom === 'logs'
+        ? `- what they lift now, from their own logged sets (their best set of each lift in the last ${LIFTS_FROM_LOG_WEEKS} weeks): ${statedLiftsLine(lifts)}`
+        : `- weights they lift today: ${statedLiftsLine(lifts)}`]
+      : []),
+    // Her room, when she named one: the week must be doable in it. Absent = a full gym.
+    ...(roomLine(equipment) ? [roomLine(equipment)!] : []),
     ...(said ? ['', 'WHAT THE ATHLETE ASKED FOR, in their own words:', said] : []),
   ].join('\n');
   return {

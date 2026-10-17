@@ -1679,6 +1679,7 @@
   },
   "profile": {
     "syncTestOn": "בדיקת סנכרון פעילה",
+    "lockTaps": "לחיצות במסך הנעול",
     "units": "יחידות",
     "membership": "מנוי",
     "memberSince": "חבר מאז",

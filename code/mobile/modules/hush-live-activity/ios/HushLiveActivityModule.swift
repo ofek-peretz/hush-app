@@ -105,12 +105,36 @@ struct CardioWordsRecord: Record {
 /// the same suite, the same key, read here because a pod cannot see the app target's Swift).
 private enum LockQueue {
   static let suite = "group.com.hushfitness.app"
+  /// The one-array queue the intents wrote until 2026-10-17 — still drained, never written.
   static let key = "hush.lockIntents"
+  /// One key per tap since 2026-10-17 (`HushLockIntentBus.entryPrefix`): `hush.lockIntent.<id>`.
+  static let entryPrefix = "hush.lockIntent."
+  static let timingPrefix = "hush.lockTimings."
   static let darwinName = "com.hushfitness.app.lockIntent"
 
-  /// Take everything queued. Only the ids handed over are removed, so a tap pushed by the intent
-  /// process between the read and the write is kept for the next drain, never lost.
+  /// Take everything queued.
+  ///
+  /// ⛔ KEY BY KEY (2026-10-17). The drain used to read the array, filter it and write it back while
+  /// the intent read, appended and wrote it back on another thread — a tap written between this
+  /// read and this write was erased by it. Each tap is its own key now: read, then removed by name,
+  /// so a tap written meanwhile sits under a key this drain never touched, for the next one.
   static func drain() -> [[String: Any]] {
+    take(prefix: entryPrefix) + drainLegacy()
+  }
+
+  /// Every row under `prefix`, each removed by its own key.
+  static func take(prefix: String) -> [[String: Any]] {
+    guard let store = UserDefaults(suiteName: suite) else { return [] }
+    var out: [[String: Any]] = []
+    for (k, v) in store.dictionaryRepresentation() where k.hasPrefix(prefix) {
+      if let row = v as? [String: Any] { out.append(row) }
+      store.removeObject(forKey: k)
+    }
+    return out
+  }
+
+  /// The old array, for an app updated in the middle of a workout. Only the ids handed over are removed.
+  private static func drainLegacy() -> [[String: Any]] {
     guard let store = UserDefaults(suiteName: suite) else { return [] }
     let queue = store.array(forKey: key) as? [[String: Any]] ?? []
     if queue.isEmpty { return [] }
@@ -127,7 +151,11 @@ private enum LockQueue {
 /// target's Swift, so the shape is declared twice; `theLockScreenIsAControl` holds the literals).
 private enum LockPending {
   static let key = "hush.lockPending"
-  struct Figures { let key: String; let weight: Double?; let reps: Int }
+  /// `atMs`: when she typed it (absent on figures parked before 2026-10-17 — read as old).
+  struct Figures { let key: String; let weight: Double?; let reps: Int; let atMs: Double? }
+
+  /// A parked figure younger than this survives a republish of another card (see `strengthState`).
+  static let freshS: Double = 120
 
   static func key(liftIndex: Int, setIndex: Int) -> String { "\(liftIndex)/\(setIndex)" }
 
@@ -136,7 +164,22 @@ private enum LockPending {
           let d = store.dictionary(forKey: key),
           let k = d["key"] as? String,
           let reps = d["reps"] as? Int else { return nil }
-    return Figures(key: k, weight: d["weight"] as? Double, reps: reps)
+    return Figures(key: k, weight: d["weight"] as? Double, reps: reps, atMs: d["atMs"] as? Double)
+  }
+
+  static func isFresh(_ f: Figures) -> Bool {
+    guard let at = f.atMs else { return false }
+    return Date().timeIntervalSince1970 * 1000 - at < freshS * 1000
+  }
+
+  /// The card's state with her parked figures on it, when they were typed for the set it shows.
+  @available(iOS 16.2, *)
+  static func merged(_ s: HushSessionAttributes.ContentState) -> HushSessionAttributes.ContentState {
+    guard s.phase == "set", let p = read(), p.key == key(liftIndex: s.liftIndex, setIndex: s.setIndex) else { return s }
+    var out = s
+    out.targetWeight = p.weight
+    out.targetReps = p.reps
+    return out
   }
 
   static func clear() {
@@ -206,6 +249,26 @@ public class HushLiveActivityModule: Module {
     AsyncFunction("drainLockIntents") { () -> [[String: Any]] in
       LockQueue.drain()
     }
+
+    /// How long each lock-screen tap took to show on the card (`HushLockTimings` in the intents —
+    /// `{ k, atMs, drawnMs, ageS, drawn }` each, 2026-10-17). Taken and cleared, like the queue.
+    AsyncFunction("drainLockTimings") { () -> [[String: Any]] in
+      LockQueue.take(prefix: LockQueue.timingPrefix)
+    }
+  }
+}
+
+/// Runs its closure the first time only — a continuation may be resumed exactly once.
+private final class LaneOnce: @unchecked Sendable {
+  private let lock = NSLock()
+  private var done = false
+
+  func run(_ body: () -> Void) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard !done else { return }
+    done = true
+    body()
   }
 }
 
@@ -236,7 +299,14 @@ final class HushActivityController {
     if r.phase == "set", let p = LockPending.read(), p.key == key {
       weight = p.weight
       reps = p.reps
-    } else {
+    } else if let p = LockPending.read(), !LockPending.isFresh(p) {
+      /*
+       * ⛔ ONLY A STALE FIGURE IS DROPPED HERE (found in review, 2026-10-17). This cleared on ANY other
+       * card — and the first thing a phone does when iOS launches it for a lock-screen tap is
+       * republish the state it remembers, a card or more behind the one she is on. So "Next set",
+       * then "+", then the app waking erased the "+". The key already keeps a figure off every other
+       * set; a fresh one (typed in the last `freshS`) now waits for its set, and a stale one goes.
+       */
       LockPending.clear()
     }
     return HushSessionAttributes.ContentState(
@@ -373,9 +443,20 @@ final class HushActivityController {
     let live = strengthActivities()
     if let a = live.first {
       endAll(live, keepingFirst: true)
-      Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
+      draw(strengthState(r), on: a) // through the lane, ordered with every other draw of the phone's
       return true
     }
+    /*
+     * ⛔ A NEW CARD STARTS WITH NO PARKED FIGURES (found in review, 2026-10-17). They are keyed
+     * `liftIndex/setIndex`, and every workout's first set is `1/1`: figures turned on the lock screen
+     * in a workout that was then abandoned sat in the App Group and were merged onto the NEXT
+     * workout's first set — a stranger's weight on her card, and on the set "Done" would log.
+     *
+     * ⚠️ ONLY HERE, WHERE A CARD IS CREATED — never above, where a live card is re-adopted. A "+" on a
+     * card whose app iOS had killed LAUNCHES the app; its JS then starts the card again, and clearing
+     * on that road would erase the very figure the tap just parked. (`end` clears the rest.)
+     */
+    LockPending.clear()
     do {
       _ = try Activity.request(
         attributes: HushSessionAttributes(),
@@ -394,11 +475,77 @@ final class HushActivityController {
       return
     }
     guard let a = strengthActivities().first else { _ = start(r); return }
-    Task { await a.update(ActivityContent(state: strengthState(r), staleDate: nil)) }
+    draw(strengthState(r), on: a)
+  }
+
+  // ---- the strength card's lane (2026-10-17) ----
+  private let lane = NSLock()
+  private var laneTail: Task<Void, Never>?
+
+  /*
+   * ⛔ THE PHONE'S DRAWS LAND IN THE ORDER IT PUBLISHED THEM (found in review, 2026-10-17). Each
+   * update was a free-standing `Task`, and nothing ordered two of them: a stale state published just
+   * before a tap's replay could land AFTER it, and leave the card on a set already logged for a whole
+   * rest. One lane now, each draw after the one before it (at most 2 s behind a stalled one) — and
+   * the skip below is decided inside the lane, against what the card shows once every earlier draw
+   * of the phone's has landed.
+   */
+  @available(iOS 16.2, *)
+  private func draw(_ next: HushSessionAttributes.ContentState, on a: Activity<HushSessionAttributes>) {
+    lane.lock()
+    defer { lane.unlock() }
+    let previous = laneTail
+    laneTail = Task {
+      var settled = true
+      if let previous { settled = await HushActivityController.waitAtMost(previous, seconds: 2) }
+      // Her figures as they stand NOW — a turn on the lock screen may have landed since this was published.
+      let state = LockPending.merged(next)
+      // Skipped only when the draw before it LANDED: behind a stalled one, the card may be about to change.
+      if settled, HushActivityController.showsAlready(a.content.state, state) { return }
+      await a.update(ActivityContent(state: state, staleDate: nil))
+    }
+  }
+
+  /// Returns when `task` finishes (true) or `seconds` pass (false), whichever is first.
+  static func waitAtMost(_ task: Task<Void, Never>, seconds: Double) async -> Bool {
+    await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
+      let once = LaneOnce()
+      Task {
+        await task.value
+        once.run { done.resume(returning: true) }
+      }
+      Task {
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        once.run { done.resume(returning: false) }
+      }
+    }
+  }
+
+  /*
+   * ⛔ A CARD THAT ALREADY SHOWS IT IS NOT DRAWN AGAIN (2026-10-17, founder: *"הם מגיבים בדילאיי"*).
+   *
+   * A tap on the card draws its answer at once (`HushLockProjection`), and a moment later the phone
+   * replays the same tap and publishes the same truth — a second draw of a card that has not changed,
+   * every tap, plus every republish the phone makes for reasons of its own. Each draw is a request
+   * iOS has to serialise and render, and nothing about the lock screen is faster for having more of
+   * them in line. The rest's end is compared to the second: the card stamps it at the tap's instant
+   * and the phone at the replay of that instant, and no clock on the card can show the difference.
+   */
+  @available(iOS 16.2, *)
+  static func showsAlready(_ shown: HushSessionAttributes.ContentState, _ next: HushSessionAttributes.ContentState) -> Bool {
+    var same = next
+    if let a = shown.restEndDate, let b = next.restEndDate, abs(a.timeIntervalSince(b)) < 1 { same.restEndDate = a }
+    if let a = shown.holdEndDate, let b = next.holdEndDate, abs(a.timeIntervalSince(b)) < 1 { same.holdEndDate = a }
+    return same == shown
   }
 
   func end(kind: String) {
     guard #available(iOS 16.2, *) else { return }
-    if kind == "cardio" { endAll(cardioActivities()) } else { endAll(strengthActivities()) }
+    if kind == "cardio" {
+      endAll(cardioActivities())
+    } else {
+      endAll(strengthActivities())
+      LockPending.clear() // the card is gone; nothing typed on it may reach the next one (see `start`)
+    }
   }
 }

@@ -46,9 +46,18 @@
 import { exerciseById } from '@/data/exercises';
 import { matchLift } from '@/domain/importedPlan';
 import type { Program } from '@/data/local/models';
-import { BUILDER_SETS_MAX, BUILDER_SETS_MIN, START_LOAD_MAX_KG } from '@/domain/planBuilder';
+import { BUILDER_SETS_MAX, START_LOAD_MAX_KG } from '@/domain/planBuilder';
 import { BUILD_MAX_LIFTS, REPS_MAX, REPS_MIN } from '@/domain/buildPrompt';
 import { proseFingerprint, readableProse, type ProseFault } from '@/domain/modelText';
+
+/**
+ * ⛔ THE FEWEST SETS A WEEK THE MODEL WROTE MAY GIVE A LIFT (founder, 2026-10-17): *"ממתי עושים 2
+ * סטים"*. The prompt asks for at least three (`buildPrompt.instructions`) and, measured live, the model
+ * keeps to it; this is the floor under that, so a slip can never put a 2 in front of her. Only the
+ * MODEL's week is floored here — her own edits in the builder still go down to one
+ * (`BUILDER_SETS_MIN`), because a set count she chose is hers.
+ */
+export const MODEL_SETS_MIN = 3;
 import { materializeTemplate, type PlanTemplate } from '@/domain/planTemplates';
 
 /** The model's answer, exactly as `BUILD_WEEK_SCHEMA` shapes it. */
@@ -243,7 +252,7 @@ export function draftFromCoachWeek(
       seen.add(id);
       lifts.push({
         ex: id,
-        sets: Math.min(BUILDER_SETS_MAX, Math.max(BUILDER_SETS_MIN, Math.round(l.sets))),
+        sets: Math.min(BUILDER_SETS_MAX, Math.max(MODEL_SETS_MIN, Math.round(l.sets))),
         ...(l.pair ? { pair: true as const } : {}),
         ...(l.reps ? { reps: l.reps } : {}),
         ...(l.load != null ? { load: l.load } : {}),

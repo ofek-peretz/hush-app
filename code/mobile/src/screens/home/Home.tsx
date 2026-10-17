@@ -38,6 +38,7 @@ import { voiceScript } from '@/domain/voiceScript';
 import { db } from '@/data/local/db';
 import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, queuedWorkout } from '@/domain/coachWeek';
+import { planWithoutResting } from '@/domain/restingToday';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { useSession } from '@/state/stores/sessionStore';
@@ -546,8 +547,10 @@ export function Home({ navigation, route }: Props) {
    * in the direction it moved *"on every screen without exception"*. `PreWorkoutScreen` already
    * does this merge; the front door was the screen that did not.
    */
+  const painEases = app.profile?.painEases;
   const plan = React.useMemo(() => {
-    const rows = coachPlanRows(todayId ? coachRows(coachPlan, todayId) : null, app.profile?.units ?? 'kg');
+    // Today lists the workout she will be asked to do: without what a pain report rests (`domain/restingToday`).
+    const rows = coachPlanRows(todayId ? coachRows(planWithoutResting(coachPlan, painEases, Date.now()), todayId) : null, app.profile?.units ?? 'kg');
     /*
      * ⛔ AND `rows` IS NULL FAR MORE OFTEN THAN IT LOOKS (device crash, 2026-08-20).
      *
@@ -568,7 +571,7 @@ export function Home({ navigation, route }: Props) {
         ? { ...r, changed: changedDir[r.exerciseId], ...(changedKg[r.exerciseId] ? { changedByKg: changedKg[r.exerciseId] } : {}) }
         : r,
     );
-  }, [coachPlan, todayId, app.profile?.units, changedDir, changedKg]);
+  }, [coachPlan, todayId, app.profile?.units, changedDir, changedKg, painEases]);
 
   const nowMs = Date.now();
   /*
@@ -662,7 +665,8 @@ export function Home({ navigation, route }: Props) {
           history,
           sessions: coachWorkouts
             .filter((w) => !doneCoachIds.includes(w.id))
-            .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(coachPlan, w.id)?.blocks ?? [] })),
+            // The wrist runs alone what the phone would run: without the lifts her pain rests (`domain/restingToday`).
+            .map((w) => ({ id: w.id, name: w.name, blocks: coachSession(planWithoutResting(coachPlan, app.profile?.painEases, Date.now()), w.id)?.blocks ?? [] })),
           nowMs: Date.now(),
           /*
            * ⛔ THE COMMENT ABOVE WAS FALSE UNTIL 2026-08-16: this shipped `REST_INTER_S` — a flat 90
@@ -1049,7 +1053,9 @@ export function Home({ navigation, route }: Props) {
        */
       const movedDays = daysAfterStarting(coachWorkouts, todayId, WEEK_ORDER[new Date().getDay()]);
       if (movedDays) void db.saveCoachPlanDays(movedDays).catch(() => {});
-      const planned = coachSession(coachPlan, todayId);
+      // The workout as she will train it — without what a pain report rests (`domain/restingToday`), so
+      // the figure that walks onto the stage walks on with a lift she is actually asked to do.
+      const planned = coachSession(planWithoutResting(coachPlan, app.profile?.painEases, Date.now()), todayId);
       if (!planned) {
         setStartError(true);
         return;

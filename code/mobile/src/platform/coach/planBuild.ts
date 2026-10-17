@@ -35,6 +35,7 @@
 
 import { readCoachWeek, type CoachWeekDraft } from '@/domain/coachDraft';
 import { buildWeekRequest } from '@/domain/buildPrompt';
+import type { StatedLift } from '@/domain/statedLifts';
 import { currentLocale } from '@/i18n';
 import { askCoach, type CoachFailure, type CoachReply } from '@/platform/coach/coachClient';
 import { BUILD_EVENTS } from '@/platform/events';
@@ -183,6 +184,11 @@ export async function requestPlanBuild(her: {
   experience?: 'beginner' | 'intermediate' | 'advanced';
   /** Her own instruction, when she wrote one. Empty is the ordinary case and is not sent. */
   ask?: string;
+  /** What she lifts — her intake answer, or (`liftsFrom: 'logs'`) her own logged sets on a rebuild. */
+  lifts?: readonly StatedLift[];
+  liftsFrom?: 'stated' | 'logs';
+  /** Her room's equipment families, when she named one (`Profile.equipment`). */
+  equipment?: readonly string[];
 }): Promise<PlanBuildResult> {
   const locale = currentLocale() === 'he' ? 'he' : 'en';
   const req = buildWeekRequest({ ...her, locale });

@@ -30,7 +30,7 @@ import { isTrainingGated } from '@/domain/entitlement';
 import { runSteps } from '@/domain/planRun';
 import { movementById } from '@/data/movements';
 import { syncTrace } from '@/platform/syncTrace';
-import { liveActivity, drainLockIntents, addLockIntentListener, type LockExtras, type LockIntent, syncLiveActivity } from '@/platform/liveActivity';
+import { liveActivity, drainLockIntents, drainLockTimings, LOCK_COLD_LAUNCH_S, addLockIntentListener, type LockExtras, type LockIntent, syncLiveActivity } from '@/platform/liveActivity';
 import { projectSessionMirror, type MirrorStep, type MirrorMilestone } from '@/platform/sessionMirror';
 import { newlyEarned } from '@/domain/milestones';
 import { milestoneCopy, type Translate } from '@/domain/milestoneCopy';
@@ -87,6 +87,7 @@ function worthQueuing(e: unknown): boolean {
 // median) lives in ONE home, `domain/restPrescription` — re-exported here so every existing
 // importer (Home, the watch plan, tests) keeps its single import point.
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
+import { restingLifts, sessionWithoutResting } from '@/domain/restingToday';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { bandOf, currentBlockSets } from '@/domain/setRow';
 import { supersetAt, type SupersetView } from '@/domain/supersetView';
@@ -2306,7 +2307,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           nowOverrideMs = null;
         }
         await settle();
-        void track('lock_intent', { sessionId: session.id, type: i.type, lateS: Math.max(0, Math.round((Date.now() - i.atMs) / 1000)) });
+        void track('lock_intent', { sessionId: session.id, type: i.type, lateS: Math.max(0, Math.round((Date.now() - i.atMs) / 1000)), lateMs: Math.max(0, Math.round(Date.now() - i.atMs)) });
       }
       await applyClockRef.current(Date.now());
     },
@@ -2323,6 +2324,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // Always — an empty queue still ends in `applyClock(now)`, so a wake that reaches this listener
     // first runs the clock forward exactly as the clock's own listener would.
     await applyLockIntentsRef.current(list);
+    /* How long each tap took to show on the card (2026-10-17) — the intent's own clock, journalled
+       beside the replay so one screenshot of the lock-tap journal answers "was it the card or the
+       phone". AFTER the replay and not awaited: the instrument may not sit in front of what it measures. */
+    void drainLockTimings().then((timings) => {
+      for (const tm of timings) {
+        syncTrace.add('T', tm.kind, syncTrace.rel(tm.atMs), tm.drawMs, tm.ageS, tm.drawn);
+        void track('lock_draw', {
+          type: tm.kind,
+          drawMs: Math.round(tm.drawMs),
+          ...(tm.ageS != null ? { ageS: Math.round(tm.ageS), cold: tm.ageS < LOCK_COLD_LAUNCH_S } : {}),
+          drawn: tm.drawn,
+        });
+      }
+    });
   }, []);
   useEffect(() => {
     // The whistle (JS alive), the wake (JS slept), and the start (a queue from before the app ran).
@@ -3204,7 +3219,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         pendingRestSRef.current = null;
         historyRef.current = await db.loadHistory().catch(() => []); // her learned grid for live Loop 1
         refreshLearnedRests(historyRef.current); // …and her learned REST timer (S-17)
-        const plan2 = buildPlan(day, targets);
+        /* ⛔ THE REST SHE WAS PROMISED (2026-10-17, `domain/restingToday`): a lift her pain report
+           rests is left out of the workout she starts — the same table, the same refusal to empty a day. */
+        const written = buildPlan(day, targets);
+        const resting = restingLifts(written.map((st) => st.exerciseId), appRef.current?.profile?.painEases, Date.now());
+        const plan2 = resting.size > 0 ? applyLiveEdits(written, 0, [...resting].map((ex) => ({ do: 'drop', ex }) as const)) : written;
+        if (plan2 !== written) void track('pain_rest_kept', { lifts: resting.size });
         const session: Session = {
           id: `sess_${Date.now()}`,
           programDayId: day.id,
@@ -3271,7 +3291,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // No `targets` argument, and that is the whole difference. The engine's per-set targets are
         // what `start` composes a plan AROUND; here the loads are already decided and are in the
         // items. Only the `reps` shape carries one at all — a run has no load to prescribe.
-        const plan2 = buildPlanFromCoach(planned);
+        /*
+         * ⛔ THE REST SHE WAS PROMISED HOLDS HERE TOO (2026-10-17, `domain/restingToday`). Every week
+         * she trains is one nobody may rebuild, so a pain report's window was kept for the workout she
+         * reported it in and broken by the next one. The written week is untouched; the workout she
+         * starts while the window is open leaves the resting lifts out — Today and the pre-workout card
+         * read the same function, so what she is shown is what she is asked to do.
+         */
+        const toRun = sessionWithoutResting(planned, appRef.current?.profile?.painEases, Date.now());
+        if (toRun !== planned) {
+          const lifts = (s: typeof planned) => s.blocks.reduce((n, b) => n + b.items.length, 0);
+          void track('pain_rest_kept', { lifts: lifts(planned) - lifts(toRun) });
+        }
+        const plan2 = buildPlanFromCoach(toRun);
         const session: Session = {
           id: `sess_${Date.now()}`,
           programDayId: workoutId,

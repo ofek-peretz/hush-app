@@ -45,6 +45,7 @@ import { voiceCapture } from '@/platform/voice/voiceCapture';
 import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 import { track } from '@/platform/telemetry';
 import { syncTrace } from '@/platform/syncTrace';
+import { readLockTapJournal } from '@/platform/lockTapJournal';
 import { freeSessionsRemaining, FREE_SESSION_LIMIT, trialDaysLeft } from '@/domain/entitlement';
 import { PRODUCT_PERIOD, isProductId } from '@/platform/billing';
 import { color, space, font, textScale, tracking, trackingPx, press, alert, radius, signal } from '@/design/tokens';
@@ -111,6 +112,8 @@ export function ProfileSheet({ navigation }: Props) {
    */
   const toast = useToast();
   const [syncTraceOn, setSyncTraceOn] = useState(() => syncTrace.isOn());
+  /** The lock-screen taps as this phone wrote them down (`lockTapJournal`) — null until asked for. */
+  const [lockTaps, setLockTaps] = useState<string[] | null>(null);
   const p = app.profile;
   const [overlay, setOverlay] = useState<Overlay>('none');
   const [legalOpen, setLegalOpen] = useState(false);
@@ -674,6 +677,20 @@ export function ProfileSheet({ navigation }: Props) {
           <Text style={styles.version}>{versionLabel()}</Text>
           {syncTraceOn ? <Text style={styles.versionNote}>{t('profile.syncTestOn')}</Text> : null}
         </Pressable>
+        {/* ⛔ THE LOCK SCREEN'S HALF OF A TAP (2026-10-17, founder: *"הם מגיבים בדילאיי"*): how long the
+            card took to answer, whether iOS launched the app for it, and when the phone replayed it —
+            the founder's instrument, so it lives under his switch and nowhere an athlete looks. */}
+        {syncTraceOn ? (
+          <>
+            <Button
+              variant="quiet"
+              size="sm"
+              label={t('profile.lockTaps')}
+              onPress={() => void (lockTaps ? Promise.resolve(setLockTaps(null)) : readLockTapJournal().then(setLockTaps))}
+            />
+            {lockTaps ? <Text style={styles.versionNote}>{lockTaps.length > 0 ? lockTaps.join('\n') : t('profile.voiceJournalEmpty')}</Text> : null}
+          </>
+        ) : null}
       </ScrollView>
       {legalOpen ? <LegalSheet onClose={() => setLegalOpen(false)} /> : null}
 

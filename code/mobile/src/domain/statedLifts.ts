@@ -22,8 +22,10 @@
  * her bench is a FACT only she has. This step asks for facts and nothing else.
  */
 
-import type { Program } from '@/data/local/models';
+import type { Program, Session } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
+import { isEvidenceSet } from '@/domain/setEvidence';
+import { epley } from '@/engine/loadMath';
 
 export interface StatedLift {
   exerciseId: string;
@@ -72,6 +74,52 @@ export function cleanStatedLifts(lifts: readonly Partial<StatedLift>[] | null | 
     out.push({ exerciseId: l.exerciseId, kg: Math.round(kg * 100) / 100, ...(hasReps ? { reps } : {}) });
   }
   return out;
+}
+
+/**
+ * ════ WHAT SHE LIFTS NOW, READ FROM HER OWN LOG (2026-10-17) ════
+ *
+ * The intake asks four lifts because at the intake there is nothing else to read. A week rebuilt
+ * from the Program tab was sent NONE: the model wrote every load from sex, bodyweight and a chip —
+ * for an athlete with months of sets on this phone — and the opening load her week's author writes
+ * comes first for any lift she has not done (`fixtureModel.slotStartLoadOf`), so a new lift opened
+ * at a stranger's number beside her own 100 kg bench. The coach itself named it, asked what it was
+ * missing: *"recent exercise history, loads… would show whether this is a productive increase."*
+ *
+ * Her best set of each lift she trained in the last eight weeks — the lifts she trained most first,
+ * eight at most, and only sets she stood behind (`isEvidenceSet`). Same shape as the intake's, so
+ * the prompt reads both the same way; the line says which it is (`buildWeekRequest`'s `liftsFrom`).
+ */
+export const LIFTS_FROM_LOG_WEEKS = 8;
+export const LIFTS_FROM_LOG_MAX = 8;
+
+export function liftsFromHistory(history: readonly Session[], nowMs: number): StatedLift[] {
+  const since = nowMs - LIFTS_FROM_LOG_WEEKS * 7 * 86_400_000;
+  const by = new Map<string, { sessions: number; kg: number; reps: number; e1rm: number }>();
+  for (const s of history) {
+    const at = Date.parse(s.startedAt);
+    if (!Number.isFinite(at) || at < since || s.freeform) continue;
+    const here = new Set<string>();
+    for (const log of s.sets) {
+      if (!isEvidenceSet(log) || log.actualWeight == null || !(log.actualWeight > 0) || !(log.actualReps > 0)) continue;
+      const ex = exerciseById(log.exerciseId);
+      if (!ex || ex.bodyweight) continue;
+      const row = by.get(log.exerciseId) ?? { sessions: 0, kg: 0, reps: 0, e1rm: 0 };
+      if (!here.has(log.exerciseId)) {
+        row.sessions += 1;
+        here.add(log.exerciseId);
+      }
+      const e = epley(log.actualWeight, log.actualReps);
+      if (e > row.e1rm) Object.assign(row, { kg: log.actualWeight, reps: log.actualReps, e1rm: e });
+      by.set(log.exerciseId, row);
+    }
+  }
+  return cleanStatedLifts(
+    [...by.entries()]
+      .sort((a, b) => b[1].sessions - a[1].sessions || b[1].e1rm - a[1].e1rm)
+      .slice(0, LIFTS_FROM_LOG_MAX)
+      .map(([exerciseId, r]) => ({ exerciseId, kg: r.kg, reps: r.reps })),
+  );
 }
 
 /**

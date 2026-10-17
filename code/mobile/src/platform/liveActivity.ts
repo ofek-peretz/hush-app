@@ -266,6 +266,8 @@ interface HushLiveActivityNativeModule {
   areActivitiesEnabled(): boolean;
   /** Every lock-screen tap since the last drain, oldest first; the native queue is emptied. */
   drainLockIntents(): Promise<unknown>;
+  /** How long each tap took to show on the card (2026-10-17) — taken and cleared. Absent on builds before it. */
+  drainLockTimings?(): Promise<unknown>;
   addListener?(event: 'onLockIntent', cb: () => void): { remove(): void };
 }
 
@@ -406,6 +408,52 @@ export async function drainLockIntents(): Promise<LockIntent[]> {
   if (!nativeModule?.drainLockIntents) return [];
   try {
     return parseLockIntents(await nativeModule.drainLockIntents());
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ════ HOW LONG A TAP TOOK TO SHOW ON THE CARD (2026-10-17) ════
+ *
+ *   > founder: *"כאשר אני לוחץ על הפקדים של האפליקציה בLIVE ACTIVITY הם מגיבים בדילאיי ולא בזמן אמת."*
+ *
+ * One row per tap, written by the intent itself (`HushLockTimings`): `kind` is a wire verb or
+ * `adjust_weight` / `adjust_reps`; `drawMs` is from the moment our code began to the moment the card's
+ * redraw returned; `ageS` is how long the app's process had been alive at the tap — a few seconds
+ * means iOS had to launch the app for this tap, which is the slow road; `drawn` is false when the card
+ * stood down for a truth the phone had already published (or the tap could not apply).
+ */
+export interface LockTiming {
+  kind: string;
+  atMs: number;
+  drawMs: number;
+  ageS: number | null;
+  drawn: boolean;
+}
+
+/** A process younger than this at the tap was launched FOR the tap (`LockTiming.ageS`). */
+export const LOCK_COLD_LAUNCH_S = 5;
+
+export function parseLockTimings(raw: unknown): LockTiming[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LockTiming[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== 'object') continue;
+    const o = r as Record<string, unknown>;
+    if (typeof o.k !== 'string' || !/^[a-z_]{1,32}$/.test(o.k)) continue;
+    if (typeof o.atMs !== 'number' || !Number.isFinite(o.atMs) || typeof o.drawnMs !== 'number' || !Number.isFinite(o.drawnMs)) continue;
+    const age = typeof o.ageS === 'number' && Number.isFinite(o.ageS) && o.ageS >= 0 ? o.ageS : null;
+    out.push({ kind: o.k, atMs: o.atMs, drawMs: Math.max(0, o.drawnMs - o.atMs), ageS: age, drawn: o.drawn === true });
+  }
+  return out.sort((a, b) => a.atMs - b.atMs);
+}
+
+/** Every tap timing written since the last drain, oldest first. Empty off-device and on older builds. */
+export async function drainLockTimings(): Promise<LockTiming[]> {
+  if (!nativeModule?.drainLockTimings) return [];
+  try {
+    return parseLockTimings(await nativeModule.drainLockTimings());
   } catch {
     return [];
   }
