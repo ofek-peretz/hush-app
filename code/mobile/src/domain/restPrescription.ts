@@ -397,10 +397,16 @@ function tierRestS(exerciseId: string | null | undefined, bandLo?: number | null
  * the plan, and on a coach-written step her pace changes nothing. The caller only shows the beat
  * where the plan is the engine's.
  *
+ * ⛔ AND THE BOOTSTRAP IT FALLS BACK TO IS THE TIMER'S, RANGE INCLUDED (2026-10-17). It fell back to
+ * the bare tier number while the timer runs the tier shaped by the prescription's floor (B-11). Under
+ * the evidence gate the two differ on every seat outside 8–11 reps: a lateral raise at 12–20 rests 60
+ * s, and the beat announced "1:15 NEXT TIME" over a next rest that ran 1:00 — the screen walked on
+ * 2026-10-17 recorded both. `bandLo` is the step's own floor, exactly as `restAfterStep` passes it.
+ *
  * Pure, and deliberately not cached: it answers about a rest that has not been saved yet.
  */
-export function restWithSample(history: Session[], exerciseId: string, sampleS: number): number {
-  return learnedInterRestS(history, exerciseId, sampleS) ?? tierRestS(exerciseId);
+export function restWithSample(history: Session[], exerciseId: string, sampleS: number, bandLo?: number | null): number {
+  return learnedInterRestS(history, exerciseId, sampleS) ?? tierRestS(exerciseId, bandLo);
 }
 
 /** The between-exercises rest: HER pooled transition median once she has one, else the bootstrap. */

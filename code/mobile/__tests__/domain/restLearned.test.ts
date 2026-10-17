@@ -63,3 +63,21 @@ describe('what the rest prescription becomes if this rest joins it', () => {
     expect(restWithSample([session([150, 150]), curls], 'bb_curl', 60)).toBe(60);
   });
 });
+
+describe('⛔ the beat says the next clock — the range included (2026-10-17, walked on the glass)', () => {
+  /*
+   * Under the evidence gate the next rest is the tier bootstrap SHAPED BY THE SEAT'S FLOOR (B-11), and
+   * the beat fell back to the bare tier: a 12–20 lateral raise rests 60 s and the beat said 75. Its
+   * number must be `restInterSecondsFor`'s number for the same lift and the same floor, on every range.
+   */
+  const { restInterSecondsFor } = require('@/domain/restPrescription');
+  it.each([[3], [6], [8], [12], [15]])('a lift with no rests of hers yet, at a floor of %i reps', (floor) => {
+    for (const ex of ['lateral_raise', 'bb_back_squat']) {
+      expect(restWithSample([], ex, 40, floor)).toBe(restInterSecondsFor(ex, floor));
+    }
+  });
+  it('and the screen asks it with the step\'s own floor', () => {
+    const src = require('fs').readFileSync(require('path').resolve(__dirname, '..', '..', 'src/screens/session/SessionFlow.tsx'), 'utf8');
+    expect(src).toContain('restWithSample(historyRef.current, exId, tookS, session.currentTarget?.repBandLo)');
+  });
+});

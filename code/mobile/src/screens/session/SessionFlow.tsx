@@ -803,7 +803,8 @@ export function SessionFlow({ navigation, route }: Props) {
    */
   function endRestLearned(tookS: number, wasS: number) {
     const exId = session.currentExerciseId;
-    const now = exId ? restWithSample(historyRef.current, exId, tookS) : null;
+    // The step's own floor (B-11) — the same fact the timer was set from (`restAfterStep`).
+    const now = exId ? restWithSample(historyRef.current, exId, tookS, session.currentTarget?.repBandLo) : null;
     /*
      * ════ ⛔ "LEARNED" IS SHOWN ONLY WHEN SOMETHING WAS (founder, 2026-08-18) ════
      *
