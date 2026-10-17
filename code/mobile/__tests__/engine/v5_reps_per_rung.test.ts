@@ -102,14 +102,15 @@ describe('F-12 / B-5 · below the evidence gate there is no fitted slope — the
    */
   describe('B-5 · the size of the miss moves the load, before any slope is fitted', () => {
     const band = { lo: 8, hi: 10 };
-    // A 10 kg dumbbell: the default rung is 1 kg, and one rep of headroom at the top of her band is
-    // worth 10/(30+10) = 0.25 kg — so a rung costs her 4 reps.
-    const up = bootstrapPerRung(10, band.hi, { equipment: 'dumbbell', bodyweight: false });
-    const down = bootstrapPerRung(10, band.lo, { equipment: 'dumbbell', bodyweight: false });
+    // A 25 kg machine: the rung is 2.5 kg, and one rep of headroom at the top of her band is worth
+    // 25/(30+10) = 0.625 kg — so a rung costs her 4 reps. (This read a 10 kg dumbbell with a 1 kg rung
+    // until 2026-10-17, when the engine learned the rack: a dumbbell steps 10 → 12. Same ratio, same numbers.)
+    const up = bootstrapPerRung(25, band.hi, { equipment: 'machine', bodyweight: false });
+    const down = bootstrapPerRung(25, band.lo, { equipment: 'machine', bodyweight: false });
 
     it('the modelled slope is the rung divided by what one rep of headroom costs', () => {
-      expect(up).toBeCloseTo(4, 6); //  1 kg rung ÷ (10/(30+10)) kg per rep
-      expect(down).toBeCloseTo(3.8, 6); // 1 kg rung ÷ (10/(30+8))
+      expect(up).toBeCloseTo(4, 6); //  2.5 kg rung ÷ (25/(30+10)) kg per rep
+      expect(down).toBeCloseTo(3.8, 6); // 2.5 kg rung ÷ (25/(30+8))
     });
 
     it('a 20-rep set and a 12-rep set no longer raise the load by the same amount', () => {

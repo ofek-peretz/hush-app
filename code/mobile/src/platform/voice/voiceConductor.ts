@@ -283,8 +283,14 @@ const validReps = (n: number) => Number.isInteger(n) && n > 0 && n <= MAX_VOICE_
 const straightOn = (s: Step | undefined): boolean =>
   !!s && !s.lastSetOfSession && s.restAfterS != null && s.restAfterS <= REST_SKIP_THRESHOLD_S;
 
+/*
+ * ⛔ THE REPS SAID ARE HER TARGET (2026-10-17, the engine audit). `recommendedReps` is the rep target
+ * that climbs one rep a session (`ExerciseState.repTarget`) — the floor until it does — so the range
+ * said is "from your target to the top", and "כמו שכתוב" logs the target: one press of any surface and
+ * one word of the voice write the same number. (Loop 1's calibration below still reads the band.)
+ */
 const roundStepOf = (s: Step): RoundStep => {
-  const lo = s.target?.repBandLo ?? s.target?.recommendedReps ?? 8;
+  const lo = s.target?.recommendedReps ?? 8;
   return {
     exerciseId: s.exerciseId,
     exerciseSetIndex: s.exerciseSetIndex,
@@ -718,7 +724,7 @@ export class VoiceConductor {
     }
     if (!ex || !v.currentTarget) return;
     const kg = v.currentTarget.recommendedWeight;
-    const lo = v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps;
+    const lo = v.currentTarget.recommendedReps;
     const hi = v.currentTarget.repBandHi ?? lo;
     const n = v.setLabel?.n ?? 1;
     const m = v.setLabel?.m ?? 1;
@@ -988,7 +994,7 @@ export class VoiceConductor {
         return false;
       }
       case 'as_written':
-        return this.takeReport(v, planned, v.currentTarget?.repBandLo ?? v.currentTarget?.recommendedReps ?? 0, 1);
+        return this.takeReport(v, planned, v.currentTarget?.recommendedReps ?? 0, 1);
       case 'skip':
         return this.onSkip(v, false);
       case 'pause':
@@ -1160,7 +1166,7 @@ export class VoiceConductor {
          * number is heard as her report everywhere else — with "מוכן" asked of every set, a set begun
          * without the word and reported with one ("עשר") must never move the bar instead.
          */
-        const tooSoonForASet = this.d.now() - this.loadingSinceMs < voiceReportFromS(ex, v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps) * 1000;
+        const tooSoonForASet = this.d.now() - this.loadingSinceMs < voiceReportFromS(ex, v.currentTarget.recommendedReps) * 1000;
         /*
          * …and a side is made of plates: a bare number no plates add up to ("שמונה", "שתים עשרה" on a
          * bar that moves by a kilo and a quarter a side) is not a side at all — it is reps, or noise,
@@ -1317,7 +1323,7 @@ export class VoiceConductor {
     // a hundred and eighteen seconds after "קדימה" — thirty of them the same fifteen, counted twice.
     const ahead = this.roundAhead(v);
     if (ahead) return (ahead.reduce((t, s) => t + voiceAskAfterS(s.exerciseId, s.lo) - VOICE_BUFFER_S, 0) + VOICE_BUFFER_S) * 1000;
-    const lo = v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps;
+    const lo = v.currentTarget.recommendedReps;
     return voiceAskAfterS(ex, lo) * 1000;
   }
 
@@ -1328,7 +1334,7 @@ export class VoiceConductor {
     if (!ex || !v.currentTarget) return null;
     const ahead = this.roundAhead(v);
     if (ahead) return ahead.reduce((t, s) => t + voiceReportFromS(s.exerciseId, s.lo), 0) * 1000;
-    return voiceReportFromS(ex, v.currentTarget.repBandLo ?? v.currentTarget.recommendedReps) * 1000;
+    return voiceReportFromS(ex, v.currentTarget.recommendedReps) * 1000;
   }
 
   private scheduleAsk(v: SessionView, startMs: number): void {
@@ -1489,7 +1495,7 @@ export class VoiceConductor {
         return true;
       case 'as_written':
         if (inEcho) return true;
-        void this.complete(v, v.currentTarget?.recommendedWeight ?? null, v.currentTarget?.repBandLo ?? v.currentTarget?.recommendedReps ?? 0, 1);
+        void this.complete(v, v.currentTarget?.recommendedWeight ?? null, v.currentTarget?.recommendedReps ?? 0, 1);
         return false;
       case 'no':
         if (q === 'confirm' && this.ask.fromLoading) {

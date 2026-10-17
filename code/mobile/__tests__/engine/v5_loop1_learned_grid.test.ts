@@ -9,7 +9,8 @@
 
 import { applyLoop1, type LiveStep } from '@/engine/v5/liveSession';
 
-// A DUMBBELL lift, band [8,10], performed at 16 kg. Default dumbbell increment is 1.0 kg.
+// A DUMBBELL lift, band [8,10], performed at 16 kg. With no learned grid it walks the stocked rack
+// (`loadGrid.dumbbellStepAt`, 2026-10-17): 1 kg to 10, 2 kg to 20, 2.5 above.
 const plan = (): LiveStep[] =>
   [0, 1, 2].map((g) => ({
     exerciseId: 'db_bench_press',
@@ -31,10 +32,10 @@ const plan = (): LiveStep[] =>
  * `prevReps` that missed the same way — the witness is present, and the snap stays the subject.
  */
 describe('live Loop 1 uses the learned grid', () => {
-  it('with NO grid → steps by the default increment (16 → 17, which may not exist)', () => {
+  it('with NO grid → steps on the stocked rack (16 → 18; a 17 kg pair is not a rack weight, 2026-10-17)', () => {
     const r = applyLoop1(plan(), 0, 16, 11, 0, undefined, null, 11); // 1 over, witnessed (F-20)
     expect(r.corrected).toBe(true);
-    expect(r.plan[1].target!.recommendedWeight).toBe(17);
+    expect(r.plan[1].target!.recommendedWeight).toBe(18);
   });
 
   it('with her real grid [14,16,18,20] → snaps to the real next rung (16 → 18)', () => {

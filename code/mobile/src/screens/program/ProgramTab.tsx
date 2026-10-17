@@ -40,7 +40,7 @@ import { useApp } from '@/state/stores/appStore';
 import { db } from '@/data/local/db';
 import { loadWeekPlan } from '@/data/local/weekPlan';
 /* The app's ONE assembly of a prescription — see the note over `figure`. */
-import { figureLoad, figureUnit, figureScheme, type PlanLift, FigureCells} from '@/components/PlanLifts';
+import { figureLoad, figureUnit, figureScheme, schemeBand, type PlanLift, FigureCells} from '@/components/PlanLifts';
 import { CoupledRow, coupleSeat } from '@/components/CoupledRow';
 import { coachWeek, coachRows, coachPlanRows } from '@/domain/coachWeek';
 import type { CoachPlan } from '@/domain/coachPlan';
@@ -69,6 +69,8 @@ interface Row {
   sets: number;
   band: [number, number];
   detail?: string;
+  /** Her climbing rep target inside `band` (2026-10-17) — read the way Today and the pre-workout read it. */
+  target?: number;
   /** This lift and the next are done back to back — a superset (`CoachRow.withNext`). */
   withNext?: boolean;
 }
@@ -95,7 +97,7 @@ interface Row {
  * ════════════════════════════════════════════════════════════════════════════════════════════════
  */
 const figure = (r: Row, units: 'kg' | 'lb'): string => {
-  const lift = { load: r.load, sets: r.sets, band: r.band, ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift;
+  const lift = { load: r.load, sets: r.sets, band: r.band, ...(r.target != null ? { target: r.target } : {}), ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift;
   return `${figureLoad(lift, units)}${figureUnit(lift, units)}${figureScheme(lift)}`;
 };
 
@@ -394,7 +396,7 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
                     the lift names onto two lines. The day's header carries it; a row prints a scheme
                     only when it is the exception. */}
                 <FigureCells
-                  lift={{ load: r.load, sets: r.sets, band: r.band, ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift}
+                  lift={{ load: r.load, sets: r.sets, band: r.band, ...(r.target != null ? { target: r.target } : {}), ...(r.detail != null ? { detail: r.detail } : {}) } as PlanLift}
                   units={units}
                   scheme={r.detail != null || schemeOf(r) !== dominantScheme(w.rows)}
                   bodyweightWord={t('workout.bodyweightShort')}
@@ -411,14 +413,14 @@ export function ProgramTabView({ workouts, units, settled, figure, motionPaused,
   );
 }
 
-/** A row's scheme as the table prints it — `3×8–12`, or `3×8` for a fixed count. */
-function schemeOf(r: { sets: number; band: [number, number]; detail?: string | null }): string {
-  const [lo, hi] = r.band;
+/** A row's scheme as the table prints it — `3×8–12`, or `3×8` for a fixed count — from her target up. */
+function schemeOf(r: { sets: number; band: [number, number]; target?: number; detail?: string | null }): string {
+  const [lo, hi] = schemeBand(r);
   return `${r.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
 }
 
 /** The scheme most of a day's rows share, when at least two do — said once, in the day's header. */
-function dominantScheme(rows: readonly { sets: number; band: [number, number]; detail?: string | null }[]): string | null {
+function dominantScheme(rows: readonly { sets: number; band: [number, number]; target?: number; detail?: string | null }[]): string | null {
   const counts = new Map<string, number>();
   for (const r of rows) if (r.detail == null) counts.set(schemeOf(r), (counts.get(schemeOf(r)) ?? 0) + 1);
   let best: string | null = null;

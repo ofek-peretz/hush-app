@@ -105,6 +105,11 @@ export interface RepsItem extends ItemBase {
   kind: 'reps';
   reps: [number, number];
   load: number | null;
+  /**
+   * The reps she is asked for inside `reps` — her climbing rep target (`ExerciseState.repTarget`,
+   * 2026-10-17). Absent = the floor, which is every plan a coach or an import ever wrote.
+   */
+  target?: number;
 }
 /** Held or worked for a duration. */
 export interface TimeItem extends ItemBase {
@@ -763,7 +768,7 @@ export function parseCoachPlan(raw: string | unknown, facts?: CoachFacts): Parse
     /** The typist. A LIFT lands on a rung; a movement's load is left as written (see the header). */
     const settle = (load: number | null | undefined): number | null | undefined => {
       if (load == null || !lift) return load;
-      const onRung = normalizeLoad(load, lift.equipment, rungs.get(lift.id));
+      const onRung = normalizeLoad(load, lift.equipment, rungs.get(lift.id), { rack: false });
       if (onRung !== load) snapped += 1;
       return onRung;
     };

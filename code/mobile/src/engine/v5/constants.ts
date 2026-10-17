@@ -449,6 +449,24 @@ export const BOOTSTRAP_RUNGS_PER_MOVE = 1;
 export const RAISE_HEADROOM_REPS = 2;
 
 /**
+ * ════ F-24 · A RAISE IS ONE RUNG, AND A BIG RUNG WAITS FOR THE TOP (founder-approved audit, 2026-10-17) ════
+ *
+ * A raise was sized by her headroom — "as many rungs as it justifies" — and on a small load that is
+ * a big jump: an overhead press went 30 → 35 kg (+17%), she failed, and the hole the jump left in her
+ * learned grid then froze the lift at 30 while she did ten reps at the top of her range. The evidence
+ * (ACSM 2009: 2–10%) and every app we measured against move one increment at a time. So a raise is
+ * ONE rung; more than one only when she is already PAST the top of her range, and only while the
+ * whole move stays within this share of the load (a strong lifter started light still catches up).
+ */
+/*
+ * …and a step bigger than BIG_STEP_FRACTION of the load is a BIG step (a 2.5 → 5 kg cable, a 5 → 6 kg
+ * dumbbell): the raise then waits for the reps — her first set at the TOP of her range and the rest
+ * within two of it — so the jump lands on a set that had room for it ("reps first", RP / MacroFactor).
+ */
+export const MAX_RAISE_FRACTION = 0.1;
+export const BIG_STEP_FRACTION = 0.1;
+
+/**
  * ════ B-10 · THE FIRST GUESS ERRS ONE RUNG LIGHT (B-1c, 2026-09-10, measured) ════
  *
  * B-1 models a working load from sex and bodyweight, and the model is, by construction, the load she

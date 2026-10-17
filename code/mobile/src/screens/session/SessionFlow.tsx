@@ -81,7 +81,7 @@ import { useReducedMotion } from '@/platform/reducedMotion';
 import { legendVoice } from '@/design/monoVoice';
 import { color, space, stage, font, ramp, rampLine, textScale, tracking, trackingPx, signal, up, down, hold, radius, press, line, motion, directionTone } from '@/design/tokens';
 import { bandOf } from '@/domain/setRow';
-import { isRecordSet } from '@/domain/setRecord';
+import { isRecordSet, isRepRecordSet } from '@/domain/setRecord';
 import { loadNews } from '@/domain/loadNews';
 import type { MainParamList } from '@/app/navigation';
 import { CoachNoteLine } from '@/components/CoachNoteLine';
@@ -109,6 +109,8 @@ export type Confirm = {
   /** This set struck her all-time record on the lift (domain/setRecord — the share card's exact
    *  rule, so the beat and the poster can never disagree about the same bar). */
   record?: boolean;
+  /** A rep record (`setRecord.isRepRecordSet`, 2026-10-17) — the crown says so in its own words. */
+  repRecord?: boolean;
   /**
    * ⛔ HER BAND — [Tlo, Thi], the IMMUTABLE one, never the reps she edited (founder, 2026-08-04).
    *
@@ -194,6 +196,8 @@ export function SessionFlow({ navigation, route }: Props) {
   const partnerName = pair.partnerName ? bidi(pair.partnerName) : null;
   const toast = useToast();
   const [overlay, setOverlay] = useState<Overlay>('none');
+  /** What the why sheet explains — the load's move, or her rep target's climb (2026-10-17). */
+  const [whyAbout, setWhyAbout] = useState<WhyAbout>({ kind: 'weight' });
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   /**
    * 2.4d · REST — LEARNED. Set when the athlete leaves a rest she CHANGED — cut short, or
@@ -620,6 +624,10 @@ export function SessionFlow({ navigation, route }: Props) {
       record:
         !session.setLabel?.warmup &&
         isRecordSet(tgt.recommendedWeight, tgt.recommendedReps, session.priorPeakKg),
+      // …and a REP record: her heaviest weight, more reps than ever at it (2026-10-17).
+      repRecord:
+        !session.setLabel?.warmup &&
+        isRepRecordSet(tgt.recommendedWeight, tgt.recommendedReps, session.priorPeakKg, session.priorPeakReps),
       /*
        * ⛔ ONE LADDER, SHARED WITH THE STAGE (`domain/setRow.bandOf`, 2026-08-05).
        *
@@ -777,6 +785,7 @@ export function SessionFlow({ navigation, route }: Props) {
       ...(logged.band ? { band: logged.band } : {}),
       ...(logged.lift ? { lift: logged.lift } : {}),
       ...(logged.record ? { record: true } : {}),
+      ...(logged.repRecord ? { repRecord: true } : {}),
     };
     // The same speak-predicate as the phone's own beat — ONE function, so the two devices can
     // never drift apart again (that divergence was the 2026-08-16 repro).
@@ -1313,7 +1322,10 @@ export function SessionFlow({ navigation, route }: Props) {
             units={units}
             notice={notice}
             onComplete={onCompleteSet}
-            onWhy={() => setOverlay('reasoning')}
+            onWhy={(about) => {
+              setWhyAbout(about);
+              setOverlay('reasoning');
+            }}
             /* ⛔ THE FORM DISC IS GONE FROM THE CHROME AND THE FIGURE IS THE DOOR (founder,
                2026-08-31: *"צריך להוריד את הפקד של צפייה בסרטון כי הכנסנו אותו למסך עצמו"*). He is
                right that a disc for "watch the clip" is absurd on a screen that is now mostly the
@@ -1432,7 +1444,7 @@ export function SessionFlow({ navigation, route }: Props) {
       ) : null}
 
       {overlay === 'reasoning' ? (
-        <WhyLoadSheet units={units} onClose={() => setOverlay('none')} />
+        <WhyLoadSheet units={units} about={whyAbout} onClose={() => setOverlay('none')} />
       ) : null}
 
       {/* His proposal, and the two answers to it. See `PairSwapSheet`. */}
@@ -2488,7 +2500,8 @@ function ActiveSet({
   /** A notice owns the footer while it is up — the buttons stand down (see SessionFlow.notice). */
   notice: boolean;
   onComplete: () => void;
-  onWhy: () => void;
+  /** Opens the why sheet — the change arrow beside a figure is its door (2026-10-17). */
+  onWhy: (about: WhyAbout) => void;
   /** Opens the technique sheet. Absent while a beat is up, or on a lift with no film. */
   onDemo?: () => void;
 }) {
@@ -2729,6 +2742,16 @@ function ActiveSet({
   const isWarmupSet = !!session.setLabel?.warmup;
   const lastW = !isWarmupSet && lastTime?.loadKg != null ? displayWeight(lastTime.loadKg, units) : null;
   const lastR = !isWarmupSet && lastTime ? lastTime.reps[setN - 1] ?? null : null;
+  /*
+   * ⛔ THE TARGET CLIMBED (2026-10-17, the engine audit). At the same weight as last time, the reps she
+   * is asked for now are more than she did on this set then: that IS the progression this session, and
+   * the stage says so the way it says a load moved — a small up-arrow beside the figure.
+   */
+  const sameLoadAsLastTime =
+    target.recommendedWeight == null
+      ? lastTime?.loadKg == null
+      : lastTime?.loadKg != null && Math.abs(lastTime.loadKg - target.recommendedWeight) < 1e-6;
+  const repsNews = lastR != null && sameLoadAsLastTime && target.recommendedReps > lastR ? target.recommendedReps - lastR : null;
   /* The same suppression, one level up: the STRIP is the row of figures the markers annotate, so
      the two can never disagree about whether last time is being shown. An empty rep list is a
      history record with nothing in it — a row of nothing is worse than no row. */
@@ -3297,9 +3320,14 @@ function ActiveSet({
                 </Text>
               )}
               {news && newsFigure && slot !== 'weight' ? (
-                <Text style={[styles.rxFigureDelta, { color: directionTone(news.direction) }]} numberOfLines={1}>
-                  {`${news.direction === 'up' ? '↑' : '↓'}${newsFigure}`}
-                </Text>
+                /* ⛔ THE ARROW IS THE DOOR (2026-10-17, the engine audit). The why sheet was built, kept,
+                   and unreachable since Rev 15 took its link off the stage — the July note had already
+                   named the change pill as its door. Press the move, read why. */
+                <Pressable accessibilityRole="button" accessibilityLabel={t('whyLoad.legend')} hitSlop={10} onPress={() => onWhy({ kind: 'weight' })}>
+                  <Text style={[styles.rxFigureDelta, { color: directionTone(news.direction) }]} numberOfLines={1}>
+                    {`${news.direction === 'up' ? '↑' : '↓'}${newsFigure}`}
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
             {/* ⛔ THE MONO WRAPS FIGURES AND NEVER WORDS (`monoCarriesNoWords`): the unit, the total
@@ -3356,6 +3384,13 @@ function ActiveSet({
               >
                 {slot === 'reps' ? draft || '—' : repsEntered ? repsTyped : String(target.recommendedReps)}
               </Text>
+              {repsNews != null && slot !== 'reps' && !repsEntered ? (
+                /* Her rep target climbed since last time (`ExerciseState.repTarget`) — the next step of
+                   her progression, shown like any move the engine made, and its own door to why. */
+                <Pressable accessibilityRole="button" accessibilityLabel={t('whyLoad.legendReps')} hitSlop={10} onPress={() => onWhy({ kind: 'reps', from: lastR as number, to: target.recommendedReps })}>
+                  <Text style={[styles.rxFigureDelta, { color: directionTone('up') }]} numberOfLines={1}>{`↑${repsNews}`}</Text>
+                </Pressable>
+              ) : null}
             </View>
             {/* The band under the count — the instruction the count is aimed at. A collapsed band
                 (a fixed rep count) says nothing rather than "8–8". */}
@@ -3591,7 +3626,7 @@ export function Logged({
    * in moss over a ring that has just closed in moss reads as the headline it is, and the figure
    * below it stops being a repetition and becomes the evidence.
    */
-  const recordLine = confirm.record ? (
+  const recordLine = confirm.record || confirm.repRecord ? (
     <View style={styles.recordRow}>
       {/* ✦ SHE RAISES HER ARMS (2026-09-30) — the athlete who has mimed every set of this session,
           at the one moment the session exists for (`life.celebratingRig`). */}
@@ -3600,7 +3635,7 @@ export function Logged({
         {/* ✦ THE CROWN (design audit 2026-09-29) — the mark this product gives a thing EARNED (`star`,
             the milestones' own glyph), in the moss the words wear. */}
         <Icon name="star" size={26} color={signal[0]} strokeWidth={2} />
-        <Legend tone="accent" size={28} track={0.24} align="center">{t('workout.recordStruck')}</Legend>
+        <Legend tone="accent" size={28} track={0.24} align="center">{t(confirm.record ? 'workout.recordStruck' : 'workout.repRecordStruck')}</Legend>
       </View>
     </View>
   ) : null;
@@ -4730,7 +4765,10 @@ function Rest({
  *  cousin of the Weekly Update's WhyTriple. Calm, past-tense, never predictive,
  *  never a setback. A load coming down is matched to demonstrated capability with
  *  the sets kept. */
-function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => void }) {
+/** What the why sheet explains (2026-10-17): a load that moved, or a rep target that climbed. */
+type WhyAbout = { kind: 'weight' } | { kind: 'reps'; from: number; to: number };
+
+function WhyLoadSheet({ units, about, onClose }: { units: 'kg' | 'lb'; about: WhyAbout; onClose: () => void }) {
   const { t } = useCopy();
   const session = useSession();
   const app = useApp();
@@ -4771,6 +4809,30 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   const exName = exerciseDisplayName(session.currentExerciseId);
   if (!target) return null;
 
+  // Her rep target climbed: the reps, last time → today, and the rule that moves them.
+  if (about.kind === 'reps') {
+    return (
+      <BottomSheet onClose={onClose}>
+        <Legend style={styles.sheetLegend}>{t('whyLoad.legendReps')}</Legend>
+        <View style={styles.whyHead}>
+          <Text style={styles.whyName} numberOfLines={1}>{exName}</Text>
+          <View style={[styles.verdictBadge, { backgroundColor: up.wash }]}>
+            <Icon name="trendingUp" size={14} color={up.stage} strokeWidth={2} />
+            <Text style={[styles.verdictText, { color: up.stage }]}>{t('whyLoad.verdictTargetUp')}</Text>
+          </View>
+        </View>
+        <View style={styles.whyNums}>
+          <Text style={styles.whyFrom}>{about.from}</Text>
+          <Icon name="chevronRight" size={16} color={color.textTertiary} strokeWidth={2} />
+          <Text style={[styles.whyTo, { color: up.stage }]}>{opticalFigure(about.to)}</Text>
+          <Text style={styles.whyUnitWord}>{t('workout.repsUnit')}</Text>
+        </View>
+        <Text style={styles.whyLine}>{t('whyLoad.lineReps', { from: about.from, to: about.to })}</Text>
+        <Button variant="primary" block label={t('whyLoad.got')} onPress={onClose} style={styles.whyGot} />
+      </BottomSheet>
+    );
+  }
+
   // Week 1 is the LEARNING week (founder 2026-07-09): Hush is still getting to know the athlete, so
   // there is no up/down yet — pressing Why explains exactly that instead of a load change.
   if (week <= 1) {
@@ -4807,7 +4869,7 @@ function WhyLoadSheet({ units, onClose }: { units: 'kg' | 'lb'; onClose: () => v
   const toneWash = tone === 'up' ? up.wash : tone === 'down' ? down.wash : color.fillSubtle;
   const verdict = tone === 'up' ? t('whyLoad.verdictUp') : tone === 'down' ? t('whyLoad.verdictDown') : t('whyLoad.verdictHold');
   const from = tone === 'up' ? to - deltaMag : tone === 'down' ? to + deltaMag : null;
-  const line = tone === 'up' ? t('whyLoad.lineUp', { delta: deltaMag, unit }) : tone === 'down' ? t('whyLoad.lineDown') : t('whyLoad.lineHold');
+  const line = tone === 'up' ? t('whyLoad.lineUp', { delta: deltaMag, unit }) : tone === 'down' ? t('whyLoad.lineDown') : t('whyLoad.lineHold', { reps: target.recommendedReps });
   const icon: IconName = tone === 'up' ? 'trendingUp' : 'minus';
 
   return (
@@ -5712,6 +5774,8 @@ const styles = StyleSheet.create({
   whyFrom: { fontFamily: font.mono, fontVariant: ['tabular-nums'], fontSize: textScale.lg, color: color.textTertiary, textAlign: 'left' },
   whyTo: { fontFamily: font.monoSemibold, fontVariant: ['tabular-nums'], fontSize: textScale['3xl'], letterSpacing: -0.7, textAlign: 'left' },
   whyKg: { fontFamily: font.mono, fontSize: textScale.md, color: color.textMuted, textAlign: 'left' },
+  // The rep word beside the target's figure — a WORD, so the sans that can draw it (`monoCarriesNoWords`).
+  whyUnitWord: { fontFamily: font.sans, fontSize: textScale.md, color: color.textMuted, textAlign: 'left' },
   whyLine: { fontFamily: font.sans, fontSize: textScale.base, color: color.textSecondary, lineHeight: 23, marginTop: 14, textAlign: 'left' },
   whyLearnTitle: { fontFamily: font.sansSemibold, fontSize: textScale.xl, letterSpacing: trackingPx(textScale.xl, tracking.tight), color: color.textPrimary, marginTop: 10, textAlign: 'left' },
   whyNote: { flexDirection: 'row', gap: 9, marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: color.border },

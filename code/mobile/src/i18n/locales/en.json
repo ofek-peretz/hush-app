@@ -669,6 +669,7 @@
     "setOfM": "Set {{n}} of {{m}}",
     "warmupOfM": "Warm-up · {{n}} of {{m}}",
     "recordStruck": "Personal record",
+    "repRecordStruck": "Rep record",
     "coachingUp": "Up {{delta}} from last week. You're ready for it.",
     "coachingHold": "You can do it.",
     "distance": "Distance",
@@ -857,6 +858,14 @@
     "shortMany_one": "1 of your sessions comes in under {{floor}} minutes. What you left switched on doesn’t hold longer ones — fewer days make each one fuller.",
     "shortMany_other": "{{count}} of your sessions come in under {{floor}} minutes. What you left switched on doesn’t hold longer ones — fewer days make each one fuller."
   },
+  "swapOffer": {
+    "rotate": "{{from}}: the same weight for several workouts. Swap it for {{to}}?",
+    "graduate": "{{from}}: you are at the top of the range on every set. Move up to {{to}}, the harder version?",
+    "learned": "You swapped {{from}} for {{to}} twice in a row. Keep {{to}} in your week?",
+    "take": "Swap it in",
+    "keep": "Keep it",
+    "decline": "Not now"
+  },
   "whyLoad": {
     "legend": "Why this load",
     "verdictUp": "Moved up",
@@ -864,9 +873,12 @@
     "verdictHold": "Held",
     "trigger": "Why this load",
     "learning": "I set this from your body. Your first sets replace it.",
-    "lineUp": "You cleared the top of your range last time, so I added {{delta}} {{unit}}.",
+    "lineUp": "You met the target on every set last time, so I added {{delta}} {{unit}}.",
     "lineDown": "You came in under your range last time, so I matched the load to what you lifted clean — and kept every set.",
-    "lineHold": "You landed in your range. Clear the top of it and the load goes up.",
+    "lineHold": "Today's target: {{reps}} reps on every set. Meet it and it climbs a rep — until the weight goes up.",
+    "legendReps": "Why this target",
+    "verdictTargetUp": "Target up",
+    "lineReps": "Last time: {{from}} reps. Today's target is {{to}}, at the same weight. Meet it on every set and it climbs again — until the weight goes up.",
     "note": "Every load here came from a set you actually lifted.",
     "got": "Got it",
     "learningTitle": "I don't know you yet."
@@ -926,6 +938,8 @@
     "weekClosedCrewAll_one": "Week complete · your whole circle closed, a first week in a row",
     "weekClosedCrew": "Week complete · {{closed}} of {{total}} in your circle closed",
     "nextTime": "Next time",
+    "repWord_one": "rep",
+    "repWord_other": "reps",
     "weekClosed": "Week complete",
     "tonneUnit": "t",
     "saved": "Saved",
@@ -944,7 +958,7 @@
     "newBest": "New best",
     "setsLabel": "sets",
     "movedShort": "moved",
-    "everythingHeld": "Every lift landed where it was asked to. Nothing needed moving, and that is exactly how a session is supposed to go.",
+    "everythingHeld": "Next time — the same weights and the same targets. Meet the target on every set and it moves up a rep.",
     "volumeUp": "{{muscle}} earned a set",
     "volumeDown": "{{muscle}} gave a set back",
     "topSet": "Top set",
@@ -1963,6 +1977,12 @@
       "observation": "Your {{muscle}} work was carrying more sets than your week now holds.",
       "conclusion": "Your minutes decide the ceiling, not a target.",
       "action": "I brought your {{muscle}} work back to what fits your week."
+    },
+    "repsUp": {
+      "text": "It met its target on every set — the weight stays, and the target moves up a rep.",
+      "observation": "{{reps}} reps on every set.",
+      "conclusion": "The weight stays, and the target moves up a rep.",
+      "action": "Next time: {{reps}} reps."
     },
     "rungOutOfReach": {
       "text": "It cleared every set, but the next weight your gym has is too big a step — so we add reps until it is within reach.",

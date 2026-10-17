@@ -235,6 +235,9 @@ export function liftChanges(log: ChangeEntry[] | undefined, exerciseId: string):
     // A graduation/swap stamps the FROM lift in `exerciseId` and the new one in `toExercise` — both
     // sides of the move belong to this lift's story, so both match.
     .filter((c) => c.exerciseId === exerciseId || c.toExercise === exerciseId)
+    // A rep target's climb (2026-10-17) is the ordinary walk between loads — the finish screen says it;
+    // this tab is the record of what the LOAD did.
+    .flatMap((c) => (c.kind === 'reps' ? [] : [{ ...c, kind: c.kind }]))
     .map((c) => ({
       atMs: c.at,
       loadFrom: c.loadFrom,

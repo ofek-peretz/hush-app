@@ -187,7 +187,9 @@ describe('the app and the engine agree, after six weeks of real training', () =>
       const t0 = targets.find((x) => x.exerciseId === slot.exerciseId && x.setIndex === 0);
       if (!t0) { wrong.push(`${slot.exerciseId}: no target emitted`); continue; }
       if (t0.recommendedWeight !== st.weight) wrong.push(`${slot.exerciseId}: stage ${t0.recommendedWeight} vs engine ${st.weight}`);
-      if (t0.repBandLo !== st.reps || t0.repBandHi !== st.bandHi) wrong.push(`${slot.exerciseId}: band [${t0.repBandLo},${t0.repBandHi}] vs engine [${st.reps},${st.bandHi}]`);
+      if (t0.repBandLo !== st.bandLo || t0.repBandHi !== st.bandHi) wrong.push(`${slot.exerciseId}: band [${t0.repBandLo},${t0.repBandHi}] vs engine [${st.bandLo},${st.bandHi}]`);
+      // …and the reps she is asked for are the engine's climbing target (2026-10-17), not a re-derivation.
+      if (t0.recommendedReps !== st.reps) wrong.push(`${slot.exerciseId}: asked ${t0.recommendedReps} reps vs engine target ${st.reps}`);
     }
     expect({ disagreements: wrong }).toEqual({ disagreements: [] });
   });
@@ -295,7 +297,7 @@ describe('the app and the engine agree, after six weeks of real training', () =>
       const st = engine[l.exerciseId];
       if (!st) continue;
       if (l.loadKg !== st.weight) wrong.push(`${l.exerciseId}: row ${l.loadKg} vs engine ${st.weight}`);
-      if (l.repRange && (l.repRange[0] !== st.reps || l.repRange[1] !== st.bandHi)) wrong.push(`${l.exerciseId}: row band ${l.repRange} vs engine [${st.reps},${st.bandHi}]`);
+      if (l.repRange && (l.repRange[0] !== st.bandLo || l.repRange[1] !== st.bandHi)) wrong.push(`${l.exerciseId}: row band ${l.repRange} vs engine [${st.bandLo},${st.bandHi}]`);
     }
     expect({ disagreements: wrong }).toEqual({ disagreements: [] });
   });

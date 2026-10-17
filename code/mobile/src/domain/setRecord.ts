@@ -51,6 +51,35 @@ export function isRecordSet(weightKg: number | null, reps: number, prior: number
 }
 
 /**
+ * ════ A REP RECORD — MORE REPS AT HER HEAVIEST WEIGHT (the engine audit, 2026-10-17) ════
+ *
+ * Records counted weight only, and the engine now progresses her in REPS between loads (her rep
+ * target climbs one rep a session): the most frequent real best she sets — nine at the weight she has
+ * only ever done eight with — went uncelebrated. A rep record is exactly that, and only that: her
+ * heaviest weight on the lift, done for more reps than any set at it before. Never at a lighter weight
+ * (more reps after a back-off is the climb back, not a best), never on a first meeting (no past to beat).
+ */
+export function priorRepsAtKg(
+  sets: Iterable<{ exerciseId: string; actualWeight: number | null; actualReps: number; isApproach?: boolean; presumed?: boolean }>,
+  exerciseId: string,
+  kg: number | null,
+): number | null {
+  if (kg == null) return null;
+  let best: number | null = null;
+  for (const x of sets) {
+    if (x.exerciseId !== exerciseId || !isEvidenceSet(x)) continue;
+    if (x.actualWeight == null || Math.abs(x.actualWeight - kg) > 1e-6 || x.actualReps < 1) continue;
+    if (best == null || x.actualReps > best) best = x.actualReps;
+  }
+  return best;
+}
+
+/** Does this set strike a REP record — her heaviest weight, more reps than ever at it? */
+export function isRepRecordSet(weightKg: number | null, reps: number, priorPeak: number | null, priorRepsAtPeak: number | null): boolean {
+  return weightKg != null && priorPeak != null && priorRepsAtPeak != null && Math.abs(weightKg - priorPeak) < 1e-6 && reps > priorRepsAtPeak;
+}
+
+/**
  * The heaviest working set ALREADY LOGGED in the live session, per lift (review find, 2026-08-24).
  *
  * The beat's baseline is everything logged BEFORE the current set — history AND the live

@@ -52,6 +52,8 @@ import { readTrialLedger, writeTrialLedger } from '@/platform/trialLedger';
 import { cloud } from '@/platform/cloud';
 import { cloudAutoBackup, cloudErase } from '@/platform/cloudBackup';
 import { updateHomeWidget } from '@/platform/homeWidget';
+import { applyOffer, declined, withoutOffer } from '@/domain/swapOffers';
+import type { SwapOffer } from '@/data/local/db';
 import { syncTrainingRemindersFromPlan } from '@/platform/trainingReminders';
 import { armGapCatch } from '@/platform/gapCatch';
 import { armTrialEnding, armTrialLast } from '@/platform/trialCatch';
@@ -278,6 +280,14 @@ interface AppApi extends AppState {
    * naked-save contract as `adoptImportedProgram`: not one clamp on the way past.
    */
   saveBuiltProgram: (program: Program) => Promise<void>;
+  /**
+   * ⛔ THE ONE WAY AN OFFER BECOMES HER WEEK — her tap (2026-10-17, `domain/swapOffers`). Every seat
+   * of `from` in her written week becomes `to`, sets and range kept; the offer is spent. Refused, like
+   * every builder save, on a week a linked coach owns.
+   */
+  acceptSwapOffer: (offer: SwapOffer) => Promise<void>;
+  /** "Not now": the offer is kept, declined, and not made again for the same change. */
+  declineSwapOffer: (offer: SwapOffer) => Promise<void>;
   /**
    * ════ THE COACH'S WEEK LANDS (the coach track, 2026-09-17) ════
    * The one writer of a week stamped `authored: 'coach'` — called by `state/coachOutbox.pullCoachWeek`
@@ -1330,6 +1340,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           sessions: program.days.filter((d) => !d.isRest).length,
           lifts: program.days.reduce((n, d) => n + d.slots.length, 0),
         });
+      },
+
+      async acceptSwapOffer(offer) {
+        const week = state.program ?? (await db.loadProgram().catch(() => null));
+        if (!week || (await lockedToCoach(week))) return;
+        const next = applyOffer(week, offer);
+        await db.saveProgram(next);
+        const prefs = await db.loadPreferences().catch(() => null);
+        if (prefs) await db.savePreferences({ ...prefs, swapOffers: withoutOffer(prefs.swapOffers, offer) }).catch(() => {});
+        dispatch({ type: 'PROGRAM_UPDATED', program: next, recents: state.recents });
+        void track('swap_offer_taken', { kind: offer.kind, from: offer.from, to: offer.to });
+      },
+
+      async declineSwapOffer(offer) {
+        const prefs = await db.loadPreferences().catch(() => null);
+        if (!prefs) return;
+        await db.savePreferences({ ...prefs, swapOffers: declined(prefs.swapOffers, offer, Date.now()) }).catch(() => {});
+        void track('swap_offer_declined', { kind: offer.kind, from: offer.from, to: offer.to });
       },
 
       async revertProgramToEngine() {

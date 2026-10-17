@@ -17,7 +17,7 @@ import { isEvidenceSet } from '@/domain/setEvidence';
 import { BAR_KG, emptyBarKg } from '@/engine/loadMath';
 import { loadFloor } from '@/engine/v5/grid';
 import { SEED_RUNGS_LIGHT } from '@/engine/v5/constants';
-import { incrementOf } from '@/engine/v5/loadGrid';
+import { incrementOf, onDumbbellLadder, dumbbellDownOrEqual } from '@/engine/v5/loadGrid';
 import type { Exercise } from '@/data/exercises';
 
 /**
@@ -160,6 +160,9 @@ export function canLoad(ex: Exercise, profile?: LoadProfile): boolean {
 export function snapToStock(kg: number, ex: Exercise): number {
   const inc = incrementOf(ex.equipment); // her room's rung (`loadGrid`, 2026-09-30)
   if (inc <= 0) return kg; // bodyweight — no load axis to land on
+  // ⚠️ NOT the rack ladder (`loadGrid.dumbbellStepAt`): this rounds numbers a coach or the model WROTE,
+  // and the coach owns the number (`theCoachDecidesItsOwnLoads` — a 13 kg press stays 13). The engine's
+  // own seeds and moves walk the rack (`startingWeight` below, `grid.ts`).
   const floor = emptyBarKg(ex.equipment); // the Olympic bar, or the lightest fixed bar (F-19)
   const rungs = Math.max(0, Math.round((kg - floor) / inc));
   return floor + rungs * inc;
@@ -304,6 +307,9 @@ export function startingWeight(ex: Exercise, profile: LoadProfile): number | nul
   // B-1c — the first guess errs one rung light (`SEED_RUNGS_LIGHT`, measured): the model's number is
   // the load she makes Tlo on fresh, which leaves every later set under it. Never below the bar.
   const inc = incrementOf(ex.equipment);
-  if (inc > 0) kg = Math.max(emptyBarKg(ex.equipment), kg - inc * SEED_RUNGS_LIGHT);
+  if (onDumbbellLadder(ex.equipment)) {
+    // One rung light on the rack itself — 14 → 12, never to a 13 the rack does not hold.
+    for (let i = 0; i < SEED_RUNGS_LIGHT; i++) kg = Math.max(1, dumbbellDownOrEqual(kg - 1e-6));
+  } else if (inc > 0) kg = Math.max(emptyBarKg(ex.equipment), kg - inc * SEED_RUNGS_LIGHT);
   return Math.max(kg, step);
 }

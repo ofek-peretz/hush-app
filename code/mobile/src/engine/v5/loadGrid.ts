@@ -60,6 +60,40 @@ export function incrementOf(equipment: Equipment): number {
   return STARTING_INCREMENT[equipment] || 0;
 }
 
+/**
+ * ════ THE DUMBBELL RACK AS GYMS ACTUALLY STOCK IT (2026-10-17, the engine audit) ════
+ *
+ * One kilogram at every weight proposed 11 kg and 13 kg dumbbells — pairs most commercial racks do not
+ * hold: they step by 1 kg to 10, by 2 to 20, then by 2.5. So does the engine now, in the kilogram room
+ * (a pound rack keeps its 2.5 lb ladder). Her own logged weights still refine it where she has lifted
+ * (F-2), so a rack that holds a 13 is learned the day she lifts one.
+ */
+export function dumbbellStepAt(kg: number): number {
+  if (kg < 10 - 1e-9) return 1;
+  if (kg < 20 - 1e-9) return 2;
+  return 2.5;
+}
+
+/** Does this equipment walk the stocked dumbbell ladder (`dumbbellStepAt`) in her room? */
+export function onDumbbellLadder(equipment: Equipment): boolean {
+  return equipment === 'dumbbell' && room === 'kg';
+}
+
+/** The next rack weight strictly above `kg`. */
+export function dumbbellUp(kg: number): number {
+  if (kg < 10 - 1e-9) return Math.floor(kg + 1e-9) + 1;
+  if (kg < 20 - 1e-9) return Math.min(20, Math.floor(kg / 2 + 1e-9) * 2 + 2);
+  return Math.floor(kg / 2.5 + 1e-9) * 2.5 + 2.5;
+}
+
+/** The heaviest rack weight at or below `kg` (≥ 1). */
+export function dumbbellDownOrEqual(kg: number): number {
+  if (kg < 1) return 1;
+  if (kg < 10 + 1e-9) return Math.floor(kg + 1e-9);
+  if (kg < 20 + 1e-9) return Math.max(10, Math.floor(kg / 2 + 1e-9) * 2);
+  return Math.max(20, Math.floor(kg / 2.5 + 1e-9) * 2.5);
+}
+
 /** The empty bar of this equipment, in KILOGRAMS, in her room (null = not a bar). */
 export function barOf(equipment: Equipment): number | null {
   if (equipment === 'barbell') return room === 'lb' ? LB_BAR / LB_PER_KG : BAR_KG;

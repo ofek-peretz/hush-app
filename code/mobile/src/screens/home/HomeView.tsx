@@ -189,6 +189,8 @@ export interface HomePlanLift {
    * the FLOOR, dressed as the whole target.
    */
   band: [number, number];
+  /** Her climbing rep target inside `band` (2026-10-17) — absent at the floor. */
+  target?: number;
   /** Which way the engine moved this lift's load this week; absent = it did not touch it. */
   changed?: LoadDirection;
   /** …and by how much, in kg (signed). Absent when only the direction is known. */
@@ -348,6 +350,11 @@ export interface HomeViewProps {
    * — three facts it has stamped on the days for a long time and told nobody but telemetry.
    */
   notice?: string | null;
+  /**
+   * ⛔ A CHANGE TO HER WEEK THE ENGINE OFFERS (2026-10-17, `domain/swapOffers`) — one at a time, with
+   * the reason in one sentence and two answers. Her week changes only on "take".
+   */
+  offer?: { text: string; takeLabel: string; declineLabel: string; onTake: () => void; onDecline: () => void } | null;
   /**
    * The weekdays she trains on, or absent while the pattern is still being earned.
    * Absent → the column NUMBERS its rows instead (see `WeekColumn`), which is week one.
@@ -810,6 +817,15 @@ export function HomeView(props: HomeViewProps) {
                 appears nowhere near it.
               */}
               {props.notice ? <Text style={styles.weekNotice}>{props.notice}</Text> : null}
+              {props.offer ? (
+                <View style={styles.offer}>
+                  <Text style={styles.offerText}>{props.offer.text}</Text>
+                  <View style={styles.offerActions}>
+                    <Button variant="primary" size="sm" label={props.offer.takeLabel} onPress={props.offer.onTake} />
+                    <Button variant="quiet" size="sm" label={props.offer.declineLabel} onPress={props.offer.onDecline} />
+                  </View>
+                </View>
+              ) : null}
               {/* ⛔ The coach track: the week is named for the person who wrote it. */}
               {props.coachSignature ? (
                 <Text style={styles.coachSignature}>{t('coachTrack.athlete.signature', { coach: bidiName(props.coachSignature) })}</Text>
@@ -1415,6 +1431,22 @@ const styles = StyleSheet.create({
   coachWaitingTitle: { fontFamily: font.sansSemibold, fontSize: 19, lineHeight: 24, color: stage.ink0, textAlign: 'left' },
   coachWaitingBody: { fontFamily: font.sans, fontSize: 17, lineHeight: 23, color: stage.ink1, textAlign: 'left' },
   coachSignature: { fontFamily: font.serif, fontSize: 20, lineHeight: 26, color: signal[0], marginTop: 10, textAlign: 'left' },
+  /* The engine's offer: a quiet well, the sentence, two answers — never a banner. */
+  offer: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: color.fillSubtle,
+    gap: 10,
+  },
+  offerText: {
+    fontFamily: font.sans,
+    fontSize: 17,
+    lineHeight: 22,
+    color: color.textPrimary,
+    textAlign: 'left',
+  },
+  offerActions: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   weekNotice: {
     marginTop: 10,
     fontFamily: font.sans,

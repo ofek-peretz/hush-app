@@ -22,6 +22,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { appFacts, buildWeekRequest } from '@/domain/buildPrompt';
+import { nextRepTarget } from '@/engine/v5/loop2';
+import { atTheFloor } from '@/domain/statedLifts';
 import { RAISE_HEADROOM_REPS } from '@/engine/v5/constants';
 import { DELOAD_DAYS, DELOAD_FRACTION } from '@/engine/v5/deload';
 import { DEFAULT_REP_BAND } from '@/engine/v5/repBand';
@@ -91,10 +93,34 @@ describe('2 · every fact is true of the code', () => {
     expect(plan.sessions[1]!.blocks.map((b) => b.rounds)).toEqual([3]);
   });
 
-  it('"two reps above the bottom of its range" is the engine\'s own raise rule', () => {
-    expect(facts).toContain(`reaches at least ${RAISE_HEADROOM_REPS} reps above the bottom of its range (${8 + RAISE_HEADROOM_REPS} in an 8–12 range)`);
+  it('"two reps above the bottom… or the top, when the next step is big" is the engine\'s own raise rule (F-21, F-24)', () => {
+    expect(facts).toContain(`when every working set reaches ${RAISE_HEADROOM_REPS} reps above the bottom (${8 + RAISE_HEADROOM_REPS} in an 8–12 range) — or the top of the range, when the next weight step is a big one — the next session adds one step and the target starts over.`);
     expect(DEFAULT_REP_BAND).toBe('8-12');
-    expect(read('src/engine/v5/loop2.ts')).toContain('RAISE_HEADROOM_REPS');
+    const loop2 = read('src/engine/v5/loop2.ts');
+    expect(loop2).toContain('RAISE_HEADROOM_REPS');
+    expect(loop2).toContain('BIG_STEP_FRACTION');
+  });
+
+  it('"a rep target that starts at the bottom … and climbs one rep each session they meet it" is `nextRepTarget`', () => {
+    expect(facts).toContain('a rep target that starts at the bottom of the range and climbs one rep each session they meet it on every set');
+    const band = { lo: 8, hi: 12 };
+    const met = (n: number) => [{ load: 40, reps: n }, { load: 40, reps: n }, { load: 40, reps: n }];
+    expect(nextRepTarget(undefined, met(8), band, 10)).toBe(9);
+    expect(nextRepTarget(9, met(9), band, 10)).toBe(10);
+    expect(nextRepTarget(10, met(10), band, 10)).toBe(10); // the raise point — Loop 2 raises from here
+    expect(nextRepTarget(10, met(9), band, 10)).toBe(10); // short of the target, over the floor: again
+    expect(nextRepTarget(10, met(7), band, 10)).toBe(8); // under the floor: back to the floor
+  });
+
+  it('one range per exercise — the app keeps one progression per exercise', () => {
+    const stable = buildWeekRequest({ daysPerWeek: 4, sex: 'male', locale: 'he' }).blocks[0]!.text;
+    expect(stable).toContain('· An exercise you use on more than one day gets the same rep range each time — the app keeps one progression per exercise.');
+  });
+
+  it('the coach is not promised a first-set correction that no longer exists', () => {
+    const schema = JSON.stringify(buildWeekRequest({ daysPerWeek: 4, sex: 'male' }).schema);
+    expect(schema).not.toContain('corrects it on the first set');
+    expect(schema).toContain('The app does not change a weight during the workout');
   });
 
   it('"lightens every load for a week" is the deload as it is built — loads only, seven days', () => {
@@ -154,6 +180,12 @@ describe('3 · a rebuilt week is written from her own sets, and in her room', ()
     const stated = buildWeekRequest({ daysPerWeek: 4, sex: 'male', lifts: [{ exerciseId: 'bb_bench_press', kg: 100, reps: 6 }] }).blocks[1]!.text;
     expect(stated).toContain('- weights they lift today: bb_bench_press 100 kg x 6');
     expect(stated).not.toContain('equipment where they train');
+  });
+
+  it('her stated set is priced at the floor she will train — "100 × 3" never opens an 8-rep bench at 100', () => {
+    expect(atTheFloor({ exerciseId: 'bb_bench_press', kg: 100, reps: 3 }, 8)).toBeLessThan(90);
+    expect(atTheFloor({ exerciseId: 'bb_bench_press', kg: 100, reps: 10 }, 8)).toBe(100); // more reps than the floor: it stands
+    expect(atTheFloor({ exerciseId: 'bb_bench_press', kg: 100 }, 8)).toBe(100); // no reps given: her number
   });
 
   it('the Program tab\'s rebuild sends them — her log and her room', () => {

@@ -14,7 +14,7 @@ import { median, percentileNearestRank } from './stats';
 import { snapDown, moveRungs, nextRung, prevRung, loadFloor } from './grid';
 import { repsPerRung, rungsForHeadroom, rungOutOfReach, bootstrapPerRung } from './repsPerRung';
 import { epley, loadForReps } from '@/engine/loadMath';
-import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED, EPLEY_VALID_REPS, RAISE_HEADROOM_REPS } from './constants';
+import { RECENCY_WINDOW_SESSIONS, N_PERCENTILE, ATTEMPTS_TO_CLEAR_SEED, EPLEY_VALID_REPS, RAISE_HEADROOM_REPS, MAX_RAISE_FRACTION, BIG_STEP_FRACTION } from './constants';
 
 const EPS = 1e-6;
 
@@ -25,6 +25,59 @@ const working = (sets: SetPerf[]): SetPerf[] => sets.filter((s) => !s.isApproach
 
 /** Did the set meet the target (reps ≥ Tlo, and it was really performed)? */
 const metTlo = (s: SetPerf, band: Band): boolean => s.reps >= band.lo && s.reps > 0;
+
+/**
+ * ════ HER NEXT REP TARGET — double progression, written (founder-approved audit, 2026-10-17) ════
+ *
+ * `cap` is where the target stops climbing: the reps at which the LOAD rises (so the target walks her
+ * exactly to the raise and no further), or the top of her range on a lift with no load to raise.
+ *
+ *   · every set met the target → one rep more — or one more than her worst set, when she did more than
+ *     she was asked ("beat last time"), never past `cap`;
+ *   · a set fell short of the target but every set met the floor → the same target again;
+ *   · a set fell under the floor → back to the floor.
+ *
+ * A logged set "as written" is the target exactly, so a one-press athlete climbs one rep a session and
+ * an athlete who types her real reps climbs as fast as she proves she can — both by the same rule.
+ */
+export function nextRepTarget(prev: number | undefined, sets: SetPerf[], band: Band, cap: number): number {
+  const top = Math.max(band.lo, Math.min(cap, band.hi));
+  const t = Math.max(band.lo, Math.min(top, prev ?? band.lo));
+  const done = working(sets).filter((s) => s.reps > 0);
+  if (done.length === 0) return t;
+  const worst = Math.min(...done.map((s) => s.reps));
+  if (worst >= t) return Math.min(top, Math.max(t + 1, worst + 1));
+  if (worst >= band.lo) return t;
+  return band.lo;
+}
+
+/**
+ * When this lift's load rises.
+ *
+ *   · an ordinary step: the WORST set two reps over the floor (`RAISE_HEADROOM_REPS`, measured) — the
+ *     target climbs to exactly that;
+ *   · a BIG step (the next rung > `BIG_STEP_FRACTION` of the load — 2.5 → 5 kg on a cable, 5 → 6 kg on
+ *     a dumbbell): the reps go first — the FIRST set at the top of her range and the rest within two of
+ *     it — so the jump lands on a set that had the room for it. The target climbs to the top.
+ *
+ * A range narrower than the headroom rises at its top. Never past the top.
+ */
+export interface RaiseRule {
+  big: boolean;
+  /** The worst set must reach this. */
+  worstAt: number;
+  /** The best (first, fresh) set must reach this. */
+  bestAt: number;
+  /** Where her rep target stops climbing (`nextRepTarget`). */
+  targetCap: number;
+}
+export function raiseRuleFor(load: number, band: Band, meta: ExerciseMeta): RaiseRule {
+  const next = nextRung(load, meta.equipment, meta.observedLoads);
+  const big = load > 0 && next / load - 1 > BIG_STEP_FRACTION + EPS;
+  const ordinary = Math.min(band.hi, band.lo + RAISE_HEADROOM_REPS);
+  if (!big) return { big, worstAt: ordinary, bestAt: 0, targetCap: ordinary };
+  return { big, worstAt: Math.min(band.hi, Math.max(ordinary, band.hi - RAISE_HEADROOM_REPS)), bestAt: band.hi, targetCap: band.hi };
+}
 
 /**
  * S-25.2 — has she hit the SAME wall twice? A repeated stall at the current prescribed load, with a
@@ -242,8 +295,10 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     : snapDown((usable[usable.length - 1].load as number), meta.equipment, meta.observedLoads);
 
   if (allMet) {
-    // S-22: progress. Move up by as many rungs as her measured headroom over Tlo justifies.
+    // S-22: progress — ONE rung (2026-10-17), several only past the top of her range within 10%.
     const worstReps = Math.min(...sets.map((s) => s.reps));
+    const bestReps = Math.max(...sets.map((s) => s.reps));
+    const rule = raiseRuleFor(anchor, band, meta);
     // The rung she is about to be asked for — priced at THE ANCHOR, not at her grid's top (S-28).
     const perRung = repsPerRung(inp.session, state.history, meta, anchor);
 
@@ -256,8 +311,14 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     // Then: "T is hers, so the engine may not quietly raise it" — the load HOLDS at the anchor, she
     // climbs reps at it, and the engine SAYS SO. Silent until her slope is fitted (F-12): with no
     // measured perRung there is no fact that the jump breaks her, and B-5's cautious rung stands.
-    if (rungOutOfReach(anchor, band, perRung, meta, worstReps)) {
-      return { decision: 'rung_out_of_reach', load: anchor, band, sets: state.sets };
+    /*
+     * ⛔ NEVER AT THE TOP OF HER RANGE (2026-10-17). "Hold the load, she climbs reps at it" has no
+     * second half once she is at the top: there are no reps left to climb, and the lift froze — the
+     * audit's overhead press did ten reps at 30 kg for five sessions running. At the top the rung is
+     * taken, big or not; below it the reps climb toward it (`nextRepTarget` up to the top).
+     */
+    if (worstReps < band.hi && rungOutOfReach(anchor, band, perRung, meta, worstReps)) {
+      return { decision: 'rung_out_of_reach', load: anchor, band, sets: state.sets, repTarget: nextRepTarget(state.repTarget, sets, band, band.hi) };
     }
 
     // Her fitted slope if she has one, else B-5's modelled price of a rep AT THE ANCHOR — the load
@@ -277,13 +338,27 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
      */
     // S-22b — a clear AT the edge holds; the load moves when the worst set has a rep to spare
     // (`RAISE_HEADROOM_REPS`, measured). The hold keeps the anchor, exactly as S-24 does.
-    if (worstReps - band.lo < RAISE_HEADROOM_REPS) {
-      return { decision: 'hold', load: anchor, band, sets: state.sets };
+    if (worstReps < rule.worstAt || bestReps < rule.bestAt) {
+      return { decision: 'hold', load: anchor, band, sets: state.sets, repTarget: nextRepTarget(state.repTarget, sets, band, rule.targetCap) };
     }
-    const n = rungsForHeadroom(worstReps - band.lo, perRung, 'up', bootstrapPerRung(anchor, band.lo, meta));
+    let n = 1;
+    if (worstReps > band.hi) {
+      const want = rungsForHeadroom(worstReps - band.lo, perRung, 'up', bootstrapPerRung(anchor, band.lo, meta));
+      for (let k = want; k > 1; k--) {
+        const to = snapDown(moveRungs(anchor, k, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
+        if (anchor > 0 && to / anchor - 1 <= MAX_RAISE_FRACTION + EPS) {
+          n = k;
+          break;
+        }
+      }
+    }
     let load = snapDown(moveRungs(anchor, n, meta.equipment, meta.observedLoads), meta.equipment, meta.observedLoads);
     load = applyRail(load, state.history, band, meta, anchor); // L11 (base = max(settled, anchor))
-    return { decision: 'progress', load, band, sets: state.sets };
+    // The rail can hold the load where it is — then nothing rose, and her target keeps climbing.
+    if (!(load > anchor + EPS)) {
+      return { decision: 'hold', load: anchor, band, sets: state.sets, repTarget: nextRepTarget(state.repTarget, sets, band, band.hi) };
+    }
+    return { decision: 'progress', load, band, sets: state.sets, repTarget: band.lo };
   }
 
   // Not all met Tlo → S-24 hold, unless it is a stall (S-25).
@@ -317,13 +392,13 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     // same-muscle target exists (else the lift simply backs off, S-53). rotationAvailable stays a
     // hook the caller may gate; the persistence test is the trigger.
     if (inp.rotationAvailable && (atFloor || isRepeatedStall(state.history, state.load, band))) {
-      return { decision: 'stall_rotate', load, band, sets: state.sets, wantsChange: 'rotate' };
+      return { decision: 'stall_rotate', load, band, sets: state.sets, wantsChange: 'rotate', repTarget: band.lo };
     }
-    return { decision: 'stall_backoff', load, band, sets: state.sets };
+    return { decision: 'stall_backoff', load, band, sets: state.sets, repTarget: band.lo };
   }
 
-  // S-24: plain hold at the anchor.
-  return { decision: 'hold', load: anchor, band, sets: state.sets };
+  // S-24: plain hold at the anchor — a set under the floor sends her target back to the floor.
+  return { decision: 'hold', load: anchor, band, sets: state.sets, repTarget: nextRepTarget(state.repTarget, sets, band, raiseRuleFor(anchor, band, meta).targetCap) };
 }
 
 // ── Bodyweight (S-51/52/53) ────────────────────────────────────────────────
@@ -390,8 +465,10 @@ function decideBodyweight(inp: Loop2Input, sets: SetPerf[]): Loop2Result {
 
   const allMetThi = sets.every((s) => s.reps >= band.hi); // S-52 trigger 1: too easy
   if (allMetThi) {
-    return { decision: 'graduate', load: null, band, sets: state.sets, wantsChange: 'graduate' };
+    return { decision: 'graduate', load: null, band, sets: state.sets, wantsChange: 'graduate', repTarget: band.hi };
   }
+  // Her target climbs toward the top of the range, one rep at a time (2026-10-17, `nextRepTarget`).
+  const repTarget = nextRepTarget(state.repTarget, sets, band, band.hi);
 
   // Her past scores, oldest-first, inside the recency window (F-8).
   const past = [...state.history.slice(0, RECENCY_WINDOW_SESSIONS)]
@@ -414,13 +491,16 @@ function decideBodyweight(inp: Loop2Input, sets: SetPerf[]): Loop2Result {
     }
   }
   const advanced = best == null || score > best;
-  if (advanced) return { decision: 'progress', load: null, band, sets: state.sets };
-
-  // S-52 trigger 2: a stall below Thi — she cannot add reps, and there is no load to add.
-  const N = runs.length === 0 ? ATTEMPTS_TO_CLEAR_SEED : Math.max(1, percentileNearestRank(runs, N_PERCENTILE));
-  const attempts = trailing + 1; // the flat occurrences before this one, plus this one
-  if (attempts > N) {
-    return { decision: 'graduate', load: null, band, sets: state.sets, wantsChange: 'graduate' };
-  }
-  return { decision: 'hold', load: null, band, sets: state.sets };
+  if (advanced) return { decision: 'progress', load: null, band, sets: state.sets, repTarget };
+  /*
+   * ⛔ A STALL IS NO LONGER A GRADUATION (founder-approved audit, 2026-10-17). S-52's second trigger
+   * sent an athlete who could NOT add reps to a HARDER variation — the engine's own explanation
+   * admitted the copy was wrong for it — and, worse, it fired for every one-press athlete: she logged
+   * the floor, the floor did not beat the floor, and every third occurrence "graduated" her. Her
+   * target now climbs one rep a session, so a one-press athlete advances; one who truly cannot add a
+   * rep holds her target — an honest hold — and the harder variation waits for the top of her range.
+   */
+  void trailing;
+  void runs;
+  return { decision: 'hold', load: null, band, sets: state.sets, repTarget };
 }

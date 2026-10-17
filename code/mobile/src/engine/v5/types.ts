@@ -58,6 +58,17 @@ export interface ExerciseState {
   sets: number;
   /** Newest-first; kept to the recency window (F-8) plus a little slack for the rail. */
   history: SessionRecord[];
+  /**
+   * ════ THE REP TARGET SHE IS ASKED FOR (founder-approved audit, 2026-10-17) ════
+   *
+   * Double progression, WRITTEN INTO THE PRESCRIPTION. The stage asked for the floor of her range on
+   * every set, a one-press "Done" logged exactly that, and Loop 2 raises only when the worst set clears
+   * the floor by two — so an athlete who pressed Done never moved, measured: 0 raises on 24 of 24 lifts
+   * in twelve weeks (`audit/theEngineAsSheLivesIt`). The target is the number she is asked for now: it
+   * starts at the floor, climbs one rep each time every set meets it, reaches the point where the load
+   * rises, and starts over at the floor of the new load. Absent = the floor (every state before this).
+   */
+  repTarget?: number;
 }
 
 /** The kind of decision Loop 2 reached — for explanation + tests. */
@@ -78,4 +89,6 @@ export interface Loop2Result {
   sets: number;
   /** Set when decision === 'graduate' / 'stall_rotate': the exercise to move to (id resolved upstream). */
   wantsChange?: 'graduate' | 'rotate';
+  /** Her rep target for the next occurrence (`ExerciseState.repTarget`). */
+  repTarget?: number;
 }

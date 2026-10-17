@@ -120,7 +120,7 @@ export interface ModelClient {
    * changeLog `sessionEarned` narrates; a lift absent from the map simply held. Optional for the
    * same reason as `sessionEarned` (the decommissioned HTTP path owns no engine).
    */
-  sessionForward?(args: { startedAtMs: number }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>>;
+  sessionForward?(args: { startedAtMs: number }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null; repsFrom?: number; repsTo?: number }>>;
 
   /**
    * Per-capability relative scores + confidence + still-learning flags for the

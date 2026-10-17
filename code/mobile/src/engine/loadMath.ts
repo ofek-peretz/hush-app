@@ -67,6 +67,6 @@ export function emptyBarKg(equipment: Equipment): number {
  * increment decides outside it, and every result is floored at what physically exists (S-55 — the
  * empty bar, the smallest plate; never zero).
  */
-export function normalizeLoad(load: number, equipment: Equipment, grid?: number[]): number {
-  return snapDown(load, equipment, grid);
+export function normalizeLoad(load: number, equipment: Equipment, grid?: number[], opts: { rack?: boolean } = {}): number {
+  return snapDown(load, equipment, grid, opts);
 }

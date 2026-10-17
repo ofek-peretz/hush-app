@@ -94,6 +94,23 @@ describe('one sentence per decision', () => {
     expect(g[0].lines).toHaveLength(1);
   });
 
+  it('⛔ …and the ENGINE’S OWN params group too — the lift’s name rides along, unprinted (web walk 2026-10-17)', async () => {
+    /*
+     * The tests above fed `{ delta }` alone. The engine hands the sentence `{ ex, delta }`, and the
+     * sentence prints only the delta — so on the glass two raises of 2.5 kg read the same words twice.
+     * The screen groups on the RENDERED sentence now; this is that, through the real copy.
+     */
+    const { initI18n, tg } = require('@/i18n');
+    await initI18n();
+    const engineMet = (ex: string, delta: number) => ({ key: 'explain.progressLoad.textMet', params: { ex, delta, unit: 'kg' } });
+    const say = (r) => ('text' in r ? r.text : tg(r.key, r.params));
+    const g = groupDecisions([line('bench', engineMet('Bench', 2.5)), line('row', engineMet('Row', 2.5)), line('squat', engineMet('Squat', 5))], say);
+    expect(g.map((x) => x.lines.map((l) => l.key))).toEqual([['bench', 'row'], ['squat']]);
+    // and the screen really passes its renderer
+    const src = require('fs').readFileSync(require('path').resolve(__dirname, '..', '..', 'src/screens/session/WellDone.tsx'), 'utf8');
+    expect(src).toContain("groupDecisions(decisions, (r) => ('text' in r ? r.text : t(r.key, inHerUnits(r.params, units ?? 'kg'))))");
+  });
+
   it('⚠️ an empty ledger stays empty — "every lift held" is a verdict, not a group', () => {
     expect(groupDecisions([])).toEqual([]);
   });

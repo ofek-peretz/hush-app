@@ -358,7 +358,7 @@ export function buildCoachWatchPlan(inp: {
         globalIndex: global,
         ...lastFields(lastOf(item.ex)),
         targetWeight: item.load,
-        targetReps: item.reps[0],
+        targetReps: item.target ?? item.reps[0], // her climbing target (2026-10-17), else the floor
         // Her band's ceiling, so the wrist draws the same ruler standalone that it draws mirrored.
         targetRepsHi: item.reps[1],
         /*

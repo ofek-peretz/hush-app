@@ -192,6 +192,16 @@ const K = {
  * library is unambiguous and immediate. The learned machinery is not replaced — it still explains
  * lifts she has never opened the library for, which is most of them.
  */
+/** A change to her week the engine offers her (`domain/swapOffers`). */
+export interface SwapOffer {
+  from: string;
+  to: string;
+  /** Why: the lift kept hitting a wall, a bodyweight lift reached the top of its range, or she swapped to `to` twice. */
+  kind: 'rotate' | 'graduate' | 'learned';
+  at: number;
+  declinedAt?: number;
+}
+
 export interface OwnedPreferences {
   /** S-71 — her learned LEAVE-ITS: MuscleGroup -> the lift the engine must stop rotating away.
    *  EARNED, never declared: the engine rotated a stalled lift out and she swapped back to it twice
@@ -263,6 +273,12 @@ export interface OwnedPreferences {
    * says so on screen. The assembler ignores the refusals rather than hand her an empty muscle.
    */
   refusedIds?: string[];
+  /**
+   * OFFERED — changes to her week the engine wants and she has not answered yet (2026-10-17,
+   * `domain/swapOffers`). On a week nobody may rebuild, a rotation, a graduation or a learned swap is
+   * a one-tap offer, never a silent edit; a declined offer stays here, declined, so it is not made again.
+   */
+  swapOffers?: SwapOffer[];
   workoutOrder: string[]; // day keys, athlete order
   exerciseOrderByWorkout: Record<string, string[]>; // day key -> exerciseId order within it
   // (The v4 Lock System `lockedSlots` and the 3-week periodic-refresh `rotations`/`rotationUsed`/
@@ -349,6 +365,14 @@ export interface EngineV5State {
   /** The newest completed-session `startedAt` (ms) already folded. Decisions run PER WORKOUT at the
    *  end of each occurrence (register L7 — no weekly boundary); this is the per-workout cursor. */
   lastFoldedAt?: number;
+  /**
+   * The sessions already folded, by id — the newest few hundred (2026-10-17, the engine audit). The
+   * cursor above folds only sessions that STARTED after the last one folded, so a workout the wrist
+   * ran alone and brought home after a later phone workout was never read at all. A session missing
+   * from here, inside the late window, is folded when it arrives. Absent on state from before: every
+   * session up to the cursor is taken as folded, so nothing is ever folded twice.
+   */
+  foldedIds?: string[];
   /** A timestamped log of every load change the engine made, for the Saturday MIRROR (S-45 — the
    *  review is a reflection of decisions already told per-workout, never a decision itself). The
    *  mirror filters this to the week that just closed. Capped; structural to avoid a layering cycle. */
@@ -367,7 +391,10 @@ export interface EngineV5State {
      *  VOLUME change (S-32/S-34/S-37 — Loop 3 grew or trimmed a muscle's weekly sets). `exerciseId`
      *  holds the FROM lift (or the muscle name, for 'volume'); the mirror narrates each with its copy.
      *  Absent on the ordinary load-change entries. */
-    kind?: 'graduate' | 'swap' | 'volume' | 'rung' | 'detrain' | 'deload' | 'ease';
+    kind?: 'graduate' | 'swap' | 'volume' | 'rung' | 'detrain' | 'deload' | 'ease' | 'reps';
+    /** kind 'reps' — her rep target climbed at the same load (`ExerciseState.repTarget`, 2026-10-17). */
+    repsFrom?: number;
+    repsTo?: number;
     /** kind 'ease' — the run that earned it, rounded km (null = qualified by duration alone). */
     runKm?: number | null;
     toExercise?: string;
@@ -421,6 +448,15 @@ export interface EngineV5State {
    * re-read at the same moment is still a no-op.
    */
   detrainedRetained?: number;
+  /**
+   * B-9 — every lift's load AS IT STOOD WHEN THIS GAP BEGAN (2026-10-17, the engine audit). The decay
+   * is priced from these, never from the load an earlier read left: each read used to take the small
+   * fraction owed since the last one, round it to the nearest rung (nothing, on a short step) and stamp
+   * it paid — so an athlete who opened the app daily through a layoff was never decayed at all, and
+   * one who opened it rarely was decayed in big steps. From the base, any number of reads lands on the
+   * same loads.
+   */
+  detrainBase?: Record<string, number>;
   /**
    * THE LIGHT WEEK (engine/v5/deload, 2026-08-24) — the open deload window, when one is running.
    * `restore` holds every pre-deload load so the week can end exactly where it began; absent =

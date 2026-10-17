@@ -39,6 +39,7 @@ import { db } from '@/data/local/db';
 import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, queuedWorkout } from '@/domain/coachWeek';
 import { planWithoutResting } from '@/domain/restingToday';
+import { isAuthored, liveOffers, type SwapOffer } from '@/domain/swapOffers';
 import type { CoachPlan } from '@/domain/coachPlan';
 import type { Session } from '@/data/local/models';
 import { useSession } from '@/state/stores/sessionStore';
@@ -373,9 +374,16 @@ export function Home({ navigation, route }: Props) {
         // The week is now KNOWN — whatever it turned out to be. See `weekLoaded`.
         setWeekLoaded(true);
         /* ⛔ The coach track: a coach's week is not hers to re-balance, so the engine's advice about her
-           inputs is not printed over it — the coach answers for its shape. */
-        const notice = program?.authored === 'coach' ? null : weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek });
+           inputs is not printed over it — the coach answers for its shape.
+           ⛔ …AND NEITHER IS ANY WRITTEN WEEK (web walk, 2026-10-17). The sentence is the ENGINE saying
+           what its own arrangement could not do, with a remedy in her inputs ("a third day, or a muscle
+           off"). On a week the model wrote it read "twice a week is not enough" over a THREE-day week,
+           and offered muscle switches the build screen no longer has. Only the engine's week has it. */
+        const notice = isAuthored(program) ? null : weekNotice(program, { bodyMap: app.profile?.bodyMap, daysPerWeek: app.profile?.daysPerWeek });
         setEngineNotice(notice ? t(notice.key, notice.params) : null);
+        // A coach's week answers for its own exercises — the engine offers nothing over it.
+        const prefs = program?.authored === 'coach' ? null : await db.loadPreferences().catch(() => null);
+        if (alive) setOffer(liveOffers(prefs?.swapOffers, program)[0] ?? null);
         const since = weekOpenMs ?? 0;
         setDoneCoachIds(
           history
@@ -527,6 +535,8 @@ export function Home({ navigation, route }: Props) {
    */
   /** The one sentence about what her week could not do — see `domain/weekNotice`. */
   const [engineNotice, setEngineNotice] = useState<string | null>(null);
+  /** The one change to her week the engine is offering, if any (`domain/swapOffers`, 2026-10-17). */
+  const [offer, setOffer] = useState<SwapOffer | null>(null);
   /*
    * ⛔ THE ENGINE'S PER-SET TARGET READ WAS HERE, and the `pending` machinery around it.
    *
@@ -962,7 +972,11 @@ export function Home({ navigation, route }: Props) {
       try {
         const all = await db.loadHistory();
         if (cancelled) return;
-        const weekOpen = currentWeekOpen(Date.now());
+        /* ⛔ HER CYCLE, THE ONE THE METER ABOVE COUNTS (web walk, 2026-10-17). This window stayed on the
+           Saturday bucket when the week became a rotation (2026-09-28), so the page read "week 2 · 0 of
+           3" over 10 tonnes and a lit body — the cycle she had just closed, called "your week so far".
+           The calendar week is only the fallback for a cycle that has not been stamped yet. */
+        const weekOpen = app.weekOpenMs ?? currentWeekOpen(Date.now());
         const wk = all.filter((s) => Date.parse(s.startedAt) >= weekOpen);
         // Tonnage (kg lifted → t) and calories (from total wall-clock work time) across the week.
         let kg = 0;
@@ -999,7 +1013,7 @@ export function Home({ navigation, route }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, resting, app.profile?.weightKg, app.profile?.units]);
+  }, [isFocused, resting, app.weekOpenMs, app.profile?.weightKg, app.profile?.units]);
 
   async function onResume() {
     let ok = false;
@@ -1354,6 +1368,25 @@ export function Home({ navigation, route }: Props) {
        * the one screen that has to be about today.
        */
       notice={engineNotice}
+      offer={
+        offer
+          ? {
+              text: t(`swapOffer.${offer.kind}`, { from: exerciseDisplayName(offer.from), to: exerciseDisplayName(offer.to) }),
+              takeLabel: t(offer.kind === 'learned' ? 'swapOffer.keep' : 'swapOffer.take'),
+              declineLabel: t('swapOffer.decline'),
+              onTake: () => {
+                const o = offer;
+                setOffer(null);
+                void app.acceptSwapOffer(o);
+              },
+              onDecline: () => {
+                const o = offer;
+                setOffer(null);
+                void app.declineSwapOffer(o);
+              },
+            }
+          : null
+      }
       /*
        * ⛔ AND WHAT THE ENGINE COULD NOT DO, on the screen she opens every morning. Read from the
        * engine's OWN week rather than the plan drawn above it, because the verdicts are stamped on

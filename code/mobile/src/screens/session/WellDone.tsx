@@ -211,6 +211,11 @@ export interface EarnedLine {
   name: string;
   from: string | null;
   to: string | null;
+  /**
+   * Her rep target climbed at the same load (2026-10-17, `ExerciseState.repTarget`) — the next step of
+   * her progression, told under "next time" beside the raises. `from`/`to` then read "×8" → "×9".
+   */
+  reps?: { from: number; to: number; load: string | null };
   /** Held at the load she lifted — no arrow, the word and the figure (S-24). */
   held: boolean;
   /**
@@ -240,7 +245,7 @@ export interface EarnedLine {
  */
 function earnedLines(
   earned: Explanation[] | null,
-  forward: Record<string, { loadFrom: number | null; loadTo: number | null }> | null,
+  forward: Record<string, { loadFrom: number | null; loadTo: number | null; repsFrom?: number; repsTo?: number }> | null,
   units: 'kg' | 'lb',
 ): EarnedLine[] {
   if (!earned) return [];
@@ -251,6 +256,17 @@ function earnedLines(
   };
   return earned.map((e) => {
     const moved = forward?.[e.slotId] ?? null;
+    if (moved?.repsFrom != null && moved.repsTo != null && moved.repsTo > moved.repsFrom) {
+      return {
+        key: e.slotId,
+        name: exerciseDisplayName(e.slotId),
+        from: `×${moved.repsFrom}`,
+        to: `×${moved.repsTo}`,
+        held: false,
+        reps: { from: moved.repsFrom, to: moved.repsTo, load: fmt(moved.loadTo ?? null) },
+        reason: { key: e.text.key, params: e.text.params },
+      };
+    }
     const from = fmt(moved?.loadFrom ?? null);
     const to = fmt(moved?.loadTo ?? null);
     return {
@@ -309,11 +325,19 @@ function reasonId(r: EarnedReason): string {
   return 'text' in r ? `t:${r.text}` : `k:${r.key}:${JSON.stringify(r.params ?? {})}`;
 }
 
-export function groupDecisions(lines: readonly EarnedLine[]): DecisionGroup[] {
+/*
+ * ⛔ THE SENTENCE, AS SHE WILL READ IT (web walk, 2026-10-17). Grouping on key + params was meant to be
+ * the same thing, and was not: the engine hands `progressLoad.textMet` its lift's NAME as well as the
+ * delta, and the sentence prints only the delta — so two raises that read word for word "you met the
+ * target on every set, so I added 2.5 kg" never matched, and the ledger printed it twice, the mail
+ * merge this function exists to end. The law fed it `{ delta }` alone and stayed green. The screen
+ * now passes its own renderer, so the key IS the rendered sentence; without one, key + params.
+ */
+export function groupDecisions(lines: readonly EarnedLine[], say?: (reason: EarnedReason) => string): DecisionGroup[] {
   const out: DecisionGroup[] = [];
   const at = new Map<string, DecisionGroup>();
   for (const line of lines) {
-    const id = reasonId(line.reason);
+    const id = say ? `s:${say(line.reason)}` : reasonId(line.reason);
     const found = at.get(id);
     if (found) {
       found.lines.push(line);
@@ -413,7 +437,7 @@ export function WellDone({ navigation, route }: Props) {
    * box states a result only when there IS one, and says nothing when the read did not land.
    */
   const [earnedFailed, setEarnedFailed] = useState(false);
-  const [forward, setForward] = useState<Record<string, { loadFrom: number | null; loadTo: number | null }> | null>(null);
+  const [forward, setForward] = useState<Record<string, { loadFrom: number | null; loadTo: number | null; repsFrom?: number; repsTo?: number }> | null>(null);
   useEffect(() => {
     if (notStarted || !summary?.startedAtMs) return;
     let active = true;
@@ -1152,9 +1176,11 @@ export function SessionEarned({
    */
   const heldLine = partial ? t('complete.partialHeld') : t('complete.everythingHeld');
   /** The raises the engine has already decided for next time — see the block on the poster. */
-  const nextTime = decisions
-    .filter((d) => d.to != null && d.from != null && !d.held && Number(d.to) > Number(d.from))
-    .slice(0, 3);
+  const nextTime = [
+    ...decisions.filter((d) => !d.reps && d.to != null && d.from != null && !d.held && Number(d.to) > Number(d.from)),
+    // …and where the weight stays, the rep target that climbed (2026-10-17): the next step is a rep.
+    ...decisions.filter((d) => d.reps && d.reps.to > d.reps.from),
+  ].slice(0, 3);
   /*
    * ⛔ THE HERO IS ONE MEASUREMENT, AND VoiceOver HEARD TWO. `heroNum` and its unit are sibling
    * `Text`s, so the reader stopped on "60", moved on, and stopped again on "kg" — the biggest
@@ -1408,18 +1434,34 @@ export function SessionEarned({
                       text under the facts — the one thing on the poster that is about TOMORROW, set
                       as small as a caption. The raise is the figure now, at the facts' own weight,
                       in moss; where it lands rides under the lift's name. */}
-                  {nextTime.map((d) => (
-                    <View key={d.key} style={styles.nextRow}>
-                      <View style={styles.nextNameCol}>
-                        <Text style={styles.nextName} numberOfLines={1}>{bidi(d.name)}</Text>
-                        <Text style={styles.nextTo}>{opticalFigure(`\u2066${d.from} \u2192 ${d.to}\u2069`)}</Text>
+                  {nextTime.map((d) =>
+                    d.reps ? (
+                      <View key={d.key} style={styles.nextRow}>
+                        <View style={styles.nextNameCol}>
+                          <Text style={styles.nextName} numberOfLines={1}>{bidi(d.name)}</Text>
+                          <Text style={styles.nextTo}>
+                            {opticalFigure(`\u2066${d.reps.load != null ? `${d.reps.load} ` : ''}× ${d.reps.from} \u2192 ${d.reps.to}\u2069`)}
+                          </Text>
+                        </View>
+                        {/* The figure in mono, the word in the sans beside it — never a word in mono. */}
+                        <View style={styles.nextFigureRow}>
+                          <Text style={styles.nextFigure}>{opticalFigure(`+${d.reps.to - d.reps.from}`)}</Text>
+                          <Text style={styles.nextUnitWord}>{` ${t('complete.repWord', { count: d.reps.to - d.reps.from })}`}</Text>
+                        </View>
                       </View>
-                      <Text style={styles.nextFigure}>
-                        {opticalFigure(`+${+(Number(d.to) - Number(d.from)).toFixed(2)}`)}
-                        <Text style={styles.nextUnit}>{` ${unitLabel(units ?? 'kg')}`}</Text>
-                      </Text>
-                    </View>
-                  ))}
+                    ) : (
+                      <View key={d.key} style={styles.nextRow}>
+                        <View style={styles.nextNameCol}>
+                          <Text style={styles.nextName} numberOfLines={1}>{bidi(d.name)}</Text>
+                          <Text style={styles.nextTo}>{opticalFigure(`\u2066${d.from} \u2192 ${d.to}\u2069`)}</Text>
+                        </View>
+                        <Text style={styles.nextFigure}>
+                          {opticalFigure(`+${+(Number(d.to) - Number(d.from)).toFixed(2)}`)}
+                          <Text style={styles.nextUnit}>{` ${unitLabel(units ?? 'kg')}`}</Text>
+                        </Text>
+                      </View>
+                    ),
+                  )}
                 </Arrive>
               ) : null}
 
@@ -1520,7 +1562,7 @@ export function SessionEarned({
             </View>
             <ScrollView contentContainerStyle={styles.sheetScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.earned}>
-              {groupDecisions(decisions).map((g) => (
+              {groupDecisions(decisions, (r) => ('text' in r ? r.text : t(r.key, inHerUnits(r.params, units ?? 'kg')))).map((g) => (
                 <View key={g.key} style={styles.earnedRow}>
                   {g.lines.map((d) => (
                   <View key={d.key} style={styles.earnedHead}>
@@ -2019,6 +2061,8 @@ const styles = StyleSheet.create({
   nextTo: { fontFamily: font.mono, fontSize: 17, lineHeight: 22, color: stage.ink2, textAlign: 'left' },
   nextFigure: { fontFamily: font.monoMedium, fontSize: 30, lineHeight: 34, letterSpacing: -0.6, color: signal[0], textAlign: 'right' },
   nextUnit: { fontFamily: font.sansMedium, fontSize: 17, letterSpacing: 0, color: signal[0] }, // rtl-ok: nested in nextFigure
+  nextFigureRow: { flexDirection: 'row', alignItems: 'baseline' },
+  nextUnitWord: { fontFamily: font.sansMedium, fontSize: 17, letterSpacing: 0, color: signal[0], textAlign: 'left' },
   posterPartial: {
     marginTop: 20,
     fontFamily: font.serif,

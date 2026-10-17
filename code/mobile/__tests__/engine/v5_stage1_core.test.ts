@@ -232,21 +232,47 @@ describe('S-51/S-52 · bodyweight progresses on reps and graduates at Thi or on 
     const r = decideExercise({ state: state({ load: null }), session: [S(null, 9), S(null, 9), S(null, 8)], meta: bw });
     expect(r.decision).toBe('progress');
   });
-  it("S-52's OWN trap case · a 12-15 athlete stuck FLAT at 3×12 (Tlo met every time) graduates on the stall — never frozen", () => {
-    // The register's motivating example verbatim: she meets Tlo=12 every session, never reaches
-    // Thi=15, and has no load lever. "Failed to clear Tlo" can never fire here — reps not MOVING is
-    // the wall. Two flat occurrences behind her (N=1 seed) + this one → attempts 2 > N → graduate.
+  /*
+   * ⛔ S-52's SECOND TRIGGER IS RETIRED (founder-approved engine audit, 2026-10-17). A stall used to
+   * graduate her to a HARDER variation — the engine's own explanation admitted the copy was wrong for
+   * it — and every one-press athlete "stalled" by construction: she logged the floor, the floor did not
+   * beat the floor, and every third occurrence moved her up a ladder for nothing. The trap S-52 was
+   * written against — the 12-15 athlete flat at 3×12, "frozen for ever with no load lever" — is now
+   * answered by her REP TARGET: it asks for one rep more, and the harder variation waits for the top.
+   */
+  it("S-52's OWN trap case · flat at 3×12 in 12-15: her target asks for 13 — no harder variation for a plateau", () => {
     const highBand: Band = { lo: 12, hi: 15 };
     const flat = { load: null, sets: [S(null, 12), S(null, 12), S(null, 12)] };
     const r = decideExercise({ state: state({ load: null, band: highBand, history: [flat, flat] }), session: [S(null, 12), S(null, 12), S(null, 12)], meta: bw });
-    expect(r.decision).toBe('graduate');
-    expect(r.wantsChange).toBe('graduate');
+    expect(r.decision).toBe('hold');
+    expect(r.wantsChange).toBeUndefined();
+    expect(r.repTarget).toBe(13);
   });
-  it('stuck BELOW Tlo (reps not moving) → the same stall graduates', () => {
+  it('stuck BELOW Tlo (reps not moving) → a hold, her target back at the floor — never a harder lift', () => {
     const highBand: Band = { lo: 12, hi: 15 };
     const rec = { load: null, sets: [S(null, 11), S(null, 10)] };
     const r = decideExercise({ state: state({ load: null, band: highBand, history: [rec, rec] }), session: [S(null, 11), S(null, 10)], meta: bw });
-    expect(r.decision).toBe('graduate');
+    expect(r.decision).toBe('hold');
+    expect(r.wantsChange).toBeUndefined();
+    expect(r.repTarget).toBe(12);
+  });
+  it('a one-press athlete climbs her target to the top, and only THERE is the harder variation wanted', () => {
+    const band: Band = { lo: 8, hi: 12 };
+    let st = state({ load: null, band, history: [] });
+    const seen: number[] = [];
+    for (let i = 0; i < 8; i++) {
+      const t = st.repTarget ?? band.lo;
+      seen.push(t);
+      const done = [S(null, t), S(null, t), S(null, t)];
+      const r = decideExercise({ state: st, session: done, meta: bw });
+      if (r.wantsChange) {
+        expect(r.wantsChange).toBe('graduate');
+        expect(t).toBe(band.hi);
+        break;
+      }
+      st = { ...st, repTarget: r.repTarget, history: [{ load: null, sets: done }, ...st.history] };
+    }
+    expect(seen).toEqual([8, 9, 10, 11, 12]);
   });
   it('a lift she TRIED and could not do one rep of is rotated away, not held for ever', () => {
     // The bodyweight twin of the floor dead-end. `repsScore` is null for two different things —

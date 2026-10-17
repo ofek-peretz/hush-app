@@ -44,6 +44,7 @@ import { weeklyTargets } from '@/engine/v5/assembler';
 import { repairWeek } from '@/domain/weekRepair';
 import { learnedExecSFor } from '@/domain/setDwell';
 import { isEvidenceSet } from '@/domain/setEvidence';
+import { isAuthored, withOffer } from '@/domain/swapOffers';
 import { learnedInterRestS, learnedTransitionRestS, REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN, perSetSeconds, pairedRestSavedS } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SESSION_MIN, SESSION_MAX, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
@@ -1839,13 +1840,16 @@ async function foldEngineUnsynchronised(
   // it; a per-occurrence figure would silently halve a multi-day muscle at the next regeneration.
   const prescribedByEx: Record<string, number> = {};
   const weeklyByMuscle: Record<string, number> = {};
-  for (const d of program.days) for (const s of d.slots) {
+  for (const d of program.days) for (const [i, s] of d.slots.entries()) {
     if (s.supplemental) continue;
-    prescribedByEx[s.exerciseId] = s.setCount;
+    // A superset runs `min` rounds of its pair (`enginePlan.sessionOf`) — that is what she was asked for.
+    const partnerOf = s.pairedWithNext ? d.slots[i + 1] : i > 0 && d.slots[i - 1]?.pairedWithNext ? d.slots[i - 1] : undefined;
+    prescribedByEx[s.exerciseId] = partnerOf ? Math.min(s.setCount, partnerOf.setCount) : s.setCount;
     const m = exerciseById(s.exerciseId)?.muscle;
     if (m) weeklyByMuscle[m] = (weeklyByMuscle[m] ?? 0) + s.setCount;
   }
-  const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0, weeklyByMuscle, retainedNow >= 1).catch(
+  const writtenWeek = isAuthored(program);
+  const changes = await advanceV5(engineExerciseIds, bandOf, history, seedFor, Date.now(), bucketOpenMs, (id) => prescribedByEx[id] ?? 0, weeklyByMuscle, retainedNow >= 1, writtenWeek).catch(
     (e): Record<string, 'graduate' | 'rotate'> => {
       void track('engine_error', { op: 'advanceV5', message: String(e) });
       return {};
@@ -1859,6 +1863,23 @@ async function foldEngineUnsynchronised(
   // lift with a leave-it is never taken away) and flagging rotations (S-71/S-72). Pure — the write below only
   // enacts what the resolver returns.
   const enacted = resolveEngineEnactments(changes, prefs.leaveItsByMuscle, history, profile);
+  /*
+   * ⛔ ON A WEEK NOBODY MAY REBUILD, THE CHANGE IS OFFERED (founder-approved audit, 2026-10-17). A
+   * substitute written here is read only by `generateProgram`, which never runs on her written week —
+   * so the rotation was recorded, narrated, and never made. It becomes a one-tap offer instead
+   * (`domain/swapOffers`), and her week changes only when she takes it.
+   */
+  if (writtenWeek) {
+    if (enacted.length) {
+      const nowMs = Date.now();
+      await editPreferences((p) => {
+        let offers = p.swapOffers;
+        for (const e of enacted) offers = withOffer(offers, { from: e.from, to: e.to, kind: e.kind === 'graduate' ? 'graduate' : 'rotate', at: nowMs });
+        p.swapOffers = offers;
+      }).catch((e) => void track('engine_error', { op: 'offerEngineChange', message: String(e) }));
+    }
+    return;
+  }
   if (enacted.length) {
     await editPreferences((p) => {
       for (const e of enacted) {
@@ -2336,7 +2357,7 @@ export const fixtureModel: ModelClient = {
    * most recent whistle is decided before we read it back — then reads the stamped changeLog. A lift
    * that held has no entry; the screen reads its absence as "holds at what she lifted".
    */
-  async sessionForward({ startedAtMs }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
+  async sessionForward({ startedAtMs }): Promise<Record<string, { loadFrom: number | null; loadTo: number | null; repsFrom?: number; repsTo?: number }>> {
     const program = await db.loadProgram();
     if (!program) return {};
     const profile = await loadProfileSafe();
@@ -2344,7 +2365,7 @@ export const fixtureModel: ModelClient = {
     const prefs = await loadPreferencesSafe();
     const bucketOpenMs = (await db.loadWeekOpen().catch(() => null)) ?? undefined;
     await foldEngine(program, profile, history, prefs, bucketOpenMs);
-    return getSessionForwardV5(startedAtMs).catch((e): Record<string, { loadFrom: number | null; loadTo: number | null }> => {
+    return getSessionForwardV5(startedAtMs).catch((e): Record<string, { loadFrom: number | null; loadTo: number | null; repsFrom?: number; repsTo?: number }> => {
       void track('engine_error', { op: 'sessionForward', message: String(e) });
       return {};
     });
@@ -2486,7 +2507,9 @@ export const fixtureModel: ModelClient = {
       const v5t = v5targets[ex.id];
       // v5 owns every managed exercise; an unmanaged / swap-only lift falls back to the seed + her band.
       const weight = v5t ? v5t.weight : slotStartLoadOf(program, ex.id) ?? smartSeed(ex.id, profile, history, bandOf(ex.id).lo);
+      // `reps` is her rep TARGET (2026-10-17 — the floor until it climbs); the band travels beside it.
       const reps = v5t ? v5t.reps : bandOf(ex.id).lo;
+      const repBandLo = v5t ? v5t.bandLo : bandOf(ex.id).lo;
       const repBandHi = v5t ? v5t.bandHi : bandOf(ex.id).hi;
       let reasonType: SetTarget['reasonType'];
       let reasonDelta: number | undefined;
@@ -2525,7 +2548,7 @@ export const fixtureModel: ModelClient = {
        * 68.1) instead of decaying. A predictive ramp lowers what Loop 1 has already lowered.
        */
       for (let s = 0; s < maxSetCount; s++)
-        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo: reps, repBandHi, perRung, ...(deloadActive ? { deloadHold: true } : {}), reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
+        out.push({ exerciseId: ex.id, setIndex: s, recommendedWeight: weight, recommendedReps: reps, repBandLo, repBandHi, perRung, ...(deloadActive ? { deloadHold: true } : {}), reasonType: s === 0 ? reasonType : undefined, reasonDelta: s === 0 ? reasonDelta : undefined });
     }
     return out;
   },

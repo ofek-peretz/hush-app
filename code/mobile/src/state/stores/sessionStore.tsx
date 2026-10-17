@@ -69,7 +69,7 @@ import { factForLift, type KnownFact } from '@/domain/whatIKnow';
 import { setNudge } from '@/platform/setNudge';
 import { restHaptics } from '@/platform/restHaptics';
 import { displayWeight, kgFromDisplay, unitLabel } from '@/domain/schedule';
-import { priorPeakKg, livePeakKg, recordBaselineKg, isRecordSet } from '@/domain/setRecord';
+import { priorPeakKg, livePeakKg, recordBaselineKg, isRecordSet, isRepRecordSet, priorRepsAtKg } from '@/domain/setRecord';
 import { musclesForWristArea, asPainSeverity } from '@/domain/painReport';
 import { sessionDurationMs, sessionEnergyKcal } from '@/domain/sessionMetrics';
 import { healthWrite } from '@/platform/health/healthWrite';
@@ -88,6 +88,7 @@ function worthQueuing(e: unknown): boolean {
 // importer (Home, the watch plan, tests) keeps its single import point.
 import { applyLiveEdits, type LiveEdit } from '@/domain/liveRevision';
 import { restingLifts, sessionWithoutResting } from '@/domain/restingToday';
+import { isAuthored, withOffer } from '@/domain/swapOffers';
 import { lastTimeOn, type LastTime } from '@/domain/lastTimeOn';
 import { bandOf, currentBlockSets } from '@/domain/setRow';
 import { supersetAt, type SupersetView } from '@/domain/supersetView';
@@ -582,6 +583,8 @@ export interface WatchLoggedSet {
   /** This set struck her all-time record (domain/setRecord) — same rule, either device, so a PR
    *  never depends on which wrist or thumb happened to log it (2026-08-24). */
   record?: boolean;
+  /** A rep record — her heaviest weight, more reps than ever at it (`setRecord.isRepRecordSet`, 2026-10-17). */
+  repRecord?: boolean;
 }
 
 export interface SessionView {
@@ -841,6 +844,8 @@ export interface SessionView {
   /** Her heaviest EVER logged weight on the current lift (domain/setRecord), or null when the
    *  lift has no past — the beat's record question is answered against this. */
   priorPeakKg: number | null;
+  /** Her most reps ever at `priorPeakKg` — the rep record's baseline (`setRecord.isRepRecordSet`, 2026-10-17). */
+  priorPeakReps: number | null;
   /**
    * ════ THE WARM-UP DISC, AND WHETHER IT EXISTS RIGHT NOW (founder 2026-08-30) ════
    *
@@ -1099,7 +1104,8 @@ export function buildPlanFromCoach(session: PlannedSession): Step[] {
               exerciseId: st.item.ex,
               setIndex: st.round - 1,
               recommendedWeight: st.item.load,
-              recommendedReps: st.item.reps[0],
+              // The reps she is asked for: her climbing target, else the floor (2026-10-17).
+              recommendedReps: st.item.target ?? st.item.reps[0],
               repBandLo: st.item.reps[0],
               repBandHi: st.item.reps[1],
             } satisfies SetTarget,
@@ -2235,6 +2241,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       ...(tgt?.exerciseId ? { lift: tgt.exerciseId } : {}),
       // The record answers identically on every channel (never on a warm-up bridge).
       ...(!v.setLabel.warmup && isRecordSet(weight, reps, v.priorPeakKg) ? { record: true } : {}),
+      ...(!v.setLabel.warmup && isRepRecordSet(weight, reps, v.priorPeakKg, v.priorPeakReps) ? { repRecord: true } : {}),
     });
   }, []);
 
@@ -2863,7 +2870,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             if (m) leaveItsByMuscle[m] = anchor; // S-71 — never rotated (S-30), cut last (S-59)
             delete engineRotated[anchor];
           }
-          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending, leaveItsByMuscle, engineRotated });
+          /*
+           * ⛔ ON HER WRITTEN WEEK, AN ADOPTION IS AN OFFER (2026-10-17, `domain/swapOffers`). The learned
+           * substitute is read only when the engine rebuilds a week — never, on a week she or the model
+           * wrote — so a lift she swapped to twice running is offered to her, one tap, to keep.
+           */
+          let swapOffers = prefs.swapOffers;
+          const week = await db.loadProgram().catch(() => null);
+          if (isAuthored(week)) {
+            for (const [from, to] of Object.entries(next.substitutes)) {
+              if (prev[from] !== to) swapOffers = withOffer(swapOffers, { from, to, kind: 'learned', at: Date.now() });
+            }
+          }
+          await db.savePreferences({ ...prefs, substitutes: next.substitutes, swapPending: next.pending, leaveItsByMuscle, engineRotated, ...(swapOffers ? { swapOffers } : {}) });
           /*
            * ⛔ THE ADOPTION USED TO BE STAMPED INTO THE ENGINE'S CHANGELOG so the Saturday mirror
            * could name it. Nothing reads that log any more — and the adoption reaches the coach a
@@ -3116,6 +3135,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         ? recordBaselineKg(
             priorPeakKg(historyRef.current, current.exerciseId, sessionRef.current?.id),
             livePeakKg(state.session?.sets ?? [], current.exerciseId),
+          )
+        : null,
+      // …and her most reps at that weight, across history and the live session's earlier sets.
+      priorPeakReps: current
+        ? priorRepsAtKg(
+            [
+              ...historyRef.current.filter((s) => s.id !== sessionRef.current?.id).flatMap((s) => s.sets),
+              ...(state.session?.sets ?? []),
+            ],
+            current.exerciseId,
+            recordBaselineKg(
+              priorPeakKg(historyRef.current, current.exerciseId, sessionRef.current?.id),
+              livePeakKg(state.session?.sets ?? [], current.exerciseId),
+            ),
           )
         : null,
       /* The offer, asked at the step she is about to PERFORM — see the field's note for why a

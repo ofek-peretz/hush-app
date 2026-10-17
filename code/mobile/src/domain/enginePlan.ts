@@ -79,6 +79,10 @@ function sessionOf(day: ProgramDay, byExercise: Map<string, SetTarget>, band: [n
        * way (no weight, the scheme alone), which is the honest rendering of either.
        */
       load: target?.recommendedWeight ?? null,
+      // Her rep target inside the band, once it has climbed off the floor (2026-10-17).
+      ...(!fixed && target && target.repBandLo != null && target.recommendedReps > target.repBandLo
+        ? { target: target.recommendedReps }
+        : {}),
       /* ⛔ The coach track (law 7): a linked coach's note rides the item to the card and the stage. */
       ...(slot.coachNote ? { coachNote: slot.coachNote } : {}),
     };

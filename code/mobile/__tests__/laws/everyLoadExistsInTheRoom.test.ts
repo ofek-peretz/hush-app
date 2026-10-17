@@ -49,6 +49,12 @@ const athlete = (over: Partial<Profile> = {}): Profile => ({
 function onGrid(kg: number, equipment: string): boolean {
   const inc = STARTING_INCREMENT[equipment] ?? 0;
   if (inc <= 0) return true; // bodyweight — no load axis
+  // A dumbbell is a pair on the rack (`loadGrid.dumbbellStepAt`, 2026-10-17): by 1 to 10, by 2 to 20, by 2.5 above.
+  if (equipment === 'dumbbell') {
+    const step = kg <= 10 + 1e-6 ? 1 : kg <= 20 + 1e-6 ? 2 : 2.5;
+    const r = kg / step;
+    return kg >= 1 && Math.abs(r - Math.round(r)) < 1e-6;
+  }
   const floor = equipment === 'barbell' ? BAR_KG : 0;
   const rungs = (kg - floor) / inc;
   // A hair of float slop, and nothing more: 41.5 is 8.6 rungs and must fail.

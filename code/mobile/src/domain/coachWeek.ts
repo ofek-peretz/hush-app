@@ -124,6 +124,8 @@ export interface CoachRow {
   rounds: number;
   /** `reps` only — her band, `[lo, hi]`. */
   band?: [number, number];
+  /** `reps` only — her climbing rep target inside the band, once off the floor (2026-10-17). */
+  target?: number;
   /** kg, or null for bodyweight. Absent when the shape carries no load at all. */
   load?: number | null;
   /** `time` only. */
@@ -307,7 +309,7 @@ export function coachRows(plan: CoachPlan | null | undefined, workoutId: string)
         name: nameOf(item.ex),
         kind: item.kind,
         rounds: block.rounds,
-        ...(item.kind === 'reps' ? { band: item.reps, load: item.load } : {}),
+        ...(item.kind === 'reps' ? { band: item.reps, load: item.load, ...(item.target ? { target: item.target } : {}) } : {}),
         ...(item.kind === 'time' ? { seconds: item.seconds, ...(item.load != null ? { load: item.load } : {}) } : {}),
         ...(item.kind === 'distance' ? { metres: item.metres, ...(item.load != null ? { load: item.load } : {}) } : {}),
         ...(item.say ? { say: item.say } : {}),
@@ -345,7 +347,7 @@ export function coachSession(plan: CoachPlan | null | undefined, workoutId: stri
 export function coachPlanRows(
   rows: CoachRow[] | null,
   units: 'kg' | 'lb',
-): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; detail?: string; coachNote?: string; withNext?: true }[] | null {
+): { exerciseId: string; name: string; load: number | null; sets: number; band: [number, number]; target?: number; detail?: string; coachNote?: string; withNext?: true }[] | null {
   if (!rows) return null;
   return rows.map((r) => {
     /* The coach track's note rides the row (law 7) — the card draws it, attributed; Today does not.
@@ -361,7 +363,7 @@ export function coachPlanRows(
     switch (r.kind) {
       case 'reps':
         // The one shape the existing assembly already says correctly.
-        return { ...base, load: r.load ?? null, band: r.band ?? [0, 0] };
+        return { ...base, load: r.load ?? null, band: r.band ?? [0, 0], ...(r.target ? { target: r.target } : {}) };
       case 'time':
         return { ...base, load: null, detail: `${r.rounds}×${formatSeconds(r.seconds ?? 0)}` };
       case 'distance':

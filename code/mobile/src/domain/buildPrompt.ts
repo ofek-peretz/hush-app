@@ -91,7 +91,7 @@ import { RAISE_HEADROOM_REPS } from '@/engine/v5/constants';
 import { LIFTS_FROM_LOG_WEEKS, statedLiftsLine, type StatedLift } from '@/domain/statedLifts';
 
 /** Bumped when the wording below changes in a way that could change an answer. */
-export const BUILD_PROMPT_VERSION = 9;
+export const BUILD_PROMPT_VERSION = 10;
 
 /**
  * ════ THE ONE PRESCRIPTION THE MODEL MAY NOW MAKE: A REP RANGE PER LIFT (founder, 2026-09-07) ════
@@ -328,7 +328,7 @@ export const BUILD_WEEK_SCHEMA = {
                      * lift of the week"; the description never asked it to. It does now, in the one
                      * place the model reads the field's meaning.
                      */
-                    'The starting weight in kg for this exercise: the total on a barbell or machine, the weight of ONE dumbbell. When the athlete gave you any of the weights they lift today, write a starting weight for EVERY exercise of the week that takes a load. A lift they named opens at exactly the weight they gave — give it a rep range that weight fits, never a lighter weight. Each of the others is your estimate from those numbers: a weight this athlete can do for its rep range with a little in hand (the app corrects it on the first set). Omit it only for an exercise done with bodyweight or a band — the app cannot add weight to those, so an athlete who trains one of them with added weight is better given a loaded exercise — or when the athlete gave you no weight at all: the app then estimates from bodyweight.',
+                    'The starting weight in kg for this exercise: the total on a barbell or machine, the weight of ONE dumbbell. When the athlete gave you any of the weights they lift today, write a starting weight for EVERY exercise of the week that takes a load. A lift they named opens at exactly the weight they gave — give it a rep range whose bottom is no higher than the reps they did at that weight, never a lighter weight. Each of the others is your estimate from those numbers: a weight this athlete can do for every working set at the bottom of its rep range with a rep or two in hand. The app does not change a weight during the workout — the athlete logs what they did and the next session adjusts — so a first weight that is too heavy costs a failed workout. Omit it only for an exercise done with bodyweight or a band — the app cannot add weight to those, so an athlete who trains one of them with added weight is better given a loaded exercise — or when the athlete gave you no weight at all: the app then estimates from bodyweight.',
                 },
                 /* See the note at `REPS_MIN`. Optional; the description is the whole instruction. */
                 reps: {
@@ -563,6 +563,12 @@ function instructions(locale: 'en' | 'he'): string {
      * upper-body pushing". With this line the same athlete's week kept her emphasis and gained a press.
      */
     '· What the athlete asked for names what matters most to them; it is not a list of the only things they train.',
+    /*
+     * ⛔ ONE RANGE PER EXERCISE (the engine audit, 2026-10-17). The app tracks one progression per
+     * exercise — one load, one band, one rep target — so a squat written heavy on Monday and light on
+     * Thursday was run as one of the two on both days (`fixtureModel.slotBandOf` reads the first seat).
+     */
+    '· An exercise you use on more than one day gets the same rep range each time — the app keeps one progression per exercise.',
   ].join('\n');
 }
 
@@ -591,7 +597,7 @@ export function appFacts(): string {
     'HOW THE APP USES THIS WEEK (facts about the app)',
     '· This week is the athlete’s programme. It repeats unchanged, week after week, until the athlete asks for a new one. Nothing rotates the exercises.',
     '· The set count you write is permanent: nothing in the app adds or removes sets later. It is the number they will do every week, not a starting dose for someone to adjust.',
-    `· Loads progress by themselves from what is logged: when every working set reaches at least ${RAISE_HEADROOM_REPS} reps above the bottom of its range (${8 + RAISE_HEADROOM_REPS} in an 8–12 range), the next session adds one step; a missed set holds the load; a repeated stall backs it off. When the logs show broad fatigue, the app lightens every load for a week.`,
+    `· Loads progress by themselves from what is logged. At a given weight the athlete is asked for a rep target that starts at the bottom of the range and climbs one rep each session they meet it on every set; when every working set reaches ${RAISE_HEADROOM_REPS} reps above the bottom (${8 + RAISE_HEADROOM_REPS} in an 8–12 range) — or the top of the range, when the next weight step is a big one — the next session adds one step and the target starts over. A missed set holds the load; a repeated stall backs it off. When the logs show broad fatigue, the app lightens every load for a week.`,
     '· One set of a one-sided exercise (lunge, split squat, single-arm row) covers both sides. A dumbbell load is the weight of one dumbbell.',
   ].join('\n');
 }

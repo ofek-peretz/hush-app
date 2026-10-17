@@ -12,7 +12,7 @@
  */
 
 import type { Equipment } from '@/engine/catalog';
-import { barOf, incrementOf } from './loadGrid';
+import { barOf, incrementOf, onDumbbellLadder, dumbbellUp, dumbbellDownOrEqual, dumbbellStepAt } from './loadGrid';
 
 const EPS = 1e-9;
 
@@ -21,6 +21,18 @@ function rungsOf(observedLoads?: number[]): number[] {
   if (!observedLoads || observedLoads.length === 0) return [];
   return Array.from(new Set(observedLoads.filter((x) => x > 0))).sort((a, b) => a - b);
 }
+
+/**
+ * ⛔ A BAR IS LOADED WITH PLATES, AND EVERY ROOM HAS THE SMALL ONES (2026-10-17, the engine audit).
+ * Her performed grid (F-2) is how the engine learns a STACK or a RACK it cannot see — a machine that
+ * jumps 40 → 50, a dumbbell pair the gym does not own. On a bar it learned holes instead: a 30 → 35 kg
+ * raise left 32.5 unlifted, the grid then read 35 as the next rung, S-28 called it a big jump, and the
+ * press froze at 30. A bar's rungs are the plate ladder, always.
+ */
+function learnsGrid(equipment: Equipment): boolean {
+  return equipment !== 'barbell' && equipment !== 'fixed_barbell';
+}
+const gridOf = (equipment: Equipment, observedLoads?: number[]): number[] | undefined => (learnsGrid(equipment) ? observedLoads : undefined);
 
 /**
  * F-2 — THE LEARNED GRID SPEAKS ONLY WITHIN THE RANGE SHE HAS PERFORMED.
@@ -82,7 +94,8 @@ export function loadFloor(equipment: Equipment, observedLoads?: number[]): numbe
  * nearest performed load at or below the ideal; above her max performed load (normal progression
  * past her best), or with no grid yet, fall back to the starting increment (B-6).
  */
-export function snapDown(ideal: number, equipment: Equipment, observedLoads?: number[]): number {
+export function snapDown(ideal: number, equipment: Equipment, observedLoads0?: number[], opts: { rack?: boolean } = {}): number {
+  const observedLoads = gridOf(equipment, observedLoads0);
   const floor = loadFloor(equipment, observedLoads); // S-55 — nothing below what physically exists
   if (inRange(ideal, observedLoads)) {
     const rungs = rungsOf(observedLoads);
@@ -90,6 +103,8 @@ export function snapDown(ideal: number, equipment: Equipment, observedLoads?: nu
     for (const r of rungs) if (r <= ideal + EPS) down = r;
     return Math.max(down, floor);
   }
+  // `rack: false` — a number a COACH wrote: the coach owns it (`theCoachDecidesItsOwnLoads`), a 13 kg pair stays 13.
+  if (opts.rack !== false && onDumbbellLadder(equipment)) return Math.max(dumbbellDownOrEqual(ideal), floor);
   const inc = incrementOf(equipment);
   if (inc <= 0) return ideal;
   return Math.max(Math.floor(ideal / inc + EPS) * inc, floor);
@@ -100,13 +115,15 @@ export function snapDown(ideal: number, equipment: Equipment, observedLoads?: nu
  * `load` sits within it; otherwise the starting increment. This is the unit "one rung" means
  * everywhere in the engine.
  */
-export function nextRung(load: number, equipment: Equipment, observedLoads?: number[]): number {
+export function nextRung(load: number, equipment: Equipment, observedLoads0?: number[]): number {
+  const observedLoads = gridOf(equipment, observedLoads0);
   const floor = loadFloor(equipment, observedLoads);
   // Only within her performed range (see `inRange`): below her lowest rung the grid would propose a
   // LEAP up to it, when the increment is a real, smaller, honest step.
   if (load >= (rungsOf(observedLoads)[0] ?? Infinity) - EPS) {
     for (const r of rungsOf(observedLoads)) if (r > load + EPS) return Math.max(r, floor);
   }
+  if (onDumbbellLadder(equipment)) return Math.max(dumbbellUp(load), floor);
   const inc = incrementOf(equipment);
   if (inc <= 0) return load;
   // Above her observed max (or no grid): the next multiple of the increment STRICTLY above. A load
@@ -119,7 +136,8 @@ export function nextRung(load: number, equipment: Equipment, observedLoads?: num
 }
 
 /** The previous real rung strictly BELOW `load` (one honest step down), never under the floor (S-55). */
-export function prevRung(load: number, equipment: Equipment, observedLoads?: number[]): number {
+export function prevRung(load: number, equipment: Equipment, observedLoads0?: number[]): number {
+  const observedLoads = gridOf(equipment, observedLoads0);
   const floor = loadFloor(equipment, observedLoads);
   // Only within her performed range: above her heaviest rung the grid would propose a PLUNGE down to
   // it (80 → 50 on a [40,50] grid) when the increment is one honest step (77.5).
@@ -127,6 +145,7 @@ export function prevRung(load: number, equipment: Equipment, observedLoads?: num
   let below: number | null = null;
   for (const r of rungs) if (r < load - EPS) below = r;
   if (below != null) return Math.max(below, floor);
+  if (onDumbbellLadder(equipment)) return Math.max(dumbbellDownOrEqual(load - 1e-6), floor);
   const inc = incrementOf(equipment);
   if (inc <= 0) return load;
   // The previous multiple of the increment STRICTLY below — same ladder alignment as `nextRung`
@@ -152,7 +171,9 @@ export function rungSize(load: number, equipment: Equipment, observedLoads?: num
 export function isBigJump(load: number, equipment: Equipment, observedLoads?: number[]): boolean {
   const inc = incrementOf(equipment);
   if (inc <= 0) return false; // bodyweight — no load axis (S-51)
-  return rungSize(load, equipment, observedLoads) > inc + EPS;
+  // The rack's own step at this weight is not micro-loading's absence — 12 → 14 kg is how a rack steps.
+  const step = onDumbbellLadder(equipment) ? dumbbellStepAt(load) : inc;
+  return rungSize(load, equipment, observedLoads) > step + EPS;
 }
 
 /** Move `n` rungs from `load` (n>0 up, n<0 down). One call per rung so a sparse grid steps rung-wise. */

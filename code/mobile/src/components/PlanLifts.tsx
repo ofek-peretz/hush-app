@@ -52,6 +52,8 @@ export interface PlanLift {
   sets: number;
   /** HER BAND — `[Tlo, Thi]`. The prescription IS the band; printing Tlo alone prints the FLOOR. */
   band: [number, number];
+  /** Her climbing rep target inside `band` (2026-10-17) — absent at the floor. */
+  target?: number;
   /** Which way the coach moved this lift's load; absent = it did not touch it. */
   changed?: LoadDirection;
   /** The figure has not landed yet — the row stands, the column waits. Never a claim of zero. */
@@ -360,7 +362,8 @@ export function FigureCells({
     );
   }
   const load = figureLoad(lift, units);
-  const [lo, hi] = lift.band;
+  // From her rep TARGET to the top (2026-10-17): "3×9–12" once the target has climbed off the floor.
+  const [lo, hi] = schemeBand(lift);
   const schemeStr = `${lift.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
   /*
    * ⚠️ THE LTR ISLAND IS BUILT BY HAND (found rebuilding this, 2026-09-01). Neither escape hatch
@@ -471,9 +474,21 @@ export function figureUnit(lift: PlanLift, units: 'kg' | 'lb'): string {
 /** The scheme, tight, with an EN-dash range: " · 4×8–10" (leading separator when a load precedes). */
 export function figureScheme(lift: PlanLift): string {
   if (lift.detail != null) return lift.detail;
-  const [lo, hi] = lift.band;
+  const [lo, hi] = schemeBand(lift);
   const scheme = `${lift.sets}×${hi > lo ? `${lo}–${hi}` : lo}`;
   return lift.load == null ? scheme : ` · ${scheme}`;
+}
+
+/**
+ * The range a row prints: her rep TARGET to the top of her band (2026-10-17, the engine audit). The
+ * band is still the prescription — the top is where it ends — but the bottom she is asked for climbs a
+ * rep a session, and "3×8–12" kept printing the floor she has already passed. The voice says the same
+ * "9 עד 12", and the wrist the same "× 9–12".
+ */
+export function schemeBand(lift: Pick<PlanLift, 'band'> & { target?: number }): [number, number] {
+  const [lo, hi] = lift.band;
+  const t = lift.target != null && lift.target > lo ? Math.min(hi, lift.target) : lo;
+  return [t, hi];
 }
 
 /** The whole right-hand figure as one string, for the row's accessibility label. */

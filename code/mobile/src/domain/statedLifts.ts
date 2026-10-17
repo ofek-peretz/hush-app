@@ -25,7 +25,7 @@
 import type { Program, Session } from '@/data/local/models';
 import { exerciseById } from '@/data/exercises';
 import { isEvidenceSet } from '@/domain/setEvidence';
-import { epley } from '@/engine/loadMath';
+import { epley, loadForReps } from '@/engine/loadMath';
 
 export interface StatedLift {
   exerciseId: string;
@@ -140,16 +140,31 @@ export function statedLiftsLine(lifts: readonly StatedLift[]): string {
  */
 export function seedStatedLoads(program: Program, lifts: readonly StatedLift[]): Program {
   if (!lifts.length) return program;
-  const byId = new Map(lifts.map((l) => [l.exerciseId, l.kg]));
+  const byId = new Map(lifts.map((l) => [l.exerciseId, l]));
   let touched = false;
   const days = program.days.map((d) => ({
     ...d,
     slots: d.slots.map((s) => {
-      const kg = byId.get(s.exerciseId);
-      if (kg == null || s.startLoadKg != null || exerciseById(s.exerciseId)?.bodyweight) return s;
+      const stated = byId.get(s.exerciseId);
+      if (stated == null || s.startLoadKg != null || exerciseById(s.exerciseId)?.bodyweight) return s;
       touched = true;
-      return { ...s, startLoadKg: kg };
+      return { ...s, startLoadKg: atTheFloor(stated, s.repBand?.[0] ?? DEFAULT_FLOOR) };
     }),
   }));
   return touched ? { ...program, days } : program;
+}
+
+/** The floor of the default range (`DEFAULT_REP_BAND`, 8–12) — a seat the model gave no range runs on it. */
+const DEFAULT_FLOOR = 8;
+
+/**
+ * ⛔ HER SET, PRICED AT THE FLOOR SHE WILL TRAIN (the engine audit, 2026-10-17). "Bench 100 × 3" opened
+ * the bench at 100 kg whatever range the week gave it — three reps of a weight, asked for eight, and
+ * nothing in the workout corrects a load any more (Loop 1 left the stage on 2026-08-26). A set of
+ * FEWER reps than the floor is converted down by the engine's one formula (Epley); a set of as many or
+ * more already proves the floor, and stands as she gave it.
+ */
+export function atTheFloor(stated: StatedLift, floor: number): number {
+  if (!stated.reps || stated.reps >= floor) return stated.kg;
+  return Math.round(loadForReps(epley(stated.kg, stated.reps), floor) * 2) / 2;
 }

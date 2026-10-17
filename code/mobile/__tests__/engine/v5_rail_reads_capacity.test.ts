@@ -62,9 +62,13 @@ function nextLoad(first: number): number {
 }
 
 describe('a raise the engine sized is a raise she gets', () => {
-  it('⛔ a big overshoot moves more than one rung', () => {
+  it('⛔ a big overshoot moves more than one rung — and never more than a tenth of the load (F-24)', () => {
+    // Past the top of her range she may climb several rungs at once, so a lifter started light still
+    // catches up — but a raise is bounded by the evidence (ACSM: 2–10%) since the 2026-10-17 audit,
+    // when a 30 → 35 kg press (+17%) failed and froze the lift. 15 and 18 reps both earn the whole tenth.
     expect(nextLoad(15)).toBeGreaterThan(62.5);
-    expect(nextLoad(18)).toBeGreaterThan(nextLoad(15));
+    expect(nextLoad(18)).toBeGreaterThanOrEqual(nextLoad(15));
+    expect(nextLoad(18)).toBeLessThanOrEqual(60 * 1.1);
   });
 
   it('⚠️ …and an ORDINARY clear still moves exactly one — nothing was loosened', () => {

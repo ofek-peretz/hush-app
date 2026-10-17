@@ -293,8 +293,10 @@ describe('1b · the model is not locked in — a free hand, one vocabulary', () 
      * and shoulders led the advanced week; glutes led hers), confidence 4–5 of 10 unchanged or up.
      * Still a law in both directions — the ceiling moved by what was measured and stays a ceiling.
      */
-    expect(instructionsOnly.length).toBeLessThan(1_760);
-    expect(instructionsOnly.length).toBeGreaterThan(1_600);
+    // 2026-10-17 (v10, the engine audit): the facts now state the climbing rep target and the big-step
+    // rule as the engine runs them, and one line asks for one range per exercise (one progression each).
+    expect(instructionsOnly.length).toBeLessThan(2_120);
+    expect(instructionsOnly.length).toBeGreaterThan(1_960);
     expect(instructionsOnly).toContain('Write the best training week this athlete could be given — one the world’s best coaches would respect.');
     expect(instructionsOnly).toContain('Session length is no constraint: choose every exercise and every set count only by what this athlete needs.');
     // …and it takes time OUT of the decision; it does not ask for more (the wording that did was measured and dropped).

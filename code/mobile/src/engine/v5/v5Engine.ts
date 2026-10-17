@@ -23,11 +23,16 @@ import { decideVolume } from './loop3';
 import { deloadDue, deloadActiveAt, DELOAD_DAYS, DELOAD_FRACTION } from './deload';
 import { easeDueFor, runEaseActiveAt, runEaseEndsAt, RUN_EASE_MUSCLES, RUN_EASE_MIN_KM, type RunView } from './runEase';
 import { repsPerRung } from './repsPerRung';
+import { epley, loadForReps } from '@/engine/loadMath';
 import { snapDown, nextRung, prevRung } from './grid';
 import { retainedAfterGap, daysSinceLastSession, lastSessionStartMs } from './detraining';
 import { muscleOf } from '@/data/exercises';
 import type { Band, ExerciseState, ExerciseMeta, SetPerf, SessionRecord } from './types';
 import { RECENCY_WINDOW_SESSIONS, SETS_MIN } from './constants';
+
+/** How many folded session ids are remembered, and how far back a late arrival is still folded. */
+const FOLDED_IDS_KEEP = 400;
+const LATE_FOLD_WINDOW_MS = 21 * 86_400_000;
 import { incrementOf } from './loadGrid';
 import { isEvidenceSet } from '@/domain/setEvidence';
 import { track } from '@/platform/telemetry';
@@ -258,9 +263,19 @@ export async function ensureExercisesV5(
         // S-43 (change T — now per muscle): recompute the load from her history at the NEW Tlo — "the
         // load at which she performed ≥ the new T." If she has no history at the new band, keep the
         // current load and set 1 finds it (no conversion formula). Bodyweight has no load to recompute.
+        /*
+         * ⛔ FROM WHERE SHE IS NOW, NOT FROM HER ALL-TIME BEST (2026-10-17, the engine audit). This took
+         * the heaviest weight she had EVER lifted at the new floor — so a rebuilt week with a new range
+         * wiped out a back-off, a light week or a layoff's decay in one read. Her current load is
+         * converted to the new floor (Epley, the engine's one formula), and her own demonstrated load
+         * can only bring it lower: a band change never makes a lift heavier than both say.
+         */
+        const cur = ex[id].load;
+        const converted = cur != null ? loadForReps(epley(cur, ex[id].band.lo), b.lo) : null;
         const demo = meta.bodyweight ? null : bestDemonstratedLoad(id, b, history);
-        const load = demo != null ? snapDown(demo, meta.equipment, meta.observedLoads) : ex[id].load;
-        ex[id] = { ...ex[id], band: b, load };
+        const pick = converted != null && demo != null ? Math.min(converted, demo) : converted ?? demo;
+        const load = pick != null ? snapDown(pick, meta.equipment, meta.observedLoads) : ex[id].load;
+        ex[id] = { ...ex[id], band: b, load, repTarget: undefined };
       }
       /*
        * ⛔ A SEED SHE HAS NOT TESTED YET IS RE-READ, NOT FROZEN (2026-08-16).
@@ -329,6 +344,11 @@ export async function advanceV5(
    * that a positional signature is a contract with every call site at once.
    */
   reseedUnperformed: boolean = true,
+  /**
+   * The week is one nobody may rebuild (she, a coach or the model wrote it — `domain/swapOffers`).
+   * Then Loop 3's learned volume can never reach it, and is not narrated as if it had (2026-10-17).
+   */
+  writtenWeek: boolean = false,
 ): Promise<Record<string, 'graduate' | 'rotate'>> {
   void bucketOpenMs; // decisions are per-workout; no weekly boundary (L7)
   const state = await ensureExercisesV5(exerciseIds, band, history, seedFor, reseedUnperformed);
@@ -338,11 +358,27 @@ export async function advanceV5(
   // Completed sessions not yet folded, OLDEST first — each is one occurrence, decided in order so
   // state accumulates (Monday's gain is there for Thursday). `startedAt` strictly after the cursor.
   const lastFolded = state.lastFoldedAt ?? 0;
+  /*
+   * ⛔ A WORKOUT THAT COMES HOME LATE IS STILL READ (2026-10-17, the engine audit). The cursor alone
+   * skipped any session that started before the last one folded — exactly what a workout the wrist ran
+   * alone is, when the phone trained again before the record arrived. Folded ids are remembered, and a
+   * session inside `LATE_FOLD_WINDOW_MS` that was never folded is folded now, in start order. State from
+   * before this field takes everything up to the cursor as folded, so nothing is folded twice.
+   */
+  if (!state.foldedIds) {
+    state.foldedIds = history.filter((s) => Date.parse(s.startedAt) <= lastFolded).map((s) => s.id).slice(-FOLDED_IDS_KEEP);
+  }
+  const foldedIds = new Set(state.foldedIds);
   const unfolded = history
     // A FREE-FORM log is a record, never a decision input (models.ts `Session.freeform`): the
     // engine coaches its own programme, and a holiday PR single must not read as a failed floor.
     .filter((s) => !s.freeform)
-    .filter((s) => { const t = Date.parse(s.startedAt); return Number.isFinite(t) && t > lastFolded; })
+    .filter((s) => {
+      const t = Date.parse(s.startedAt);
+      if (!Number.isFinite(t)) return false;
+      if (t > lastFolded) return !foldedIds.has(s.id);
+      return !foldedIds.has(s.id) && t > lastFolded - LATE_FOLD_WINDOW_MS;
+    })
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt));
 
   const log = state.changeLog ?? [];
@@ -487,7 +523,19 @@ export async function advanceV5(
       // (isRepeatedStall) — a first stall still backs off and re-climbs, so S-25's order holds. The
       // integration resolves the rotation target (longest-without); if none exists, the lift just
       // backs off (S-53). GRADUATION (S-52) is surfaced the same way, independent of this flag.
-      const out = decideExercise({ state: st, session: sets, meta, rotationAvailable: true });
+      let out = decideExercise({ state: st, session: sets, meta, rotationAvailable: true });
+      /*
+       * ⛔ A PARTIAL OCCURRENCE NEVER RAISES (2026-10-17, the engine audit). One strong set, then she
+       * stopped — the worst set of ONE set is the fresh one, so it cleared and the load rose on a lift she
+       * did a third of. A raise is earned on the prescription: fewer working sets than she was asked for
+       * holds the load and her target, whatever those sets were.
+       * ⚠️ Counted as Loop 3 counts a slot (`performedByEx`): the S-60 approach set OCCUPIES one of the
+       * prescribed sets — counting working sets only read every approach occurrence as partial.
+       */
+      const asked = prescribedSets(id);
+      if (out.decision === 'progress' && st.load != null && asked > 0 && (performedByEx[id] ?? 0) < asked) {
+        out = { ...out, decision: 'hold', load: st.load, repTarget: st.repTarget };
+      }
       if (out.wantsChange) wantsChange[id] = out.wantsChange;
       else delete wantsChange[id]; // a later climb cancels a change wanted earlier this fold-run
       if (out.decision === 'progress') advancedThisOcc.add(id); // a lift of this muscle rose (S-32)
@@ -537,7 +585,18 @@ export async function advanceV5(
       if (out.decision === 'rung_out_of_reach' && out.load != null) {
         log.push({ exerciseId: id, decision: out.decision, loadFrom: out.load, loadTo: out.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at, kind: 'rung' });
       }
-      ex[id] = { ...st, load: out.load, band: out.band, sets: out.sets, history: [{ load: st.load, sets }, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS) };
+      /*
+       * ⛔ HER TARGET CLIMBED — SAID, NOT SILENT (2026-10-17, the engine audit). The load held and the
+       * number she is asked for next time rose by a rep: that is the next step of her progression, and
+       * the finish screen's "next time" says so (`getSessionForwardV5`). Never in the weekly letter —
+       * a rep a session is the ordinary walk, not news (`closedWeekChanges`).
+       */
+      const repsBefore = Math.max(st.band.lo, Math.min(st.band.hi, st.repTarget ?? st.band.lo));
+      const loadHeld = (out.load ?? null) === (st.load ?? null) || (out.load != null && st.load != null && Math.abs(out.load - st.load) < 1e-6);
+      if (loadHeld && out.repTarget != null && out.repTarget > repsBefore) {
+        log.push({ exerciseId: id, decision: out.decision, loadFrom: st.load, loadTo: st.load, setsFrom: st.sets, setsTo: out.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [out.band.lo, out.band.hi], at, kind: 'reps', repsFrom: repsBefore, repsTo: out.repTarget });
+      }
+      ex[id] = { ...st, load: out.load, band: out.band, sets: out.sets, repTarget: out.repTarget ?? st.repTarget, history: [{ load: st.load, sets }, ...st.history].slice(0, RECENCY_WINDOW_SESSIONS) };
     }
 
     // ── Loop 3 · the Muscle loop (register Part 4 §E) — one volume decision per muscle per occurrence.
@@ -574,7 +633,12 @@ export async function advanceV5(
       // chest work"). Measured against what she was ACTUALLY prescribed (current), so the very first
       // earned set — grown from the seed in the same fold — is narrated too; a pure seed (no move) says
       // nothing. Muscle-keyed; the load fields stay null.
-      if (res.sets !== current) {
+      /*
+       * ⛔ NEVER ON A WEEK IT CANNOT REACH (2026-10-17, the engine audit). On a written week the set
+       * counts are hers and permanent — the coach is told so in as many words (`buildPrompt.appFacts`)
+       * — so "I added a set to your chest work" in her letter was a change that never happened.
+       */
+      if (res.sets !== current && !writtenWeek) {
         log.push({ exerciseId: m, decision: res.decision, loadFrom: null, loadTo: null, setsFrom: current, setsTo: res.sets, bandFrom: [0, 0], bandTo: [0, 0], at, kind: 'volume', muscle: m });
       }
     }
@@ -586,7 +650,8 @@ export async function advanceV5(
       closeRunEase(at);
     }
   }
-  state.lastFoldedAt = Date.parse(unfolded[unfolded.length - 1].startedAt);
+  state.lastFoldedAt = Math.max(lastFolded, ...unfolded.map((s) => Date.parse(s.startedAt)));
+  state.foldedIds = [...(state.foldedIds ?? []), ...unfolded.map((s) => s.id)].slice(-FOLDED_IDS_KEEP);
 
   // The read moment itself: a window that lapsed since the last session closes, and a run she
   // recorded after it opens — so the prescription handed out NOW already carries the answer.
@@ -652,7 +717,9 @@ export async function activeDeloadV5(nowMs: number = Date.now()): Promise<boolea
 // ───────────────────────────── prescription read ─────────────────────────────
 export interface V5Target {
   weight: number | null;
-  reps: number; // Tlo
+  /** The reps she is asked for — her rep TARGET (`ExerciseState.repTarget`), the floor until it climbs. */
+  reps: number;
+  bandLo: number; // Tlo
   bandHi: number; // Thi
   sets: number;
 }
@@ -671,7 +738,8 @@ export async function currentV5Targets(history: Session[], nowMs: number = Date.
   const out: Record<string, V5Target> = {};
   for (const id of Object.keys(ex)) {
     const st = ex[id];
-    out[id] = { weight: st.load, reps: st.band.lo, bandHi: st.band.hi, sets: st.sets };
+    const target = Math.max(st.band.lo, Math.min(st.band.hi, st.repTarget ?? st.band.lo));
+    out[id] = { weight: st.load, reps: target, bandLo: st.band.lo, bandHi: st.band.hi, sets: st.sets };
   }
   return out;
 }
@@ -737,20 +805,23 @@ export async function applyDetrainingV5(
    * the fraction the current gap deserves and applies only the difference. Re-reading at the same
    * moment is still a no-op (target === applied), which is the property that matters.
    */
-  const applied = state.detrainedAfter === lastSession ? (state.detrainedRetained ?? 1) : 1;
-  if (!(target < applied - 1e-9)) {
-    // Nothing further owed. Stamp the gap so a later call knows where it stands, but only when this
-    // gap is genuinely being tracked — inside the grace window there is nothing to record.
-    if (target < 1 && state.detrainedAfter !== lastSession) {
-      state.detrainedAfter = lastSession;
-      state.detrainedRetained = target;
-      await save(state);
-    }
-    return 0;
-  }
-  const step = target / applied; // the fraction still owed since the last time this ran
+  if (!(target < 1 - 1e-9)) return 0; // inside the grace window — nothing owed, nothing to stamp
 
   const ex = asStates(state);
+  /*
+   * ⛔ PRICED FROM THE GAP'S BASE (2026-10-17, the engine audit — `EngineV5State.detrainBase`). The
+   * loads as they stood when this gap began are taken once; every read decays from THEM to the fraction
+   * the whole gap deserves, and only ever lowers a load. Reading daily or once a month lands on the
+   * same numbers — the old fraction-since-last-read rounded every small step to nothing.
+   */
+  if (state.detrainedAfter !== lastSession || !state.detrainBase) {
+    state.detrainBase = {};
+    for (const id of Object.keys(ex)) {
+      const l = ex[id].load;
+      if (l != null && Number.isFinite(l) && l > 0) state.detrainBase[id] = l;
+    }
+  }
+  const base = state.detrainBase;
   const log = state.changeLog ?? [];
   let moved = 0;
   for (const id of Object.keys(ex)) {
@@ -758,14 +829,16 @@ export async function applyDetrainingV5(
     if (st.load == null || !Number.isFinite(st.load) || st.load <= 0) continue; // bodyweight / unusable
     const meta = metaWithGrid(id, history);
     if (meta.bodyweight) continue;
-    const next = decayRung(st.load, st.load * step, meta.equipment, meta.observedLoads);
-    if (!(next < st.load - 1e-6)) continue; // already at the floor, or the move is under a rung
+    const from = base[id] ?? (base[id] = st.load); // a lift first seen inside the gap starts from its load
+    const next = decayRung(from, from * target, meta.equipment, meta.observedLoads);
+    if (!(next < st.load - 1e-6)) continue; // already there (or lower), or the move is under a rung
     log.push({
       exerciseId: id, decision: 'detrain', loadFrom: st.load, loadTo: next,
       setsFrom: st.sets, setsTo: st.sets, bandFrom: [st.band.lo, st.band.hi], bandTo: [st.band.lo, st.band.hi],
       at: nowMs, kind: 'detrain',
     });
-    ex[id] = { ...st, load: next };
+    // A lighter load starts its reps over at the floor of her range (`ExerciseState.repTarget`).
+    ex[id] = { ...st, load: next, repTarget: undefined };
     moved += 1;
   }
   // ⚠️ STAMPED WHETHER OR NOT ANYTHING MOVED. A gap where every load was already on its floor is a
@@ -904,6 +977,18 @@ export function explainChange(c: ChangeEntry): Explanation {
       conclusion: L(up ? 'volumeUp.conclusion' : 'volumeDown.conclusion'),
       action: L(up ? 'volumeUp.action' : 'volumeDown.action', { muscle }),
       text: L(up ? 'volumeUp.text' : 'volumeDown.text', { muscle }),
+    };
+  }
+  // Her rep target climbed at the same load (2026-10-17). The sentence carries no figures — the row
+  // above it already reads "× 6 → 7" — so four lifts that climbed say it ONCE on the finish screen
+  // (`groupDecisions` groups by the rendered sentence), never as a mail merge.
+  if (c.kind === 'reps') {
+    return {
+      slotId: c.exerciseId, pattern: '' as never,
+      observation: L('repsUp.observation', { reps: c.repsFrom ?? 0 }),
+      conclusion: L('repsUp.conclusion'),
+      action: L('repsUp.action', { reps: c.repsTo ?? 0 }),
+      text: L('repsUp.text'),
     };
   }
   // S-28 · the rung is out of reach. She cleared every set, and the load still held — because the
@@ -1075,7 +1160,8 @@ function closedWeek(nowMs: number, window?: ClosedWindow | null): { start: numbe
  *  earliest loadFrom → its latest loadTo, so the mirror reads "back went up" once, not thrice. */
 function closedWeekChanges(log: ChangeEntry[], nowMs: number, window?: ClosedWindow | null): ChangeEntry[] {
   const { start, end } = closedWeek(nowMs, window);
-  const inWeek = log.filter((c) => c.at >= start && c.at < end).sort((a, b) => a.at - b.at);
+  // A rep target's climb is the ordinary walk of her progression — told at the finish, not in the letter.
+  const inWeek = log.filter((c) => c.at >= start && c.at < end && c.kind !== 'reps').sort((a, b) => a.at - b.at);
   const netByEx = new Map<string, ChangeEntry>();
   for (const c of inWeek) {
     // Structural changes (S-45) are keyed apart from load changes so a graduation and a load move on
@@ -1136,6 +1222,9 @@ function closedWeekChanges(log: ChangeEntry[], nowMs: number, window?: ClosedWin
  */
 export function changeMoved(c: ChangeEntry): boolean {
   if (c.toExercise) return true; // a swap or a graduation — the lift itself moved
+  // Her rep target climbed: the load held, but the number she is asked for next time moved — and the
+  // finish screen's "next time" is built from exactly this list (found on the screen, 2026-10-17).
+  if (c.kind === 'reps') return c.repsFrom != null && c.repsTo != null && c.repsTo > c.repsFrom;
   if (c.loadFrom !== c.loadTo) return true;
   if (c.setsFrom !== c.setsTo) return true;
   return c.bandFrom[0] !== c.bandTo[0] || c.bandFrom[1] !== c.bandTo[1];
@@ -1166,13 +1255,24 @@ export async function getSessionEarnedV5(sessionStartedAtMs: number): Promise<Ex
  * a different kind of news and has no per-lift "next weight". A lift that HELD has no entry at all —
  * a hold is not a change (R7) — so the caller reads a missing exercise as "holds at what she lifted".
  */
+export interface SessionForward {
+  loadFrom: number | null;
+  loadTo: number | null;
+  /** Her rep target, when it climbed at the same load (2026-10-17). */
+  repsFrom?: number;
+  repsTo?: number;
+}
 export async function getSessionForwardV5(
   sessionStartedAtMs: number,
-): Promise<Record<string, { loadFrom: number | null; loadTo: number | null }>> {
+): Promise<Record<string, SessionForward>> {
   const state = await load();
-  const out: Record<string, { loadFrom: number | null; loadTo: number | null }> = {};
+  const out: Record<string, SessionForward> = {};
   for (const c of state.changeLog ?? []) {
     if (c.at !== sessionStartedAtMs) continue;
+    if (c.kind === 'reps') {
+      if (!out[c.exerciseId]) out[c.exerciseId] = { loadFrom: c.loadFrom, loadTo: c.loadTo, repsFrom: c.repsFrom, repsTo: c.repsTo };
+      continue;
+    }
     if (c.kind != null && c.kind !== 'deload' && c.kind !== 'ease') continue;
     /*
      * A deload (or a run's ease) stamped at the SAME fold supersedes the Loop 2 move it overrode —
