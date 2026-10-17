@@ -20,6 +20,13 @@
 //
 // What it cannot see: a rest running out by itself (the engine's timer needs a run loop and a
 // minute), the haptics, the screens, Bluetooth. Those are the gallery's and the device's.
+//
+// ⛔ THE ENGINE RUNS ON THE PHONE'S OWN SECONDS (2026-10-17). It is handed a clock (`now:`) that
+// moves exactly as the phone's script does — a second before every tap, and `wait` for the time she
+// stands there — so the rest she TAKES (stage 5's `restBeforeS`) is measured from the same seconds on
+// both devices. And a scenario may say `phoneDies` (stage 3): the engine is then started at that step
+// from nothing but the takeover kits the phone's frames carried (stored through the wrist's own
+// `WatchStore`), and must draw what the phone — still running beside it — draws, to the end.
 // ════════════════════════════════════════════════════════════════════════════════════════════════
 import Foundation
 
@@ -136,18 +143,27 @@ for file in files {
   var engine: LocalWorkoutEngine?
   var last: WireMirror?
   var record: WireSessionRecord?
-
-  if isNull(root["plan"]) {
-    diffs.append("the wrist was sent NO plan for this day — it cannot be started here at all")
-  } else if let planData = try? JSONSerialization.data(withJSONObject: root["plan"]!),
-            let plan = try? JSONDecoder().decode(WirePlan.self, from: planData),
-            let workout = plan.allWorkouts.first(where: { $0.id == workoutId }) {
-    let e = LocalWorkoutEngine(workout: workout, plan: plan, store: WatchStore())
+  // The phone's own clock, in milliseconds — the engine reads it through its `now` seam.
+  var clockMs = (root["t0"] as? NSNumber)?.doubleValue ?? 1_800_000_000_000
+  let clock: () -> Date = { Date(timeIntervalSince1970: clockMs / 1000) }
+  let takeover = root["takeover"] as? [String: Any]
+  func hook(_ e: LocalWorkoutEngine) {
     e.onFrame = { last = $0 }
     e.onComplete = { r, frame in
       record = r
       last = frame
     }
+  }
+
+  if takeover != nil {
+    // The phone runs this one until it dies — the wrist starts at `phoneDies`, below.
+  } else if isNull(root["plan"]) {
+    diffs.append("the wrist was sent NO plan for this day — it cannot be started here at all")
+  } else if let planData = try? JSONSerialization.data(withJSONObject: root["plan"]!),
+            let plan = try? JSONDecoder().decode(WirePlan.self, from: planData),
+            let workout = plan.allWorkouts.first(where: { $0.id == workoutId }) {
+    let e = LocalWorkoutEngine(workout: workout, plan: plan, store: WatchStore(), now: clock)
+    hook(e)
     e.activate()
     engine = e
     diffs += disagreements(at: "start", phone: start, wrist: drawn(last))
@@ -155,9 +171,36 @@ for file in files {
     diffs.append("the wrist could not READ the plan the phone built for this day")
   }
 
-  if let engine {
+  do {
     for (i, step) in steps.enumerated() {
       let what = step["do"] as? String ?? "?"
+      clockMs += 1000 // a second passes before anything she does — the phone's script, exactly
+      if what == "wait" { clockMs += ((step["s"] as? NSNumber)?.doubleValue ?? 0) * 1000 }
+      if what == "phoneDies" {
+        // ⛔ THE PHONE IS GONE: the wrist holds what its frames carried, and nothing else.
+        let store = WatchStore()
+        for raw in takeover?["kits"] as? [Any] ?? [] {
+          guard let data = try? JSONSerialization.data(withJSONObject: raw),
+                let kit = try? JSONDecoder().decode(WireTakeoverKit.self, from: data) else {
+            diffs.append("step \(i): the wrist could not READ a takeover kit the phone sent")
+            continue
+          }
+          store.saveTakeoverKit(kit)
+        }
+        if let said = (takeover?["nowMs"] as? NSNumber)?.doubleValue, abs(said - clockMs) > 1 {
+          diffs.append("step \(i): the two clocks disagree at the takeover — phone \(said) / wrist \(clockMs)")
+        }
+        guard let kit = store.loadTakeoverKit(), let e = LocalWorkoutEngine(takeover: kit, store: store, now: clock) else {
+          diffs.append("step \(i): the wrist could NOT take the workout over from the kit it held")
+          break
+        }
+        hook(e)
+        e.activate()
+        engine = e
+        diffs += disagreements(at: "step \(i) (the phone dies)", phone: step["phone"] as? [String: Any] ?? [:], wrist: drawn(last))
+        continue
+      }
+      guard let engine else { continue } // before a takeover, the phone runs it alone
       switch what {
       case "complete":
         // As written unless she gave her own figures — the rule `WatchModel.completeSet` applies.
@@ -172,18 +215,24 @@ for file in files {
       case "resume": engine.resume()
       case "finishEarly": engine.finishEarly()
       case "warmUp": engine.addWarmup()
+      case "wait": break // she stands there; the clock has moved
       default: diffs.append("step \(i): an action this program does not know — \(what)")
       }
       let phone = step["phone"] as? [String: Any] ?? [:]
       diffs += disagreements(at: "step \(i) (\(what))", phone: phone, wrist: drawn(last))
     }
 
-    // The record she brings home: every set, in order, with what she actually lifted.
+  }
+
+  if let engine {
+    // The record she brings home: every set, in order, with what she actually lifted — on a takeover,
+    // the phone's sets before the split and the wrist's after it, as ONE account.
     let sets = record?.sets ?? engine.state.sets
     let home: [[String: Any]] = sets.map { s in
       var row: [String: Any] = ["exerciseId": s.exerciseId, "setIndex": s.setIndex, "reps": s.actualReps]
       if let w = s.actualWeight { row["weight"] = w }
       if s.isWarmup == true { row["warmup"] = true }
+      if let r = s.restBeforeS { row["restBeforeS"] = r }
       return row
     }
     if !same(logged, home) {
@@ -196,6 +245,7 @@ for file in files {
       if let s = i.seconds { row["seconds"] = s }
       if let m = i.metres { row["metres"] = m }
       if let l = i.load { row["load"] = l }
+      if let r = i.restBeforeS { row["restBeforeS"] = r }
       return row
     }
     if !same(heldOnPhone, heldOnWrist) {

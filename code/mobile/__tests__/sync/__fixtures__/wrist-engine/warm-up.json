@@ -2,6 +2,7 @@
  "name": "warm-up",
  "says": "she asks for the warm-up on the squat (two bridges) and on the deadlift (one), pauses on a bridge, and the curl is offered none",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

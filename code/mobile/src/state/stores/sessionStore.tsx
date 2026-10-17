@@ -40,8 +40,10 @@ import { prescribedSets, sessionTrained } from '@/domain/completion';
 import { AppState } from 'react-native';
 import { notifier } from '@/platform/notifications';
 import { WatchSession } from '@/platform/watch/watchBridge';
-import { isCardioRecordPayload, type WatchLobby, type WatchLocalSession, type WatchPlanSnapshot } from '@/platform/watch/protocol';
+import { isCardioRecordPayload, type WatchLobby, type WatchLocalSession, type WatchPlanSnapshot, type WatchPlanStep, type WatchTakeoverKit } from '@/platform/watch/protocol';
 import { applyWatchCardioRecord, applyWatchSessionRecord, watchSessionId } from '@/platform/watch/watchReconcile';
+import { decideTakeover, sessionWork, takeoverKit, takeoverSteps } from '@/platform/watch/watchTakeover';
+import { noteWatchRecordApplied } from '@/platform/watch/watchPlanRefresh';
 import { armGapCatch } from '@/platform/gapCatch';
 import { cardioControl, setCardioWatchSink } from '@/platform/cardio/cardioLive';
 import { adoptWatchSession, adoptedRestAnchor, decideAdoption } from '@/platform/watch/watchAdopt';
@@ -788,7 +790,7 @@ export interface SessionView {
    * Never overwrites a live session, and never half-adopts: every question is answered before
    * anything is mutated. See the implementation.
    */
-  adoptLocalSession: (local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused'>;
+  adoptLocalSession: (local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused' | 'superseded'>;
   completeSet: (override?: { weight: number | null; reps: number }) => Promise<CompleteResult>;
   /**
    * End the current step when it is NOT a set — held, covered, or simply done.
@@ -1773,7 +1775,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         recordToModel: (args) => appRef.current.model.recordSession(args),
         enqueuePendingSync: (args) => db.enqueuePendingSync(args),
         track: (type, data) => void track(type, data),
-        ack: (id) => watchTransport.ackRecord(id),
+        ack: (id) => {
+          watchTransport.ackRecord(id);
+          // …and the wrist is sent its next week, wherever she is in the app (stage 5, 2026-10-17).
+          noteWatchRecordApplied();
+        },
+        /*
+         * ⛔ A WORKOUT THE WRIST TOOK OVER, COME HOME FINISHED (stage 3, 2026-10-17). The phone's own
+         * copy of it — still live on this phone, or waiting on disk to be resumed after the kill that
+         * started all this — is the SHORTER account of the same workout (`decideTakeover`), and it
+         * goes: left standing, Home would offer to resume a workout she has finished.
+         */
+        liveSession: () =>
+          sessionRef.current && planRef.current.length > 0 ? { id: sessionRef.current.id, work: sessionWork(sessionRef.current) } : null,
+        retireLocalCopy: async (id) => {
+          if (sessionRef.current?.id === id && planRef.current.length > 0) dispatch({ type: 'END' });
+          const saved = await db.loadActiveSession().catch(() => null);
+          if (saved?.id === id) {
+            await db.clearActiveSession();
+            await db.clearSessionResume().catch(() => {});
+          }
+        },
       });
     });
   }, []);
@@ -1939,6 +1961,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [correction, setCorrection] = useState<LiveCorrection | null>(null);
   // Live Activity start/end is one-shot per session; gates start-vs-update + telemetry.
   const laStartedRef = useRef(false);
+  /** The takeover kit's plan half, for the plan it was built from — rebuilt only when the plan changes (stage 3). */
+  const kitStepsRef = useRef<{ plan: Step[]; steps: WatchPlanStep[] | null } | null>(null);
   // Watch action handlers, refreshed each render so a (native) watch intent runs the
   // EXACT same action an in-app tap would. The stub transport delivers none in v1.
   const watchActionsRef = useRef<Partial<Record<SessionEvent['type'], () => void>>>({});
@@ -1968,7 +1992,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const watchPainRef = useRef<(area: string, severity: string) => void>(() => {});
   /** The live handover — see the store's `adoptLocalSession`. Bound below, like every other wrist
    *  action, so the bridge is built once and never closes over a stale implementation. */
-  const watchAdoptRef = useRef<(local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused'>>(
+  const watchAdoptRef = useRef<(local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused' | 'superseded'>>(
     async () => 'refused',
   );
   // The phone-authority watch bridge. Constructed once; reads the action ref so it
@@ -2438,9 +2462,61 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       warmupOffered: machine.phase === 'SET_PRESENTED' ? warmupOffer(plan, machine.setIndex)?.ramp.length ?? 0 : 0,
     });
 
+    /*
+     * ⛔ AND WHAT THE WRIST NEEDS TO CARRY IT ON IF THIS PHONE GOES SILENT (stage 3, 2026-10-17) —
+     * the takeover kit (`platform/watch/watchTakeover`). The plan half is rebuilt only when the plan
+     * itself changes (her weight carried, a swap, a warm-up); the bridge decides when it rides.
+     */
+    let kit: WatchTakeoverKit | null = null;
+    if (mirror && mirror.phase !== 'complete' && state.session && plan.length > 0) {
+      if (kitStepsRef.current?.plan !== plan) {
+        const seen = new Map<string, ReturnType<typeof lastTimeOn>>();
+        kitStepsRef.current = {
+          plan,
+          steps: takeoverSteps(plan, {
+            restAfter: restAfterStep,
+            restLearned: (st) => st.restAfterS == null && (st.lastSetOfExercise ? restTransitionIsLearned() : restIsLearnedFor(st.exerciseId)),
+            superset: (i) => {
+              const r = sessionSupersetAt(plan, i);
+              return r ? { round: r.round, rounds: r.rounds, position: r.position, count: r.exerciseIds.length } : null;
+            },
+            warmupAt: (i) => warmupOffer(plan, i)?.ramp ?? null,
+            lastOf: (ex) => {
+              if (!seen.has(ex)) seen.set(ex, lastTimeOn(ex, historyRef.current, { excludeSessionId: sessionRef.current?.id }));
+              return seen.get(ex) ?? null;
+            },
+          }),
+        };
+      }
+      const steps = kitStepsRef.current.steps;
+      const onStep = plan[machine.setIndex];
+      const pausedInRest = machine.phase === 'PAUSED' && (machine.resumePhase === 'REST_INTER' || !!machine.resumePhase?.startsWith('REST_TRANSITION'));
+      kit = steps
+        ? takeoverKit({
+            session: state.session,
+            plan,
+            machine,
+            steps,
+            restEndsAt: mirror.restEndsAt,
+            restTotalS: mirror.restTotalS ?? (onStep ? restAfterStep(onStep) : null),
+            restStartedAtMs: restStartedAtRef.current,
+            pausedAtMs: machine.phase === 'PAUSED' ? pauseStartedAtRef.current : null,
+            // What a rest paused on this phone still had to run — the frozen remainder the wrist resumes.
+            pausedRestRemainingS:
+              pausedInRest && onStep && restStartedAtRef.current != null && pauseStartedAtRef.current != null
+                ? restAfterStep(onStep) + restExtraSecondsRef.current - (pauseStartedAtRef.current - restStartedAtRef.current) / 1000
+                : null,
+            holdEndsAt: mirror.holdEndsAt ?? null,
+            pendingRestS: pendingRestSRef.current,
+            restInterS: REST_UNSTATED_S,
+            restTransitionS: REST_UNSTATED_S,
+          })
+        : null;
+    }
+
     // One projection → both surfaces. The watch receives the full mirror (incl. the
     // terminal "complete" frame so it can show Workout Complete, then tear down).
-    watchRef.current?.publish(mirror);
+    watchRef.current?.publish(mirror, kit);
 
     // Mid-workout resume snapshot (S3): every live state change persists the machine + plan
     // + rest anchors, so an app kill resumes exactly where the athlete was (the watch's
@@ -3319,27 +3395,34 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
        * leave this store exactly as it found it; a half-adopted session — plan swapped, machine
        * not — is the one outcome worse than not adopting at all.
        */
-      async adoptLocalSession(local: WatchLocalSession): Promise<'adopted' | 'duplicate' | 'refused'> {
-        const id = watchSessionId(local.recordId);
+      async adoptLocalSession(local: WatchLocalSession): Promise<'adopted' | 'duplicate' | 'refused' | 'superseded'> {
+        const id = local.takeoverOf ?? watchSessionId(local.recordId);
+        const live = () => (sessionRef.current && plan.length > 0 ? { id: sessionRef.current.id, work: sessionWork(sessionRef.current) } : null);
+        /*
+         * ⛔ A WORKOUT THE WRIST TOOK OVER FROM THIS PHONE (stage 3, 2026-10-17) is not "a different
+         * workout" when the phone is live again: it is this very one, and the two accounts of the time
+         * apart are weighed by the ONE rule (`decideTakeover`) — the wrist's is taken only when it did
+         * more after the split; otherwise the phone keeps its own and the wrist lets go.
+         */
+        const judge = (historyIds: readonly string[]) =>
+          local.takeoverOf
+            ? decideTakeover({
+                takeoverOf: local.takeoverOf,
+                splitAt: local.splitAt ?? 0,
+                wristWork: local.sets.length + (local.items?.length ?? 0),
+                live: live(),
+                historyIds,
+              })
+            : decideAdoption({ liveSessionId: sessionRef.current?.id ?? null, liveSessionActive: plan.length > 0, historyIds, offeredId: id });
         /* The cheap refusals first, on facts already in memory — no read of her history is needed
            to know that a different workout is live on this phone. */
-        const quick = decideAdoption({
-          liveSessionId: sessionRef.current?.id ?? null,
-          liveSessionActive: plan.length > 0,
-          historyIds: [],
-          offeredId: id,
-        });
+        const quick = judge([]);
         if (quick !== 'proceed') return quick;
 
         const history = await db.loadHistory().catch(() => []);
         /* …and then the one that needs her record: already finished and come home. The wrist's
            record may beat its own offer, and a straggler must not resurrect a saved workout. */
-        const verdict = decideAdoption({
-          liveSessionId: sessionRef.current?.id ?? null,
-          liveSessionActive: plan.length > 0,
-          historyIds: history.map((h) => h.id),
-          offeredId: id,
-        });
+        const verdict = judge(history.map((h) => h.id));
         if (verdict !== 'proceed') return verdict;
 
         const adopted = adoptWatchSession(local, Date.now());
@@ -3367,7 +3450,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         const anchor = adoptedRestAnchor(adopted, onStep ? restAfterStep(onStep) : null, Date.now());
         restStartedAtRef.current = anchor.restStartedAtMs;
         restExtraSecondsRef.current = 0;
-        pendingRestSRef.current = null;
+        // A rest she finished on the wrist belongs to the next set she logs, wherever she logs it.
+        pendingRestSRef.current = adopted.pendingRestS;
         pauseStartedAtRef.current = anchor.pausedAtMs;
         // A hold whose clock was running on her wrist keeps running here, to the same second
         // (2026-10-13) — the one clock every surface counts a hold on (`holdRun`).

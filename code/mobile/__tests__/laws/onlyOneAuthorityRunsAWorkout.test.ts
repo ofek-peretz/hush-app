@@ -69,8 +69,11 @@ describe('one workout has one authority', () => {
     const engine = code(swift('LocalWorkoutEngine.swift'));
     const decl = engine.split('\n').find((l) => l.includes('var hasWork'));
     expect(decl).toBeDefined();
-    expect(decl).toContain('state.sets.isEmpty');
+    // Every set AND every hold — counted past the split, since a workout taken over from the phone
+    // (stage 3) starts with the phone's account in it, which is the phone's to hold, not this wrist's.
+    expect(decl).toContain('state.sets.count');
     expect(decl).toContain('state.items');
+    expect(decl).toContain('state.splitAt');
     // Nothing that decides whether a session may be thrown away reads sets alone any more.
     expect(code(swift('WatchModel.swift'))).not.toMatch(/state\.sets\.isEmpty/);
   });

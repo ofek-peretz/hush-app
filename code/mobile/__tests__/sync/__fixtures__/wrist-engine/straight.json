@@ -2,6 +2,7 @@
  "name": "straight",
  "says": "three lifts, every set as written, every rest skipped, to the end",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

@@ -2,6 +2,7 @@
  "name": "carry-day",
  "says": "a bodyweight lift, a loaded carry measured in metres, a dumbbell lift — ended early inside the carry",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

@@ -2,6 +2,7 @@
  "name": "plank-day",
  "says": "a day with a plank in it — one hold started on its clock and finished, one finished outright",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

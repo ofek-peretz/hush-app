@@ -66,6 +66,47 @@
     },
     "lobby": null,
     "plan": null,
+    "takeover": {
+      "sessionId": "sess_1800000000000",
+      "workoutId": "coach_0",
+      "workoutName": "Full B",
+      "startedAt": "2027-01-15T08:00:00.000Z",
+      "rev": "kit_1xgcctp_6",
+      "cursor": 2,
+      "phase": "active_set",
+      "sets": [
+        {
+          "exerciseId": "push_up",
+          "setIndex": 0,
+          "recommendedWeight": null,
+          "recommendedReps": 8,
+          "actualWeight": null,
+          "actualReps": 8,
+          "completedAt": "2027-01-15T08:00:00.000Z",
+          "at": {
+            "block": 1,
+            "round": 1,
+            "position": 1
+          }
+        },
+        {
+          "exerciseId": "push_up",
+          "setIndex": 1,
+          "recommendedWeight": null,
+          "recommendedReps": 8,
+          "actualWeight": null,
+          "actualReps": 8,
+          "completedAt": "2027-01-15T08:00:00.000Z",
+          "at": {
+            "block": 1,
+            "round": 1,
+            "position": 1
+          }
+        }
+      ],
+      "restInterS": 90,
+      "restTransitionS": 90
+    },
     "authoritySeq": 5,
     "authorityEpoch": 1800000000000,
     "sentAt": "2027-01-15T08:00:00.000Z"

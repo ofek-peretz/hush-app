@@ -2,6 +2,7 @@
  "name": "superset",
  "says": "a lift, then a couple of two lifts for three rounds, then a lift",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

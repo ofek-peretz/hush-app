@@ -27,7 +27,8 @@ import { exerciseById } from '@/data/exercises';
 import { sessionTrained } from '@/domain/completion';
 import { HttpError } from '@/data/api/httpErrors';
 import { WATCH_EVENTS } from '@/platform/events';
-import { parseCardioRecord, parseSessionRecord, type WatchCardioRecord, type WatchRecordItem, type WatchSessionRecord } from './protocol';
+import { parseCardioRecord, parseSessionRecord, type WatchCardioRecord, type WatchRecordItem, type WatchRecordSet, type WatchSessionRecord } from './protocol';
+import { decideTakeover } from './watchTakeover';
 
 /** One set in the shape the backend model sync expects (same as finalize()). */
 export interface WatchSyncSet {
@@ -58,6 +59,12 @@ export interface WatchReconcileDeps {
   track: (type: string, data?: Record<string, unknown>) => void;
   /** Acknowledge the record to the watch (durable transfer) so it clears its outbox. */
   ack: (recordId: string) => void;
+  /** The session live on this phone, if any, and how much it holds (`sessionWork`) — what a record
+   *  of a workout the wrist TOOK OVER is judged against (stage 3). Absent: nothing is live. */
+  liveSession?: () => { id: string; work: number } | null;
+  /** Retire the phone's own copy of a workout the wrist took over and finished: end it if it is live,
+   *  and clear it from disk if it is waiting to be resumed (stage 3). */
+  retireLocalCopy?: (sessionId: string) => Promise<void>;
 }
 
 /** True if a failed sync is worth queuing for retry (transient), not a doomed payload. */
@@ -89,10 +96,14 @@ export function watchRecordToSession(r: WatchSessionRecord): Session {
       // A warm-up bridge comes home with BOTH of the phone's marks (`domain/warmupRamp`) — the one
       // every engine reader already steps over, and the honest label (2026-10-17).
       ...(s.isWarmup ? { isApproach: true, isWarmup: true } : {}),
+      // The rest she took before it — her learned pace learns from a wrist workout too (stage 5).
+      ...(s.restBeforeS != null ? { restBeforeS: s.restBeforeS } : {}),
     };
   });
+  const items = canonicalItems(r.sets, r.items);
   return {
-    id: watchSessionId(r.recordId),
+    // A workout the wrist TOOK OVER is the phone's own workout, finished elsewhere (stage 3).
+    id: r.takeoverOf ?? watchSessionId(r.recordId),
     programDayId: r.workoutId,
     programDayName: r.workoutName,
     startedAt: r.startedAt,
@@ -107,9 +118,58 @@ export function watchRecordToSession(r: WatchSessionRecord): Session {
     // exactly as it always has.
     ...(r.kcal == null ? {} : { measuredKcal: r.kcal }),
     sets,
-    // The holds and carries she finished on the wrist, put back where the plan had them (2026-10-13).
-    ...(r.items && r.items.length > 0 ? { items: r.items.map(watchItemToResult) } : {}),
+    // Every step she did, where the plan had it — the canonical record (stage 5, see below).
+    ...(items ? { items } : {}),
   };
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE RECORD COMES HOME WHOLE (2026-10-17, the wrist-alone plan, stage 5)
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * On the phone a coach session's canonical record is `items` — EVERY step at its block, round and
+ * position, a set among them (`itemResultOf`) — and `sets` is the strangler's second copy of the
+ * reps (`models.ts`). `sessionTrained`, and every reader after it, counts `items` whenever it exists.
+ *
+ * ⛔ THE BUG THIS CLOSES (stage 1b, never in a build): a wrist workout with a plank in it came home
+ * with the planks in `items` and the sets in `sets` only — so a day of four sets and two planks was
+ * counted as TWO steps done, under half of six, and was not credited as trained. Every set now
+ * crosses with its place (`WatchRecordSet.at`) and becomes the reps item the phone writes for one;
+ * the holds join them, and the list reads in the order she did the work.
+ *
+ * ⚠️ A WORKING SET WITH NO PLACE means a record from a wrist (or a plan) older than places: then
+ * there is no honest way to put its reps in the canonical list, and the record keeps the shape it
+ * always had — no reps items, so every reader falls back to `sets` as it always did. A warm-up
+ * bridge never has a place (it is the app's own, not the coach's) and never has an item, as on the
+ * phone (`insertWarmup`).
+ */
+export function canonicalItems(sets: readonly WatchRecordSet[], items: readonly WatchRecordItem[] | undefined): ItemResult[] | undefined {
+  const holds = (items ?? []).map((i) => ({ when: i.completedAt, item: watchItemToResult(i) }));
+  const working = sets.filter((s) => s.isWarmup !== true);
+  if (!working.every((s) => s.at != null)) return holds.length > 0 ? holds.map((h) => h.item) : undefined;
+  const reps = working.map((s) => {
+    const recommendedReps = s.recommendedReps ?? s.actualReps;
+    const edited = (s.actualWeight ?? null) !== (s.recommendedWeight ?? null) || s.actualReps !== recommendedReps;
+    const item: ItemResult = {
+      ex: s.exerciseId,
+      block: s.at!.block,
+      round: s.at!.round,
+      position: s.at!.position,
+      at: s.completedAt,
+      ...(s.restBeforeS != null ? { restBeforeS: s.restBeforeS } : {}),
+      kind: 'reps',
+      load: s.actualWeight ?? null,
+      reps: s.actualReps,
+      ...(edited ? { edited: true } : {}),
+    };
+    return { when: s.completedAt, item };
+  });
+  const all = [...reps, ...holds]
+    .map((x, i) => ({ ...x, i, t: Date.parse(x.when) }))
+    .sort((a, b) => (a.t !== b.t ? a.t - b.t : a.i - b.i))
+    .map((x) => x.item);
+  return all.length > 0 ? all : undefined;
 }
 
 /**
@@ -117,7 +177,14 @@ export function watchRecordToSession(r: WatchSessionRecord): Session {
  * phone. The wrist finishes a hold AS PRESCRIBED (Done), so what was held is what was asked.
  */
 export function watchItemToResult(i: WatchRecordItem): ItemResult {
-  const base = { ex: i.exerciseId, block: i.block, round: i.round, position: i.position, at: i.completedAt };
+  const base = {
+    ex: i.exerciseId,
+    block: i.block,
+    round: i.round,
+    position: i.position,
+    at: i.completedAt,
+    ...(i.restBeforeS != null ? { restBeforeS: i.restBeforeS } : {}),
+  };
   return i.kind === 'time'
     ? { ...base, kind: 'time', seconds: i.seconds ?? 0, askedSeconds: i.seconds ?? 0, ...(i.load != null ? { load: i.load } : {}) }
     : { ...base, kind: 'distance', metres: i.metres ?? 0, askedMetres: i.metres ?? 0, ...(i.load != null ? { load: i.load } : {}) };
@@ -148,13 +215,36 @@ export async function applyWatchSessionRecord(raw: unknown, deps: WatchReconcile
       return;
     }
 
-    // Idempotency: at-least-once delivery + a durable identity = safe replays.
+    // Idempotency: at-least-once delivery + a durable identity = safe replays. A workout the wrist
+    // took over comes home under the PHONE's id — one workout, one session — never a second beside it.
     const history = await deps.loadHistory();
-    const id = watchSessionId(record.recordId);
+    const id = record.takeoverOf ?? watchSessionId(record.recordId);
     if (history.some((s) => s.id === id)) {
       deps.track(WATCH_EVENTS.recordReceived, { outcome: 'duplicate', recordId: record.recordId });
       deps.ack(record.recordId);
       return;
+    }
+    /*
+     * ⛔ THE ONE RULE, AT THE END OF A TAKEOVER (stage 3, 2026-10-17). The phone may still be holding
+     * its own copy of this workout — live, if it came back and she carried on there too. Whichever
+     * account did more after the split stands (`decideTakeover`): the phone's, and this record is
+     * acknowledged and set aside; or the record's, and the phone's copy is retired before it is saved.
+     */
+    if (record.takeoverOf) {
+      const live = deps.liveSession?.() ?? null;
+      const verdict = decideTakeover({
+        takeoverOf: record.takeoverOf,
+        splitAt: record.splitAt ?? 0,
+        wristWork: record.sets.length + (record.items?.length ?? 0),
+        live: live && live.id === record.takeoverOf ? live : null,
+        historyIds: [],
+      });
+      if (verdict === 'superseded') {
+        deps.track(WATCH_EVENTS.recordReceived, { outcome: 'superseded', recordId: record.recordId, takeover: true });
+        deps.ack(record.recordId);
+        return;
+      }
+      await deps.retireLocalCopy?.(record.takeoverOf);
     }
 
     // PARTIAL vs TRAINED (domain/completion) — identical to the phone's finalize: a wrist session

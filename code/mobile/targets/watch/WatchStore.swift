@@ -158,6 +158,47 @@ final class WatchStore {
     try? FileManager.default.removeItem(at: sessionURL)
   }
 
+  // MARK: The takeover kit (stage 3, 2026-10-17)
+  //
+  // The phone's last word on the workout it is running — what this wrist needs to carry it on if the
+  // phone goes silent (`WireTakeoverKit`). On disk, because the case that matters most is a watch app
+  // relaunched in the middle of a workout whose phone then stops answering.
+
+  private var kitURL: URL { dir.appendingPathComponent("takeover.json") }
+  /// The kit last written, held in memory too — it arrives with every live frame, and reading ten
+  /// kilobytes back off the disk each time to find the steps it already holds would be waste.
+  private var kitCache: WireTakeoverKit?
+
+  func loadTakeoverKit() -> WireTakeoverKit? {
+    if let kitCache { return kitCache }
+    kitCache = read(WireTakeoverKit.self, from: kitURL)
+    return kitCache
+  }
+
+  /**
+   * Keep the phone's latest kit, and the plan that goes with it.
+   *
+   * The plan (`steps`) rides only when its rev is new to this wrist — so a kit that arrives without
+   * steps keeps the ones already held UNDER THE SAME REV, and carries none when the rev is new (a
+   * frame carrying them was lost). Returns whether the steps are held for the kit now stored; when
+   * they are not, the caller asks the phone for them (`kit_request`) and cannot take over until then.
+   */
+  @discardableResult
+  func saveTakeoverKit(_ kit: WireTakeoverKit) -> Bool {
+    var keep = kit
+    if keep.steps == nil, let held = loadTakeoverKit(), held.rev == kit.rev, let steps = held.steps {
+      keep.steps = steps
+    }
+    kitCache = keep
+    write(keep, to: kitURL)
+    return keep.steps != nil
+  }
+
+  func clearTakeoverKit() {
+    kitCache = nil
+    try? FileManager.default.removeItem(at: kitURL)
+  }
+
   // MARK: Outbox (completed records awaiting the phone's durable ack)
 
   private func recordURL(_ recordId: String) -> URL {

@@ -26,6 +26,9 @@ let REST_SKIP_THRESHOLD_S = 5
 /// The breath after a warm-up bridge — a plate change, never her learned rest. The phone's own
 /// number (`domain/warmupRamp.WARMUP_REST_S`); the wire-parity law holds the two together.
 let WARMUP_REST_S = 45
+/// A rest shorter than this is a thumb pressed straight through, not her pace: it is not banked
+/// (`restBeforeS` stays unknown). The phone's line (`restPrescription.REST_SAMPLE_FLOOR_S`).
+let REST_SAMPLE_FLOOR_S = 10
 let MIRROR_SCHEMA_VERSION = 1
 
 struct WireSwapOption: Codable, Equatable {
@@ -298,6 +301,52 @@ struct WireEnvelope: Codable {
   /// The run the PHONE is recording, live — mirror of protocol.ts `cardio` (2026-09-15). Optional like
   /// every post-v1 field: a phone one build behind never sends it, and nil is "no phone run".
   var cardio: WireCardioLive?
+  /// What this wrist needs to carry the phone's workout on if the phone goes silent (stage 3,
+  /// 2026-10-17) — see `WireTakeoverKit`. On live frames only; nil from a phone that does not send it,
+  /// and then the wrist can only say "reconnecting", as it always did.
+  var takeover: WireTakeoverKit?
+  var sentAt: String
+}
+
+/**
+ * ════ THE TAKEOVER KIT — mirror of protocol.ts `WatchTakeoverKit` (stage 3, 2026-10-17) ════
+ *
+ * The phone's workout, in the shape this wrist's own engine runs: its plan as the phone holds it
+ * now, what she has logged, and where she stands. When a tap goes unanswered — the phone killed in a
+ * pocket, left in a locker, out of range — the engine starts from this, at this point, and she
+ * presses on; when the phone comes back the workout is offered back under the phone's session id.
+ *
+ * `steps` rides only when its `rev` is new (the plan is the heavy part); `WatchStore` keeps the steps
+ * it holds by their rev, and a frame naming a rev this wrist does not hold asks for it (`kit_request`).
+ */
+struct WireTakeoverKit: Codable, Equatable {
+  var sessionId: String
+  var workoutId: String
+  var workoutName: String
+  var startedAt: String
+  var rev: String
+  var steps: [WirePlanStep]?
+  var cursor: Int
+  var phase: String
+  var pausedFrom: String?
+  var restEndsAt: String?
+  var restTotalS: Int?
+  var pausedRestRemainingS: Int?
+  var holdEndsAt: String?
+  var restStartedAt: String?
+  var pausedAt: String?
+  var pendingRestS: Int?
+  var sets: [WireRecordSet]
+  var items: [WireRecordItem]?
+  var restInterS: Int
+  var restTransitionS: Int
+}
+
+/// "Send me the plan whole" — this wrist holds an older rev than the frame names (stage 3).
+struct WireKitRequest: Codable {
+  var v: Int
+  var type: String // "kit_request"
+  var have: String?
   var sentAt: String
 }
 
@@ -475,6 +524,8 @@ struct WireRecordItem: Codable, Equatable {
   var metres: Int?
   var load: Double?
   var completedAt: String
+  /// The rest she took before it, as on a set (stage 5). Absent = unknown, never zero.
+  var restBeforeS: Int?
 }
 
 // ---- Watch-local session record (watch → phone reconciliation) --------------
@@ -495,6 +546,12 @@ struct WireRecordSet: Codable, Equatable {
   var completedAt: String
   /// A warm-up bridge (2026-10-17) — the phone files it as the bridge it is, never as working work.
   var isWarmup: Bool?
+  /// ⛔ WHERE IT SAT IN THE DAY, AND THE REST SHE TOOK BEFORE IT (stage 5, 2026-10-17). With its place
+  /// the phone writes the reps item it writes for a set of its own — the canonical record every
+  /// reader counts; with its rest, her learned pace learns from a workout done far from the phone.
+  /// Absent on a bridge (no place in the coach's day), and on a set no rest came before.
+  var at: WireStepPlace?
+  var restBeforeS: Int?
 }
 
 struct WireSessionRecord: Codable, Equatable {
@@ -513,6 +570,10 @@ struct WireSessionRecord: Codable, Equatable {
   var sets: [WireRecordSet]
   /// The holds and carries of the workout, in the order she finished them (2026-10-13).
   var items: [WireRecordItem]?
+  /// A workout this wrist TOOK OVER from the phone (stage 3): the phone's session id — the identity
+  /// it comes home under — and how much of `sets` + `items` the phone had logged when it did.
+  var takeoverOf: String?
+  var splitAt: Int?
 }
 
 extension WireSessionRecord {
@@ -601,6 +662,12 @@ struct WireLocalSession: Codable {
   /// …and the holds she has finished, and the end of one whose clock is running (2026-10-13).
   var items: [WireRecordItem]?
   var holdEndsAt: String?
+  /// The phone session this continues, when the wrist TOOK it over (stage 3), and where the two
+  /// accounts split — the phone's one rule decides whose stands (`decideTakeover`).
+  var takeoverOf: String?
+  var splitAt: Int?
+  /// A rest she has finished and has not logged a set after yet — the next set's (stage 5).
+  var pendingRestS: Int?
   var sentAt: String
 }
 
@@ -766,6 +833,11 @@ enum WatchWire {
   /// later would describe a workout that has since ended.
   static func encodeLocalSession(_ offer: WireLocalSession) -> String? {
     guard let data = try? JSONEncoder().encode(offer) else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
+  static func encodeKitRequest(_ request: WireKitRequest) -> String? {
+    guard let data = try? JSONEncoder().encode(request) else { return nil }
     return String(data: data, encoding: .utf8)
   }
 

@@ -2,6 +2,7 @@
  "name": "bodyweight",
  "says": "a lift with no load beside a loaded one",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

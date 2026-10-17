@@ -47,6 +47,18 @@ struct LocalSessionState: Codable {
   var holdEndsAt: String?
   /// What remained of that hold when she paused.
   var pausedHoldRemainingS: Int?
+  /// ⛔ THE REST SHE ACTUALLY TAKES (stage 5, 2026-10-17). When the running rest began — moved on by
+  /// any pause inside it, exactly as the phone moves its own anchor (`unfrozenRestAnchor`) — and when
+  /// she paused, so a resume knows how far to move it. Optional: a session persisted by an older
+  /// build restores without them and simply banks no rest.
+  var restStartedAt: String?
+  var pausedAt: String?
+  /// A rest she finished and has not logged a set after yet — the next set's `restBeforeS`.
+  var pendingRestS: Int?
+  /// A workout this wrist TOOK OVER from the phone (stage 3): the phone's session id, and how much
+  /// of `sets` + `items` the phone had logged at that moment.
+  var takeoverOf: String?
+  var splitAt: Int?
 }
 
 final class LocalWorkoutEngine {
@@ -59,18 +71,23 @@ final class LocalWorkoutEngine {
 
   private var restWork: DispatchWorkItem?
   private var finished = false
+  /// The engine's one clock. A watch reads the wall; the instrument that runs this engine on a Mac
+  /// (`native-tests/wrist-engine`) hands it the phone's own scripted time, so a rest taken across a
+  /// pause is measured on both devices from the same seconds.
+  let now: () -> Date
 
   // MARK: Construction
 
   /// Fresh start from a plan workout (phone absent; Begin on the watch).
-  init(workout: WirePlanWorkout, plan: WirePlan, store: WatchStore) {
+  init(workout: WirePlanWorkout, plan: WirePlan, store: WatchStore, now: @escaping () -> Date = { Date() }) {
     self.store = store
+    self.now = now
     self.state = LocalSessionState(
       recordId: UUID().uuidString,
       planId: plan.planId,
       workoutId: workout.id,
       workoutName: workout.name,
-      startedAt: WatchWire.iso(Date()),
+      startedAt: WatchWire.iso(now()),
       phase: "active_set",
       pausedFrom: nil,
       pausedRestRemainingS: nil,
@@ -83,22 +100,77 @@ final class LocalWorkoutEngine {
       sets: [],
       items: nil,
       holdEndsAt: nil,
-      pausedHoldRemainingS: nil
+      pausedHoldRemainingS: nil,
+      restStartedAt: nil,
+      pausedAt: nil,
+      pendingRestS: nil,
+      takeoverOf: nil,
+      splitAt: nil
     )
   }
 
   /// Restore after an app termination/crash. Returns nil on an unusable state.
-  init?(restored: LocalSessionState, store: WatchStore) {
+  init?(restored: LocalSessionState, store: WatchStore, now: @escaping () -> Date = { Date() }) {
     guard !restored.steps.isEmpty, restored.currentIndex < restored.steps.count else { return nil }
     self.store = store
+    self.now = now
     self.state = restored
+  }
+
+  /**
+   * ⛔ THE PHONE WENT SILENT — CARRY ITS WORKOUT ON FROM HERE (stage 3, 2026-10-17).
+   *
+   * The phone's last word on its workout (`WireTakeoverKit`): its plan as it held it — her weights
+   * carried, the bridges she asked for — what she has logged, and where she stands. The engine
+   * starts at exactly that point; `activate()` then catches up a rest that ran out while nobody was
+   * listening, as it does after a crash. Everything she does from here is this wrist's, and is
+   * offered back under the phone's own session id when the phone answers again.
+   *
+   * Nil when the kit cannot be stood in: no plan in it (the wrist holds an older rev), or a cursor
+   * outside the plan — then the wrist says "reconnecting", as it always did, rather than guess.
+   */
+  init?(takeover kit: WireTakeoverKit, store: WatchStore, now: @escaping () -> Date = { Date() }) {
+    let phases = ["active_set", "rest_inter", "rest_transition", "paused"]
+    guard let steps = kit.steps, !steps.isEmpty, kit.cursor >= 0, kit.cursor < steps.count,
+          phases.contains(kit.phase) else { return nil }
+    if kit.phase == "paused" {
+      guard let from = kit.pausedFrom, from != "paused", phases.contains(from) else { return nil }
+    }
+    self.store = store
+    self.now = now
+    self.state = LocalSessionState(
+      recordId: UUID().uuidString,
+      planId: kit.rev,
+      workoutId: kit.workoutId,
+      workoutName: kit.workoutName,
+      startedAt: kit.startedAt,
+      phase: kit.phase,
+      pausedFrom: kit.phase == "paused" ? kit.pausedFrom : nil,
+      pausedRestRemainingS: kit.pausedRestRemainingS,
+      currentIndex: kit.cursor,
+      restEndsAt: kit.restEndsAt,
+      restTotalS: kit.restTotalS,
+      restInterS: kit.restInterS,
+      restTransitionS: kit.restTransitionS,
+      steps: steps,
+      sets: kit.sets,
+      items: kit.items,
+      holdEndsAt: kit.holdEndsAt,
+      pausedHoldRemainingS: nil,
+      restStartedAt: kit.restStartedAt,
+      // A pause carried over began when the PHONE paused — the rest's start moves on from there.
+      pausedAt: kit.phase == "paused" ? (kit.pausedAt ?? WatchWire.iso(now())) : nil,
+      pendingRestS: kit.pendingRestS,
+      takeoverOf: kit.sessionId,
+      splitAt: kit.sets.count + (kit.items?.count ?? 0)
+    )
   }
 
   /// Persist + render the current state, catching up any wall-clock rest that
   /// elapsed while the app was dead. Call once after construction.
   func activate() {
-    if isResting(state.phase), let end = WatchWire.parseDate(state.restEndsAt), end <= Date() {
-      advancePastRest() // the rest finished while we were gone
+    if isResting(state.phase), let end = WatchWire.parseDate(state.restEndsAt), end <= now() {
+      advancePastRest(byClock: true) // the rest finished while we were gone
       return
     }
     persist()
@@ -128,7 +200,8 @@ final class LocalWorkoutEngine {
         // What she carried is on the PLAN, and the phone's own record of a hold does not repeat it
         // (`itemResultOf`) — so neither does this one: one record, whichever device wrote it.
         load: nil,
-        completedAt: WatchWire.iso(Date())
+        completedAt: WatchWire.iso(now()),
+        restBeforeS: state.pendingRestS
       ))
       state.items = items
       state.holdEndsAt = nil
@@ -141,13 +214,18 @@ final class LocalWorkoutEngine {
         recommendedReps: step.targetReps,
         actualWeight: weight,
         actualReps: reps,
-        completedAt: WatchWire.iso(Date()),
-        isWarmup: step.isBridge ? true : nil
+        completedAt: WatchWire.iso(now()),
+        isWarmup: step.isBridge ? true : nil,
+        // A bridge has no place in the coach's day (`insertWarmup` gives it none); a set has its own.
+        at: step.isBridge ? nil : step.at,
+        restBeforeS: state.pendingRestS
       ))
       // A bridge's half weight is the road TO her number, never a number to carry onto it — the
       // phone's line exactly (`completeSet`: "its weight must not carry onto the working sets").
       if !step.isBridge { carryForward(from: state.currentIndex, weight: weight) }
     }
+    // One rest belongs to exactly one step — spent here, as the phone spends its own.
+    state.pendingRestS = nil
     let isLast = state.currentIndex >= state.steps.count - 1
     if isLast {
       finish(early: false)
@@ -162,7 +240,7 @@ final class LocalWorkoutEngine {
     // under (`afterSetCompletion`), and the step now says how long its rest is. A plan from an older
     // phone says nothing (`nil`), and rests as it always did.
     if let said = step.restAfterS, said <= REST_SKIP_THRESHOLD_S {
-      advancePastRest()
+      advancePastRest(byClock: false)
       return
     }
     beginRest(transition: transition)
@@ -175,7 +253,7 @@ final class LocalWorkoutEngine {
     guard !finished, state.phase == "active_set", state.holdEndsAt == nil else { return }
     let step = state.steps[state.currentIndex]
     guard let seconds = step.holdSeconds, seconds > 0 else { return } // a carry has no clock
-    state.holdEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(seconds)))
+    state.holdEndsAt = WatchWire.iso(now().addingTimeInterval(TimeInterval(seconds)))
     persist()
     emit()
   }
@@ -228,7 +306,7 @@ final class LocalWorkoutEngine {
   /// "Ready" — end the running rest now.
   func endRest() {
     guard !finished, isResting(state.phase) else { return }
-    advancePastRest()
+    advancePastRest(byClock: false)
   }
 
   /// "+15 sec" — extend the running rest. The END moves out; `restTotalS` does NOT (founder
@@ -250,13 +328,14 @@ final class LocalWorkoutEngine {
     cancelRestAdvance()
     state.pausedFrom = state.phase
     if isResting(state.phase), let end = WatchWire.parseDate(state.restEndsAt) {
-      state.pausedRestRemainingS = max(0, Int(end.timeIntervalSince(Date()).rounded()))
+      state.pausedRestRemainingS = max(0, Int(end.timeIntervalSince(now()).rounded()))
     }
     // A hold in flight freezes too: what remained of it comes back when she resumes.
     if let end = WatchWire.parseDate(state.holdEndsAt) {
-      state.pausedHoldRemainingS = max(0, Int(end.timeIntervalSince(Date()).rounded()))
+      state.pausedHoldRemainingS = max(0, Int(end.timeIntervalSince(now()).rounded()))
       state.holdEndsAt = nil
     }
+    state.pausedAt = WatchWire.iso(now())
     state.phase = "paused"
     state.restEndsAt = nil
     persist()
@@ -271,16 +350,24 @@ final class LocalWorkoutEngine {
     state.pausedFrom = nil
     if let left = state.pausedHoldRemainingS {
       state.pausedHoldRemainingS = nil
-      state.holdEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(left)))
+      state.holdEndsAt = WatchWire.iso(now().addingTimeInterval(TimeInterval(left)))
     }
+    // The rest's start moves on by exactly the time the workout stood still — the phone's
+    // `unfrozenRestAnchor` — so a pause is never counted as rest she took.
+    if let started = WatchWire.parseDate(state.restStartedAt), let paused = WatchWire.parseDate(state.pausedAt) {
+      state.restStartedAt = WatchWire.iso(started.addingTimeInterval(max(0, now().timeIntervalSince(paused))))
+    }
+    state.pausedAt = nil
     if isResting(from) {
       let remaining = state.pausedRestRemainingS ?? 0
       state.pausedRestRemainingS = nil
       if remaining <= 0 {
-        advancePastRest()
+        // Under the old clock the end would have come; the rest ran its length.
+        state.restEndsAt = WatchWire.iso(now())
+        advancePastRest(byClock: true)
         return
       }
-      state.restEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(remaining)))
+      state.restEndsAt = WatchWire.iso(now().addingTimeInterval(TimeInterval(remaining)))
       // restTotalS keeps the full prescribed length (the ring's denominator).
     }
     persist()
@@ -300,7 +387,14 @@ final class LocalWorkoutEngine {
   /// read `state.sets.isEmpty`, written while a set was the only thing the wrist could log. Since
   /// the wrist runs holds alone (2026-10-13), a session that opened on a plank had real work in it
   /// and `sets` still empty — so a phone that turned up live discarded it, plank and all.
-  var hasWork: Bool { !state.sets.isEmpty || !(state.items ?? []).isEmpty }
+  ///
+  /// ⚠️ ON THIS WRIST. A workout taken over from the phone (stage 3) starts with the phone's account
+  /// in it; none of that is this wrist's to protect — it is already on the phone. Only what was
+  /// logged past the split is work the wrist alone holds.
+  var hasWork: Bool { state.sets.count + (state.items?.count ?? 0) > (state.splitAt ?? 0) }
+
+  /// A workout this wrist took over from the phone (stage 3), rather than one it began itself.
+  var isTakeover: Bool { state.takeoverOf != nil }
 
   /// Tear the local session down WITHOUT recording anything. Only valid while nothing
   /// has been logged (asserted by the caller): the Begin fallback starts a local session
@@ -370,15 +464,29 @@ final class LocalWorkoutEngine {
     // a superset's rounds is neither "this lift's rest" nor "the walk", it is what the plan says.
     let restS = step?.restAfterS ?? (transition ? state.restTransitionS : (step?.restInterS ?? state.restInterS))
     state.phase = transition ? "rest_transition" : "rest_inter"
-    state.restEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(restS)))
+    state.restStartedAt = WatchWire.iso(now())
+    state.restEndsAt = WatchWire.iso(now().addingTimeInterval(TimeInterval(restS)))
     state.restTotalS = restS
     persist()
     scheduleRestAdvance()
     emit()
   }
 
-  private func advancePastRest() {
+  /**
+   * ⛔ THE REST SHE TOOK IS BANKED FOR THE SET THAT FOLLOWS IT (stage 5, 2026-10-17) — the phone's
+   * `endRest`, to the letter. Ended by her: from its start to now. Run out by itself (the timer, or
+   * caught up after the app was gone): its whole length, start to end — the phone's clock banks the
+   * same (`sessionClock`, `restS`). Under `REST_SAMPLE_FLOOR_S` it was a thumb, not her pace, and is
+   * not banked: unknown, never zero. No rest at all (straight on) banks nothing.
+   */
+  private func advancePastRest(byClock: Bool) {
     cancelRestAdvance()
+    if isResting(state.phase), let started = WatchWire.parseDate(state.restStartedAt) {
+      let until = byClock ? (WatchWire.parseDate(state.restEndsAt) ?? now()) : now()
+      let tookS = max(0, Int(until.timeIntervalSince(started).rounded()))
+      state.pendingRestS = tookS >= REST_SAMPLE_FLOOR_S ? tookS : nil
+    }
+    state.restStartedAt = nil
     state.currentIndex = min(state.currentIndex + 1, state.steps.count - 1)
     state.phase = "active_set"
     state.restEndsAt = nil
@@ -394,10 +502,10 @@ final class LocalWorkoutEngine {
   private func scheduleRestAdvance() {
     cancelRestAdvance()
     guard isResting(state.phase), let end = WatchWire.parseDate(state.restEndsAt) else { return }
-    let delay = max(0.05, end.timeIntervalSince(Date()))
+    let delay = max(0.05, end.timeIntervalSince(now()))
     let work = DispatchWorkItem { [weak self] in
       guard let self, !self.finished, self.isResting(self.state.phase) else { return }
-      self.advancePastRest()
+      self.advancePastRest(byClock: true)
     }
     restWork = work
     DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
@@ -425,11 +533,13 @@ final class LocalWorkoutEngine {
       workoutId: state.workoutId,
       workoutName: state.workoutName,
       startedAt: state.startedAt,
-      endedAt: WatchWire.iso(Date()),
+      endedAt: WatchWire.iso(now()),
       earlyFinish: early,
       kcal: measuredKcal,
       sets: state.sets,
-      items: state.items
+      items: state.items,
+      takeoverOf: state.takeoverOf,
+      splitAt: state.splitAt
     )
     // Durability order: the record enters the outbox BEFORE the active session is
     // cleared — a crash between the two re-offers a completed workout to the
@@ -498,8 +608,8 @@ final class LocalWorkoutEngine {
   }
 
   private func timeLabel(fromISO iso: String) -> String {
-    let started = WatchWire.parseDate(iso) ?? Date()
-    let s = max(0, Int(Date().timeIntervalSince(started).rounded()))
+    let started = WatchWire.parseDate(iso) ?? now()
+    let s = max(0, Int(now().timeIntervalSince(started).rounded()))
     return "\(s / 60):" + String(format: "%02d", s % 60)
   }
 
@@ -706,7 +816,7 @@ final class LocalWorkoutEngine {
     m.superset = next?.superset
     m.restEndsAt = state.restEndsAt
     if let end = WatchWire.parseDate(state.restEndsAt) {
-      m.restRemainingS = max(0, Int(end.timeIntervalSince(Date()).rounded()))
+      m.restRemainingS = max(0, Int(end.timeIntervalSince(now()).rounded()))
     }
     m.restTotalS = state.restTotalS
     m.nextExerciseName = next?.exerciseName

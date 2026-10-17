@@ -34,7 +34,7 @@ import type { Session, SetLog, SetTarget } from '@/data/local/models';
 import type { SessionMachine, SessionPhase } from '@/state/machines/sessionState';
 import type { Step } from '@/state/stores/sessionStore';
 import type { WatchLocalSession, WatchPlanStep, WatchRecordSet } from './protocol';
-import { watchItemToResult, watchSessionId } from './watchReconcile';
+import { canonicalItems, watchSessionId } from './watchReconcile';
 
 export interface AdoptedSession {
   /** The live session, ready for `db.saveActiveSession` and the store. */
@@ -53,6 +53,8 @@ export interface AdoptedSession {
   /** A hold running on the wrist at the handover: the instant its clock began, so the phone's one
    *  clock counts to the same end. Null when no hold was running. */
   holdStartedAtMs: number | null;
+  /** A rest she finished on the wrist with no set logged after it yet — the next set's `restBeforeS`. */
+  pendingRestS: number | null;
 }
 
 const isRestPhase = (p: SessionPhase | null | undefined) => p === 'REST_INTER' || !!p?.startsWith('REST_TRANSITION');
@@ -194,6 +196,7 @@ function setOf(s: WatchRecordSet): SetLog {
     edited: actualWeight !== recommendedWeight || s.actualReps !== recommendedReps,
     persistedAt: s.completedAt,
     ...(s.isWarmup ? { isApproach: true, isWarmup: true } : {}),
+    ...(s.restBeforeS != null ? { restBeforeS: s.restBeforeS } : {}),
   };
 }
 
@@ -247,15 +250,21 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
     restStartedAtMs = totalS != null ? endsAt - totalS * 1000 : nowMs;
   }
 
+  /* The canonical record, whole — every set at its place and every hold, in the order she did them
+     (stage 5): the phone goes on writing reps items for the sets it logs after the handover, and the
+     ones she logged on the wrist must already be there beside them. */
+  const items = canonicalItems(local.sets, local.items);
   const session: Session = {
-    id: watchSessionId(local.recordId),
+    /* A workout the wrist TOOK OVER from this phone continues under the phone's own session id
+       (stage 3), so the two accounts of it are one session — never a second one beside it. */
+    id: local.takeoverOf ?? watchSessionId(local.recordId),
     programDayId: local.workoutId,
     programDayName: local.workoutName,
     startedAt: local.startedAt,
     state: 'ACTIVE',
     earlyFinish: false,
     sets: local.sets.map(setOf),
-    ...(local.items && local.items.length > 0 ? { items: local.items.map(watchItemToResult) } : {}),
+    ...(items ? { items } : {}),
   };
 
   const machine: SessionMachine = {
@@ -277,8 +286,11 @@ export function adoptWatchSession(local: WatchLocalSession, nowMs: number): Adop
   const onStep = local.steps[local.currentIndex];
   const holdEnd = phase === 'SET_PRESENTED' && local.holdEndsAt && onStep?.holdSeconds ? Date.parse(local.holdEndsAt) : NaN;
   const holdStartedAtMs = Number.isFinite(holdEnd) ? holdEnd - (onStep.holdSeconds as number) * 1000 : null;
+  /* A rest she finished on the wrist and has not logged a set after: the phone banks it for that set,
+     exactly as its own `endRest` would have (stage 5). */
+  const pendingRestS = local.pendingRestS != null && local.pendingRestS >= 0 ? Math.round(local.pendingRestS) : null;
 
-  return { session, plan, machine, restStartedAtMs, restRemainingS, restEndsAtMs, pausedRestRemainingS, holdStartedAtMs };
+  return { session, plan, machine, restStartedAtMs, restRemainingS, restEndsAtMs, pausedRestRemainingS, holdStartedAtMs, pendingRestS };
 }
 
 /**

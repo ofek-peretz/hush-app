@@ -34,6 +34,14 @@ import {
 
 const SWIFT = readFileSync(join(__dirname, '../../targets/watch/WatchWire.swift'), 'utf8');
 
+/** A takeover kit with every key the phone can put in one (stage 3) — paused in a rest, a hold done. */
+const KIT = {
+  sessionId: 'sess_1', workoutId: 'd1', workoutName: 'Upper A', startedAt: '2026-07-12T10:00:00.000Z', rev: 'kit_1',
+  steps: [], cursor: 2, phase: 'paused', pausedFrom: 'rest_inter', restEndsAt: '2026-07-12T10:06:00.000Z', restTotalS: 120,
+  pausedRestRemainingS: 40, holdEndsAt: '2026-07-12T10:06:30.000Z', restStartedAt: '2026-07-12T10:04:00.000Z',
+  pausedAt: '2026-07-12T10:05:20.000Z', pendingRestS: 90, sets: [], items: [], restInterS: 90, restTransitionS: 120,
+};
+
 /** A phone run mid-kilometre-four — every field the wrist decodes, present. */
 const LIVE_RUN = {
   runId: '2026-09-15T07:00:00.000Z', gait: 'run' as const, paused: false, clockAnchorMs: 1_788_898_463_000,
@@ -421,16 +429,20 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       recommendedReps: 8, actualWeight: 20, actualReps: 9, completedAt: new Date(NOW).toISOString(),
       // A warm-up bridge she did on the wrist (2026-10-17): it comes home as the bridge it is.
       isWarmup: true,
+      // …where a set sat in the day and the rest before it (stage 5): the canonical record, whole.
+      at: { block: 1, round: 1, position: 1 }, restBeforeS: 92,
     };
     // A hold she finished on the wrist (stage 1b, 2026-10-13) — an ITEM, not a set of zero reps.
     const item: WatchRecordItem = {
       exerciseId: 'plank', block: 2, round: 1, position: 1, kind: 'time', seconds: 45, metres: 40, load: 24,
-      completedAt: new Date(NOW).toISOString(),
+      completedAt: new Date(NOW).toISOString(), restBeforeS: 60,
     };
     const record: WatchSessionRecord = {
       v: WATCH_PROTOCOL_VERSION, type: 'session_record', recordId: 'r1', planId: 'p1',
       workoutId: 'd1', workoutName: 'Upper A', startedAt: new Date(NOW).toISOString(),
       endedAt: new Date(NOW).toISOString(), earlyFinish: false, kcal: 412, sets: [set], items: [item],
+      // A workout the wrist TOOK OVER from the phone (stage 3): the phone's id, and where the two split.
+      takeoverOf: 'sess_1', splitAt: 4,
     };
     joined('WireRecordItem', keysOf(item));
     joined('WireRecordSet', keysOf(set));
@@ -461,7 +473,19 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
     const lobbyFrame = makeStateEnvelope(null, 8, NOW, null, null, watchCopyPack(), NOW);
     // The phone's live run rides beside the lobby (2026-09-15).
     const runFrame = makeStateEnvelope(null, 9, NOW, null, null, null, NOW, null, LIVE_RUN);
-    joined('WireEnvelope', keysOf(mirrorFrame, lobbyFrame, runFrame));
+    // A live frame carrying the takeover kit (stage 3, 2026-10-17).
+    const kitFrame = makeStateEnvelope(widestMirror(), 10, NOW, null, null, null, NOW, null, null, KIT);
+    joined('WireEnvelope', keysOf(mirrorFrame, lobbyFrame, runFrame, kitFrame));
+  });
+
+  it('WireTakeoverKit + WireKitRequest — what the wrist carries a workout on with when the phone goes silent', () => {
+    /*
+     * ⛔ THE MESSAGE A SILENT PHONE LEAVES BEHIND (stage 3). A field misspelled here is a kit the wrist
+     * cannot read, and a wrist that cannot read it is back to "reconnecting" over a workout it could
+     * have carried on — the build-79 experience, through its own cure.
+     */
+    joined('WireTakeoverKit', keysOf(KIT));
+    joined('WireKitRequest', keysOf({ v: WATCH_PROTOCOL_VERSION, type: 'kit_request', have: 'kit_1', sentAt: new Date(NOW).toISOString() }));
   });
 
   it('WireCardioLive — the phone’s run, drawn on the wrist', () => {
@@ -494,6 +518,8 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       // The holds she has finished, and the end of one whose clock is running (stage 1b).
       items: [],
       holdEndsAt: new Date(NOW + 30_000).toISOString(),
+      // A workout the wrist took over (stage 3), and a rest it banked for the next set (stage 5).
+      takeoverOf: 'sess_1', splitAt: 4, pendingRestS: 75,
       sentAt: new Date(NOW).toISOString(),
     };
     joined('WireLocalSession', keysOf(offer));

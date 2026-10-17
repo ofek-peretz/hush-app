@@ -65,6 +65,38 @@
     },
     "lobby": null,
     "plan": null,
+    "takeover": {
+      "sessionId": "sess_1800000000000",
+      "workoutId": "coach_0",
+      "workoutName": "Upper A",
+      "startedAt": "2027-01-15T08:00:00.000Z",
+      "rev": "kit_t246ki_6",
+      "cursor": 0,
+      "phase": "paused",
+      "pausedFrom": "rest_inter",
+      "restTotalS": 150,
+      "pausedRestRemainingS": 160,
+      "restStartedAt": "2027-01-15T08:00:00.000Z",
+      "pausedAt": "2027-01-15T08:00:20.000Z",
+      "sets": [
+        {
+          "exerciseId": "bb_bench_press",
+          "setIndex": 0,
+          "recommendedWeight": 60,
+          "recommendedReps": 8,
+          "actualWeight": 60,
+          "actualReps": 8,
+          "completedAt": "2027-01-15T08:00:00.000Z",
+          "at": {
+            "block": 1,
+            "round": 1,
+            "position": 1
+          }
+        }
+      ],
+      "restInterS": 90,
+      "restTransitionS": 90
+    },
     "authoritySeq": 5,
     "authorityEpoch": 1800000000000,
     "sentAt": "2027-01-15T08:00:20.000Z"

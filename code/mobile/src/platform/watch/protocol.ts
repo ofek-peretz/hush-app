@@ -156,6 +156,90 @@ export interface WatchStateEnvelope {
    * while it is set — and is omitted, not null, when there is none.
    */
   cardio?: WatchCardioLive | null;
+  /**
+   * ⛔ WHAT THE WRIST NEEDS TO CARRY ON IF THE PHONE GOES SILENT — see `WatchTakeoverKit`
+   * (2026-10-17, the wrist-alone plan, stage 3). Rides every LIVE mirror frame; never a lobby.
+   */
+  takeover?: WatchTakeoverKit;
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE TAKEOVER KIT — the phone's workout, in the shape the wrist's own engine runs.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * ⛔ THE GAP (the wrist-alone audit, 2026-10-13, gap 6 — and build 79's whole experience): a workout
+ * the PHONE runs could not survive the phone. Killed in a pocket, left in a locker, out of range —
+ * the wrist's Complete set asked a phone that did not answer, the honest viewer came up, and the set
+ * was logged nowhere. The wrist had an engine that runs a workout by itself, and nothing to run it
+ * with: everything it knew about the session was the frame on its glass.
+ *
+ * So every live frame now carries what that engine needs to take the workout over where it stands:
+ * the session's plan as the phone holds it NOW (her own weights carried, the bridges she asked for,
+ * the swap she made), what she has logged, and where she is. When a tap goes unanswered — or the
+ * phone stops answering for good — the wrist starts its engine from this, at this exact point, and
+ * she presses on. When the phone comes back, the wrist offers the workout back (the live handover)
+ * under the PHONE's own session id, and ONE rule decides whose account stands (`decideTakeover`).
+ *
+ * ── WHY THE STEPS DO NOT RIDE EVERY FRAME ───────────────────────────────────────────────────────
+ * The plan is the heavy part — ten kilobytes for a long day — and it changes a few times a workout
+ * (her weight carried, a swap, a warm-up), not on every frame. It is named by `rev`, a hash of its
+ * content, and sent when the rev is new, on a reconnect, whenever the phone cannot reach the wrist
+ * directly (then only the LAST frame arrives, and it must be whole), and when the wrist asks for it
+ * (`kit_request` — it holds an older rev). The rest is a few hundred bytes and rides every frame.
+ */
+export interface WatchTakeoverKit {
+  /** The phone's session id — what a continuation on the wrist comes home under. */
+  sessionId: string;
+  workoutId: string;
+  workoutName: string;
+  startedAt: string; // ISO
+  /** The plan's name (a hash of `steps`). The wrist keeps the steps it holds by it. */
+  rev: string;
+  /** The session's plan, step by step, exactly as the phone holds it — when the rev is new to the wrist. */
+  steps?: WatchPlanStep[];
+  /** Where she is: the step on stage (in the PLAN's own count, not the mirror's), in the wrist's words. */
+  cursor: number;
+  phase: 'active_set' | 'rest_inter' | 'rest_transition' | 'paused';
+  pausedFrom?: 'active_set' | 'rest_inter' | 'rest_transition' | null;
+  /** A running rest's absolute end; the length it was prescribed; a paused one's remainder. */
+  restEndsAt?: string | null;
+  restTotalS?: number | null;
+  pausedRestRemainingS?: number | null;
+  /** A running hold's absolute end. */
+  holdEndsAt?: string | null;
+  /** When the running rest began, moved on by any pause in it — so the rest she takes is measured
+   *  across the takeover as one rest (stage 5's `restBeforeS`). */
+  restStartedAt?: string | null;
+  /** When the phone paused, while it is paused — a rest's start moves on by the pause from here. */
+  pausedAt?: string | null;
+  /** A rest she has finished and not yet logged a set after — the next set's `restBeforeS`. */
+  pendingRestS?: number | null;
+  /** Everything she has logged, in order — the account a continuation extends. */
+  sets: WatchRecordSet[];
+  items?: WatchRecordItem[];
+  /** The fallbacks the wrist's engine is built with (every step says its own rest). */
+  restInterS: number;
+  restTransitionS: number;
+}
+
+/**
+ * The wrist holds an older plan than the frame names, and asks for the current one (2026-10-17).
+ * Not an intent — nothing about the session is proposed; the phone simply sends its next frame whole.
+ */
+export interface WatchKitRequest {
+  v: typeof WATCH_PROTOCOL_VERSION;
+  type: 'kit_request';
+  /** The rev the wrist holds, if any — telemetry only. */
+  have?: string | null;
+  sentAt: string;
+}
+
+export function parseKitRequest(raw: unknown): WatchKitRequest | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (r.v !== WATCH_PROTOCOL_VERSION || r.type !== 'kit_request' || typeof r.sentAt !== 'string') return null;
+  return { v: WATCH_PROTOCOL_VERSION, type: 'kit_request', have: typeof r.have === 'string' ? r.have : null, sentAt: r.sentAt };
 }
 
 /** The phone's live run, as the wrist draws it — see `WatchStateEnvelope.cardio`. */
@@ -193,6 +277,7 @@ export function makeStateEnvelope(
   authorityEpoch = 0,
   adoptedRecordId: string | null = null,
   cardio: WatchCardioLive | null = null,
+  takeover: WatchTakeoverKit | null = null,
 ): WatchStateEnvelope {
   return {
     v: WATCH_PROTOCOL_VERSION,
@@ -200,6 +285,8 @@ export function makeStateEnvelope(
     mirror,
     lobby,
     plan,
+    // Live frames only, and omitted rather than null — like every optional key here.
+    ...(takeover && mirror ? { takeover } : {}),
     // Omitted rather than sent as null when there is none, so an unchanged envelope stays
     // byte-identical for an older watch that has never seen the field.
     ...(copy ? { copy } : {}),
@@ -406,6 +493,20 @@ export interface WatchRecordSet {
   completedAt: string; // ISO
   /** A warm-up bridge (2026-10-17) — it comes home as the phone writes one: `isApproach` + `isWarmup`. */
   isWarmup?: boolean;
+  /**
+   * ⛔ WHERE THE SET SAT IN THE DAY, AND THE REST SHE TOOK BEFORE IT (2026-10-17, stage 5).
+   *
+   * On the phone a coach session's canonical record is `items` — every step, a set among them, at
+   * its block, round and position, each with the rest that preceded it — and `sets` is the
+   * strangler's second copy (`models.ts`). A workout the wrist ran came home as `sets` alone, and
+   * once a hold rode `items` (stage 1b) every reader that counts `items` counted only the holds:
+   * a day of four sets and two planks read as two steps done, and was not credited as trained.
+   * With its place, every set becomes the reps item the phone would have written; with its rest, her
+   * learned pace learns from a workout done with the phone in a locker, as from any other.
+   * Absent on a bridge (it has no place in the coach's day) and on a set with no rest before it.
+   */
+  at?: { block: number; round: number; position: number };
+  restBeforeS?: number;
 }
 
 /**
@@ -424,6 +525,8 @@ export interface WatchRecordItem {
   metres?: number;
   load?: number | null;
   completedAt: string; // ISO
+  /** The rest she took before it, as on a set (stage 5). Absent = unknown, never zero. */
+  restBeforeS?: number;
 }
 
 /** A workout the watch executed AS THE LOCAL AUTHORITY (phone absent). Durable on
@@ -448,6 +551,11 @@ export interface WatchSessionRecord {
   sets: WatchRecordSet[];
   /** The holds and carries of the workout, in the order she finished them. Absent = none. */
   items?: WatchRecordItem[];
+  /** A workout the wrist TOOK OVER from the phone (stage 3, 2026-10-17): the phone's session id —
+   *  the identity it comes home under, never `watch_<recordId>` — see `WatchTakeoverKit`. */
+  takeoverOf?: string;
+  /** …and how much of `sets` + `items` the phone had already logged when the wrist took over. */
+  splitAt?: number;
 }
 
 /**
@@ -546,6 +654,27 @@ export function parseCardioRecord(raw: unknown): WatchCardioRecord | null {
   };
 }
 
+/** A place in the coach's day (block, round, position — each a whole number from 1): absent, or whole. */
+function readablePlace(raw: unknown): boolean {
+  if (raw == null) return true;
+  if (typeof raw !== 'object') return false;
+  const p = raw as Record<string, unknown>;
+  const whole = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 1;
+  return whole(p.block) && whole(p.round) && whole(p.position);
+}
+
+/** A rest she took, in whole seconds: absent (unknown), or a number of them. Never negative. */
+function readableRest(raw: unknown): boolean {
+  return raw == null || (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0);
+}
+
+/** A takeover's two facts — the phone session it continues and where the accounts split: both or neither. */
+function readableTakeover(r: Record<string, unknown>): boolean {
+  if (r.takeoverOf == null && r.splitAt == null) return true;
+  if (typeof r.takeoverOf !== 'string' || r.takeoverOf.length === 0) return false;
+  return typeof r.splitAt === 'number' && Number.isInteger(r.splitAt) && r.splitAt >= 0;
+}
+
 /** The holds of a record or of a live offer: absent, or every one of them whole. */
 function readableItems(raw: unknown): boolean {
   if (raw == null) return true;
@@ -561,6 +690,7 @@ function readableItems(raw: unknown): boolean {
     if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return false;
     if (it.load != null && (typeof it.load !== 'number' || !Number.isFinite(it.load))) return false;
     if (typeof it.completedAt !== 'string' || Number.isNaN(Date.parse(it.completedAt))) return false;
+    if (!readableRest(it.restBeforeS)) return false;
   }
   return true;
 }
@@ -614,8 +744,10 @@ export function parseSessionRecord(raw: unknown): WatchSessionRecord | null {
     const set = s as Record<string, unknown>;
     if (typeof set.exerciseId !== 'string' || typeof set.setIndex !== 'number') return null;
     if (typeof set.actualReps !== 'number') return null;
+    if (!readablePlace(set.at) || !readableRest(set.restBeforeS)) return null;
   }
   if (!readableItems(r.items)) return null;
+  if (!readableTakeover(r)) return null;
   // `kcal` is the one field here the phone STORES as a measurement rather than re-deriving, so it
   // is the one field that must not ride the blanket cast below. Junk is dropped (the session falls
   // back to the estimate); it is never coerced, and never stamped as a measurement it is not.
@@ -1307,6 +1439,12 @@ export interface WatchLocalSession {
   /** A hold whose clock is running on the wrist ends at this instant — kept to the second across
    *  the handover, as a rest's end is. Absent when no hold is running. */
   holdEndsAt?: string | null;
+  /** The phone session this continues, when the wrist TOOK it over (stage 3) — see `WatchTakeoverKit`. */
+  takeoverOf?: string;
+  /** How much of `sets` + `items` the phone had logged at the takeover — the point the two accounts split. */
+  splitAt?: number;
+  /** A rest she has just finished and has not yet logged a set after — banked for that set (stage 5). */
+  pendingRestS?: number | null;
   sentAt: string; // ISO
 }
 
@@ -1383,8 +1521,10 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
       return null;
     }
     if (typeof set.completedAt !== 'string' || Number.isNaN(Date.parse(set.completedAt))) return null;
+    if (!readablePlace(set.at) || !readableRest(set.restBeforeS)) return null;
   }
   if (!readableItems(r.items)) return null;
+  if (!readableTakeover(r) || !readableRest(r.pendingRestS)) return null;
   if (r.holdEndsAt != null && (typeof r.holdEndsAt !== 'string' || Number.isNaN(Date.parse(r.holdEndsAt)))) return null;
   if (typeof r.sentAt !== 'string' || Number.isNaN(Date.parse(r.sentAt))) return null;
   return o as WatchLocalSession;

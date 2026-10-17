@@ -417,6 +417,20 @@ final class WatchModel: ObservableObject {
 
     let phoneLive = ["active_set", "rest_inter", "rest_transition", "paused"].contains(mirror?.phase ?? "")
 
+    /*
+     * ⛔ THE PHONE'S LAST WORD ON ITS WORKOUT, KEPT (stage 3, 2026-10-17 — `WireTakeoverKit`).
+     * Every live frame from this build's phone carries what this wrist needs to carry the workout on
+     * if the phone goes silent. Kept with the frame it came on, so the kit and the stage can never
+     * describe two different moments; a frame naming a plan this wrist does not hold asks for it. A
+     * live frame from a phone that sends no kit — or no live session at all — leaves nothing held:
+     * a takeover from a stale kit would carry on a workout from a moment that is gone.
+     */
+    if phoneLive, let kit = envelope.takeover {
+      if !store.saveTakeoverKit(kit) { askForKit(have: kit.rev) }
+    } else {
+      store.clearTakeoverKit()
+    }
+
     // A NEW live workout always wins a completion the athlete never dismissed (they walked away
     // from the wrist and started the next session on the phone) — the held frame is stale. The
     // same goes for a run/walk summary still sitting on the stage.
@@ -468,7 +482,12 @@ final class WatchModel: ObservableObject {
     // in it, or one finished plank (2026-10-17: this read `sets.isEmpty`, and a session that opened
     // on a hold had real work and no sets), is still the truth and still keeps authority, because
     // the alternative is throwing away work she performed.
-    if let engine = localEngine, phoneLive, !engine.hasWork {
+    //
+    // ⛔ AND A TAKEOVER THAT HAS DONE NOTHING YIELDS TO ANY WORD FROM THE PHONE (stage 3). It carries
+    // only the phone's own account; the phone speaking again — live, or with the workout finished, or
+    // back on its lobby — is the phone holding that account itself, and the wrist goes back to the
+    // phone's stage with nothing lost.
+    if let engine = localEngine, phoneLive || (engine.isTakeover && (envelope.lobby != nil || envelope.mirror?.phase == "complete")), !engine.hasWork {
       engine.discard()
       localEngine = nil
       localMirror = nil
@@ -497,7 +516,12 @@ final class WatchModel: ObservableObject {
       // and believes no session exists — so it is answered with the offer, throttled (the lobby is
       // republished on every Home focus) and idempotent (the phone answers `duplicate` freely).
       // ══════════════════════════════════════════════════════════════════════════════════════
-      if localEngine != nil, envelope.mirror == nil, Date().timeIntervalSince(lastLocalOfferAt) > 5 {
+      //
+      // ⛔ A TAKEOVER IS OFFERED BACK ON ANY FRAME (stage 3): the phone running the very workout this
+      // wrist took over from it is the phone it belongs to, and the one rule (`decideTakeover`) says
+      // whose account of the time apart stands. A standalone session still waits for the lobby — a
+      // phone running something else must not be asked to swap it.
+      if let engine = localEngine, envelope.mirror == nil || engine.isTakeover, Date().timeIntervalSince(lastLocalOfferAt) > 5 {
         lastLocalOfferAt = Date()
         offerLocalSession()
       }
@@ -535,7 +559,149 @@ final class WatchModel: ObservableObject {
     }
     syncRestHaptics(prev: prev, next: mirror)
     syncWorkoutRuntime(phase: mirror?.phase)
+    armSilenceWatch(mirror)
     recompute()
+  }
+
+  // MARK: Stage 3 — the wrist takes over when the phone goes silent (2026-10-17)
+
+  /**
+   * ⛔ THE PHONE WENT SILENT MID-WORKOUT — CARRY IT ON FROM EXACTLY HERE.
+   *
+   * Founder, 2026-10-13: *"אני רוצה שהאימון בשעון יהיה ברמה הגבוהה ביותר ושיהיה מסונכרן בצורה
+   * מושלמת עם הפלאפון."* Build 79 is what this was before: the phone killed in a pocket, a set
+   * pressed on the wrist that went nowhere, the honest viewer, and no way on but the phone.
+   *
+   * Three moments say the phone is gone, and each hands the workout to this wrist's own engine,
+   * started from the phone's last word (`WireTakeoverKit`) — its plan as it stood, what she has
+   * logged, where she is:
+   *   · a tap the phone did not answer (`propose`): the tap is then carried out here;
+   *   · the phone out of reach past the grace that a dropped connection is allowed (`setReachable`);
+   *   · a rest that ran out with no word from the phone (`armSilenceWatch`): it would have presented
+   *     the next set within a second; eight seconds of nothing is a phone that cannot.
+   * Nothing on the stage changes — the same frames, now from this wrist. When the phone answers
+   * again the workout is offered back under its own session id (`offerLocalSession`), and the one
+   * rule on the phone decides whose account stands.
+   *
+   * Nil — and the honest viewer, as before — when there is nothing to carry on from: no live phone
+   * session, a kit whose plan this wrist does not hold, or the wrist already running something.
+   */
+  @discardableResult
+  private func takeOver(_ why: String) -> LocalWorkoutEngine? {
+    guard localEngine == nil, cardioGait == nil, phoneCardio == nil, completeHold == nil else { return nil }
+    guard let m = mirror, ["active_set", "rest_inter", "rest_transition", "paused"].contains(m.phase) else { return nil }
+    guard let kit = store.loadTakeoverKit(), let engine = LocalWorkoutEngine(takeover: kit, store: store) else { return nil }
+    silenceWatch?.cancel()
+    silenceWatch = nil
+    graceWork?.cancel()
+    graceWork = nil
+    stageReturn?.cancel()
+    stageReturn = nil
+    connection = .connected
+    lastTakeover = why
+    adoptLocal(engine)
+    engine.activate()
+    return engine
+  }
+
+  /// Why the last takeover happened — kept for the record of this process, read by nothing yet.
+  private(set) var lastTakeover: String?
+
+  /// The rest on the phone's stage ran out with no frame since — see `takeOver`.
+  private var silenceWatch: DispatchWorkItem?
+  private static let silenceAfterRestS: TimeInterval = 8
+
+  private func armSilenceWatch(_ m: WireMirror?) {
+    silenceWatch?.cancel()
+    silenceWatch = nil
+    guard localEngine == nil, let m, m.phase == "rest_inter" || m.phase == "rest_transition",
+          let end = WatchWire.parseDate(m.restEndsAt) else { return }
+    let seq = highestSeq
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.silenceWatch = nil
+      // Still the same frame, still the same rest: nothing has come from the phone since it ran out.
+      guard self.highestSeq == seq, self.localEngine == nil, self.mirror?.phase == m.phase,
+            self.mirror?.globalIndex == m.globalIndex else { return }
+      self.takeOver("rest_ran_out")
+    }
+    silenceWatch = work
+    let delay = max(0, end.timeIntervalSinceNow) + WatchModel.silenceAfterRestS
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+  }
+
+  /// This wrist holds an older plan than the frame names — ask for it whole (throttled).
+  private var lastKitAsk = Date.distantPast
+  private func askForKit(have: String?) {
+    guard Date().timeIntervalSince(lastKitAsk) > 10 else { return }
+    lastKitAsk = Date()
+    let ask = WireKitRequest(v: WATCH_PROTOCOL_VERSION, type: "kit_request", have: have, sentAt: WatchWire.iso(Date()))
+    if let json = WatchWire.encodeKitRequest(ask) { manager.send(intentJSON: json) }
+  }
+
+  /**
+   * A proposal to the phone that knows what to do if the phone does not answer.
+   *
+   * Sent asking for a reply (W3: an answer, not an address — `sendExpectingReply`). Heard: the phone
+   * carries it out and its next frame shows it. Not heard — refused delivery, `listening: false` from
+   * a phone still waking, or no word within `replyDeadlineS` — the wrist takes the workout over and
+   * carries the tap out itself (`local`). With nothing to take over from, the honest viewer.
+   *
+   * ⚠️ A LATE "HEARD" AFTER A TAKEOVER IS NOT A CONFLICT. The phone then did the same thing the wrist
+   * did; when its frames arrive the takeover is offered back and the one rule keeps the longer
+   * account, which already holds that tap (a set logged on both sides is one set, not two).
+   */
+  private static let replyDeadlineS: TimeInterval = 4
+  private func propose(
+    _ type: String,
+    expectedIndex: Int? = nil,
+    actualReps: Int? = nil,
+    actualWeight: Double? = nil,
+    seconds: Int? = nil,
+    heard: @escaping () -> Void = {},
+    local: @escaping (LocalWorkoutEngine) -> Void
+  ) {
+    let intent = WireIntent(
+      v: WATCH_PROTOCOL_VERSION,
+      type: type,
+      intentId: UUID().uuidString,
+      issuedAt: ISO8601DateFormatter().string(from: Date()),
+      expectedGlobalIndex: expectedIndex,
+      actualReps: actualReps,
+      actualWeight: actualWeight,
+      workoutId: nil,
+      exerciseId: nil,
+      seconds: seconds,
+      severity: nil,
+      area: nil,
+      issuedAtMs: WatchModel.nowMs(),
+      rx: syncRx.isEmpty ? nil : syncRx,
+      hx: syncHx.isEmpty ? nil : syncHx
+    )
+    guard let json = WatchWire.encodeIntent(intent) else { return }
+    var answered = false
+    let silent: () -> Void = { [weak self] in
+      guard let self else { return }
+      if let engine = self.takeOver(type) { local(engine) } else { self.intentDidNotLeave() }
+    }
+    let deadline = DispatchWorkItem {
+      guard !answered else { return }
+      answered = true
+      silent()
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + WatchModel.replyDeadlineS, execute: deadline)
+    manager.sendExpectingReply(intentJSON: json) { [weak self] ok in
+      guard let self, !answered else { return }
+      answered = true
+      deadline.cancel()
+      if ok {
+        self.syncRx.removeAll()
+        self.syncHx.removeAll()
+        heard()
+      } else {
+        silent()
+      }
+    }
   }
 
   /// Drive the OS workout runtime from the authoritative phase: live phases hold an
@@ -697,6 +863,9 @@ final class WatchModel: ObservableObject {
       sets: s.sets,
       items: s.items,
       holdEndsAt: s.holdEndsAt,
+      takeoverOf: s.takeoverOf,
+      splitAt: s.splitAt,
+      pendingRestS: s.pendingRestS,
       sentAt: WatchWire.iso(Date())
     )
     if let json = WatchWire.encodeLocalSession(offer) { manager.send(intentJSON: json) }
@@ -745,6 +914,8 @@ final class WatchModel: ObservableObject {
     let work = DispatchWorkItem { [weak self] in
       guard let self else { return }
       self.graceWork = nil
+      // A workout the phone was running carries on HERE (stage 3) — the viewer only when it cannot.
+      if self.takeOver("unreachable") != nil { return }
       self.connection = .reconnecting
       self.recompute()
     }
@@ -935,34 +1106,36 @@ final class WatchModel: ObservableObject {
      *
      * ⚠️ THE DRAFT IS KEPT on failure, deliberately. Clearing it would throw away the weight and
      * reps she just dialled in, and she will have to send exactly those again.
+     *
+     * ⛔ AND "NOT HEARD" NO LONGER MEANS "NOT LOGGED" (stage 3, 2026-10-17). With the phone's last
+     * word on the workout in hand, this wrist takes the workout over and logs the set itself; the
+     * honest viewer is left for the one case with nothing to carry on from.
      */
     let edited = editDraft != nil
-    let intent = WireIntent(
-      v: WATCH_PROTOCOL_VERSION,
-      type: "complete_set",
-      intentId: UUID().uuidString,
-      issuedAt: ISO8601DateFormatter().string(from: Date()),
-      expectedGlobalIndex: m.globalIndex,
+    propose(
+      "complete_set",
+      expectedIndex: m.globalIndex,
       actualReps: edited ? reps : nil,
       actualWeight: edited ? weight : nil,
-      workoutId: nil,
-      exerciseId: nil,
-      seconds: nil,
-      severity: nil,
-      area: nil
-    )
-    guard let json = WatchWire.encodeIntent(intent) else { return }
-    manager.sendExpectingReply(intentJSON: json) { [weak self] heard in
-      guard let self else { return }
-      guard heard else {
-        self.intentDidNotLeave()
-        return
+      heard: { [weak self] in
+        guard let self else { return }
+        self.editDraft = nil
+        self.setConfirm = confirm
+        self.recompute()
+        self.scheduleSetConfirmClear()
+      },
+      local: { [weak self] engine in
+        // ⛔ THE PRESS IS HONOURED (stage 3): the set she just did is logged on this wrist, with the
+        // figures she dialled, exactly as the phone would have logged it.
+        guard let self else { return }
+        engine.completeSet(weight: weight, reps: reps)
+        self.editDraft = nil
+        guard self.localMirror?.phase != "complete" else { return }
+        self.setConfirm = confirm
+        self.recompute()
+        self.scheduleSetConfirmClear()
       }
-      self.editDraft = nil
-      self.setConfirm = confirm
-      self.recompute()
-      self.scheduleSetConfirmClear()
-    }
+    )
   }
 
   /* ⛔ EVERY PROPOSAL SAYS SO WHEN IT DOES NOT LEAVE — see `completeSet()` and
@@ -970,7 +1143,7 @@ final class WatchModel: ObservableObject {
      ask the phone to change something. An unreachable phone means the tap did nothing at all, and
      the wrist has to show that rather than sit on a live-looking stage for twelve seconds. */
   func ready() {
-    if let engine = localEngine { engine.endRest() } else if !sendIntent(type: "end_rest") { intentDidNotLeave() }
+    if let engine = localEngine { engine.endRest() } else { propose("end_rest") { $0.endRest() } }
   }
 
   /// ⛔ "מוכן" on the wrist (2026-09-28): the voice's loading dialogue is open and the set — or the
@@ -984,7 +1157,7 @@ final class WatchModel: ObservableObject {
       return
     }
     guard let m = effectiveMirror else { return }
-    if !sendIntent(type: "set_ready", expectedIndex: m.globalIndex) { intentDidNotLeave() }
+    propose("set_ready", expectedIndex: m.globalIndex) { $0.startHold() }
   }
 
   /// "+ Warm-up" (2026-10-17, stage 2) — the bridges on offer before the set on stage go in. Alone,
@@ -998,27 +1171,29 @@ final class WatchModel: ObservableObject {
       return
     }
     guard let m = effectiveMirror, (m.warmupOffered ?? 0) > 0 else { return }
-    if !sendIntent(type: "add_warmup", expectedIndex: m.globalIndex) { intentDidNotLeave() }
+    propose("add_warmup", expectedIndex: m.globalIndex) { $0.addWarmup() }
   }
 
   func addRest() {
     if let engine = localEngine {
       engine.addRest(seconds: 15)
-    } else if !sendIntent(type: "add_rest", seconds: 15) {
-      intentDidNotLeave()
+    } else {
+      propose("add_rest", seconds: 15) { $0.addRest(seconds: 15) }
     }
   }
 
   func pause() {
-    if let engine = localEngine { engine.pause() } else if !sendIntent(type: "pause") { intentDidNotLeave() }
+    if let engine = localEngine { engine.pause() } else { propose("pause") { $0.pause() } }
   }
 
   func resume() {
-    if let engine = localEngine { engine.resume() } else if !sendIntent(type: "resume") { intentDidNotLeave() }
+    if let engine = localEngine { engine.resume() } else { propose("resume") { $0.resume() } }
   }
 
+  /// Ending the workout from the wrist: the phone ends it — or, silent, this wrist does, and the
+  /// record of it (her sets on both devices, under the phone's session id) goes home (stage 3).
   func endWorkout() {
-    if let engine = localEngine { engine.finishEarly() } else { sendIntent(type: "finish_early") }
+    if let engine = localEngine { engine.finishEarly() } else { propose("finish_early") { $0.finishEarly() } }
   }
 
   /// The athlete flagged a body area that hurts (WT14). It is a REPORT, not a session action: it

@@ -2,6 +2,7 @@
  "name": "her-own-weight",
  "says": "she lifts lighter than written on the first set — the phone carries her weight to the sets that follow",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

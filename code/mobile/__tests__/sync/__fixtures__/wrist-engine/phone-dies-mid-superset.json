@@ -1,0 +1,834 @@
+{
+ "name": "phone-dies-mid-superset",
+ "says": "the phone goes silent with the couple half done — the wrist goes straight on to the partner, then rests the round",
+ "agrees": true,
+ "t0": 1800000000000,
+ "workoutId": "w_today",
+ "plan": {
+  "schema": 1,
+  "planId": "plan_1ut7hyg",
+  "generatedAt": "2027-01-15T08:00:00.000Z",
+  "restInterS": 90,
+  "restTransitionS": 120,
+  "workouts": [
+   {
+    "id": "w_today",
+    "name": "Arms",
+    "muscles": "",
+    "steps": [
+     {
+      "exerciseId": "bb_bench_press",
+      "exerciseName": "Barbell Bench Press",
+      "exerciseGroup": "Chest",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 1,
+      "globalIndex": 0,
+      "targetWeight": 60,
+      "targetReps": 8,
+      "targetRepsHi": 10,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 20,
+       "plates": [
+        20
+       ],
+       "barKg": 20
+      },
+      "ramp": [
+       {
+        "weightKg": 30,
+        "reps": 5,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 5,
+         "plates": [
+          5
+         ],
+         "barKg": 20
+        }
+       },
+       {
+        "weightKg": 45,
+        "reps": 3,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 12.5,
+         "plates": [
+          10,
+          2.5
+         ],
+         "barKg": 20
+        }
+       }
+      ],
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_curl",
+      "exerciseName": "Dumbbell Curl",
+      "exerciseGroup": "Biceps",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 1,
+      "targetWeight": 12,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 12
+      },
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 1,
+       "rounds": 2,
+       "position": 1,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "rope_pushdown",
+      "exerciseName": "Rope Pushdown",
+      "exerciseGroup": "Triceps",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 2,
+      "targetWeight": 25,
+      "targetReps": 10,
+      "targetRepsHi": 15,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "cable",
+       "pin": 25
+      },
+      "restAfterS": 120,
+      "superset": {
+       "round": 1,
+       "rounds": 2,
+       "position": 2,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 2
+      }
+     },
+     {
+      "exerciseId": "db_curl",
+      "exerciseName": "Dumbbell Curl",
+      "exerciseGroup": "Biceps",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 3,
+      "targetWeight": 12,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 12
+      },
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 2,
+       "rounds": 2,
+       "position": 1,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "rope_pushdown",
+      "exerciseName": "Rope Pushdown",
+      "exerciseGroup": "Triceps",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 4,
+      "targetWeight": 25,
+      "targetReps": 10,
+      "targetRepsHi": 15,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "cable",
+       "pin": 25
+      },
+      "restAfterS": 120,
+      "superset": {
+       "round": 2,
+       "rounds": 2,
+       "position": 2,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 2
+      }
+     }
+    ],
+    "seat": 0
+   }
+  ]
+ },
+ "start": {
+  "phase": "active_set",
+  "exerciseName": "Barbell Bench Press",
+  "setNumber": 1,
+  "setsInExercise": 1,
+  "globalIndex": 0,
+  "totalSets": 5,
+  "targetWeight": 60,
+  "targetReps": 8,
+  "targetRepsHi": 10,
+  "restTotalS": null,
+  "nextExerciseName": null,
+  "nextSetNumber": null,
+  "nextSetsInExercise": null,
+  "nextTargetWeight": null,
+  "nextTargetReps": null,
+  "completedExerciseName": null,
+  "liftIndex": 1,
+  "liftCount": 3,
+  "superset": null,
+  "setsSoFar": [],
+  "loadsSoFar": [],
+  "liveSets": 0,
+  "liveVolumeKg": 0,
+  "holdSeconds": null,
+  "holdMetres": null,
+  "nextHoldSeconds": null,
+  "nextHoldMetres": null,
+  "warmupOffered": 2,
+  "isWarmup": false
+ },
+ "steps": [
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 1,
+    "setsInExercise": 1,
+    "globalIndex": 0,
+    "totalSets": 5,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 120,
+    "nextExerciseName": "Dumbbell Curl",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 12,
+    "nextTargetReps": 8,
+    "completedExerciseName": "Barbell Bench Press",
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": {
+     "round": 1,
+     "rounds": 2,
+     "position": 1,
+     "count": 2
+    },
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     60
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Dumbbell Curl",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 5,
+    "targetWeight": 12,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": {
+     "round": 1,
+     "rounds": 2,
+     "position": 1,
+     "count": 2
+    },
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Rope Pushdown",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 5,
+    "targetWeight": 25,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": {
+     "round": 1,
+     "rounds": 2,
+     "position": 2,
+     "count": 2
+    },
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 576,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "phoneDies",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Rope Pushdown",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 5,
+    "targetWeight": 25,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": {
+     "round": 1,
+     "rounds": 2,
+     "position": 2,
+     "count": 2
+    },
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 2,
+    "liveVolumeKg": 576,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Rope Pushdown",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 5,
+    "targetWeight": 25,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": 120,
+    "nextExerciseName": "Dumbbell Curl",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 12,
+    "nextTargetReps": 8,
+    "completedExerciseName": "Rope Pushdown",
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": {
+     "round": 2,
+     "rounds": 2,
+     "position": 1,
+     "count": 2
+    },
+    "setsSoFar": [
+     10
+    ],
+    "loadsSoFar": [
+     25
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 826,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "wait",
+   "s": 30,
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Rope Pushdown",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 2,
+    "totalSets": 5,
+    "targetWeight": 25,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": 120,
+    "nextExerciseName": "Dumbbell Curl",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 12,
+    "nextTargetReps": 8,
+    "completedExerciseName": "Rope Pushdown",
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": {
+     "round": 2,
+     "rounds": 2,
+     "position": 1,
+     "count": 2
+    },
+    "setsSoFar": [
+     10
+    ],
+    "loadsSoFar": [
+     25
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 826,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Dumbbell Curl",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 3,
+    "totalSets": 5,
+    "targetWeight": 12,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": {
+     "round": 2,
+     "rounds": 2,
+     "position": 1,
+     "count": 2
+    },
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     12
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 826,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Rope Pushdown",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 4,
+    "totalSets": 5,
+    "targetWeight": 25,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": {
+     "round": 2,
+     "rounds": 2,
+     "position": 2,
+     "count": 2
+    },
+    "setsSoFar": [
+     10
+    ],
+    "loadsSoFar": [
+     25
+    ],
+    "liveSets": 4,
+    "liveVolumeKg": 922,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "complete",
+    "summarySets": 5,
+    "summaryVolumeKg": 1172,
+    "summaryLifts": [
+     "Barbell Bench Press 60 × 8",
+     "Dumbbell Curl 12 × 8",
+     "Rope Pushdown 25 × 10"
+    ]
+   }
+  }
+ ],
+ "logged": [
+  {
+   "exerciseId": "bb_bench_press",
+   "setIndex": 0,
+   "weight": 60,
+   "reps": 8
+  },
+  {
+   "exerciseId": "db_curl",
+   "setIndex": 0,
+   "weight": 12,
+   "reps": 8
+  },
+  {
+   "exerciseId": "rope_pushdown",
+   "setIndex": 0,
+   "weight": 25,
+   "reps": 10
+  },
+  {
+   "exerciseId": "db_curl",
+   "setIndex": 1,
+   "weight": 12,
+   "reps": 8,
+   "restBeforeS": 32
+  },
+  {
+   "exerciseId": "rope_pushdown",
+   "setIndex": 1,
+   "weight": 25,
+   "reps": 10
+  }
+ ],
+ "held": [],
+ "takeover": {
+  "nowMs": 1800000004000,
+  "kits": [
+   {
+    "sessionId": "sess_1800000000000",
+    "workoutId": "w_today",
+    "workoutName": "Arms",
+    "startedAt": "2027-01-15T08:00:00.000Z",
+    "rev": "kit_3jquvt_5",
+    "steps": [
+     {
+      "exerciseId": "bb_bench_press",
+      "exerciseName": "Barbell Bench Press",
+      "exerciseGroup": "Chest",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 1,
+      "globalIndex": 0,
+      "targetWeight": 60,
+      "targetReps": 8,
+      "targetRepsHi": 10,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 20,
+       "plates": [
+        20
+       ],
+       "barKg": 20
+      },
+      "restInterS": 120,
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      },
+      "ramp": [
+       {
+        "weightKg": 30,
+        "reps": 5,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 5,
+         "plates": [
+          5
+         ],
+         "barKg": 20
+        }
+       },
+       {
+        "weightKg": 45,
+        "reps": 3,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 12.5,
+         "plates": [
+          10,
+          2.5
+         ],
+         "barKg": 20
+        }
+       }
+      ]
+     },
+     {
+      "exerciseId": "db_curl",
+      "exerciseName": "Dumbbell Curl",
+      "exerciseGroup": "Biceps",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 1,
+      "targetWeight": 12,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 12
+      },
+      "restInterS": 0,
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 1,
+       "rounds": 2,
+       "position": 1,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "rope_pushdown",
+      "exerciseName": "Rope Pushdown",
+      "exerciseGroup": "Triceps",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 2,
+      "targetWeight": 25,
+      "targetReps": 10,
+      "targetRepsHi": 15,
+      "loadSetup": {
+       "style": "cable",
+       "pin": 25
+      },
+      "restInterS": 120,
+      "restAfterS": 120,
+      "superset": {
+       "round": 1,
+       "rounds": 2,
+       "position": 2,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 2
+      }
+     },
+     {
+      "exerciseId": "db_curl",
+      "exerciseName": "Dumbbell Curl",
+      "exerciseGroup": "Biceps",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 3,
+      "targetWeight": 12,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 12
+      },
+      "restInterS": 0,
+      "restAfterS": 0,
+      "restWritten": true,
+      "superset": {
+       "round": 2,
+       "rounds": 2,
+       "position": 1,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "rope_pushdown",
+      "exerciseName": "Rope Pushdown",
+      "exerciseGroup": "Triceps",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 4,
+      "targetWeight": 25,
+      "targetReps": 10,
+      "targetRepsHi": 15,
+      "loadSetup": {
+       "style": "cable",
+       "pin": 25
+      },
+      "restInterS": 120,
+      "restAfterS": 120,
+      "superset": {
+       "round": 2,
+       "rounds": 2,
+       "position": 2,
+       "count": 2
+      },
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 2
+      }
+     }
+    ],
+    "cursor": 0,
+    "phase": "active_set",
+    "sets": [],
+    "restInterS": 90,
+    "restTransitionS": 90
+   },
+   {
+    "sessionId": "sess_1800000000000",
+    "workoutId": "w_today",
+    "workoutName": "Arms",
+    "startedAt": "2027-01-15T08:00:00.000Z",
+    "rev": "kit_3jquvt_5",
+    "cursor": 2,
+    "phase": "active_set",
+    "sets": [
+     {
+      "exerciseId": "bb_bench_press",
+      "setIndex": 0,
+      "recommendedWeight": 60,
+      "recommendedReps": 8,
+      "actualWeight": 60,
+      "actualReps": 8,
+      "completedAt": "2027-01-15T08:00:01.000Z",
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_curl",
+      "setIndex": 0,
+      "recommendedWeight": 12,
+      "recommendedReps": 8,
+      "actualWeight": 12,
+      "actualReps": 8,
+      "completedAt": "2027-01-15T08:00:03.000Z",
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
+     }
+    ],
+    "restInterS": 90,
+    "restTransitionS": 90
+   }
+  ]
+ }
+}

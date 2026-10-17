@@ -45,6 +45,7 @@ import { useSession } from '@/state/stores/sessionStore';
 // the whole React session module in behind it (2026-09-09).
 import { REST_INTER_S, restInterSecondsFor, restIsLearnedFor, restTransitionSeconds, refreshLearnedRests } from '@/domain/restPrescription';
 import { buildCoachWatchPlan, watchPlanToPublish } from '@/platform/watch/watchPlan';
+import { onWatchRecordApplied } from '@/platform/watch/watchPlanRefresh';
 import type { WatchPlanSnapshot } from '@/platform/watch/protocol';
 import { flush as flushTelemetry, track } from '@/platform/telemetry';
 import { nextWorkout, sessionDayName, displayWeight, unitLabel } from '@/domain/schedule';
@@ -615,8 +616,17 @@ export function Home({ navigation, route }: Props) {
    * open after the Saturday roll — the one open where being right matters most.
    */
   const [engineTick, setEngineTick] = useState(0);
+  /*
+   * ⛔ A WORKOUT CAME HOME FROM THE WRIST — the plan is rebuilt for it whether or not Today is in front
+   * of her (stage 5, 2026-10-17 — `watchPlanRefresh`). Otherwise a record answered while she was on
+   * another tab left her wrist on the old week until she next opened Today.
+   */
+  const [wristTick, setWristTick] = useState(0);
+  const wristTickBuilt = useRef(0);
+  useEffect(() => onWatchRecordApplied(() => setWristTick((n) => n + 1)), []);
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused && wristTick === wristTickBuilt.current) return;
+    wristTickBuilt.current = wristTick;
     let cancelled = false;
 
     /*
@@ -676,7 +686,7 @@ export function Home({ navigation, route }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFocused, coachPlan, coachWorkouts, doneCoachIds, weekLoaded]);
+  }, [isFocused, coachPlan, coachWorkouts, doneCoachIds, weekLoaded, wristTick]);
 
   /**
    * THE BRIEFING — Hush's own sentence about what it did to this week's plan (domain/weekBriefing).

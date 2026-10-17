@@ -2,6 +2,7 @@
  "name": "her-own-reps",
  "says": "she logs her own reps inside the band — the load is untouched",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

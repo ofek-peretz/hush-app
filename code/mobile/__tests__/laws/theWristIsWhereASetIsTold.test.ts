@@ -250,8 +250,9 @@ describe('4 · a hold ends on the wrist', () => {
     // A timed hold with no end yet: not a carry (metres), not a set.
     expect(set).toContain('private var holdWaits: Bool { mirror.holdSeconds != nil && mirror.holdEndsAt == nil }');
     expect(set).toContain('if !editing && (mirror.awaitingReady == true || holdWaits) {');
-    // Ready is the same proposal either way, and the phone starts any set still on stage with it.
-    expect(model).toContain('if !sendIntent(type: "set_ready", expectedIndex: m.globalIndex) { intentDidNotLeave() }');
+    // Ready is the same proposal either way, and the phone starts any set still on stage with it — and
+    // since stage 3 (2026-10-17) a phone that does not answer leaves the wrist to start the hold itself.
+    expect(model).toContain('propose("set_ready", expectedIndex: m.globalIndex) { $0.startHold() }');
     const store = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'state', 'stores', 'sessionStore.tsx'), 'utf8');
     expect(flat(store)).toContain("watchReadyRef.current = afterClock((v) => { if (v.displayPhase === 'SET_PRESENTED') v.markSetStarted(); });");
   });

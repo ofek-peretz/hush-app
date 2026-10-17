@@ -2,6 +2,7 @@
  "name": "out-of-the-band",
  "says": "her reps fall far under the band — and the load does NOT move, on either device",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,

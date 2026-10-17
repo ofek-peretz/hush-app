@@ -26,6 +26,7 @@ import { syncTrace, traceWristReport } from '@/platform/syncTrace';
 import {
   decideWatchIntent,
   makeStateEnvelope,
+  parseKitRequest,
   parseWatchLocalSession,
   repairWireStrings,
   type WatchCardioLive,
@@ -33,6 +34,7 @@ import {
   type WatchLobby,
   type WatchPlanSnapshot,
   type WatchStateEnvelope,
+  type WatchTakeoverKit,
 } from './protocol';
 
 /**
@@ -143,7 +145,7 @@ export interface WatchSessionDeps {
    *
    * Optional in the type only so a harness may omit it; the app always supplies it.
    */
-  adoptLocalSession?: (local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused'>;
+  adoptLocalSession?: (local: WatchLocalSession) => Promise<'adopted' | 'duplicate' | 'refused' | 'superseded'>;
   /** Pause, resume or finish the run the phone is recording — proposed on the wrist, performed by
    *  the screen that owns the run (`platform/cardio/cardioLive`). */
   cardioControl?: (op: 'pause' | 'resume' | 'finish') => void;
@@ -181,6 +183,14 @@ export class WatchSession {
    * an id left behind would tell the NEXT workout's wrist that its own session had been adopted.
    */
   private adoptedRecordId: string | null = null;
+  /**
+   * ⛔ THE TAKEOVER KIT'S HEAVY HALF RIDES ONLY WHEN IT MUST (stage 3, 2026-10-17 — `WatchTakeoverKit`).
+   * The last kit published (whole, for a restatement), the plan rev last sent WITH its steps, and
+   * whether the wrist has asked for them (`kit_request` — it holds an older rev).
+   */
+  private lastKit: WatchTakeoverKit | null = null;
+  private kitRevSent: string | null = null;
+  private kitAsked = false;
   private readonly seen = new Set<string>();
   private reachable = false;
   private everDisconnected = false;
@@ -323,10 +333,11 @@ export class WatchSession {
     });
   }
 
-  publish(mirror: SessionMirror | null): void {
+  publish(mirror: SessionMirror | null, kit: WatchTakeoverKit | null = null): void {
     if (mirror && !this.started) this.begin();
     if (!this.started) return;
     this.lastMirror = mirror;
+    this.lastKit = mirror && mirror.phase !== 'complete' ? kit : null;
     this.hasPublished = true;
     const env = makeStateEnvelope(
       mirror,
@@ -337,6 +348,8 @@ export class WatchSession {
       null,
       this.authorityEpoch,
       this.adoptedRecordId,
+      null,
+      this.kitToSend(this.lastKit, false),
     );
     const ok = this.send(env);
     syncTrace.add('P', this.authoritySeq, mirror?.phase ?? 'none', mirror?.globalIndex, syncTrace.rel(mirror?.restEndsAt ? Date.parse(mirror.restEndsAt) : null), ok);
@@ -345,6 +358,26 @@ export class WatchSession {
       seq: this.authoritySeq,
     });
     if (!mirror || mirror.phase === 'complete') this.end();
+  }
+
+  /**
+   * The kit as it leaves on THIS frame: whole, or without its steps.
+   *
+   * WHOLE when the wrist may not hold this plan — a rev it has not been sent; a restatement (a
+   * reconnect, `whole`); the wrist asked for it; or the wrist cannot be reached directly, when only
+   * the LAST frame will arrive (the application context keeps the latest alone) and it has to stand
+   * on its own. Otherwise the steps stay home: the wrist holds them, under this very rev.
+   */
+  private kitToSend(kit: WatchTakeoverKit | null, whole: boolean): WatchTakeoverKit | null {
+    if (!kit) return null;
+    const send = whole || this.kitAsked || kit.rev !== this.kitRevSent || !this.d.transport.isReachable();
+    if (send && kit.steps) {
+      this.kitRevSent = kit.rev;
+      this.kitAsked = false;
+      return kit;
+    }
+    const { steps: _heavy, ...light } = kit;
+    return light;
   }
 
   /**
@@ -380,6 +413,10 @@ export class WatchSession {
     /* The handover belonged to the workout that just ended. Left standing, it would tell the wrist
        that the NEXT session was one it had handed over — and invite it to drop a live local one. */
     this.adoptedRecordId = null;
+    // …and so did its kit: the next workout's first frame sends its own plan whole.
+    this.lastKit = null;
+    this.kitRevSent = null;
+    this.kitAsked = false;
     this.d.track(WATCH_EVENTS.sessionEnded);
   }
 
@@ -434,6 +471,9 @@ export class WatchSession {
           null,
           this.authorityEpoch,
           this.adoptedRecordId,
+          null,
+          // A wrist coming back may hold nothing at all — the restatement is whole.
+          this.kitToSend(this.lastKit, true),
         )
       : makeStateEnvelope(
           null,
@@ -482,6 +522,18 @@ export class WatchSession {
      * that remembered the id would make the refusal permanent. Adoption is idempotent where it can
      * actually be judged — the store already holds the session id it would be adopting under.
      */
+    /*
+     * "Send me the plan whole" (stage 3): the wrist holds an older rev of the takeover kit than the
+     * frame names — a frame carrying the steps was lost. Answered at once with the current frame, the
+     * kit whole, so the wrist can carry the workout on if the phone goes silent a moment later.
+     */
+    const ask = parseKitRequest(raw);
+    if (ask) {
+      this.kitAsked = true;
+      this.d.track(WATCH_EVENTS.kitRequested, { have: ask.have ?? null, live: !!this.lastMirror });
+      if (this.lastMirror && this.lastKit) this.publish(this.lastMirror, this.lastKit);
+      return;
+    }
     const offered = parseWatchLocalSession(raw);
     if (offered) {
       if (!this.d.adoptLocalSession) {
@@ -503,13 +555,18 @@ export class WatchSession {
            * ack and is asking again. Stamping only on `adopted` would leave that one holding a
            * session forever.
            */
-          if (outcome === 'adopted' || outcome === 'duplicate') {
+          /*
+           * …and `superseded` too (stage 3): a workout the wrist took over, whose account the phone
+           * has judged shorter than its own (`decideTakeover`). The phone holds the workout; the
+           * wrist's copy is the one to let go.
+           */
+          if (outcome === 'adopted' || outcome === 'duplicate' || outcome === 'superseded') {
             this.adoptedRecordId = offered.recordId;
             /* Say so at once rather than waiting for the session's next state change — she is
                standing there, and the next frame may be ninety seconds of rest away. */
-            if (this.lastMirror) this.publish(this.lastMirror);
+            if (this.lastMirror) this.publish(this.lastMirror, this.lastKit);
           }
-          this.d.track(WATCH_EVENTS.localSessionOffered, { outcome, ...facts });
+          this.d.track(WATCH_EVENTS.localSessionOffered, { outcome, ...facts, ...(offered.takeoverOf ? { takeover: true, splitAt: offered.splitAt } : {}) });
         })
         /* An adoption that threw is a workout that did NOT move, and the dataset has to say so —
            a silent failure here looks exactly like the bug this whole path exists to fix. */

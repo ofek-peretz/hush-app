@@ -1,0 +1,740 @@
+{
+ "name": "phone-dies-paused",
+ "says": "she pauses on the phone in a rest, the phone goes silent, and she resumes on the wrist — the pause is not counted as rest",
+ "agrees": true,
+ "t0": 1800000000000,
+ "workoutId": "w_today",
+ "plan": {
+  "schema": 1,
+  "planId": "plan_9g5g6y",
+  "generatedAt": "2027-01-15T08:00:00.000Z",
+  "restInterS": 90,
+  "restTransitionS": 120,
+  "workouts": [
+   {
+    "id": "w_today",
+    "name": "Pull",
+    "muscles": "",
+    "steps": [
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 3,
+      "globalIndex": 0,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 20
+      },
+      "ramp": [
+       {
+        "weightKg": 10,
+        "reps": 5,
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 10
+        }
+       },
+       {
+        "weightKg": 15,
+        "reps": 3,
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 15
+        }
+       }
+      ],
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 3,
+      "globalIndex": 1,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 20
+      },
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 2,
+      "totalSetsInExercise": 3,
+      "globalIndex": 2,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 20
+      },
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 3,
+       "position": 1
+      }
+     }
+    ],
+    "seat": 0
+   }
+  ]
+ },
+ "start": {
+  "phase": "active_set",
+  "exerciseName": "Dumbbell Row",
+  "setNumber": 1,
+  "setsInExercise": 3,
+  "globalIndex": 0,
+  "totalSets": 3,
+  "targetWeight": 20,
+  "targetReps": 8,
+  "targetRepsHi": 12,
+  "restTotalS": null,
+  "nextExerciseName": null,
+  "nextSetNumber": null,
+  "nextSetsInExercise": null,
+  "nextTargetWeight": null,
+  "nextTargetReps": null,
+  "completedExerciseName": null,
+  "liftIndex": 1,
+  "liftCount": 1,
+  "superset": null,
+  "setsSoFar": [],
+  "loadsSoFar": [],
+  "liveSets": 0,
+  "liveVolumeKg": 0,
+  "holdSeconds": null,
+  "holdMetres": null,
+  "nextHoldSeconds": null,
+  "nextHoldMetres": null,
+  "warmupOffered": 2,
+  "isWarmup": false
+ },
+ "steps": [
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Dumbbell Row",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 20,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "wait",
+   "s": 10,
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Dumbbell Row",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 20,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "pause",
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "wait",
+   "s": 30,
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "phoneDies",
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "wait",
+   "s": 30,
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "resume",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Dumbbell Row",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 20,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "wait",
+   "s": 10,
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Dumbbell Row",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 20,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 2,
+    "setsInExercise": 3,
+    "globalIndex": 1,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     20
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 160,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 2,
+    "setsInExercise": 3,
+    "globalIndex": 1,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": 150,
+    "nextExerciseName": "Dumbbell Row",
+    "nextSetNumber": 3,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 20,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8,
+     8
+    ],
+    "loadsSoFar": [
+     20,
+     20
+    ],
+    "liveSets": 2,
+    "liveVolumeKg": 320,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Dumbbell Row",
+    "setNumber": 3,
+    "setsInExercise": 3,
+    "globalIndex": 2,
+    "totalSets": 3,
+    "targetWeight": 20,
+    "targetReps": 8,
+    "targetRepsHi": 12,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 1,
+    "superset": null,
+    "setsSoFar": [
+     8,
+     8
+    ],
+    "loadsSoFar": [
+     20,
+     20
+    ],
+    "liveSets": 2,
+    "liveVolumeKg": 320,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "complete",
+    "summarySets": 3,
+    "summaryVolumeKg": 480,
+    "summaryLifts": [
+     "Dumbbell Row 20 × 8"
+    ]
+   }
+  }
+ ],
+ "logged": [
+  {
+   "exerciseId": "db_row",
+   "setIndex": 0,
+   "weight": 20,
+   "reps": 8
+  },
+  {
+   "exerciseId": "db_row",
+   "setIndex": 1,
+   "weight": 20,
+   "reps": 8,
+   "restBeforeS": 24
+  },
+  {
+   "exerciseId": "db_row",
+   "setIndex": 2,
+   "weight": 20,
+   "reps": 8
+  }
+ ],
+ "held": [],
+ "takeover": {
+  "nowMs": 1800000045000,
+  "kits": [
+   {
+    "sessionId": "sess_1800000000000",
+    "workoutId": "w_today",
+    "workoutName": "Pull",
+    "startedAt": "2027-01-15T08:00:00.000Z",
+    "rev": "kit_1kcpn63_3",
+    "steps": [
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 3,
+      "globalIndex": 0,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 20
+      },
+      "restInterS": 150,
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      },
+      "ramp": [
+       {
+        "weightKg": 10,
+        "reps": 5,
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 10
+        }
+       },
+       {
+        "weightKg": 15,
+        "reps": 3,
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 15
+        }
+       }
+      ]
+     },
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 3,
+      "globalIndex": 1,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 20
+      },
+      "restInterS": 150,
+      "restAfterS": 150,
+      "at": {
+       "block": 1,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "db_row",
+      "exerciseName": "Dumbbell Row",
+      "exerciseGroup": "Back",
+      "setIndexInExercise": 2,
+      "totalSetsInExercise": 3,
+      "globalIndex": 2,
+      "targetWeight": 20,
+      "targetReps": 8,
+      "targetRepsHi": 12,
+      "loadSetup": {
+       "style": "dumbbell",
+       "perHand": 20
+      },
+      "restInterS": 120,
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 3,
+       "position": 1
+      }
+     }
+    ],
+    "cursor": 0,
+    "phase": "active_set",
+    "sets": [],
+    "restInterS": 90,
+    "restTransitionS": 90
+   },
+   {
+    "sessionId": "sess_1800000000000",
+    "workoutId": "w_today",
+    "workoutName": "Pull",
+    "startedAt": "2027-01-15T08:00:00.000Z",
+    "rev": "kit_1kcpn63_3",
+    "cursor": 0,
+    "phase": "paused",
+    "pausedFrom": "rest_inter",
+    "restTotalS": 150,
+    "pausedRestRemainingS": 138,
+    "restStartedAt": "2027-01-15T08:00:01.000Z",
+    "pausedAt": "2027-01-15T08:00:13.000Z",
+    "sets": [
+     {
+      "exerciseId": "db_row",
+      "setIndex": 0,
+      "recommendedWeight": 20,
+      "recommendedReps": 8,
+      "actualWeight": 20,
+      "actualReps": 8,
+      "completedAt": "2027-01-15T08:00:01.000Z",
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
+     }
+    ],
+    "restInterS": 90,
+    "restTransitionS": 90
+   }
+  ]
+ }
+}

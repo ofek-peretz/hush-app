@@ -2,6 +2,7 @@
  "name": "rests-and-pauses",
  "says": "+15 on a rest, a pause inside a rest, a pause on a set, and the workout ended early",
  "agrees": true,
+ "t0": 1800000000000,
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
@@ -264,6 +265,46 @@
    }
   },
   {
+   "do": "wait",
+   "s": 20,
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 5,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 150,
+    "nextExerciseName": "Barbell Bench Press",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 60,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 2,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     60
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
    "do": "addRest",
    "phone": {
     "phase": "rest_inter",
@@ -341,7 +382,86 @@
    }
   },
   {
+   "do": "wait",
+   "s": 60,
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 5,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 2,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     60
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
    "do": "resume",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 0,
+    "totalSets": 5,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 150,
+    "nextExerciseName": "Barbell Bench Press",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 60,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 2,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     60
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 480,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "wait",
+   "s": 25,
    "phone": {
     "phase": "rest_inter",
     "exerciseName": "Barbell Bench Press",
@@ -618,6 +738,50 @@
    }
   },
   {
+   "do": "wait",
+   "s": 50,
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Barbell Bench Press",
+    "setNumber": 3,
+    "setsInExercise": 3,
+    "globalIndex": 2,
+    "totalSets": 5,
+    "targetWeight": 60,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 120,
+    "nextExerciseName": "Barbell Row",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 50,
+    "nextTargetReps": 8,
+    "completedExerciseName": "Barbell Bench Press",
+    "liftIndex": 1,
+    "liftCount": 2,
+    "superset": null,
+    "setsSoFar": [
+     8,
+     8,
+     8
+    ],
+    "loadsSoFar": [
+     60,
+     60,
+     60
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 1440,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
    "do": "endRest",
    "phone": {
     "phase": "active_set",
@@ -714,7 +878,8 @@
    "exerciseId": "bb_bench_press",
    "setIndex": 1,
    "weight": 60,
-   "reps": 8
+   "reps": 8,
+   "restBeforeS": 50
   },
   {
    "exerciseId": "bb_bench_press",
@@ -726,7 +891,8 @@
    "exerciseId": "bb_row",
    "setIndex": 0,
    "weight": 50,
-   "reps": 8
+   "reps": 8,
+   "restBeforeS": 52
   }
  ],
  "held": []

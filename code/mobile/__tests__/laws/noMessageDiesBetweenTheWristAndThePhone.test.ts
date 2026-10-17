@@ -57,9 +57,10 @@ describe('W2 · a running wrist workout answers a lobby-publishing phone', () =>
   const model = at('targets/watch/WatchModel.swift');
 
   it('⛔⛔ a lobby envelope arriving mid-local-session triggers the handover offer', () => {
-    // The exact condition: local engine live + the envelope carries NO mirror (a lobby).
+    // The exact condition: local engine live + the envelope carries NO mirror (a lobby) — or, for a
+    // workout this wrist TOOK OVER from the phone (stage 3), any frame at all: that phone is its owner.
     expect(model.replace(/\s+/g, ' ')).toContain(
-      'if localEngine != nil, envelope.mirror == nil, Date().timeIntervalSince(lastLocalOfferAt) > 5',
+      'if let engine = localEngine, envelope.mirror == nil || engine.isTakeover, Date().timeIntervalSince(lastLocalOfferAt) > 5',
     );
     expect(model).toContain('lastLocalOfferAt = Date()');
   });
@@ -79,9 +80,17 @@ describe('W3 · a set is confirmed by an answer, not an address', () => {
 
   it('⛔⛔ the wrist completes a phone-authority set through the reply channel', () => {
     expect(model).toContain('manager.sendExpectingReply(intentJSON: json)');
-    // The confirm beat runs only inside the reply, behind the heard guard.
+    // The confirm beat runs only once the set is WRITTEN somewhere: inside the reply when the phone heard
+    // it, or once this wrist has taken the workout over and logged it itself (stage 3, 2026-10-17) —
+    // never on an address alone. With nothing to take over from, the honest viewer, as before.
     const complete = model.slice(model.indexOf('func completeSet'), model.indexOf('func ready()'));
-    expect(complete.replace(/\s+/g, ' ')).toContain('guard heard else { self.intentDidNotLeave() return }');
+    const flatComplete = complete.replace(/\s+/g, ' ');
+    expect(flatComplete).toContain('propose( "complete_set",');
+    expect(flatComplete).toContain('heard: { [weak self] in guard let self else { return } self.editDraft = nil self.setConfirm = confirm');
+    expect(flatComplete).toContain('local: { [weak self] engine in');
+    expect(flatComplete).toContain('engine.completeSet(weight: weight, reps: reps)');
+    const propose = model.slice(model.indexOf('private func propose('), model.indexOf('Drive the OS workout runtime'));
+    expect(propose.replace(/\s+/g, ' ')).toContain('if let engine = self.takeOver(type) { local(engine) } else { self.intentDidNotLeave() }');
   });
 
   it('⛔ the phone replies with the JS truth, and forwards the intent EITHER way', () => {

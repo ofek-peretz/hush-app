@@ -118,7 +118,9 @@ type Action =
   | { do: 'pause' }
   | { do: 'resume' }
   | { do: 'finishEarly' }
-  | { do: 'warmUp' }; // "+ Warm-up" on a compound's first set: the bridges go in ahead of it
+  | { do: 'warmUp' } // "+ Warm-up" on a compound's first set: the bridges go in ahead of it
+  | { do: 'wait'; s: number } // she stands there this many seconds more — the rest she TAKES is measured
+  | { do: 'phoneDies' }; // stage 3: from here the WRIST runs it, from the phone's last word — the phone runs on as the reference
 
 const done = (n: number, a: Action = { do: 'complete' }): Action[] => Array.from({ length: n }, () => [a, { do: 'endRest' } as Action]).flat();
 const reps = (ex: string, load: number | null, band: [number, number] = [8, 12]) => ({ kind: 'reps', ex, load, reps: band });
@@ -132,6 +134,8 @@ interface Scenario {
   /** `true`: the wrist alone must draw exactly what the phone tells it. Otherwise the gap's name and stage. */
   agrees: true | { gap: string; stage: number };
 }
+
+const wait = (s: number): Action => ({ do: 'wait', s });
 
 const SCENARIOS: Scenario[] = [
   {
@@ -148,15 +152,19 @@ const SCENARIOS: Scenario[] = [
     day: { name: 'Upper A', blocks: [{ rounds: 3, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('bb_row', 50)] }] },
     script: [
       { do: 'complete' },
+      wait(20),
       { do: 'addRest' },
       { do: 'pause' },
+      wait(60), // a minute standing still is not rest she took — on either device
       { do: 'resume' },
-      { do: 'endRest' },
+      wait(25),
+      { do: 'endRest' }, // banked: the rest either side of the pause — its minute left out
       { do: 'pause' },
       { do: 'resume' },
       { do: 'complete' },
-      { do: 'endRest' },
+      { do: 'endRest' }, // two seconds: a thumb, not her pace — not banked
       { do: 'complete' }, // the last bench set: the rest that follows is the walk to the row
+      wait(50),
       { do: 'endRest' },
       { do: 'complete' },
       { do: 'finishEarly' },
@@ -249,6 +257,66 @@ const SCENARIOS: Scenario[] = [
     // Stage 2 (2026-10-17): the phone's offer rides the plan, and the wrist inserts what it was told.
     agrees: true,
   },
+  /*
+   * ⛔ THE PHONE DIES (stage 3, 2026-10-17). In each of these the PHONE runs the workout up to
+   * `phoneDies`; from there the WRIST runs it — started from nothing but the takeover kits the phone's
+   * frames carried — while the phone runs on beside it as the reference. Every frame after the
+   * takeover, and the whole record at the end (the phone's sets AND the wrist's, with the rest before
+   * each), must be what the phone would have drawn and written had it never gone silent.
+   */
+  {
+    name: 'phone-dies-in-a-rest',
+    says: 'she lifts lighter on the phone (her weight carried), the phone goes silent mid-rest, and the wrist carries the day to its end',
+    day: { name: 'Upper A', blocks: [{ rounds: 3, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('bb_row', 50)] }] },
+    script: [
+      { do: 'complete', weight: 55, reps: 9 },
+      wait(30),
+      { do: 'endRest' },
+      { do: 'complete' },
+      wait(15),
+      { do: 'phoneDies' },
+      wait(20),
+      { do: 'endRest' }, // the rest she took spans the takeover — measured as ONE rest
+      { do: 'complete' },
+      { do: 'endRest' },
+      { do: 'complete' },
+      wait(40),
+      { do: 'endRest' },
+      { do: 'complete' },
+    ],
+    agrees: true,
+  },
+  {
+    name: 'phone-dies-mid-superset',
+    says: 'the phone goes silent with the couple half done — the wrist goes straight on to the partner, then rests the round',
+    day: {
+      name: 'Arms',
+      blocks: [{ rounds: 1, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('db_curl', 12), reps('rope_pushdown', 25, [10, 15])] }],
+    },
+    script: [...done(1), { do: 'complete' }, { do: 'phoneDies' }, { do: 'complete' }, wait(30), { do: 'endRest' }, { do: 'complete' }, { do: 'complete' }],
+    agrees: true,
+  },
+  {
+    name: 'phone-dies-paused',
+    says: 'she pauses on the phone in a rest, the phone goes silent, and she resumes on the wrist — the pause is not counted as rest',
+    day: { name: 'Pull', blocks: [{ rounds: 3, items: [reps('db_row', 20)] }] },
+    script: [{ do: 'complete' }, wait(10), { do: 'pause' }, wait(30), { do: 'phoneDies' }, wait(30), { do: 'resume' }, wait(10), { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }],
+    agrees: true,
+  },
+  {
+    name: 'phone-dies-on-a-warm-up',
+    says: 'the warm-up was asked for on the phone; it goes silent between the two bridges — the wrist runs the second, then the working sets',
+    day: { name: 'Lower', blocks: [{ rounds: 2, items: [reps('bb_back_squat', 100, [5, 8])] }] },
+    script: [{ do: 'warmUp' }, { do: 'complete' }, { do: 'phoneDies' }, { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, ...done(2).slice(0, -1)],
+    agrees: true,
+  },
+  {
+    name: 'phone-dies-after-a-plank',
+    says: 'a plank held on the phone, the phone silent before the second — the wrist holds it and finishes the day; both planks come home',
+    day: { name: 'Core', blocks: [{ rounds: 1, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, restS: 45, items: [{ kind: 'time', ex: 'plank', seconds: 45 }] }, { rounds: 1, items: [reps('bb_row', 50)] }] },
+    script: [...done(1), { do: 'start' }, { do: 'complete' }, { do: 'phoneDies' }, wait(20), { do: 'endRest' }, { do: 'complete' }, { do: 'endRest' }, { do: 'complete' }],
+    agrees: true,
+  },
 ];
 
 // ── the phone, running it ────────────────────────────────────────────────────────────────────────
@@ -338,9 +406,13 @@ async function run(s: Scenario) {
   await settle();
   const steps: { do: string; weight?: number | null; reps?: number; phone: Record<string, unknown> }[] = [];
   const start = told();
+  /** What the wrist holds when the phone goes silent — see `wristHolds`. */
+  let takeover: { nowMs: number; kits: unknown[] } | null = null;
   for (const a of s.script) {
     const v = view!;
     setNow(now + 1_000); // a second passes between any two things she does
+    if (a.do === 'wait') setNow(now + a.s * 1000);
+    if (a.do === 'phoneDies') takeover = { nowMs: now, kits: wristHolds() };
     if (a.do === 'complete') {
       const own = a.reps != null;
       if (v.currentTarget) await act(async () => void (await v.completeSet(own ? { weight: a.weight ?? null, reps: a.reps! } : undefined)));
@@ -351,7 +423,9 @@ async function run(s: Scenario) {
     else if (a.do === 'pause') await act(async () => v.pause());
     else if (a.do === 'resume') await act(async () => v.resume());
     else if (a.do === 'warmUp') await act(async () => v.addWarmup());
-    else await act(async () => void (await v.finishEarly()));
+    else if (a.do === 'wait' || a.do === 'phoneDies') {
+      // Nothing she does: time passes, or (stage 3) the WRIST takes over — the phone runs on as the reference.
+    } else await act(async () => void (await v.finishEarly()));
     await settle();
     await settle();
     steps.push({ ...a, phone: told() });
@@ -361,21 +435,56 @@ async function run(s: Scenario) {
   // The holds and carries she finished — what `completeItem` wrote, less the lifts (which are `sets`).
   const held = (saved?.items ?? [])
     .filter((i) => i.kind === 'time' || i.kind === 'distance')
-    .map((i) => ({ exerciseId: i.ex, block: i.block, round: i.round, position: i.position, kind: i.kind, ...(i.kind === 'time' ? { seconds: i.seconds } : { metres: i.metres }), load: i.load ?? null }));
+    .map((i) => ({
+      exerciseId: i.ex,
+      block: i.block,
+      round: i.round,
+      position: i.position,
+      kind: i.kind,
+      ...(i.kind === 'time' ? { seconds: i.seconds } : { metres: i.metres }),
+      load: i.load ?? null,
+      ...(i.restBeforeS != null ? { restBeforeS: i.restBeforeS } : {}),
+    }));
   act(() => tree!.unmount());
   return {
     name: s.name,
     says: s.says,
     agrees: s.agrees,
+    // The instant the script starts — the wrist's engine runs on the SAME seconds (its clock seam).
+    t0: T0,
     workoutId: WORKOUT,
     plan,
     start,
     steps,
     // What the PHONE wrote down — the record a wrist-alone workout must bring home. A warm-up bridge
     // is part of it, marked as the bridge it is (stage 2): the wrist must bring home the same rows.
-    logged: logged.map((l) => ({ exerciseId: l.exerciseId, setIndex: l.setIndex, weight: l.actualWeight ?? null, reps: l.actualReps, ...(l.isWarmup ? { warmup: true } : {}) })),
+    logged: logged.map((l) => ({
+      exerciseId: l.exerciseId,
+      setIndex: l.setIndex,
+      weight: l.actualWeight ?? null,
+      reps: l.actualReps,
+      ...(l.isWarmup ? { warmup: true } : {}),
+      // …and the rest she took before it (stage 5): her pace learns from a wrist workout too.
+      ...(l.restBeforeS != null ? { restBeforeS: l.restBeforeS } : {}),
+    })),
     held,
+    // Stage 3: the moment the phone went silent, and the kits the wrist held then.
+    ...(takeover ? { takeover } : {}),
   };
+}
+
+/**
+ * ⛔ WHAT THE WRIST HOLDS WHEN THE PHONE GOES SILENT (stage 3) — read off the frames the phone sent,
+ * never handed to it: the last kit that carried the plan whole, and the latest kit (which may carry
+ * none — it names the same rev). The Swift half stores the two in that order through the wrist's own
+ * `WatchStore.saveTakeoverKit`, so the steps-by-rev rule is exercised for real, not assumed.
+ */
+function wristHolds(): unknown[] {
+  const kits = wire.envelopes.map((e) => e.takeover).filter(Boolean);
+  const latest = kits[kits.length - 1];
+  if (!latest) return [];
+  const whole = [...kits].reverse().find((k) => k.rev === latest.rev && Array.isArray(k.steps));
+  return whole && whole !== latest ? [whole, latest] : [latest];
 }
 
 const FIXTURES = join(__dirname, '__fixtures__', 'wrist-engine');
@@ -390,6 +499,19 @@ describe('one script, two engines — the phone’s half', () => {
     expect(out.steps.length).toBe(s.script.length);
     expect(out.steps.every((st) => typeof st.phone.phase === 'string' && st.phone.phase !== 'none')).toBe(true);
     expect(out.logged.length).toBeGreaterThan(0);
+    // A scenario where the phone dies hands the wrist a kit WITH its plan in it, or there is nothing to test.
+    if (s.script.some((a) => a.do === 'phoneDies')) {
+      expect(out.takeover?.kits.length).toBeGreaterThan(0);
+      expect(out.takeover!.kits.some((k: any) => Array.isArray(k.steps) && k.steps.length > 0)).toBe(true);
+    }
+  });
+
+  it('⛔ the rest she takes is in the record — and a pause is never counted as rest (stage 5)', async () => {
+    const out = await run(SCENARIOS.find((x) => x.name === 'rests-and-pauses')!);
+    // A second passes before every tap. The first rest runs from the set (t 1) to the pause (t 24),
+    // and from the resume (t 86) to "next" (t 113): 23 + 27 = 50 — the 62 seconds paused are left out
+    // (counted, it would read 112). The second is two seconds — a thumb, not banked. The walk: 52.
+    expect(out.logged.map((l) => l.restBeforeS ?? null)).toEqual([null, 50, null, 52]);
   });
 
   it('the fixtures on disk are these — so the Swift half is never checked against an old phone', () => {

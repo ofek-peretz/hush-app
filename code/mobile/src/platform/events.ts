@@ -124,6 +124,12 @@ export const WATCH_EVENTS = {
    * sees Today, which is exactly what she saw before it was built.
    */
   localSessionOffered: 'watch_local_session_offered',
+  /**
+   * The wrist asked for the takeover kit whole (stage 3, 2026-10-17): it held an older plan than the
+   * frame named, so a frame carrying the steps was lost. Rare by design; frequent would mean the
+   * phone's rule for when the steps ride is wrong.
+   */
+  kitRequested: 'watch_kit_requested',
 } as const;
 
 /** Subscription / Apple Payments — StoreKit purchases behind the billing seam. */
