@@ -30,6 +30,30 @@ export interface StepAhead {
   warmup?: unknown;
 }
 
+/**
+ * ════ THE QUIET COACH'S LINES (founder-approved, 2026-10-17) ════
+ * The workout says two fixed sentences and one per new lift ahead — "עוד עשר שניות." and "עוד עשר
+ * שניות. הבא: …" — so those are what is fetched, from the step she is on to the end. The closing
+ * sentence is built from the finished workout and is fetched when it is said.
+ */
+export function quietFixedLines(): string[] {
+  return [voiceScript.tenSeconds()];
+}
+
+export function quietLinesAhead(plan: readonly StepAhead[], fromIndex: number): string[] {
+  const out: string[] = [];
+  const steps = plan.slice(Math.max(0, fromIndex));
+  for (let i = 0; i < steps.length - 1 && out.length < MAX_LINES; i++) {
+    const ex = steps[i].exerciseId;
+    const next = steps[i + 1];
+    // A new lift begins after this step, and this one does not come back (a superset's halves do).
+    if (next.exerciseId === ex || steps.slice(i + 1).some((s) => s.exerciseId === ex)) continue;
+    const line = voiceScript.tenSecondsNext(next.exerciseId);
+    if (!out.includes(line)) out.push(line);
+  }
+  return out;
+}
+
 /** The most distinct lines one call asks for — a long workout's whole list is under this. */
 const MAX_LINES = 260;
 

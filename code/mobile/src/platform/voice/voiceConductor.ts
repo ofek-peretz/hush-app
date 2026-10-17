@@ -2,6 +2,10 @@
  * ══════════════════════════════════════════════════════════════════════════════════════════════════
  * THE CONDUCTOR — the voice coach as a state machine over the session's own view.
  *
+ * ⛔ NOT MOUNTED SINCE 2026-10-17. The stage runs the QUIET coach (`platform/voice/quietCoach`) by the
+ * founder's ruling — ten seconds, the bell, and one sentence at the end. This full spoken coach is
+ * kept, with its laws, for the day any of it is wanted back; nothing in the app constructs it.
+ *
  * docs/canonical/HUSH_VOICE_SESSION_SPEC_V1.md, as code. The screens do not change: this reads the
  * same `SessionView` they draw and presses the same verbs a thumb would. It decides WHEN a line is
  * said and WHICH question is open; the lines themselves are `domain/voiceScript`, the answers are

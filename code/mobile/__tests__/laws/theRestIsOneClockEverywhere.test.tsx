@@ -35,7 +35,7 @@ import type { PlannedSession } from '@/domain/coachPlan';
 import { adoptWatchSession, adoptedRestAnchor } from '@/platform/watch/watchAdopt';
 import { parseWatchLocalSession, WATCH_PROTOCOL_VERSION } from '@/platform/watch/protocol';
 import { restedSeconds } from '@/domain/restPrescription';
-import { VoiceConductor } from '@/platform/voice/voiceConductor';
+import { QuietCoach } from '@/platform/voice/quietCoach';
 
 jest.mock('@/platform/restHaptics', () => ({
   REST_WARNING_LEAD_S: 7,
@@ -224,18 +224,17 @@ describe('3–4 · the handover from the wrist', () => {
 });
 
 describe('5 · the voice counts to the same end', () => {
+  // The coach the stage mounts (`QuietCoach`, 2026-10-17) — its "ten seconds" is the one rest clock's.
   function conductor(t: { now: number }) {
     const timers: number[] = [];
-    const c = new VoiceConductor({
+    const c = new QuietCoach({
       mouth: { say: async () => {}, interrupt() {} },
-      ear: { open: () => ({ close() {} }) },
       audio: { duck: async () => {}, unduck: async () => {}, playChime: async () => {} },
       now: () => t.now,
       setTimeout: (_f, ms) => (timers.push(ms), timers.length),
       clearTimeout: () => {},
       getView: () => null,
-      locale: () => 'he',
-      firstSessionEver: () => false,
+      locale: () => ({ locale: 'he', units: 'kg' }),
     });
     return { c, timers };
   }

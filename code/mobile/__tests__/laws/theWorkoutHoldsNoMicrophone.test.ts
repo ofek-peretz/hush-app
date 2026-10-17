@@ -60,7 +60,9 @@ describe('⛔ the workout holds no microphone', () => {
     const open = hook.slice(hook.indexOf('const open = () => {'), hook.indexOf('/** `leaving`: the stage is going'));
     expect(open.indexOf('if (!workoutHoldsMicrophone()) {')).toBeGreaterThan(-1);
     expect(open.indexOf('if (!workoutHoldsMicrophone()) {')).toBeLessThan(open.indexOf('voiceCapture.ensurePermission()'));
-    expect(hook).toContain('hearsHer: () => workoutHoldsMicrophone()');
+    // The coach on the stage is the QUIET coach (2026-10-17): it is built with no ear at all.
+    expect(hook).toContain('conductorRef.current = new QuietCoach({');
+    expect(read('src/platform/voice/quietCoach.ts')).not.toMatch(/\bear\b\s*:|openWindow|voiceCapture/);
     expect(read('src/platform/voice/voiceCapture.ts')).toMatch(/async askAtStart\(voiceOn: boolean\): Promise<void> \{[\s\S]{0,300}?if \(!workoutHoldsMicrophone\(\)\) return;/);
     // The conductor: down by design, never undone by a return to glass, and never apologised for.
     const conductor = read('src/platform/voice/voiceConductor.ts');

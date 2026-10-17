@@ -15,8 +15,8 @@
  *   WATCH   · the last envelope the fake WatchConnectivity transport was handed
  *   LOCK    · `liveActivityStateFromMirror` of what the ActivityKit host was handed. The Dynamic
  *             Island is drawn by the same widget from the SAME ContentState, so it is this row too.
- *   AUDIO   · a real `VoiceConductor` observing the same view: the timer it schedules for
- *             "ten seconds" and what it says
+ *   AUDIO   · the real `QuietCoach` observing the same view (the coach the stage mounts since
+ *             2026-10-17): the "ten seconds" it schedules, the bell, and the one closing sentence
  *   BUZZ    · the OS rest alert the phone would arm (`restHaptics.arm` with the store's end)
  *
  * …and asserts they state ONE workout: the same lift, the same set, the same load, the same count
@@ -43,7 +43,7 @@ import { SessionProvider, useSession, type SessionView } from '@/state/stores/se
 import { db } from '@/data/local/db';
 import type { PlannedSession } from '@/domain/coachPlan';
 import { WATCH_PROTOCOL_VERSION } from '@/platform/watch/protocol';
-import { VoiceConductor } from '@/platform/voice/voiceConductor';
+import { QuietCoach } from '@/platform/voice/quietCoach';
 
 // ── the surfaces, captured ───────────────────────────────────────────────────────────────────────
 const wire = {
@@ -166,60 +166,29 @@ beforeEach(async () => {
   jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove() {} }) as never);
 });
 afterAll(() => jest.useRealTimers());
+// The quiet coach's lines are copy — read in English, the language every name and frame here is in.
+beforeAll(async () => {
+  const { initI18n, setLocale } = require('@/i18n');
+  await initI18n();
+  await setLocale('en');
+});
 
 // ── the voice, over the same view ────────────────────────────────────────────────────────────────
 /*
- * ⛔ A VOICE THAT ANSWERS (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן אמת. אחידות
- * בצורה הרמטית"*). Until today this conductor had an ear that never heard anything and timers that
- * never fired: it could say "ten seconds", and nothing else it does ever happened here — the voice's
- * sets were written by calling the store directly. Now the ear takes a sentence into whatever window
- * the conductor opened (and times out when nobody speaks), the conductor's own timers fire as the
- * clock moves (`later`), and every step checks what the VOICE is doing against every other surface.
+ * ⛔ THE QUIET COACH (2026-10-17). The voice no longer asks, hears or writes anything — it is not a
+ * door any more. It is still a SURFACE: "ten seconds" counted to the rest's (or the hold's) one end,
+ * the bell when a rest runs out or a hold reaches zero, and one sentence when the workout is over.
+ * Its timers fire as the clock moves (`later`), and every step checks them against every other surface.
  */
-type VoiceTimer = { atMs: number; label: string; f: () => void; ear?: true };
+type VoiceTimer = { atMs: number; label: string; f: () => void };
 function voice(getView: () => SessionView) {
   const said: string[] = [];
+  const bells = { n: 0 };
   const timers = new Map<number, VoiceTimer>();
   let seq = 0;
-  /** The window the conductor has open, if any — what a sentence said now would land in. */
-  const win: { cur: null | { opts: any; deadlineId: number } } = { cur: null };
-  const c = new VoiceConductor({
+  const c = new QuietCoach({
     mouth: { say: async (line: string) => void said.push(line), interrupt() {} },
-    ear: {
-      open: (opts: any) => {
-        const w = { opts, deadlineId: 0 };
-        const arm = (ms: number) => {
-          if (w.deadlineId) timers.delete(w.deadlineId);
-          seq += 1;
-          w.deadlineId = seq;
-          timers.set(seq, {
-            atMs: now + ms,
-            label: 'ear',
-            ear: true,
-            f: () => {
-              if (win.cur !== w) return;
-              win.cur = null;
-              opts.onEnd('timeout');
-            },
-          });
-        };
-        arm(opts.ms);
-        win.cur = w;
-        return {
-          close: () => {
-            if (win.cur !== w) return;
-            win.cur = null;
-            timers.delete(w.deadlineId);
-            opts.onEnd('closed');
-          },
-          hold: () => {},
-          extend: (ms: number) => {
-            if (win.cur === w) arm(ms);
-          },
-        };
-      },
-    },
-    audio: { duck: async () => {}, unduck: async () => {}, playChime: async () => {} },
+    audio: { duck: async () => {}, unduck: async () => {}, playChime: async () => void (bells.n += 1) },
     now: () => now,
     setTimeout: (f: () => void, ms: number) => {
       seq += 1;
@@ -228,67 +197,54 @@ function voice(getView: () => SessionView) {
     },
     clearTimeout: (h: number) => void timers.delete(h),
     getView,
-    locale: () => ({ locale: 'he', units: 'kg' }),
-    firstSessionEver: () => false,
+    locale: () => ({ locale: 'en', units: 'kg' }),
     track: () => {},
+    // The finished workout, read off the same disk the store saved it to.
+    finished: async (startedAtMs: number) => {
+      const history = await db.loadHistory();
+      const session = history.find((x) => Date.parse(x.startedAt) === startedAtMs);
+      return session ? { session, history, weekClosed: false } : null;
+    },
   });
-  /** She speaks: the sentence lands in the open window, exactly as `voiceCapture` hands it over. */
-  const hear = (text: string): boolean => {
-    const w = win.cur;
-    if (!w) return false;
-    const keep = w.opts.onSentence(text, 0.95);
-    if (!keep && win.cur === w) {
-      win.cur = null;
-      timers.delete(w.deadlineId);
-      w.opts.onEnd('heard');
-    }
-    return true;
-  };
-  /** The process died: nothing of this voice survives (its timers, its window). */
-  const kill = () => {
-    timers.clear();
-    win.cur = null;
-  };
-  return { c, said, timers, win, hear, kill };
+  /** The process died: nothing of this voice survives (its timers). */
+  const kill = () => timers.clear();
+  return { c, said, bells, timers, kill };
 }
 
-/** What the conductor is doing, read the way a test reads a private field. */
-const stepKeyOfView = (v: SessionView): string | null =>
-  v.currentExerciseId && v.setLabel ? `${v.currentExerciseId}/${v.setLabel.warmup ? 'w' : ''}${v.setLabel.n}/${v.globalProgress?.index ?? 0}` : null;
+/** A plank on stage that has not started — the fact that offers Ready on the card and the wrist. */
+const holdWaits = (v: SessionView): boolean => !!v.currentItem && v.currentItem.kind === 'time' && v.holdEndsAtMs == null;
 
 function voiceDisagreements(v: SessionView, vs: ReturnType<typeof voice>): string[] {
   const c = vs.c as any;
   if (!c.on) return [];
   const out: string[] = [];
-  const mode: string = c.mode;
-  const q: string | undefined = c.ask?.question;
-  const echo = q === 'echo' || q === 'echo_reps' || q === 'echo_round';
-  const doing = `${mode}${q ? `/${q}` : ''}`;
+  const timers = [...vs.timers.values()].map((t) => t.atMs);
   if (!v.active) {
-    if (!['ended', 'idle', 'off'].includes(mode)) out.push(`VOICE ${doing} after the session ended`);
+    if (!['ended', 'off'].includes(c.mode)) out.push(`VOICE ${c.mode} after the session ended`);
     return out;
   }
+  if (c.mode !== 'live') out.push(`VOICE ${c.mode} while the workout runs`);
   if (v.paused) {
-    if (mode !== 'paused') out.push(`VOICE ${doing} while every other surface is paused`);
+    if (timers.length) out.push(`VOICE counts ${timers.length} clock(s) while every other surface is paused`);
     return out;
   }
-  if (mode === 'paused') return [`VOICE still paused while every other surface runs`];
+  // The voice asks for nothing: no Ready of the store's is ever raised by it.
+  if (v.awaitingReady) out.push('READY raised on the stage — the quiet coach asks for nothing');
   const resting = v.displayPhase === 'REST_INTER' || v.displayPhase === 'REST_TRANSITION';
   if (resting) {
-    if (!(mode === 'rest' || (mode === 'asking' && echo))) out.push(`VOICE ${doing} during a rest`);
-    if (vs.win.cur && !echo) out.push(`VOICE listening during a rest with no question open (${doing})`);
+    const end = v.restEndsAtMs;
+    // "ten seconds" at end − 10 s, and the bell AT the end — nothing else, and nothing elsewhere.
+    for (const t of timers) if (end == null || (t !== end - 10_000 && t !== end)) out.push(`VOICE timer at ${end == null ? t : t - end} ms from the rest's end`);
+    if (end != null && end > now && !timers.includes(end)) out.push('VOICE will not ring at the end of the running rest');
   } else if (v.displayPhase === 'SET_PRESENTED') {
-    if (!['loading', 'set', 'asking'].includes(mode)) out.push(`VOICE ${doing} while a set is on stage`);
-    const key = stepKeyOfView(v);
-    // What the voice is loading, running or asking about is the set every surface shows.
-    if (!echo && !c.roundWrite && key && c.setState && c.setState.key !== key && mode !== 'idle') {
-      out.push(`VOICE is on ${c.setState.key} while the stage shows ${key}`);
+    const end = v.holdEndsAtMs;
+    if (end == null) {
+      if (timers.length) out.push(`VOICE counts ${timers.length} clock(s) over a set — a set has nothing to count`);
+    } else {
+      for (const t of timers) if (t !== end - 10_000 && t !== end) out.push(`VOICE timer at ${t - end} ms from the hold's end`);
+      if (end > now && !timers.includes(end)) out.push('VOICE will not ring at the end of the running hold');
     }
   }
-  // The loading dialogue ("load the bar, say ready") and the Ready button are one state — on a hold
-  // too, since 2026-09-28.
-  if (v.awaitingReady && mode !== 'loading') out.push(`READY shown while the VOICE is ${doing}`);
-  if (!v.awaitingReady && mode === 'loading' && v.displayPhase === 'SET_PRESENTED') out.push('VOICE waits for "ready" and no surface offers Ready');
   return out;
 }
 
@@ -433,17 +389,19 @@ function disagreements(v: SessionView, voiceState: ReturnType<typeof voice>): st
   }
 
   // AUDIO — "ten seconds" is scheduled against the same end, whenever the voice is resting with her.
-  if (p.resting && !p.paused && p.restEndsAtMs != null && (voiceState.c as any).on && (voiceState.c as any).mode === 'rest') {
-    const tenS = [...voiceState.timers.values()].filter((t) => !t.ear).map((t) => t.atMs);
+  if (p.resting && !p.paused && p.restEndsAtMs != null && (voiceState.c as any).on && (voiceState.c as any).mode === 'live') {
+    const tenS = [...voiceState.timers.values()].map((t) => t.atMs);
     const expected = p.restEndsAtMs - 10_000;
     const total = v.restSeconds + (v.restExtraSeconds ?? 0);
     if (expected > now && total >= 20 && !tenS.includes(expected)) {
       out.push(`voice: "ten seconds" ${tenS.length ? `at ${tenS.map((t) => t - p.restEndsAtMs!).join('/')} ms from the end` : 'never scheduled'}, not −10000`);
     }
   }
-  // READY — the voice's loading dialogue is one state on every surface that draws a set.
-  if (!p.resting && !p.paused && card && card.awaitingReady !== v.awaitingReady) out.push(`ready: PHONE ${v.awaitingReady} / LOCK ${card.awaitingReady}`);
-  if (!p.resting && !p.paused && (m.awaitingReady ?? false) !== v.awaitingReady) out.push(`ready: PHONE ${v.awaitingReady} / WATCH ${m.awaitingReady}`);
+  // READY — one state on every surface that draws a set: the store's flag, or a plank that waits for
+  // its start (the stage offers it its own Start; the card and the wrist offer Ready — 2026-10-17).
+  const offersReady = v.awaitingReady || holdWaits(v);
+  if (!p.resting && !p.paused && card && card.awaitingReady !== offersReady) out.push(`ready: PHONE ${offersReady} / LOCK ${card.awaitingReady}`);
+  if (!p.resting && !p.paused && (m.awaitingReady ?? false) !== offersReady) out.push(`ready: PHONE ${offersReady} / WATCH ${m.awaitingReady}`);
   // THE HOLD'S ONE CLOCK — the same end on the stage, the wrist and the card, to the millisecond.
   if (!p.resting && !p.paused) {
     const watchHold = m.holdEndsAt ? Date.parse(m.holdEndsAt) : null;
@@ -535,7 +493,7 @@ function wrist(type: string, extra: Record<string, unknown> = {}) {
   });
 }
 
-type Door = 'phone' | 'wrist' | 'lock' | 'voice';
+type Door = 'phone' | 'wrist' | 'lock';
 
 async function doSet(h: ReturnType<typeof mount>, door: Door) {
   const v = h.view();
@@ -550,13 +508,7 @@ async function doSet(h: ReturnType<typeof mount>, door: Door) {
   }
   if (door === 'phone') await act(async () => void (await v.completeSet()));
   else if (door === 'wrist') await act(async () => wrist('complete_set'));
-  else if (door === 'lock') await act(async () => v.applyLockIntents([{ id: `l${++intentSeq}`, type: 'complete_set', atMs: now }]));
-  else {
-    const w = v.currentTarget.recommendedWeight ?? null;
-    const r = v.currentTarget.recommendedReps ?? 8;
-    await act(async () => void (await v.completeSet({ weight: w, reps: r })));
-    await act(async () => h.view().announceLoggedSet(w, r));
-  }
+  else await act(async () => v.applyLockIntents([{ id: `l${++intentSeq}`, type: 'complete_set', atMs: now }]));
   await settle();
 }
 
@@ -594,8 +546,8 @@ async function settle() {
 
 /**
  * The clock moves — and everything the voice scheduled inside that stretch happens, in order, at its
- * own instant (a question, a reminder, "ten seconds", a window nobody answered). The store sees each
- * instant before the voice acts on it, as it does on the phone.
+ * own instant ("ten seconds", a hold's bell). The store sees each instant before the voice acts on it,
+ * as it does on the phone.
  */
 async function later(h: ReturnType<typeof mount>, ms: number) {
   const target = now + ms;
@@ -614,36 +566,6 @@ async function later(h: ReturnType<typeof mount>, ms: number) {
   }
   setNow(target);
   await settle();
-}
-
-/** What she says, and when she says nothing. */
-type Said = 'ready' | 'reps' | 'yes' | 'correct' | 'pause' | 'resume' | 'easier' | 'busy' | 'silence';
-async function doVoice(h: ReturnType<typeof mount>, what: Said): Promise<boolean> {
-  const vs = h.voice;
-  await settle();
-  const w = vs.win.cur;
-  if (!w) return false;
-  if (what === 'silence') {
-    await later(h, Math.max(0, (vs.timers.get(w.deadlineId)?.atMs ?? now) - now) + 1);
-    return true;
-  }
-  const v = h.view();
-  const text =
-    what === 'ready' ? 'מוכן'
-    : what === 'reps' ? String(v.currentTarget?.recommendedReps ?? v.currentTarget?.repBandLo ?? 10)
-    : what === 'yes' ? 'כן'
-    : what === 'correct' ? 'לא, תשע'
-    : what === 'pause' ? 'עצור'
-    : what === 'resume' ? 'המשך'
-    : what === 'easier' ? 'קל יותר'
-    : 'תפוס';
-  await act(async () => void vs.hear(text));
-  await settle();
-  act(() => h.feedVoice());
-  await settle();
-  act(() => h.feedVoice());
-  await settle();
-  return true;
 }
 
 /** In the fuzz, disagreements are COLLECTED by kind (the message with its numbers blanked), so one
@@ -666,7 +588,7 @@ function check(h: ReturnType<typeof mount>, log: string[], label: string) {
 
 // ── 1 · the scripted workout: every door, in the order a real session uses them ─────────────────
 describe('the scripted workout — every door, one truth', () => {
-  it('stage, wrist, lock screen and voice each drive a step, and all five surfaces agree after every one', async () => {
+  it('stage, wrist and lock screen each drive a step, and all five surfaces agree after every one', async () => {
     const h = mount();
     const log: string[] = [];
     await act(async () => h.view().startCoach(PLAN, 'coach_0'));
@@ -694,7 +616,7 @@ describe('the scripted workout — every door, one truth', () => {
     await doSet(h, 'phone');           check(h, log, 'plank hold · phone');
     frame(h, 'rest-transition-after-hold');
     await doEndRest(h, 'phone');       check(h, log, 'skip rest after hold');
-    await doSet(h, 'voice');           check(h, log, 'row set 1 · voice');
+    await doSet(h, 'phone');           check(h, log, 'row set 1 · phone');
     await later(h, 200_000);           check(h, log, 'rest ran past its end');
     await doEndRest(h, 'wrist');       check(h, log, 'rest ended · wrist');
     expect(h.view().loggedSets.length).toBe(4); // three bench, one row — the hold is an item, not a set
@@ -835,156 +757,101 @@ describe('⛔ a hold on stage is a hold on every surface (found by this simulato
   });
 });
 
-// ── 1b · the voice drives it — and the wrist, the card and the phone step in ─────────────────────
-/** Let time run until the voice opens a window (a question, "זהו", the pause's "המשך"). */
-async function untilListening(h: ReturnType<typeof mount>, maxMs = 400_000): Promise<boolean> {
-  const end = now + maxMs;
-  // What the voice queued is said (and its window opened) before anything is decided.
-  await settle();
-  act(() => h.feedVoice());
-  await settle();
-  for (let guard = 0; guard < 200 && !h.voice.win.cur; guard++) {
-    const next = Math.min(...[...h.voice.timers.values()].map((t) => t.atMs));
-    if (!Number.isFinite(next) || next > end) break;
-    await later(h, Math.max(0, next - now));
-  }
-  return !!h.voice.win.cur;
-}
-const mode = (h: ReturnType<typeof mount>) => (h.voice.c as any).mode as string;
-
-describe('⛔ the voice is one of the surfaces — what it does, every other surface shows (2026-09-28)', () => {
+// ── 1b · the quiet coach — three moments, at the instants every surface counts to ────────────────
+describe('⛔ the quiet coach is one of the surfaces — ten seconds, the bell, the end (2026-10-17)', () => {
   jest.setTimeout(120_000);
-  it('a workout run by voice, with the wrist, the lock screen and the phone stepping in, agrees after every step', async () => {
+
+  it('a whole workout: ten seconds and the bell at every rest, the next lift named at each new one, the plank counted, and one sentence at the end', async () => {
     const h = mount();
     const log: string[] = [];
     await act(async () => h.view().startCoach(PLAN, 'coach_0'));
     await settle();
     check(h, log, 'start');
-
-    // ⛔ 2026-10-06 (founder: *"בלי להגיד מוכן ובלי להוסיף פקד של מוכן במסכים"*): a lift she has never
-    // lifted is simply called — the set is hers, and no surface offers a Ready.
-    expect(mode(h)).toBe('set');
-    expect(h.view().awaitingReady).toBe(false);
+    // Nothing is said at the start, nothing asked, no Ready on any surface.
+    expect(h.voice.said).toEqual([]);
     expect(lastEnvelope().mirror.awaitingReady).toBe(false);
 
-    // The question comes; she answers with her reps; every surface has the set.
-    expect(await untilListening(h)).toBe(true); check(h, log, 'voice asks');
-    await doVoice(h, 'reps');                  check(h, log, 'voice: reps');
-    expect(h.view().loggedSets.length).toBe(1);
-    expect(h.view().displayPhase).toBe('REST_INTER');
-    // …and corrects it in the echo's tail: the wrist and the card carry the correction too.
-    if (h.voice.win.cur) {
-      await doVoice(h, 'correct');             check(h, log, 'voice: "לא, תשע"');
-      expect(h.view().loggedSets[0].actualReps).toBe(9);
-      expect(lastEnvelope().mirror.setsSoFar).toEqual([9]);
-    }
+    // Bench set 1 → its rest: "ten seconds" at end − 10 s; the rest runs out → the bell.
+    await doSet(h, 'phone');                   check(h, log, 'bench 1 · phone');
+    const end1 = h.view().restEndsAtMs!;
+    await later(h, end1 - now - 9_000);        check(h, log, 'nine seconds before the end');
+    expect(h.voice.said).toEqual(['Ten more seconds.']);
+    await later(h, 9_500);                     check(h, log, 'the rest is out');
+    await doEndRest(h, 'phone');               check(h, log, 'the stage ends it at zero');
+    await settle(); // the bell is the voice's queue's next turn
+    expect(h.voice.bells.n).toBe(1);
 
-    // The rest runs out; set two is on stage and the voice is on it.
-    await later(h, 200_000);                   check(h, log, 'rest ran out');
-    if (h.view().displayPhase !== 'SET_PRESENTED') { await doEndRest(h, 'phone'); check(h, log, 'rest ended'); }
-    expect(h.view().setLabel?.n).toBe(2);
+    // Bench set 2 → she ends the rest herself from the lock screen: no bell, and no "ten seconds".
+    await doSet(h, 'wrist');                   check(h, log, 'bench 2 · wrist');
+    await later(h, 20_000);                    check(h, log, '20 s in');
+    await doEndRest(h, 'lock');                check(h, log, 'rest cut short · lock screen');
+    expect(h.voice.bells.n).toBe(1);
+    expect(h.voice.said).toEqual(['Ten more seconds.']);
 
-    // "עצור" in the question's window pauses EVERY surface; "המשך" resumes every surface.
-    expect(await untilListening(h)).toBe(true);
-    await doVoice(h, 'pause');                 check(h, log, 'voice: "עצור"');
-    expect(h.view().paused).toBe(true);
-    expect(lastEnvelope().mirror.phase).toBe('paused');
-    await later(h, 30_000);                    check(h, log, 'paused 30 s');
-    await doVoice(h, 'resume');                check(h, log, 'voice: "המשך"');
-    expect(h.view().paused).toBe(false);
-    expect(lastEnvelope().mirror.phase).toBe('active_set');
+    // Bench set 3 → the crossing to the plank: the ten seconds name it; +15 moves them.
+    await doSet(h, 'lock');                    check(h, log, 'bench 3 · lock screen');
+    await doExtend(h, 'wrist');                check(h, log, '+15 · wrist');
+    const end3 = h.view().restEndsAtMs!;
+    await later(h, end3 - now - 9_000);        check(h, log, 'nine seconds before the crossing ends');
+    expect(h.voice.said[h.voice.said.length - 1]).toBe('Ten seconds. Next: Plank.');
+    await later(h, 9_500);
+    await doEndRest(h, 'phone');               check(h, log, 'to the plank');
+    await settle();
+    expect(h.voice.bells.n).toBe(2);
 
-    // The WRIST logs the set while the voice waits to ask: the voice follows it into the rest.
-    await doSet(h, 'wrist');                   check(h, log, 'set 2 · wrist, voice waiting');
-    expect(mode(h)).not.toBe('asking');
-    await doEndRest(h, 'lock');                check(h, log, 'rest skipped · lock screen');
-
-    // Set three: the voice asks, and she answers on the LOCK SCREEN instead — the question closes.
-    expect(await untilListening(h)).toBe(true);
-    await doSet(h, 'lock');                    check(h, log, 'set 3 · lock screen, voice asking');
-    expect(h.voice.win.cur?.opts?.expect === 'reps').toBe(false);
-
-    // The plank: Ready on every surface, and "מוכן" starts ONE clock that all of them count to.
-    await doEndRest(h, 'wrist');               check(h, log, 'to the plank · wrist');
+    // The plank waits for its start: Ready on the card and the wrist — and the WRIST's Ready lands.
     expect(h.view().currentExerciseId).toBe('plank');
-    expect(mode(h)).toBe('loading');
-    expect(await untilListening(h)).toBe(true); check(h, log, 'the plank waits for "מוכן"');
-    expect(h.view().awaitingReady).toBe(true);
     expect(lastEnvelope().mirror.awaitingReady).toBe(true);
-    await doVoice(h, 'ready');                 check(h, log, 'voice: "מוכן" — the hold starts');
-    const end = h.view().holdEndsAtMs!;
-    expect(end).toBe(now + 45_000);
-    expect(Date.parse(lastEnvelope().mirror.holdEndsAt)).toBe(end);
-    expect(liveActivityStateFromMirror(lastLa().mirror, lastLa().lock).holdEndsAtMs).toBe(end);
-    // Paused from the WRIST mid-hold: every clock stands still, and moves on by the same stretch.
-    await later(h, 20_000);                    check(h, log, '20 s into the hold');
-    await doPause(h, 'wrist');                 check(h, log, 'pause mid-hold · wrist');
-    expect(h.view().holdFrozenRemainingS).toBe(25);
-    await later(h, 60_000);                    check(h, log, 'paused a minute');
-    await doPause(h, 'wrist');                 check(h, log, 'resume · wrist');
-    expect(h.view().holdEndsAtMs).toBe(end + 60_000);
-    expect(await untilListening(h)).toBe(true); check(h, log, 'voice: "זהו"');
-    expect(now).toBe(end + 60_000);            // the voice asked at the one end…
-    expect(h.view().currentExerciseId).toBe('plank'); // …and zero wrote nothing, on any surface
-    await doVoice(h, 'yes');                   check(h, log, 'voice: "כן" — the hold is done');
-    expect(h.view().displayPhase).toBe('REST_TRANSITION');
+    expect(liveActivityStateFromMirror(lastLa().mirror, lastLa().lock).awaitingReady).toBe(true);
+    await act(async () => wrist('set_ready'));
+    await settle();                            check(h, log, 'Ready · wrist — the plank starts');
+    const holdEnd = h.view().holdEndsAtMs!;
+    expect(holdEnd).toBe(now + 45_000);
+    expect(lastEnvelope().mirror.awaitingReady).toBe(false);
+    const said = h.voice.said.length;
+    await later(h, 36_000);                    check(h, log, '36 s into the plank');
+    expect(h.voice.said.slice(said)).toEqual(['Ten more seconds.']);
+    await later(h, 10_000);                    check(h, log, 'the plank reached zero');
+    expect(h.voice.bells.n).toBe(3);
+    expect(h.view().currentExerciseId).toBe('plank'); // zero writes nothing — her Done does
+    await doSet(h, 'phone');                   check(h, log, 'plank done · phone');
 
-    // The row: a new lift — called, and hers: no Ready on any surface. A Ready tapped on a lock card
-    // that still shows the old button starts nothing and changes nothing.
-    await doEndRest(h, 'phone');               check(h, log, 'to the row · phone');
-    expect(mode(h)).toBe('set');
-    expect(h.view().awaitingReady).toBe(false);
-    await act(async () => h.view().applyLockIntents([{ id: 'ready-1', type: 'set_ready', atMs: now }]));
-    await settle();                            check(h, log, 'a stray Ready · lock screen');
-    expect(h.view().awaitingReady).toBe(false);
-    expect(mode(h)).toBe('set');
-    expect(await untilListening(h)).toBe(true);
-    await doVoice(h, 'reps');                  check(h, log, 'row set 1 · voice');
-    await later(h, 200_000);                   check(h, log, 'rest ran out');
-    if (h.view().displayPhase !== 'SET_PRESENTED') { await doEndRest(h, 'wrist'); check(h, log, 'rest ended'); }
-    expect(await untilListening(h)).toBe(true);
-    await doVoice(h, 'reps');                  check(h, log, 'row set 2 · voice — the last');
-    await later(h, 10_000);                    check(h, log, 'the end');
+    // The row, to the end.
+    await later(h, 200_000);
+    await doEndRest(h, 'phone');               check(h, log, 'to the row');
+    await doSet(h, 'phone');                   check(h, log, 'row 1');
+    await later(h, 200_000);
+    await doEndRest(h, 'wrist');               check(h, log, 'rest out · wrist');
+    await doSet(h, 'phone');                   check(h, log, 'row 2 — the last');
     expect(h.view().active).toBe(false);
-    expect(mode(h)).toBe('ended');
+    // The closing sentence, once, after the saved workout is read.
+    await act(async () => {
+      for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 5));
+    });
+    await (h.voice.c as any).chain;
+    check(h, log, 'the end');
+    const last = h.voice.said[h.voice.said.length - 1];
+    // Every lift met its target on every set: that is the fact said.
+    expect(last).toBe('Well done. Every set on target in 2 exercises.');
+    expect(h.voice.said.filter((l) => l === last)).toHaveLength(1);
+    // And nothing else was ever said: only ten-seconds lines and the closing sentence.
+    expect(h.voice.said.every((l) => l.startsWith('Ten ') || l === last)).toBe(true);
   });
 
-  it('no Ready before a set, on any surface; the stage’s Start starts a hold’s one clock, and zero writes nothing', async () => {
+  it('earbuds out mid-rest and back: nothing while out, the ten seconds still land on the rest\'s own end', async () => {
     const h = mount();
     const log: string[] = [];
     await act(async () => h.view().startCoach(PLAN, 'coach_0'));
     await settle();
-    act(() => h.feedVoice());
-    await settle();                            check(h, log, 'the bench is called');
-    expect(h.view().awaitingReady).toBe(false);
-    expect(lastEnvelope().mirror.awaitingReady).toBe(false);
-    expect(mode(h)).toBe('set');
-    // A Ready from a wrist that still has the old button: refused by the gate, and it starts nothing —
-    // the set's question stays due where the call put it.
-    const due = (h.voice.c as any).setState.askDueMs;
-    expect(due).not.toBeNull();
-    await act(async () => wrist('set_ready'));
-    await settle();                            check(h, log, 'a stray Ready · wrist');
-    expect(h.view().awaitingReady).toBe(false);
-    expect((h.voice.c as any).setState.askDueMs).toBe(due);
-
-    for (let i = 0; i < 3; i++) {
-      await doSet(h, 'phone');
-      await doEndRest(h, 'phone');
-    }
-    expect(h.view().currentExerciseId).toBe('plank');
-    expect(await untilListening(h)).toBe(true); check(h, log, 'the plank waits for "מוכן"');
-    // The phone's own Start (the hold stage's button) is the same start as her word.
-    await act(async () => h.view().markSetStarted());
-    await settle();                            check(h, log, 'Start · the stage');
-    const end = h.view().holdEndsAtMs!;
-    expect(end).toBe(now + 45_000);
-    expect(Date.parse(lastEnvelope().mirror.holdEndsAt)).toBe(end);
-    expect(mode(h)).toBe('set');
-    expect((h.voice.c as any).setState.askDueMs).toBe(end);
-    await later(h, 45_000);                    check(h, log, 'the hold reached zero');
-    expect(h.view().currentExerciseId).toBe('plank');
-    expect(lastEnvelope().mirror.phase).toBe('active_set');
+    await doSet(h, 'phone');                   check(h, log, 'bench 1');
+    const end = h.view().restEndsAtMs!;
+    act(() => h.voice.c.disable());
+    await later(h, 30_000);                    check(h, log, 'earbuds out, 30 s');
+    expect([...h.voice.timers.values()]).toHaveLength(0);
+    act(() => h.voice.c.enable());
+    check(h, log, 'earbuds back');
+    expect([...h.voice.timers.values()].map((t) => t.atMs).sort()).toEqual([end - 10_000, end]);
+    expect(h.voice.said).toEqual([]); // no "חזרתי": nothing is announced
   });
 });
 
@@ -1011,7 +878,7 @@ describe('the fuzz — random doors, random timing', () => {
       wire.la = [];
       const r = rng(seed);
       const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)];
-      const doors: Door[] = ['phone', 'wrist', 'lock', 'voice'];
+      const doors: Door[] = ['phone', 'wrist', 'lock'];
       let h = mount();
       const plan = seed % 2 ? PLAN : PLAN_B;
       const log: string[] = [`seed ${seed} · ${plan.name}`];
@@ -1019,25 +886,19 @@ describe('the fuzz — random doors, random timing', () => {
       await settle();
       check(h, log, 'start');
       for (let step = 0; step < 45 && h.view().active; step++) {
-        // She speaks into whatever the voice has open — the right answer, the wrong one, or nothing.
-        if (h.voice.win.cur && r() < 0.45) {
-          const what = pick<Said>(['ready', 'reps', 'reps', 'yes', 'correct', 'pause', 'resume', 'easier', 'busy', 'silence']);
-          await doVoice(h, what);
-          check(h, log, `voice says ${what}`);
-          continue;
-        }
         const roll = r();
         const door = pick(doors);
         const v = h.view();
         if (roll < 0.3) { await doSet(h, door); check(h, log, `set · ${door}`); }
         else if (roll < 0.4) { await doExtend(h, door); check(h, log, `+15 · ${door}`); }
         else if (roll < 0.52) { await doEndRest(h, door); check(h, log, `end rest · ${door}`); }
-        else if (roll < 0.6) { await doPause(h, door === 'lock' || door === 'voice' ? 'phone' : door); check(h, log, `pause/resume · ${door}`); }
+        else if (roll < 0.6) { await doPause(h, door === 'lock' ? 'phone' : door); check(h, log, `pause/resume · ${door}`); }
         else if (roll < 0.65) {
-          // The voice moves the coming load.
-          const base = v.currentTarget?.recommendedWeight ?? v.nextTarget?.recommendedWeight;
-          if (base != null) { await act(async () => v.setLiftLoad(base + 2.5)); await settle(); }
-          check(h, log, 'voice moves the load');
+          // A plank's start, from the stage or the wrist (Ready lands only where a hold waits).
+          if (door === 'wrist') await act(async () => wrist('set_ready'));
+          else if (holdWaits(v)) await act(async () => v.markSetStarted());
+          await settle();
+          check(h, log, `start · ${door}`);
         } else if (roll < 0.69) {
           await act(async () => v.addWarmup());
           await settle();

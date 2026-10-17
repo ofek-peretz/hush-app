@@ -800,7 +800,15 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     nextHoldSeconds: next?.hold?.seconds ?? null,
     nextHoldMetres: next?.hold?.metres ?? null,
     // Unconditional, like `isWarmup`, so the wire-parity contract sees both keys on every live frame.
-    awaitingReady: phase === 'active_set' && !!inp.awaitingReady,
+    /*
+     * ⛔ …AND A TIMED HOLD THAT HAS NOT STARTED WAITS FOR ITS START, WITH OR WITHOUT A VOICE
+     * (2026-10-17, the quiet coach). Ready used to be the old voice's dialogue alone, so with the
+     * voice off a plank could not be started from the lock card at all, and the wrist's own Ready
+     * (`holdWaits`, 2026-10-10) was refused by the phone (`decideWatchIntent` gates `set_ready` on
+     * this flag). The voice no longer asks for anything, so the hold's own fact — a duration with no
+     * end yet — is what offers Ready on the card and lets the wrist's tap land.
+     */
+    awaitingReady: phase === 'active_set' && (!!inp.awaitingReady || (cur.hold?.seconds != null && inp.holdEndsAtMs == null)),
     holdEndsAt:
       phase === 'active_set' && cur.hold?.seconds != null && inp.holdEndsAtMs != null && Number.isFinite(inp.holdEndsAtMs)
         ? new Date(inp.holdEndsAtMs).toISOString()

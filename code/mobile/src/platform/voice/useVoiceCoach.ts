@@ -9,7 +9,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18next from 'i18next';
 import { db } from '@/data/local/db';
 import { track } from '@/platform/telemetry';
@@ -17,13 +16,13 @@ import { audioSession } from '@/platform/voice/audioSession';
 import { coachVoice } from '@/platform/voice/coachVoice';
 import { cloudEar } from '@/platform/voice/cloudEar';
 import { neuralVoice } from '@/platform/voice/neuralVoice';
-import { fixedLines, voiceLinesAhead } from '@/domain/voiceLinesAhead';
+import { quietFixedLines, quietLinesAhead } from '@/domain/voiceLinesAhead';
 import { recognizerLang, voiceCapture } from '@/platform/voice/voiceCapture';
-import { VoiceConductor, type VoicePersisted } from '@/platform/voice/voiceConductor';
+import { QuietCoach } from '@/platform/voice/quietCoach';
 import { workoutHoldsMicrophone } from '@/platform/voice/workoutMicrophone';
 import { useApp } from '@/state/stores/appStore';
 import { syncTrace } from '@/platform/syncTrace';
-import { restAfterStep, type SessionView, type Step } from '@/state/stores/sessionStore';
+import type { SessionView } from '@/state/stores/sessionStore';
 import { restHaptics } from '@/platform/restHaptics';
 
 /**
@@ -41,8 +40,6 @@ const CONFIRM_MS = 1500;
 const POLL_MS = 3000;
 /** How long the voice waits for the pocket ear before it speaks without it (a first model download is longer). */
 const EAR_OPEN_WAIT_MS = 3000;
-/** Where the voice keeps what must survive a killed app (see `VoicePersisted`). */
-const VOICE_STATE_KEY = 'hush.voice.state';
 /** The most the last lines of a workout may take to be said before the voice lets go regardless. */
 const DRAIN_MS = 20_000;
 /**
@@ -56,6 +53,24 @@ const DRAIN_MS = 20_000;
  */
 export const EAR_GRACE_MS = 3 * 60_000;
 
+/**
+ * The workout that just ended, as saved — the last set is never in the last live view — with the
+ * history before it and whether it closed her week (the finish screen's own test). Read a few times
+ * while the save lands; null if it never does (the coach then says nothing rather than half of it).
+ */
+async function readFinishedWorkout(startedAtMs: number) {
+  for (let i = 0; i < 12; i++) {
+    const history = await db.loadHistory().catch(() => []);
+    const session = history.find((s) => Date.parse(s.startedAt) === startedAtMs);
+    if (session) {
+      const weekOpen = await db.loadWeekOpen().catch(() => null);
+      return { session, history, weekClosed: weekOpen === startedAtMs + 1 };
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return null;
+}
+
 export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilence } {
   const app = useApp();
   /* ⛔ UNKNOWN UNTIL THE GATE IS READ (2026-09-15). This began as 'no_headset', so with earbuds IN the
@@ -68,12 +83,13 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
   const applyRef = useRef<(connected: boolean) => void>(() => {});
   const viewRef = useRef(session);
   viewRef.current = session;
-  const firstEverRef = useRef<boolean | null>(null);
-  /** Resolves once the history was read — the opening line depends on it (§1). */
-  const historyReadRef = useRef<Promise<void> | null>(null);
-  /** Resolves once the voice's state from before a relaunch was read (see below). */
-  const restoredRef = useRef<Promise<void> | null>(null);
-  const conductorRef = useRef<VoiceConductor | null>(null);
+  /*
+   * ⛔ THE QUIET COACH (founder-approved, 2026-10-17: *"מה שטוב: … עוד 10 שניות … הצליל … בסיום
+   * האימון לתת פידבק חיובי מסוים וזהו"*). Ten seconds before a rest ends (and the lift she walks to,
+   * when it is a new one), the bell, a plank the same way, and one sentence at the end — nothing
+   * else (`platform/voice/quietCoach`). The full spoken coach (`voiceConductor`) is not mounted.
+   */
+  const conductorRef = useRef<QuietCoach | null>(null);
   // `voiceSpec`, not the dead phase-B `voiceCoach` — see `Profile.voiceSpec` (2026-09-09).
   const switchOn = app.profile?.voiceSpec !== false;
   const units = app.profile?.units ?? 'kg';
@@ -155,9 +171,9 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     }
   };
 
-  // The conductor, once per stage — built over the real mouth, ear and session.
+  // The quiet coach, once per stage — built over the real mouth and audio session.
   if (!conductorRef.current) {
-    conductorRef.current = new VoiceConductor({
+    conductorRef.current = new QuietCoach({
       // The mouth, traced: when a line began and when it ended (`platform/syncTrace`; inert when off).
       mouth: {
         say: async (text: string, locale: string) => {
@@ -184,55 +200,15 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
         interrupt: () => coachVoice.interrupt(),
         warm: (lines, locale) => coachVoice.warm(lines, locale),
       },
-      // The ear, written down: which microphone a window listened through, and what it ended with.
-      ear: {
-        open: (o) => {
-          void track('voice_window', { expect: o.expect ?? null, s: Math.round(o.ms / 1000), mic: audioSession.earRunning() ? 'held' : 'screen', patient: o.patient ?? false, glass: AppState.currentState === 'active' });
-          return voiceCapture.open({
-            ...o,
-            onEnd: (why) => {
-              if (why !== 'heard' && why !== 'closed') void track('voice_window_end', { why, expect: o.expect ?? null });
-              o.onEnd(why);
-            },
-          });
-        },
-      },
       audio: audioSession,
       now: () => Date.now(),
       setTimeout: (f, ms) => setTimeout(f, ms),
       clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
       getView: () => viewRef.current,
-      locale: () => ({ locale: i18next.language ?? 'en', units: viewRef.current ? units : units }),
-      firstSessionEver: () => firstEverRef.current === true,
+      locale: () => ({ locale: i18next.language ?? 'en', units }),
       track: (event, props) => void track(event, props),
-      earIsFree: () => audioSession.earRunning(),
-      hearsHer: () => workoutHoldsMicrophone(),
-      persist: (p) => void AsyncStorage.setItem(VOICE_STATE_KEY, JSON.stringify(p)).catch(() => {}),
+      finished: readFinishedWorkout,
     });
-  }
-  /*
-   * What the voice said before the app was killed (2026-09-27, the conductor audit): read once, before
-   * the gate can enable it, so a relaunch mid-workout says "חזרתי" — not the opening, again, at lift four.
-   */
-  if (!restoredRef.current) {
-    restoredRef.current = AsyncStorage.getItem(VOICE_STATE_KEY)
-      .then((raw) => {
-        const p = raw ? (JSON.parse(raw) as VoicePersisted) : null;
-        if (p && p.startedAtMs === viewRef.current?.startedAtMs) conductorRef.current?.restore(p);
-      })
-      .catch(() => {});
-  }
-
-  // "Her first workout" is read once per mount, before the opening line can need it.
-  if (!historyReadRef.current) {
-    historyReadRef.current = db
-      .loadHistory()
-      .then((h) => {
-        firstEverRef.current = h.length === 0;
-      })
-      .catch(() => {
-        firstEverRef.current = false;
-      });
   }
 
   // The gates: the switch, the build, the earbuds. Earbuds come and go mid-workout.
@@ -241,7 +217,8 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
     const mouth = coachVoice.available();
     const ear = voiceCapture.available();
     const audio = audioSession.available();
-    const capable = Platform.OS === 'ios' && mouth && ear && audio;
+    // The quiet coach speaks and never listens (2026-10-17): a mouth and an audio session are all it needs.
+    const capable = Platform.OS === 'ios' && mouth && audio;
     /*
      * ⛔ THE GATE IS WRITTEN DOWN (founder, 2026-09-09: *"הקול באימון לא עובד"*). Four gates stand
      * between the stage and the first line, and a closed one is silent by design (spec §0.1) — so
@@ -299,19 +276,15 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       if (!workoutHoldsMicrophone()) {
         // No microphone to open and none to ask her for: the coach speaks (the conductor's ear is
         // down by design, `hearsHer`), and the lock screen, the wrist and the stage carry the sets.
-        opening = true;
-        void Promise.all([historyReadRef.current, restoredRef.current]).then(() => {
-          opening = false;
-          if (disposed || c.isOn() || !audioSession.headsetConnected()) return;
-          c.enable();
-          setSilentBecause(null);
-          voiceIs(true, 'earbuds');
-        });
+        if (!audioSession.headsetConnected()) return;
+        c.enable();
+        setSilentBecause(null);
+        voiceIs(true, 'earbuds');
         return;
       }
       if (deniedRef.current) return openWithoutEar();
       opening = true;
-      void Promise.all([voiceCapture.ensurePermission(), historyReadRef.current, restoredRef.current]).then(([ok]) => {
+      void voiceCapture.ensurePermission().then((ok) => {
         opening = false;
         if (disposed || c.isOn()) return;
         if (!ok) {
@@ -449,11 +422,9 @@ export function useVoiceCoach(session: SessionView): { silentBecause: VoiceSilen
       neuralVoice.reset(); // a network that failed last workout is tried again
     }
     if (restKey) prefetchedRestRef.current = restKey;
-    const l = { locale: i18next.language ?? 'en', units };
-    const from = (session.globalProgress?.index ?? 0) + (resting ? 1 : 0);
-    // The rest each step will be given — the store's own rule, so the prefetched rest line is the said one.
-    const ahead = voiceLinesAhead(session.livePlan as never[], from, (st) => restAfterStep(st as Step), l);
-    neuralVoice.prefetch([...ahead, ...fixedLines()], l.locale);
+    const from = session.globalProgress?.index ?? 0;
+    // The quiet coach's lines from the step she is on (the lift she walks to, at each new one).
+    neuralVoice.prefetch([...quietLinesAhead(session.livePlan as never[], from), ...quietFixedLines()], i18next.language ?? 'en');
   }, [session.active, session.startedAtMs, session.displayPhase, session.globalProgress?.index]);
 
   // A new workout: a strong ear that could not be reached last time is tried again at once.

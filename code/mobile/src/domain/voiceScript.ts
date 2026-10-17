@@ -35,6 +35,7 @@ import type { Units } from '@/data/local/models';
 import { loadSetup } from '@/domain/loadPresentation';
 import { englishDuration, hebrewDuration, hebrewKilos, hebrewOrdinal, hebrewReps, hebrewWhole, spokenNumber } from '@/domain/hebrewNumbers';
 import { currentLocale, tg } from '@/i18n';
+import type { VoiceRecap } from '@/domain/voiceRecap';
 
 export interface VoiceLocale {
   locale: string;
@@ -91,6 +92,25 @@ export function liftsPhrase(n: number, l: VoiceLocale): string {
   if (n === 1) return 'תרגיל אחד';
   if (n === 2) return 'שני תרגילים';
   return `${hebrewWhole(n, 'm')} תרגילים`;
+}
+
+/** "שני שיאים" / "שלושה שיאים" — a masculine count before its noun ("שני", never "שניים"). */
+function countPhraseM(n: number, l: VoiceLocale): string {
+  if (!isHe(l)) return String(n);
+  return n === 2 ? 'שני' : hebrewWhole(n, 'm');
+}
+
+/** "סט אחד" / "שני סטים" / "שמונה עשר סטים" / "18 sets" — her working sets. */
+function setsPhrase(n: number, l: VoiceLocale): string {
+  if (!isHe(l)) return `${n} ${n === 1 ? 'set' : 'sets'}`;
+  if (n === 1) return 'סט אחד';
+  if (n === 2) return 'שני סטים';
+  return `${hebrewWhole(n, 'm')} סטים`;
+}
+
+/** An English fact opens its sentence; Hebrew has no case to raise. */
+function capFirst(s: string, l: VoiceLocale): string {
+  return isHe(l) || !s ? s : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /** ", ושיא אישי חדש" / ", ושני שיאים אישיים חדשים" — the records of the day, or nothing. */
@@ -439,6 +459,36 @@ export const voiceScript = {
   /** Spec §3.6 — the rest. */
   rest: (seconds: number, l: VoiceLocale) => tg('voice.rest', { duration: spokenRest(seconds, l) }),
   tenSeconds: () => tg('voice.tenSeconds'),
+  /**
+   * Ten seconds before a rest that leads to a NEW lift: the same line, and the lift she walks to
+   * (founder-approved, 2026-10-17) — the one thing the pocket cannot see. Never between two sets of
+   * one lift, and never across the halves of a superset: she is not done with the row.
+   */
+  tenSecondsNext: (nextId: string) => tg('voice.tenSecondsNext', { next: name(nextId) }),
+  /**
+   * ════ THE ONE SENTENCE AT THE END (founder-approved, 2026-10-17) ════
+   *
+   * At most two facts, in this order — a record, every set on target, the week done — after "כל
+   * הכבוד". The facts are the praise; the workout itself is never graded ("a strong workout" is the
+   * interpretation `forbiddenGlobally` bans, §4.10). A day with none of the three is still said, and
+   * kindly: how much she did, and that it counts. Every fact is `domain/voiceRecap`'s, so nothing
+   * here can be truer than the workout was.
+   */
+  recap: (r: VoiceRecap, weekClosed: boolean, l: VoiceLocale) => {
+    const facts: string[] = [];
+    if (r.records.length === 1) facts.push(tg('voice.recapRecordOne', { lift: name(r.records[0]) }));
+    else if (r.records.length > 1) facts.push(tg('voice.recapRecords', { records: countPhraseM(r.records.length, l) }));
+    if (r.onTarget.length === 1) facts.push(tg('voice.recapTargetOne', { lift: name(r.onTarget[0]) }));
+    else if (r.onTarget.length > 1) facts.push(tg('voice.recapTargets', { lifts: liftsPhrase(r.onTarget.length, l) }));
+    if (weekClosed) facts.push(tg('voice.recapWeek'));
+    const two = facts.slice(0, 2);
+    if (two.length === 0) {
+      const volume = tg('voice.recapVolume', { sets: setsPhrase(r.sets, l), minutes: minutesPhrase(r.minutes, l) });
+      return `${tg('voice.recapDone')} ${capFirst(volume, l)}. ${tg('voice.recapEveryCounts')}`;
+    }
+    const said = two.length === 2 ? tg('voice.recapAnd', { a: two[0], b: two[1] }) : two[0];
+    return `${tg('voice.recapGood')} ${capFirst(said, l)}.`;
+  },
   /**
    * Sets 2+ at the same load: "סט שני מתוך ארבעה." — its number, and nothing she already has
    * (2026-10-05). The load is on the bar and the range was said at the lift's opening; reading both

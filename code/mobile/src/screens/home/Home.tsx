@@ -33,8 +33,7 @@ import { useApp } from '@/state/stores/appStore';
 import { voiceCapture } from '@/platform/voice/voiceCapture';
 import { neuralVoice } from '@/platform/voice/neuralVoice';
 import { intakeHandoff } from '@/app/intakeHandoff';
-import { fixedLines } from '@/domain/voiceLinesAhead';
-import { voiceScript } from '@/domain/voiceScript';
+import { quietFixedLines } from '@/domain/voiceLinesAhead';
 import { db } from '@/data/local/db';
 import { getWeeklyUpdate } from '@/domain/weeklyUpdate';
 import { coachSession, coachWeek, coachRows, coachPlanRows, coachLoadDirections, queuedWorkout } from '@/domain/coachWeek';
@@ -243,7 +242,8 @@ export function Home({ navigation, route }: Props) {
   useEffect(() => {
     if (!voiceOn || !app.profile) return;
     neuralVoice.setVoice(coachVoiceId);
-    neuralVoice.prefetch([voiceScript.openFirstSession(), ...fixedLines()], currentLocale()); // `fixedLines` holds the no-microphone opening too
+    // The quiet coach's fixed line (2026-10-17) — the one sentence every rest says.
+    neuralVoice.prefetch(quietFixedLines(), currentLocale());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceOn, coachVoiceId, app.profile?.sex]);
   /* The live pair — read here for two things only: the name stamped on the record at Begin, and

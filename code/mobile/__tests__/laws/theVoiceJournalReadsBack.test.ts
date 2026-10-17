@@ -50,9 +50,13 @@ describe('⛔ the voice journal', () => {
 
   it('the turns of the phone a report hangs on are all written down by the hook', () => {
     const hook = read('src/platform/voice/useVoiceCoach.ts');
-    for (const event of ['voice_on', 'voice_off', 'voice_app', 'voice_window', 'voice_window_end', 'voice_said', 'voice_ear', 'voice_gate']) {
+    // (`voice_window` / `voice_window_end` were the listening windows — the quiet coach, 2026-10-17, opens none.)
+    for (const event of ['voice_on', 'voice_off', 'voice_app', 'voice_said', 'voice_ear', 'voice_gate']) {
       expect(`${event}: ${hook.includes(`'${event}'`)}`).toBe(`${event}: true`);
     }
+    // …and the quiet coach writes down its two moments of its own: the bell, and the closing sentence.
+    const quiet = read('src/platform/voice/quietCoach.ts');
+    for (const event of ['voice_bell', 'voice_recap']) expect(`${event}: ${quiet.includes(`'${event}'`)}`).toBe(`${event}: true`);
     // …and the profile shows them where the voice's other tests are.
     const profile = read('src/screens/profile/ProfileSheet.tsx');
     expect(profile).toContain("t('profile.voiceJournal')");
