@@ -1,0 +1,19 @@
+✔ bodyweight — a lift with no load beside a loaded one: 7 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ carry-day — a bodyweight lift, a loaded carry measured in metres, a dumbbell lift — ended early inside the carry: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ her-own-reps — she logs her own reps inside the band — the load is untouched: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ her-own-weight — she lifts lighter than written on the first set — the phone carries her weight to the sets that follow: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ out-of-the-band — her reps fall far under the band — and the load does NOT move, on either device: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ phone-dies-after-a-plank — a plank held on the phone, the phone silent before the second — the wrist holds it and finishes the day; both planks come home: 10 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ phone-dies-in-a-rest — she lifts lighter on the phone (her weight carried), the phone goes silent mid-rest, and the wrist carries the day to its end: 14 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ phone-dies-mid-superset — the phone goes silent with the couple half done — the wrist goes straight on to the partner, then rests the round: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ phone-dies-on-a-warm-up — the warm-up was asked for on the phone; it goes silent between the two bridges — the wrist runs the second, then the working sets: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ phone-dies-paused — she pauses on the phone in a rest, the phone goes silent, and she resumes on the wrist — the pause is not counted as rest: 12 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ phone-dies-then-swap — the phone goes silent on the walk to the row — and she swaps it on the wrist, from the options the phone left in the kit: 9 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ plank-day — a day with a plank in it — one hold started on its clock and finished, one finished outright: 12 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ rests-and-pauses — +15 on a rest, a pause inside a rest, a pause on a set, and the workout ended early: 17 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ straight — three lifts, every set as written, every rest skipped, to the end: 13 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ superset — a lift, then a couple of two lifts for three rounds, then a lift: 16 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ swap-alone — on the walk to the row she swaps it for the first lift offered, swaps back, swaps again — and trains the swapped lift: 14 actions, every fact the phone states is what the wrist draws, and the record is the same
+✔ warm-up — she asks for the warm-up on the squat (two bridges) and on the deadlift (one), pauses on a bridge, and the curl is offered none: 23 actions, every fact the phone states is what the wrist draws, and the record is the same
+
+wristengine: 17 scenarios — the wrist alone is the phone wherever it is said to be
