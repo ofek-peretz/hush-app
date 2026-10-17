@@ -1,0 +1,408 @@
+── sources
+frames: 24, shots: 32 -> /var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/tmp.TJZbKw6mwT/src/GalleryFrames.swift
+── build
+/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/tmp.TJZbKw6mwT/Gallery.app: replacing existing signature
+total 10472
+drwxr-xr-x  3 runner  staff       96 Oct 17 07:59 _CodeSignature
+drwxr-xr-x  5 runner  staff      160 Oct 17 07:59 .
+drwx------  4 runner  staff      128 Oct 17 07:59 ..
+-rwxr-xr-x  1 runner  staff  5353632 Oct 17 07:59 Gallery
+-rw-r--r--  1 runner  staff     1297 Oct 17 07:59 Info.plist
+── simulators
+runtime: com.apple.CoreSimulator.SimRuntime.watchOS-26-5
+── 40mm · com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-6-40mm
+Monitoring boot status for gallery-40mm (2BC7BC70-8547-4B4D-AC64-3D7543F0E05E).
+Device already booted, nothing to do.
+
+com.hushfitness.gallery.watch: 2663
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/00-idle.png
+com.hushfitness.gallery.watch: 2954
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/01-home.png
+com.hushfitness.gallery.watch: 2968
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/01b-home-first.png
+com.hushfitness.gallery.watch: 3291
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/02-set-first.png
+com.hushfitness.gallery.watch: 3377
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/03-set-history.png
+com.hushfitness.gallery.watch: 3403
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/04-set-moved.png
+com.hushfitness.gallery.watch: 3539
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/05-set-dumbbell.png
+com.hushfitness.gallery.watch: 3818
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/06-set-bodyweight.png
+com.hushfitness.gallery.watch: 3842
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/07-set-warmup.png
+com.hushfitness.gallery.watch: 3869
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/08-set-heavy.png
+com.hushfitness.gallery.watch: 4278
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/09-hold-wait.png
+com.hushfitness.gallery.watch: 4291
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/10-hold-run.png
+com.hushfitness.gallery.watch: 4303
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/11-rest.png
+com.hushfitness.gallery.watch: 4726
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/12-rest-long-name.png
+com.hushfitness.gallery.watch: 4745
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/13-rest-moved.png
+com.hushfitness.gallery.watch: 4763
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/14-crossing.png
+com.hushfitness.gallery.watch: 5115
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/15-crossing-plain.png
+com.hushfitness.gallery.watch: 5404
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/16-paused.png
+com.hushfitness.gallery.watch: 5592
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/17-complete.png
+com.hushfitness.gallery.watch: 6038
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/17a-complete-reading.png
+com.hushfitness.gallery.watch: 6077
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/17b-complete-reading.png
+com.hushfitness.gallery.watch: 6088
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/17c-complete-no-energy.png
+com.hushfitness.gallery.watch: 6111
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/18-edit-reps.png
+com.hushfitness.gallery.watch: 6575
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/19-edit-weight.png
+com.hushfitness.gallery.watch: 6612
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/20-edit-bodyweight.png
+com.hushfitness.gallery.watch: 6645
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/21-lift-done.png
+com.hushfitness.gallery.watch: 7005
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/22-reconnecting.png
+com.hushfitness.gallery.watch: 7143
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/23-superset-first.png
+com.hushfitness.gallery.watch: 7173
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/24-superset-second.png
+com.hushfitness.gallery.watch: 7342
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/25-superset-rest.png
+com.hushfitness.gallery.watch: 7670
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/26-set-warmup-offered.png
+com.hushfitness.gallery.watch: 7687
+Note: No display specified. Defaulting to display: E1208C51-A651-4882-A37E-93F2F6D10B04 (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/40mm/27-set-warmup-offered-long.png
+── 45mm · com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-7-45mm
+Monitoring boot status for gallery-45mm (A8F8B5F2-704E-44CC-B642-90C05142C12A).
+[2026-10-17 08:03:42 +0000] Status=2, isTerminal=NO, Elapsed=00:16.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+		Migration Elapsed:00:11 seconds
+
+[2026-10-17 08:03:43 +0000] Status=2, isTerminal=NO, Elapsed=00:17.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.-0LaunchServicesMigrator (00LaunchServicesMigrator.migrator, user-agnostic)
+		Migration Elapsed:00:12 seconds
+
+[2026-10-17 08:03:45 +0000] Status=2, isTerminal=NO, Elapsed=00:19.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:13 seconds
+
+[2026-10-17 08:03:46 +0000] Status=2, isTerminal=NO, Elapsed=00:19.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:15 seconds
+
+[2026-10-17 08:03:47 +0000] Status=2, isTerminal=NO, Elapsed=00:20.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:15 seconds
+
+[2026-10-17 08:03:47 +0000] Status=2, isTerminal=NO, Elapsed=00:21.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:16 seconds
+
+[2026-10-17 08:03:48 +0000] Status=2, isTerminal=NO, Elapsed=00:22.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:17 seconds
+
+[2026-10-17 08:03:49 +0000] Status=2, isTerminal=NO, Elapsed=00:23.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:18 seconds
+
+[2026-10-17 08:03:50 +0000] Status=2, isTerminal=NO, Elapsed=00:24.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:19 seconds
+
+[2026-10-17 08:03:51 +0000] Status=2, isTerminal=NO, Elapsed=00:25.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:20 seconds
+
+[2026-10-17 08:03:52 +0000] Status=2, isTerminal=NO, Elapsed=00:26.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:21 seconds
+
+[2026-10-17 08:03:53 +0000] Status=2, isTerminal=NO, Elapsed=00:27.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:22 seconds
+
+[2026-10-17 08:03:54 +0000] Status=2, isTerminal=NO, Elapsed=00:28.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.managedconfiguration.migrator (MCProfile.migrator, user-agnostic)
+		Migration Elapsed:00:23 seconds
+
+[2026-10-17 08:03:55 +0000] Status=2, isTerminal=NO, Elapsed=00:29.
+	Waiting on Data Migration
+		Reason:Running plugin com.apple.NanoHealthMigrator (NanoHealthMigrator.migrator)
+		Migration Elapsed:00:24 seconds
+
+[2026-10-17 08:03:56 +0000] Status=4, isTerminal=NO, Elapsed=00:30.
+	Waiting on System App
+
+[2026-10-17 08:03:57 +0000] Status=4, isTerminal=NO, Elapsed=00:31.
+	Waiting on System App
+
+[2026-10-17 08:04:00 +0000] Status=4, isTerminal=NO, Elapsed=00:34.
+	Waiting on System App
+
+[2026-10-17 08:04:01 +0000] Status=4, isTerminal=NO, Elapsed=00:34.
+	Waiting on System App
+
+[2026-10-17 08:04:01 +0000] Status=4, isTerminal=NO, Elapsed=00:34.
+	Waiting on System App
+
+[2026-10-17 08:04:01 +0000] Status=4, isTerminal=NO, Elapsed=00:35.
+	Waiting on System App
+
+[2026-10-17 08:04:02 +0000] Status=4, isTerminal=NO, Elapsed=00:36.
+	Waiting on System App
+
+[2026-10-17 08:04:04 +0000] Status=4, isTerminal=NO, Elapsed=00:37.
+	Waiting on System App
+
+[2026-10-17 08:04:04 +0000] Status=4, isTerminal=NO, Elapsed=00:38.
+	Waiting on System App
+
+[2026-10-17 08:04:05 +0000] Status=4, isTerminal=NO, Elapsed=00:39.
+	Waiting on System App
+
+[2026-10-17 08:04:06 +0000] Status=4, isTerminal=NO, Elapsed=00:40.
+	Waiting on System App
+
+[2026-10-17 08:04:08 +0000] Status=4, isTerminal=NO, Elapsed=00:41.
+	Waiting on System App
+
+[2026-10-17 08:04:09 +0000] Status=4, isTerminal=NO, Elapsed=00:42.
+	Waiting on System App
+
+[2026-10-17 08:04:10 +0000] Status=4, isTerminal=NO, Elapsed=00:43.
+	Waiting on System App
+
+[2026-10-17 08:04:10 +0000] Status=4, isTerminal=NO, Elapsed=00:44.
+	Waiting on System App
+
+[2026-10-17 08:04:11 +0000] Status=4, isTerminal=NO, Elapsed=00:45.
+	Waiting on System App
+
+[2026-10-17 08:04:12 +0000] Status=4, isTerminal=NO, Elapsed=00:46.
+	Waiting on System App
+
+[2026-10-17 08:04:13 +0000] Status=4, isTerminal=NO, Elapsed=00:47.
+	Waiting on System App
+
+[2026-10-17 08:04:15 +0000] Status=4294967295, isTerminal=YES, Elapsed=00:48.
+	Finished
+
+com.hushfitness.gallery.watch: 9403
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/00-idle.png
+com.hushfitness.gallery.watch: 9422
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/01-home.png
+com.hushfitness.gallery.watch: 9834
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/01b-home-first.png
+com.hushfitness.gallery.watch: 9925
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/02-set-first.png
+com.hushfitness.gallery.watch: 9946
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/03-set-history.png
+com.hushfitness.gallery.watch: 10236
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/04-set-moved.png
+com.hushfitness.gallery.watch: 10445
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/05-set-dumbbell.png
+com.hushfitness.gallery.watch: 10468
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/06-set-bodyweight.png
+com.hushfitness.gallery.watch: 10660
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/07-set-warmup.png
+com.hushfitness.gallery.watch: 10985
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/08-set-heavy.png
+com.hushfitness.gallery.watch: 11063
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/09-hold-wait.png
+com.hushfitness.gallery.watch: 11395
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/10-hold-run.png
+com.hushfitness.gallery.watch: 11919
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/11-rest.png
+com.hushfitness.gallery.watch: 11932
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/12-rest-long-name.png
+com.hushfitness.gallery.watch: 11943
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/13-rest-moved.png
+com.hushfitness.gallery.watch: 12340
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/14-crossing.png
+com.hushfitness.gallery.watch: 12437
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/15-crossing-plain.png
+com.hushfitness.gallery.watch: 12467
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/16-paused.png
+com.hushfitness.gallery.watch: 12679
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/17-complete.png
+com.hushfitness.gallery.watch: 12987
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/17a-complete-reading.png
+com.hushfitness.gallery.watch: 12998
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/17b-complete-reading.png
+com.hushfitness.gallery.watch: 13012
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/17c-complete-no-energy.png
+com.hushfitness.gallery.watch: 13314
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/18-edit-reps.png
+com.hushfitness.gallery.watch: 13499
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/19-edit-weight.png
+com.hushfitness.gallery.watch: 13517
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/20-edit-bodyweight.png
+com.hushfitness.gallery.watch: 13639
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/21-lift-done.png
+com.hushfitness.gallery.watch: 14034
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/22-reconnecting.png
+com.hushfitness.gallery.watch: 14046
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/23-superset-first.png
+com.hushfitness.gallery.watch: 14089
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/24-superset-second.png
+com.hushfitness.gallery.watch: 14731
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/25-superset-rest.png
+com.hushfitness.gallery.watch: 14958
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/26-set-warmup-offered.png
+com.hushfitness.gallery.watch: 14981
+Note: No display specified. Defaulting to display: 4B33C82D-1458-4CC9-BE03-64439B9F9BFD (screenID: 1, name: LCD)
+Wrote screenshot to: /Users/runner/work/_temp/renders/45mm/27-set-warmup-offered-long.png
+40mm
+45mm
+render.log
+
+/Users/runner/work/_temp/renders/40mm:
+00-idle.png
+01-home.png
+01b-home-first.png
+02-set-first.png
+03-set-history.png
+04-set-moved.png
+05-set-dumbbell.png
+06-set-bodyweight.png
+07-set-warmup.png
+08-set-heavy.png
+09-hold-wait.png
+10-hold-run.png
+11-rest.png
+12-rest-long-name.png
+13-rest-moved.png
+14-crossing.png
+15-crossing-plain.png
+16-paused.png
+17-complete.png
+17a-complete-reading.png
+17b-complete-reading.png
+17c-complete-no-energy.png
+18-edit-reps.png
+19-edit-weight.png
+20-edit-bodyweight.png
+21-lift-done.png
+22-reconnecting.png
+23-superset-first.png
+24-superset-second.png
+25-superset-rest.png
+26-set-warmup-offered.png
+27-set-warmup-offered-long.png
+
+/Users/runner/work/_temp/renders/45mm:
+00-idle.png
+01-home.png
+01b-home-first.png
+02-set-first.png
+03-set-history.png
+04-set-moved.png
+05-set-dumbbell.png
+06-set-bodyweight.png
+07-set-warmup.png
+08-set-heavy.png
+09-hold-wait.png
+10-hold-run.png
+11-rest.png
+12-rest-long-name.png
+13-rest-moved.png
+14-crossing.png
+15-crossing-plain.png
+16-paused.png
+17-complete.png
+17a-complete-reading.png
+17b-complete-reading.png
+17c-complete-no-energy.png
+18-edit-reps.png
+19-edit-weight.png
+20-edit-bodyweight.png
+21-lift-done.png
+22-reconnecting.png
+23-superset-first.png
+24-superset-second.png
+25-superset-rest.png
+26-set-warmup-offered.png
+27-set-warmup-offered-long.png
