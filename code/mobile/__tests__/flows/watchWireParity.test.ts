@@ -104,9 +104,11 @@ function widestMirror(): SessionMirror {
   });
 }
 
-/** Mid-set — the frame the watch spends most of a workout rendering. */
+/** Mid-set — the frame the watch spends most of a workout rendering. It carries a warm-up offer
+ *  (2026-10-17): the key is sent only where there is one, so a sample without it would let the wrist
+ *  decode a field this law had never seen the phone send. */
 function activeFrame(): SessionMirror {
-  return frame({ machine: { phase: 'SET_PRESENTED', setIndex: 0, paused: false }, toLoad: true });
+  return frame({ machine: { phase: 'SET_PRESENTED', setIndex: 0, paused: false }, toLoad: true, warmupOffered: 2 });
 }
 
 /** Resting between sets — the frame that carries the rest clock. */
@@ -395,6 +397,10 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
          a day with a plank in it, and bring the plank home as an item. A real step carries one of
          the two amounts; the sample carries both so each is proven to cross. */
       holdSeconds: 45, holdMetres: 40, at: { block: 2, round: 1, position: 1 },
+      /* The warm-up the phone would offer before this set, and a bridge's own label (stage 2,
+         2026-10-17) — what lets the wrist alone offer "+ Warm-up" and run the ramp she asks for. */
+      ramp: [{ weightKg: 10, reps: 5, loadSetup: { style: 'dumbbell', perHand: 10 } }],
+      warmup: { index: 0, count: 2 },
     };
     const workout: WatchPlanWorkout = { id: 'd1', name: 'Upper A', muscles: 'chest', steps: [step], seat: 0 };
     const plan: WatchPlanSnapshot = {
@@ -402,6 +408,8 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
       restInterS: 90, restTransitionS: 120, workouts: [workout], moreWorkouts: [workout],
     };
     joined('WireStepPlace', keysOf(step.at!));
+    joined('WireWarmupRung', keysOf(...step.ramp!));
+    joined('WireWarmupPlace', keysOf(step.warmup!));
     joined('WirePlanStep', keysOf(step));
     joined('WirePlanWorkout', keysOf(workout));
     joined('WirePlan', keysOf(plan));
@@ -409,8 +417,10 @@ describe('every struct that crosses the bridge is joined, not just the mirror', 
 
   it('WireSessionRecord + WireRecordSet — the standalone workout carried home', () => {
     const set: WatchRecordSet = {
-      exerciseId: 'db_bench_press', setIndex: 0, blockId: 'b1', recommendedWeight: 20,
+      exerciseId: 'db_bench_press', setIndex: -1, blockId: 'b1', recommendedWeight: 20,
       recommendedReps: 8, actualWeight: 20, actualReps: 9, completedAt: new Date(NOW).toISOString(),
+      // A warm-up bridge she did on the wrist (2026-10-17): it comes home as the bridge it is.
+      isWarmup: true,
     };
     // A hold she finished on the wrist (stage 1b, 2026-10-13) — an ITEM, not a set of zero reps.
     const item: WatchRecordItem = {

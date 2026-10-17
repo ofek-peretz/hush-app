@@ -339,6 +339,19 @@ export interface SessionMirror {
    * and on every set. Nothing is written at zero on any surface (founder, 2026-09-09): her Done is.
    */
   holdEndsAt?: string | null;
+  /**
+   * ⛔ THE WARM-UP THE PHONE IS OFFERING BEFORE THE SET ON STAGE — how many bridges (2026-10-17).
+   *
+   * The phone's stage has drawn its warm-up disc since the founder's ruling of 2026-08-30 (offered on
+   * a compound, never prescribed); the wrist never knew there was one, so a lifter reading her set
+   * off her wrist was never offered the ramp at all. The count is the phone's own `warmupOffer`, and
+   * the wrist's "+ Warm-up" proposes `add_warmup` against it.
+   *
+   * On an ACTIVE SET only: the wrist offers it where she stands at the station (the phone also asks
+   * it on the crossing, where the wrist's two buttons already belong to +15 and the swap). Present
+   * only when there is one, so every other frame stays byte-for-byte the frame it was.
+   */
+  warmupOffered?: number;
 }
 
 export interface MirrorInputs {
@@ -394,6 +407,8 @@ export interface MirrorInputs {
   awaitingReady?: boolean;
   /** When the running hold on stage ends, epoch ms — null when none runs (`SessionMirror.holdEndsAt`). */
   holdEndsAtMs?: number | null;
+  /** How many warm-up bridges the phone offers before the set on stage (`SessionMirror.warmupOffered`). */
+  warmupOffered?: number;
 }
 
 function isResting(phase: SessionMachine['phase']): boolean {
@@ -790,6 +805,8 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       phase === 'active_set' && cur.hold?.seconds != null && inp.holdEndsAtMs != null && Number.isFinite(inp.holdEndsAtMs)
         ? new Date(inp.holdEndsAtMs).toISOString()
         : null,
+    // Only on a set she is standing at, and only when there is one — see the field's note.
+    ...(phase === 'active_set' && (inp.warmupOffered ?? 0) > 0 ? { warmupOffered: inp.warmupOffered } : {}),
   };
 }
 

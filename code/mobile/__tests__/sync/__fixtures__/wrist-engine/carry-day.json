@@ -5,7 +5,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_gd61g4",
+  "planId": "plan_1cr6uzw",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -99,8 +99,19 @@
       "targetRepsHi": 12,
       "restInterS": 150,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 20
       },
+      "ramp": [
+       {
+        "weightKg": 14,
+        "reps": 3,
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 14
+        }
+       }
+      ],
       "restAfterS": 150,
       "at": {
        "block": 3,
@@ -120,7 +131,8 @@
       "targetRepsHi": 12,
       "restInterS": 150,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 20
       },
       "restAfterS": 120,
       "at": {
@@ -162,6 +174,7 @@
   "holdMetres": null,
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
+  "warmupOffered": null,
   "isWarmup": false
  },
  "steps": [
@@ -199,7 +212,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -236,6 +251,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -275,7 +291,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": 40,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -308,6 +326,7 @@
     "holdMetres": 40,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -341,7 +360,9 @@
     "holdMetres": 40,
     "nextHoldSeconds": null,
     "nextHoldMetres": 40,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -374,6 +395,7 @@
     "holdMetres": 40,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -407,7 +429,9 @@
     "holdMetres": 40,
     "nextHoldSeconds": null,
     "nextHoldMetres": 40,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -440,6 +464,7 @@
     "holdMetres": 40,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },

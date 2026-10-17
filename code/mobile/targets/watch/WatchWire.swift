@@ -23,6 +23,9 @@ let WATCH_START_GRACE_S: TimeInterval = 3
 /// A rest this short is not a rest: the next step presents at once. The phone's own line
 /// (`sessionState.REST_SKIP_THRESHOLD_S`, §1.14) — it is how the inside of a superset is run.
 let REST_SKIP_THRESHOLD_S = 5
+/// The breath after a warm-up bridge — a plate change, never her learned rest. The phone's own
+/// number (`domain/warmupRamp.WARMUP_REST_S`); the wire-parity law holds the two together.
+let WARMUP_REST_S = 45
 let MIRROR_SCHEMA_VERSION = 1
 
 struct WireSwapOption: Codable, Equatable {
@@ -217,6 +220,10 @@ struct WireMirror: Codable, Equatable {
   /// phone one build behind sends no key, and the rest frame simply lands without the line (the
   /// next load it shows is still the correct, corrected one).
   var correction: WireCorrection?
+  /// ⛔ THE WARM-UP ON OFFER BEFORE THE SET ON STAGE — how many bridges (2026-10-17). The phone's
+  /// own `warmupOffer`, or this wrist's own engine reading the plan's `ramp`; the set screen offers
+  /// "+ Warm-up" beside Complete set while it is set. Nil everywhere else, and from an older phone.
+  var warmupOffered: Int?
 }
 
 /// One pickable workout in the Start screen's "Choose workout" overlay.
@@ -390,11 +397,34 @@ struct WirePlanStep: Codable, Equatable {
   var holdMetres: Int?
   /// Where it sits in the day — it rides the record home so a hold is put back where it was held.
   var at: WireStepPlace?
+  /// ⛔ THE WARM-UP SHE MAY ASK FOR BEFORE THIS SET (2026-10-17, stage 2). The phone's own
+  /// `warmupOffer`, answered in advance: the bridges it would insert, each with its load, its reps
+  /// and its bar. Present only where the phone itself offers one; the engine inserts them on her
+  /// press and computes nothing (no second engine on the wrist).
+  var ramp: [WireWarmupRung]?
+  /// A warm-up bridge — which of how many. Set on the steps the engine inserts, and on a bridge
+  /// already in a phone's live plan when the wrist takes the workout over.
+  var warmup: WireWarmupPlace?
+}
+
+/// One bridge of an offered warm-up — see `WirePlanStep.ramp`.
+struct WireWarmupRung: Codable, Equatable {
+  var weightKg: Double
+  var reps: Int
+  var loadSetup: WireLoadSetup?
+}
+
+/// Which bridge of how many — the phone's `insertWarmup` label.
+struct WireWarmupPlace: Codable, Equatable {
+  var index: Int
+  var count: Int
 }
 
 extension WirePlanStep {
   /// Not a set: it is finished, not counted.
   var isHold: Bool { holdSeconds != nil || holdMetres != nil }
+  /// A warm-up bridge: logged, labelled, and stepped over by everything that counts her work.
+  var isBridge: Bool { warmup != nil }
 }
 
 struct WirePlanWorkout: Codable, Equatable {
@@ -455,6 +485,7 @@ struct WireRecordItem: Codable, Equatable {
 
 struct WireRecordSet: Codable, Equatable {
   var exerciseId: String
+  /// Within the exercise, from 0 — and below 0 on a warm-up bridge, as the phone writes one.
   var setIndex: Int
   var blockId: String?
   var recommendedWeight: Double?
@@ -462,6 +493,8 @@ struct WireRecordSet: Codable, Equatable {
   var actualWeight: Double?
   var actualReps: Int
   var completedAt: String
+  /// A warm-up bridge (2026-10-17) — the phone files it as the bridge it is, never as working work.
+  var isWarmup: Bool?
 }
 
 struct WireSessionRecord: Codable, Equatable {
@@ -480,6 +513,12 @@ struct WireSessionRecord: Codable, Equatable {
   var sets: [WireRecordSet]
   /// The holds and carries of the workout, in the order she finished them (2026-10-13).
   var items: [WireRecordItem]?
+}
+
+extension WireSessionRecord {
+  /// Is this a workout? A working set or a finished hold — never a warm-up alone, which the phone
+  /// does not count as a start either (`finalize`: a session of bridges and nothing else).
+  var isAWorkout: Bool { sets.contains { $0.isWarmup != true } || !(items ?? []).isEmpty }
 }
 
 /// Watch → phone intent. The phone de-dupes on `intentId` and rejects stale/wrong-

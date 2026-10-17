@@ -1946,6 +1946,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const watchBusyRef = useRef<() => void>(() => {});
   // "מוכן" from the wrist (2026-09-28) — the same start the lock screen's Ready and her word make.
   const watchReadyRef = useRef<() => void>(() => {});
+  // "+ Warm-up" from the wrist (2026-10-17) — the same press as the stage's warm-up disc.
+  const watchWarmupRef = useRef<() => void>(() => {});
   /**
    * The latest view, for wrist handlers that first catch the clock up (`applyClock`) and must then
    * act on the state AFTER the catch-up — the `view` a handler closed over is the render before it.
@@ -1982,6 +1984,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       dispatch: (event) => watchActionsRef.current[event.type]?.(),
       markEquipmentOccupied: () => watchBusyRef.current(),
       setReady: () => watchReadyRef.current(),
+      addWarmup: () => watchWarmupRef.current(),
       swapExercise: (exerciseId) => watchSwapRef.current(exerciseId),
       startWorkout: (workoutId) => watchStartRef.current(workoutId),
       selectWorkout: (workoutId) => watchSelectRef.current(workoutId),
@@ -2430,6 +2433,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       // phone's stage draws from `useSession()`, so the wrist and the card cannot draw a third state.
       awaitingReady: awaitingReady && machine.phase === 'SET_PRESENTED',
       holdEndsAtMs: machine.phase === 'SET_PRESENTED' ? holdClockOf(plan[machine.setIndex])?.endsAtMs ?? null : null,
+      // The warm-up the stage's disc offers for the set on stage — the same `warmupOffer`, so the
+      // wrist's "+ Warm-up" and the phone's disc can never disagree about whether there is one.
+      warmupOffered: machine.phase === 'SET_PRESENTED' ? warmupOffer(plan, machine.setIndex)?.ramp.length ?? 0 : 0,
     });
 
     // One projection → both surfaces. The watch receives the full mirror (incl. the
@@ -4043,6 +4049,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // Ready does: after the clock, and only on a set that is still on stage.
   watchReadyRef.current = afterClock((v) => {
     if (v.displayPhase === 'SET_PRESENTED') v.markSetStarted();
+  });
+  // "+ Warm-up" from the wrist → the phone's own disc press (`addWarmup`), which re-asks
+  // `warmupOffer` itself — so a wrist tap can never insert a ramp the phone would not offer.
+  watchWarmupRef.current = afterClock((v) => {
+    if (v.displayPhase === 'SET_PRESENTED' && v.warmupOffered > 0) v.addWarmup();
   });
   // "+15 sec" from the watch → extend the running rest (re-publishes to every surface).
   watchAddRestRef.current = (seconds) => view.extendRest(seconds);

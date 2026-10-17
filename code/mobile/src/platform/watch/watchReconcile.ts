@@ -86,6 +86,9 @@ export function watchRecordToSession(r: WatchSessionRecord): Session {
       actualReps: s.actualReps,
       edited: actualWeight !== recommendedWeight || s.actualReps !== recommendedReps,
       persistedAt: s.completedAt ?? r.endedAt,
+      // A warm-up bridge comes home with BOTH of the phone's marks (`domain/warmupRamp`) — the one
+      // every engine reader already steps over, and the honest label (2026-10-17).
+      ...(s.isWarmup ? { isApproach: true, isWarmup: true } : {}),
     };
   });
   return {
@@ -133,8 +136,9 @@ export async function applyWatchSessionRecord(raw: unknown, deps: WatchReconcile
   try {
     // Not a workout (nothing logged) — never saved or counted, but acked so the
     // watch stops re-sending it. A hold she finished is work (2026-10-13): a record of holds alone
-    // is a workout, and dropping it as "empty" would lose the one thing she did.
-    if (record.sets.length === 0 && (record.items?.length ?? 0) === 0) {
+    // is a workout, and dropping it as "empty" would lose the one thing she did. A warm-up bridge is
+    // NOT (2026-10-17) — the phone's own rule for a session of bridges and nothing else (`finalize`).
+    if (record.sets.every((s) => s.isWarmup === true) && (record.items?.length ?? 0) === 0) {
       deps.track(WATCH_EVENTS.recordReceived, {
         outcome: 'rejected',
         reason: 'empty',

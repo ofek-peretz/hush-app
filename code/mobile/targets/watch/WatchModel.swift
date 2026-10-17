@@ -464,10 +464,11 @@ final class WatchModel: ObservableObject {
     // that ignores every phone frame and will enqueue its own record for the same workout.
     //
     // What actually makes a local session safe to discard is not HOW it started; it is that no work
-    // has been logged into it. `sets.isEmpty` is the whole guarantee, and it is unchanged — a local
-    // session with even one set in it is still the truth and still keeps authority, because the
-    // alternative is throwing away sets she performed.
-    if let engine = localEngine, phoneLive, engine.state.sets.isEmpty {
+    // has been logged into it. `hasWork` is the whole guarantee — a local session with even one set
+    // in it, or one finished plank (2026-10-17: this read `sets.isEmpty`, and a session that opened
+    // on a hold had real work and no sets), is still the truth and still keeps authority, because
+    // the alternative is throwing away work she performed.
+    if let engine = localEngine, phoneLive, !engine.hasWork {
       engine.discard()
       localEngine = nil
       localMirror = nil
@@ -602,7 +603,9 @@ final class WatchModel: ObservableObject {
     localMirror = frame
     syncRestHaptics(prev: prev, next: frame)
     syncWorkoutRuntime(phase: frame.phase) // "complete" → persist the HKWorkout
-    if !record.sets.isEmpty { manager.transferRecord(record) }
+    // A workout of holds alone is a workout (2026-10-13) — it was enqueued, and then not sent until
+    // the next reconnect flushed the outbox, because this read `sets` only. One rule, the engine's.
+    if record.isAWorkout { manager.transferRecord(record) }
     recompute()
   }
 
@@ -982,6 +985,20 @@ final class WatchModel: ObservableObject {
     }
     guard let m = effectiveMirror else { return }
     if !sendIntent(type: "set_ready", expectedIndex: m.globalIndex) { intentDidNotLeave() }
+  }
+
+  /// "+ Warm-up" (2026-10-17, stage 2) — the bridges on offer before the set on stage go in. Alone,
+  /// the wrist's own engine inserts the ramp the phone precomputed; with the phone, the phone's own
+  /// disc press does (`add_warmup`). A figure she had dialled belonged to the WORKING set, which is
+  /// no longer the one on stage — it is let go rather than carried onto a bridge.
+  func addWarmup() {
+    editDraft = nil
+    if let engine = localEngine {
+      engine.addWarmup()
+      return
+    }
+    guard let m = effectiveMirror, (m.warmupOffered ?? 0) > 0 else { return }
+    if !sendIntent(type: "add_warmup", expectedIndex: m.globalIndex) { intentDidNotLeave() }
   }
 
   func addRest() {

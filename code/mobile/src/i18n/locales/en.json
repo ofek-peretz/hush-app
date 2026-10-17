@@ -1794,6 +1794,7 @@
     "roundWord": "ROUND",
     "setWord": "SET",
     "warmupWord": "WARM-UP",
+    "addWarmup": "+ Warm-up",
     "addShort": "+15s",
     "liftDone": "{{name}}, done.",
     "correctedUp": "You did {{reps}}, so I added weight.",

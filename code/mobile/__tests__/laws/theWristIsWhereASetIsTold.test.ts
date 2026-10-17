@@ -134,7 +134,9 @@ describe('1 · how many she did: as on the phone — one press as written, two p
   it('a new set is a new screen — an editor left open never carries into the next set', () => {
     const stage = between(screens, 'case let .activeSet(m, draft):', 'case let .interRest(m):');
     expect(stage).toContain('ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,');
-    expect(stage).toContain('.id(m.globalIndex)');
+    // The position names the screen — and a warm-up bridge put in AHEAD of the set at that same
+    // position is a new set too (2026-10-17), so the key says which of the two is on stage.
+    expect(stage).toContain('.id("\\(m.globalIndex)\\(m.isWarmup == true ? "w" : "")")');
   });
 
   it('the hint names both doors, in both languages and both genders', () => {

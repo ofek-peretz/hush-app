@@ -181,6 +181,8 @@ enum WatchCopy {
   static var setWord: String { L("setWord", "SET") }
   /// The warm-up ramp's label (2026-08-24) — used wherever a bridge step would otherwise say SET.
   static var warmupWord: String { L("warmupWord", "WARM-UP") }
+  /// The warm-up offer on a compound's first set (2026-10-17) — the phone's disc, on the wrist.
+  static var addWarmup: String { L("addWarmup", "+ Warm-up") }
   static var startNextSet: String { L("startNextSet", "Start next set") }
   static var skipRest: String { L("skipRest", "Skip rest") }
   static var startNextLift: String { L("startNextLift", "Start next lift") }

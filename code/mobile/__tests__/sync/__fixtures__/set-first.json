@@ -78,7 +78,8 @@
       "nextHoldSeconds": null,
       "nextHoldMetres": null,
       "awaitingReady": false,
-      "holdEndsAt": null
+      "holdEndsAt": null,
+      "warmupOffered": 2
     },
     "lobby": null,
     "plan": null,

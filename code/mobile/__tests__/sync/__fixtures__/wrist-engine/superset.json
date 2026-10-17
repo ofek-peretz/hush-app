@@ -5,7 +5,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_m13c1v",
+  "planId": "plan_1kzmbbi",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -31,8 +31,36 @@
        "perSide": 20,
        "plates": [
         20
-       ]
+       ],
+       "barKg": 20
       },
+      "ramp": [
+       {
+        "weightKg": 30,
+        "reps": 5,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 5,
+         "plates": [
+          5
+         ],
+         "barKg": 20
+        }
+       },
+       {
+        "weightKg": 45,
+        "reps": 3,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 12.5,
+         "plates": [
+          10,
+          2.5
+         ],
+         "barKg": 20
+        }
+       }
+      ],
       "restAfterS": 150,
       "at": {
        "block": 1,
@@ -56,7 +84,8 @@
        "perSide": 20,
        "plates": [
         20
-       ]
+       ],
+       "barKg": 20
       },
       "restAfterS": 120,
       "at": {
@@ -77,7 +106,8 @@
       "targetRepsHi": 12,
       "restInterS": 75,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 12
       },
       "restAfterS": 0,
       "restWritten": true,
@@ -105,7 +135,8 @@
       "targetRepsHi": 15,
       "restInterS": 75,
       "loadSetup": {
-       "style": "cable"
+       "style": "cable",
+       "pin": 25
       },
       "restAfterS": 120,
       "superset": {
@@ -132,7 +163,8 @@
       "targetRepsHi": 12,
       "restInterS": 75,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 12
       },
       "restAfterS": 0,
       "restWritten": true,
@@ -160,7 +192,8 @@
       "targetRepsHi": 15,
       "restInterS": 75,
       "loadSetup": {
-       "style": "cable"
+       "style": "cable",
+       "pin": 25
       },
       "restAfterS": 120,
       "superset": {
@@ -187,7 +220,8 @@
       "targetRepsHi": 12,
       "restInterS": 75,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 12
       },
       "restAfterS": 0,
       "restWritten": true,
@@ -215,7 +249,8 @@
       "targetRepsHi": 15,
       "restInterS": 75,
       "loadSetup": {
-       "style": "cable"
+       "style": "cable",
+       "pin": 25
       },
       "restAfterS": 120,
       "superset": {
@@ -242,7 +277,8 @@
       "targetRepsHi": 20,
       "restInterS": 60,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 8
       },
       "restAfterS": 60,
       "at": {
@@ -263,7 +299,8 @@
       "targetRepsHi": 20,
       "restInterS": 60,
       "loadSetup": {
-       "style": "dumbbell"
+       "style": "dumbbell",
+       "perHand": 8
       },
       "restAfterS": 120,
       "at": {
@@ -305,6 +342,7 @@
   "holdMetres": null,
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
+  "warmupOffered": 2,
   "isWarmup": false
  },
  "steps": [
@@ -342,7 +380,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -379,6 +419,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -423,7 +464,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -461,6 +504,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -499,6 +543,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -541,7 +586,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -583,6 +630,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -625,6 +673,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -669,7 +718,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -713,6 +764,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -757,6 +809,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -798,7 +851,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -831,6 +886,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },
@@ -868,7 +924,9 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
-    "isWarmup": false
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
    }
   },
   {
@@ -905,6 +963,7 @@
     "holdMetres": null,
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
+    "warmupOffered": null,
     "isWarmup": false
    }
   },

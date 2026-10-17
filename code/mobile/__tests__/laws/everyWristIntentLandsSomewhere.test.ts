@@ -90,11 +90,14 @@ const PHASE_FOR: Record<WatchIntentType, SessionMirror['phase'] | null> = {
   cardio_finish: null,
   // The voice's Ready (2026-09-28): a set on stage whose loading dialogue is open (see MIRROR_FOR).
   set_ready: 'active_set',
+  // "+ Warm-up" (2026-10-17): a compound's first set, while the phone offers a ramp (see MIRROR_FOR).
+  add_warmup: 'active_set',
 };
 
 /** What the frame must also say for an intent to belong to it — Ready only while the voice waits for it. */
 const MIRROR_FOR: Partial<Record<WatchIntentType, Partial<SessionMirror>>> = {
   set_ready: { awaitingReady: true },
+  add_warmup: { warmupOffered: 2 },
 };
 
 /** The run each cardio intent belongs to: a pause needs a running run, a resume a paused one. */

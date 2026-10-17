@@ -117,7 +117,8 @@ type Action =
   | { do: 'addRest' } // +15
   | { do: 'pause' }
   | { do: 'resume' }
-  | { do: 'finishEarly' };
+  | { do: 'finishEarly' }
+  | { do: 'warmUp' }; // "+ Warm-up" on a compound's first set: the bridges go in ahead of it
 
 const done = (n: number, a: Action = { do: 'complete' }): Action[] => Array.from({ length: n }, () => [a, { do: 'endRest' } as Action]).flat();
 const reps = (ex: string, load: number | null, band: [number, number] = [8, 12]) => ({ kind: 'reps', ex, load, reps: band });
@@ -225,6 +226,29 @@ const SCENARIOS: Scenario[] = [
     script: [...done(2), { do: 'complete' }, { do: 'pause' }, { do: 'resume' }, { do: 'endRest' }, { do: 'finishEarly' }],
     agrees: true,
   },
+  {
+    name: 'warm-up',
+    says: 'she asks for the warm-up on the squat (two bridges) and on the deadlift (one), pauses on a bridge, and the curl is offered none',
+    day: {
+      name: 'Lower',
+      blocks: [{ rounds: 3, items: [reps('bb_back_squat', 100, [5, 8])] }, { rounds: 2, items: [reps('bb_rdl', 80, [8, 10])] }, { rounds: 2, items: [reps('leg_extension', 40, [10, 15])] }],
+    },
+    script: [
+      { do: 'warmUp' },
+      { do: 'complete' }, // bridge 1 of 2, as written
+      { do: 'endRest' },
+      { do: 'pause' },
+      { do: 'resume' },
+      { do: 'complete', weight: 70, reps: 3 }, // bridge 2 of 2, lighter than written — and it carries NOTHING
+      { do: 'endRest' },
+      ...done(3), // the three working squats; the last rest is the walk to the deadlift
+      { do: 'warmUp' },
+      ...done(3), // one bridge, then two working sets
+      ...done(2).slice(0, -1), // two leg extensions — never offered a warm-up
+    ],
+    // Stage 2 (2026-10-17): the phone's offer rides the plan, and the wrist inserts what it was told.
+    agrees: true,
+  },
 ];
 
 // ── the phone, running it ────────────────────────────────────────────────────────────────────────
@@ -257,6 +281,8 @@ const FACTS = [
   'holdMetres',
   'nextHoldSeconds',
   'nextHoldMetres',
+  // The warm-up on offer for the set on stage, and whether the step coming is a bridge (stage 2).
+  'warmupOffered',
 ] as const;
 
 function told(): Record<string, unknown> {
@@ -269,6 +295,7 @@ function told(): Record<string, unknown> {
   if (m.phase !== 'rest_inter' && m.phase !== 'rest_transition') for (const k of FACTS) if (k.startsWith('next')) out[k] = null;
   // A zero and an absence are one fact here: "no warm-up", "no hold".
   out.isWarmup = m.isWarmup === true;
+  if (m.phase === 'rest_inter' || m.phase === 'rest_transition') out.nextIsWarmup = m.nextIsWarmup === true;
   if (m.phase === 'complete') {
     return { phase: 'complete', summarySets: m.summary?.sets ?? null, summaryVolumeKg: m.summary?.volumeKg ?? null, summaryLifts: (m.summary?.lifts ?? []).map((l) => `${l.name} ${l.best}`) };
   }
@@ -323,6 +350,7 @@ async function run(s: Scenario) {
     else if (a.do === 'addRest') await act(async () => v.extendRest(15));
     else if (a.do === 'pause') await act(async () => v.pause());
     else if (a.do === 'resume') await act(async () => v.resume());
+    else if (a.do === 'warmUp') await act(async () => v.addWarmup());
     else await act(async () => void (await v.finishEarly()));
     await settle();
     await settle();
@@ -343,8 +371,9 @@ async function run(s: Scenario) {
     plan,
     start,
     steps,
-    // What the PHONE wrote down — the record a wrist-alone workout must bring home.
-    logged: logged.filter((l) => !l.isApproach).map((l) => ({ exerciseId: l.exerciseId, setIndex: l.setIndex, weight: l.actualWeight ?? null, reps: l.actualReps })),
+    // What the PHONE wrote down — the record a wrist-alone workout must bring home. A warm-up bridge
+    // is part of it, marked as the bridge it is (stage 2): the wrist must bring home the same rows.
+    logged: logged.map((l) => ({ exerciseId: l.exerciseId, setIndex: l.setIndex, weight: l.actualWeight ?? null, reps: l.actualReps, ...(l.isWarmup ? { warmup: true } : {}) })),
     held,
   };
 }

@@ -332,6 +332,31 @@ export interface WatchPlanStep {
   /** Where the step sits in the day as the coach wrote it — block, round, position, 1-based
    *  (`planRun`). It rides the record home, so a hold is put back exactly where it was held. */
   at?: { block: number; round: number; position: number };
+  /**
+   * ⛔ THE WARM-UP SHE MAY ASK FOR BEFORE THIS SET (2026-10-17, the wrist-alone plan, stage 2).
+   *
+   * The founder's ruling (2026-08-30): a warm-up is OFFERED on a compound and inserted at a press,
+   * never prescribed. On the phone the offer is `warmupOffer` and the bridges are `insertWarmup`; a
+   * plan carried no warm-up at all (the note at the head of `watchPlan.ts`), so the wrist alone
+   * could not offer one. Now the phone answers the question in advance — the same `warmupOffer`, on
+   * its own plan of the day — and puts the bridges it WOULD insert here: their load, their reps, and
+   * how to load the bar for each. The wrist inserts them on her press and computes nothing.
+   *
+   * Present only on a step where the phone itself would offer one. Optional, no schema bump: an
+   * older watch ignores it, and offers no warm-up — as it never did.
+   */
+  ramp?: WatchWarmupRung[];
+  /** A warm-up bridge, not a working set — which of how many (`insertWarmup`'s own label). Present
+   *  on a step the wrist inserted for her, and on one in a phone's live plan handed to the wrist. */
+  warmup?: { index: number; count: number };
+}
+
+/** One bridge of a warm-up the phone would insert — see `WatchPlanStep.ramp`. */
+export interface WatchWarmupRung {
+  weightKg: number;
+  reps: number;
+  /** How to load the bar for THIS rung — worked out on the phone, because the wrist does no plate maths. */
+  loadSetup?: MirrorLoadSetup | null;
 }
 
 export interface WatchPlanWorkout {
@@ -371,13 +396,16 @@ export interface WatchPlanSnapshot {
  *  reconciliation produces a history entry indistinguishable from a phone-run one. */
 export interface WatchRecordSet {
   exerciseId: string;
-  setIndex: number; // 0-based within the exercise
+  /** 0-based within the exercise — and NEGATIVE on a warm-up bridge, as on the phone (`insertWarmup`). */
+  setIndex: number;
   blockId?: string;
   recommendedWeight: number | null;
   recommendedReps: number;
   actualWeight: number | null;
   actualReps: number;
   completedAt: string; // ISO
+  /** A warm-up bridge (2026-10-17) — it comes home as the phone writes one: `isApproach` + `isWarmup`. */
+  isWarmup?: boolean;
 }
 
 /**
@@ -537,6 +565,31 @@ function readableItems(raw: unknown): boolean {
   return true;
 }
 
+/**
+ * A step's warm-up facts: absent, or whole (2026-10-17). A bridge is "which of how many" — two
+ * counts, the first inside the second; an offered ramp is one or more bridges, each a load she can
+ * put on a bar and a number of reps.
+ */
+function readableWarmup(st: Record<string, unknown>): boolean {
+  const w = st.warmup as Record<string, unknown> | null | undefined;
+  if (w != null) {
+    if (typeof w !== 'object') return false;
+    const { index, count } = w;
+    if (typeof index !== 'number' || typeof count !== 'number' || !Number.isInteger(index) || !Number.isInteger(count)) return false;
+    if (count < 1 || index < 0 || index >= count) return false;
+  }
+  if (st.ramp != null) {
+    if (!Array.isArray(st.ramp) || st.ramp.length === 0) return false;
+    for (const r of st.ramp) {
+      if (!r || typeof r !== 'object') return false;
+      const rung = r as Record<string, unknown>;
+      if (typeof rung.weightKg !== 'number' || !Number.isFinite(rung.weightKg) || rung.weightKg <= 0) return false;
+      if (typeof rung.reps !== 'number' || !Number.isInteger(rung.reps) || rung.reps < 1) return false;
+    }
+  }
+  return true;
+}
+
 /** Parse a wire-form session record defensively — anything unreadable is null,
  *  never a throw (the phone must survive any watch payload). */
 export function parseSessionRecord(raw: unknown): WatchSessionRecord | null {
@@ -594,6 +647,9 @@ export type WatchIntentType =
   // "מוכן" (2026-09-28): the voice's loading dialogue is open and she tapped Ready on the wrist —
   // the set (or the hold) on stage starts now. The same start as the lock screen's `set_ready`.
   | 'set_ready'
+  // "+ Warm-up" on the wrist (2026-10-17): the bridges the phone is offering before the set on
+  // stage go in now — the same press as the phone's warm-up disc (`addWarmup`).
+  | 'add_warmup'
   // The wrist flagged a body area that hurts (WT14 · What's off). A REPORT the phone acts on —
   // never an authoritative session action. Carries `area`.
   | 'report_pain'
@@ -704,6 +760,8 @@ export type WatchPhoneAction =
   | { kind: 'mark_equipment_occupied' }
   // The set on stage starts now (the voice's Ready, tapped on the wrist).
   | { kind: 'set_ready' }
+  // The warm-up the phone is offering before the set on stage goes in (the wrist's "+ Warm-up").
+  | { kind: 'add_warmup' }
   // Lobby proposals — the phone selects/starts the queued workout (it owns the
   // session lifecycle and validates before acting). `workoutId` omitted = the
   // workout the lobby already had queued.
@@ -731,7 +789,7 @@ export interface WatchIntentDecision {
 export const WATCH_INTENT_TYPES: readonly WatchIntentType[] = [
   'complete_set', 'end_rest', 'pause', 'resume', 'finish_early', 'exercise_busy',
   'select_workout', 'start_workout', 'swap_exercise', 'add_rest', 'report_pain',
-  'cardio_pause', 'cardio_resume', 'cardio_finish', 'set_ready',
+  'cardio_pause', 'cardio_resume', 'cardio_finish', 'set_ready', 'add_warmup',
 ];
 const INTENT_TYPES = WATCH_INTENT_TYPES;
 
@@ -895,6 +953,8 @@ function intentToAction(intent: WatchIntent): WatchPhoneAction | null {
       return { kind: 'mark_equipment_occupied' };
     case 'set_ready':
       return { kind: 'set_ready' };
+    case 'add_warmup':
+      return { kind: 'add_warmup' };
     case 'select_workout':
       return { kind: 'select_workout', workoutId: intent.workoutId };
     case 'start_workout':
@@ -1037,6 +1097,20 @@ export function decideWatchIntent(
   // lock screen's Ready meets (`awaitingReady`), so a late tap can never start a set she already did.
   if (intent.type === 'set_ready') {
     if (mirror.phase !== 'active_set' || !mirror.awaitingReady) return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+    if (intent.expectedGlobalIndex != null && intent.expectedGlobalIndex !== mirror.globalIndex) {
+      return { accept: false, reason: 'index_mismatch', action: null, latencyMs };
+    }
+  }
+  /*
+   * "+ Warm-up" acts on the set on stage, and only while the phone is OFFERING one there — the same
+   * `warmupOffer` the phone's own disc is drawn from (`SessionMirror.warmupOffered`). A late tap on a
+   * set that has since been logged, or a second tap after the bridges went in, is refused rather
+   * than inserting a second ramp.
+   */
+  if (intent.type === 'add_warmup') {
+    if (mirror.phase !== 'active_set' || !(mirror.warmupOffered && mirror.warmupOffered > 0)) {
+      return { accept: false, reason: 'phase_mismatch', action: null, latencyMs };
+    }
     if (intent.expectedGlobalIndex != null && intent.expectedGlobalIndex !== mirror.globalIndex) {
       return { accept: false, reason: 'index_mismatch', action: null, latencyMs };
     }
@@ -1293,6 +1367,7 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
     for (const k of ['holdSeconds', 'holdMetres'] as const) {
       if (st[k] != null && (typeof st[k] !== 'number' || !Number.isFinite(st[k] as number) || (st[k] as number) <= 0)) return null;
     }
+    if (!readableWarmup(st)) return null;
   }
   /** The presented step must exist in the plan she sent, or "where she is" means nothing. */
   if (r.currentIndex >= (r.steps as unknown[]).length) return null;
@@ -1301,7 +1376,8 @@ export function parseWatchLocalSession(raw: unknown): WatchLocalSession | null {
     if (!s || typeof s !== 'object') return null;
     const set = s as Record<string, unknown>;
     if (typeof set.exerciseId !== 'string' || set.exerciseId.length === 0) return null;
-    if (typeof set.setIndex !== 'number' || !Number.isInteger(set.setIndex) || set.setIndex < 0) return null;
+    // A working set counts from 0; a warm-up bridge counts BELOW it, as the phone writes one.
+    if (typeof set.setIndex !== 'number' || !Number.isInteger(set.setIndex) || (set.setIndex < 0 && set.isWarmup !== true)) return null;
     if (typeof set.actualReps !== 'number' || !Number.isFinite(set.actualReps) || set.actualReps < 0) return null;
     if (set.actualWeight != null && (typeof set.actualWeight !== 'number' || !Number.isFinite(set.actualWeight))) {
       return null;

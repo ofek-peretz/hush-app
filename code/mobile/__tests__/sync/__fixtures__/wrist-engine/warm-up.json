@@ -1,0 +1,1166 @@
+{
+ "name": "warm-up",
+ "says": "she asks for the warm-up on the squat (two bridges) and on the deadlift (one), pauses on a bridge, and the curl is offered none",
+ "agrees": true,
+ "workoutId": "w_today",
+ "plan": {
+  "schema": 1,
+  "planId": "plan_17jel4o",
+  "generatedAt": "2027-01-15T08:00:00.000Z",
+  "restInterS": 90,
+  "restTransitionS": 120,
+  "workouts": [
+   {
+    "id": "w_today",
+    "name": "Lower",
+    "muscles": "",
+    "steps": [
+     {
+      "exerciseId": "bb_back_squat",
+      "exerciseName": "Barbell Back Squat",
+      "exerciseGroup": "Quads",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 3,
+      "globalIndex": 0,
+      "targetWeight": 100,
+      "targetReps": 5,
+      "targetRepsHi": 8,
+      "restInterS": 225,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 40,
+       "plates": [
+        20,
+        20
+       ],
+       "barKg": 20
+      },
+      "ramp": [
+       {
+        "weightKg": 50,
+        "reps": 5,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 15,
+         "plates": [
+          15
+         ],
+         "barKg": 20
+        }
+       },
+       {
+        "weightKg": 75,
+        "reps": 3,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 27.5,
+         "plates": [
+          20,
+          5,
+          2.5
+         ],
+         "barKg": 20
+        }
+       }
+      ],
+      "restAfterS": 225,
+      "at": {
+       "block": 1,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "bb_back_squat",
+      "exerciseName": "Barbell Back Squat",
+      "exerciseGroup": "Quads",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 3,
+      "globalIndex": 1,
+      "targetWeight": 100,
+      "targetReps": 5,
+      "targetRepsHi": 8,
+      "restInterS": 225,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 40,
+       "plates": [
+        20,
+        20
+       ],
+       "barKg": 20
+      },
+      "restAfterS": 225,
+      "at": {
+       "block": 1,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "bb_back_squat",
+      "exerciseName": "Barbell Back Squat",
+      "exerciseGroup": "Quads",
+      "setIndexInExercise": 2,
+      "totalSetsInExercise": 3,
+      "globalIndex": 2,
+      "targetWeight": 100,
+      "targetReps": 5,
+      "targetRepsHi": 8,
+      "restInterS": 225,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 40,
+       "plates": [
+        20,
+        20
+       ],
+       "barKg": 20
+      },
+      "restAfterS": 120,
+      "at": {
+       "block": 1,
+       "round": 3,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "bb_rdl",
+      "exerciseName": "Romanian Deadlift",
+      "exerciseGroup": "Hamstrings",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 3,
+      "targetWeight": 80,
+      "targetReps": 8,
+      "targetRepsHi": 10,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 30,
+       "plates": [
+        20,
+        10
+       ],
+       "barKg": 20
+      },
+      "ramp": [
+       {
+        "weightKg": 55,
+        "reps": 3,
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 17.5,
+         "plates": [
+          15,
+          2.5
+         ],
+         "barKg": 20
+        }
+       }
+      ],
+      "restAfterS": 150,
+      "at": {
+       "block": 2,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "bb_rdl",
+      "exerciseName": "Romanian Deadlift",
+      "exerciseGroup": "Hamstrings",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 4,
+      "targetWeight": 80,
+      "targetReps": 8,
+      "targetRepsHi": 10,
+      "restInterS": 150,
+      "loadSetup": {
+       "style": "barbell",
+       "perSide": 30,
+       "plates": [
+        20,
+        10
+       ],
+       "barKg": 20
+      },
+      "restAfterS": 120,
+      "at": {
+       "block": 2,
+       "round": 2,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "leg_extension",
+      "exerciseName": "Leg Extension",
+      "exerciseGroup": "Quads",
+      "setIndexInExercise": 0,
+      "totalSetsInExercise": 2,
+      "globalIndex": 5,
+      "targetWeight": 40,
+      "targetReps": 10,
+      "targetRepsHi": 15,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "selectorized",
+       "pin": 40
+      },
+      "restAfterS": 75,
+      "at": {
+       "block": 3,
+       "round": 1,
+       "position": 1
+      }
+     },
+     {
+      "exerciseId": "leg_extension",
+      "exerciseName": "Leg Extension",
+      "exerciseGroup": "Quads",
+      "setIndexInExercise": 1,
+      "totalSetsInExercise": 2,
+      "globalIndex": 6,
+      "targetWeight": 40,
+      "targetReps": 10,
+      "targetRepsHi": 15,
+      "restInterS": 75,
+      "loadSetup": {
+       "style": "selectorized",
+       "pin": 40
+      },
+      "restAfterS": 120,
+      "at": {
+       "block": 3,
+       "round": 2,
+       "position": 1
+      }
+     }
+    ],
+    "seat": 0
+   }
+  ]
+ },
+ "start": {
+  "phase": "active_set",
+  "exerciseName": "Barbell Back Squat",
+  "setNumber": 1,
+  "setsInExercise": 3,
+  "globalIndex": 0,
+  "totalSets": 7,
+  "targetWeight": 100,
+  "targetReps": 5,
+  "targetRepsHi": 8,
+  "restTotalS": null,
+  "nextExerciseName": null,
+  "nextSetNumber": null,
+  "nextSetsInExercise": null,
+  "nextTargetWeight": null,
+  "nextTargetReps": null,
+  "completedExerciseName": null,
+  "liftIndex": 1,
+  "liftCount": 3,
+  "superset": null,
+  "setsSoFar": [],
+  "loadsSoFar": [],
+  "liveSets": 0,
+  "liveVolumeKg": 0,
+  "holdSeconds": null,
+  "holdMetres": null,
+  "nextHoldSeconds": null,
+  "nextHoldMetres": null,
+  "warmupOffered": 2,
+  "isWarmup": false
+ },
+ "steps": [
+  {
+   "do": "warmUp",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 0,
+    "totalSets": 9,
+    "targetWeight": 50,
+    "targetReps": 5,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 0,
+    "totalSets": 9,
+    "targetWeight": 50,
+    "targetReps": 5,
+    "targetRepsHi": null,
+    "restTotalS": 45,
+    "nextExerciseName": "Barbell Back Squat",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 75,
+    "nextTargetReps": 3,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true,
+    "nextIsWarmup": true
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 9,
+    "targetWeight": 75,
+    "targetReps": 3,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true
+   }
+  },
+  {
+   "do": "pause",
+   "phone": {
+    "phase": "paused",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 9,
+    "targetWeight": 75,
+    "targetReps": 3,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true
+   }
+  },
+  {
+   "do": "resume",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 9,
+    "targetWeight": 75,
+    "targetReps": 3,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true
+   }
+  },
+  {
+   "do": "complete",
+   "weight": 70,
+   "reps": 3,
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 1,
+    "totalSets": 9,
+    "targetWeight": 75,
+    "targetReps": 3,
+    "targetRepsHi": null,
+    "restTotalS": 45,
+    "nextExerciseName": "Barbell Back Squat",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 100,
+    "nextTargetReps": 5,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 2,
+    "totalSets": 9,
+    "targetWeight": 100,
+    "targetReps": 5,
+    "targetRepsHi": 8,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 0,
+    "liveVolumeKg": 0,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 1,
+    "setsInExercise": 3,
+    "globalIndex": 2,
+    "totalSets": 9,
+    "targetWeight": 100,
+    "targetReps": 5,
+    "targetRepsHi": 8,
+    "restTotalS": 225,
+    "nextExerciseName": "Barbell Back Squat",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 100,
+    "nextTargetReps": 5,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     5
+    ],
+    "loadsSoFar": [
+     100
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 2,
+    "setsInExercise": 3,
+    "globalIndex": 3,
+    "totalSets": 9,
+    "targetWeight": 100,
+    "targetReps": 5,
+    "targetRepsHi": 8,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     5
+    ],
+    "loadsSoFar": [
+     100
+    ],
+    "liveSets": 1,
+    "liveVolumeKg": 500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 2,
+    "setsInExercise": 3,
+    "globalIndex": 3,
+    "totalSets": 9,
+    "targetWeight": 100,
+    "targetReps": 5,
+    "targetRepsHi": 8,
+    "restTotalS": 225,
+    "nextExerciseName": "Barbell Back Squat",
+    "nextSetNumber": 3,
+    "nextSetsInExercise": 3,
+    "nextTargetWeight": 100,
+    "nextTargetReps": 5,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     5,
+     5
+    ],
+    "loadsSoFar": [
+     100,
+     100
+    ],
+    "liveSets": 2,
+    "liveVolumeKg": 1000,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 3,
+    "setsInExercise": 3,
+    "globalIndex": 4,
+    "totalSets": 9,
+    "targetWeight": 100,
+    "targetReps": 5,
+    "targetRepsHi": 8,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     5,
+     5
+    ],
+    "loadsSoFar": [
+     100,
+     100
+    ],
+    "liveSets": 2,
+    "liveVolumeKg": 1000,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Barbell Back Squat",
+    "setNumber": 3,
+    "setsInExercise": 3,
+    "globalIndex": 4,
+    "totalSets": 9,
+    "targetWeight": 100,
+    "targetReps": 5,
+    "targetRepsHi": 8,
+    "restTotalS": 120,
+    "nextExerciseName": "Romanian Deadlift",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 80,
+    "nextTargetReps": 8,
+    "completedExerciseName": "Barbell Back Squat",
+    "liftIndex": 1,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     5,
+     5,
+     5
+    ],
+    "loadsSoFar": [
+     100,
+     100,
+     100
+    ],
+    "liveSets": 3,
+    "liveVolumeKg": 1500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 5,
+    "totalSets": 9,
+    "targetWeight": 80,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 3,
+    "liveVolumeKg": 1500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": 1,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "warmUp",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 1,
+    "setsInExercise": 1,
+    "globalIndex": 5,
+    "totalSets": 10,
+    "targetWeight": 55,
+    "targetReps": 3,
+    "targetRepsHi": null,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 3,
+    "liveVolumeKg": 1500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 1,
+    "setsInExercise": 1,
+    "globalIndex": 5,
+    "totalSets": 10,
+    "targetWeight": 55,
+    "targetReps": 3,
+    "targetRepsHi": null,
+    "restTotalS": 45,
+    "nextExerciseName": "Romanian Deadlift",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 80,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 3,
+    "liveVolumeKg": 1500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": true,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 6,
+    "totalSets": 10,
+    "targetWeight": 80,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 3,
+    "liveVolumeKg": 1500,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 6,
+    "totalSets": 10,
+    "targetWeight": 80,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 150,
+    "nextExerciseName": "Romanian Deadlift",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 80,
+    "nextTargetReps": 8,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     80
+    ],
+    "liveSets": 4,
+    "liveVolumeKg": 2140,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 7,
+    "totalSets": 10,
+    "targetWeight": 80,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8
+    ],
+    "loadsSoFar": [
+     80
+    ],
+    "liveSets": 4,
+    "liveVolumeKg": 2140,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_transition",
+    "exerciseName": "Romanian Deadlift",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 7,
+    "totalSets": 10,
+    "targetWeight": 80,
+    "targetReps": 8,
+    "targetRepsHi": 10,
+    "restTotalS": 120,
+    "nextExerciseName": "Leg Extension",
+    "nextSetNumber": 1,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 40,
+    "nextTargetReps": 10,
+    "completedExerciseName": "Romanian Deadlift",
+    "liftIndex": 2,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     8,
+     8
+    ],
+    "loadsSoFar": [
+     80,
+     80
+    ],
+    "liveSets": 5,
+    "liveVolumeKg": 2780,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Leg Extension",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 8,
+    "totalSets": 10,
+    "targetWeight": 40,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [],
+    "loadsSoFar": [],
+    "liveSets": 5,
+    "liveVolumeKg": 2780,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "rest_inter",
+    "exerciseName": "Leg Extension",
+    "setNumber": 1,
+    "setsInExercise": 2,
+    "globalIndex": 8,
+    "totalSets": 10,
+    "targetWeight": 40,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": 75,
+    "nextExerciseName": "Leg Extension",
+    "nextSetNumber": 2,
+    "nextSetsInExercise": 2,
+    "nextTargetWeight": 40,
+    "nextTargetReps": 10,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     10
+    ],
+    "loadsSoFar": [
+     40
+    ],
+    "liveSets": 6,
+    "liveVolumeKg": 3180,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false,
+    "nextIsWarmup": false
+   }
+  },
+  {
+   "do": "endRest",
+   "phone": {
+    "phase": "active_set",
+    "exerciseName": "Leg Extension",
+    "setNumber": 2,
+    "setsInExercise": 2,
+    "globalIndex": 9,
+    "totalSets": 10,
+    "targetWeight": 40,
+    "targetReps": 10,
+    "targetRepsHi": 15,
+    "restTotalS": null,
+    "nextExerciseName": null,
+    "nextSetNumber": null,
+    "nextSetsInExercise": null,
+    "nextTargetWeight": null,
+    "nextTargetReps": null,
+    "completedExerciseName": null,
+    "liftIndex": 3,
+    "liftCount": 3,
+    "superset": null,
+    "setsSoFar": [
+     10
+    ],
+    "loadsSoFar": [
+     40
+    ],
+    "liveSets": 6,
+    "liveVolumeKg": 3180,
+    "holdSeconds": null,
+    "holdMetres": null,
+    "nextHoldSeconds": null,
+    "nextHoldMetres": null,
+    "warmupOffered": null,
+    "isWarmup": false
+   }
+  },
+  {
+   "do": "complete",
+   "phone": {
+    "phase": "complete",
+    "summarySets": 7,
+    "summaryVolumeKg": 3580,
+    "summaryLifts": [
+     "Barbell Back Squat 100 × 5",
+     "Romanian Deadlift 80 × 8",
+     "Leg Extension 40 × 10"
+    ]
+   }
+  }
+ ],
+ "logged": [
+  {
+   "exerciseId": "bb_back_squat",
+   "setIndex": -2,
+   "weight": 50,
+   "reps": 5,
+   "warmup": true
+  },
+  {
+   "exerciseId": "bb_back_squat",
+   "setIndex": -1,
+   "weight": 70,
+   "reps": 3,
+   "warmup": true
+  },
+  {
+   "exerciseId": "bb_back_squat",
+   "setIndex": 0,
+   "weight": 100,
+   "reps": 5
+  },
+  {
+   "exerciseId": "bb_back_squat",
+   "setIndex": 1,
+   "weight": 100,
+   "reps": 5
+  },
+  {
+   "exerciseId": "bb_back_squat",
+   "setIndex": 2,
+   "weight": 100,
+   "reps": 5
+  },
+  {
+   "exerciseId": "bb_rdl",
+   "setIndex": -1,
+   "weight": 55,
+   "reps": 3,
+   "warmup": true
+  },
+  {
+   "exerciseId": "bb_rdl",
+   "setIndex": 0,
+   "weight": 80,
+   "reps": 8
+  },
+  {
+   "exerciseId": "bb_rdl",
+   "setIndex": 1,
+   "weight": 80,
+   "reps": 8
+  },
+  {
+   "exerciseId": "leg_extension",
+   "setIndex": 0,
+   "weight": 40,
+   "reps": 10
+  },
+  {
+   "exerciseId": "leg_extension",
+   "setIndex": 1,
+   "weight": 40,
+   "reps": 10
+  }
+ ],
+ "held": []
+}

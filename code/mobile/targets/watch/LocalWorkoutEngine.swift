@@ -141,9 +141,12 @@ final class LocalWorkoutEngine {
         recommendedReps: step.targetReps,
         actualWeight: weight,
         actualReps: reps,
-        completedAt: WatchWire.iso(Date())
+        completedAt: WatchWire.iso(Date()),
+        isWarmup: step.isBridge ? true : nil
       ))
-      carryForward(from: state.currentIndex, weight: weight)
+      // A bridge's half weight is the road TO her number, never a number to carry onto it — the
+      // phone's line exactly (`completeSet`: "its weight must not carry onto the working sets").
+      if !step.isBridge { carryForward(from: state.currentIndex, weight: weight) }
     }
     let isLast = state.currentIndex >= state.steps.count - 1
     if isLast {
@@ -173,6 +176,51 @@ final class LocalWorkoutEngine {
     let step = state.steps[state.currentIndex]
     guard let seconds = step.holdSeconds, seconds > 0 else { return } // a carry has no clock
     state.holdEndsAt = WatchWire.iso(Date().addingTimeInterval(TimeInterval(seconds)))
+    persist()
+    emit()
+  }
+
+  /**
+   * "+ Warm-up" — the bridges the phone would insert before the set on stage go in, ahead of it
+   * (2026-10-17, the wrist-alone plan, stage 2).
+   *
+   * ⛔ NOTHING IS COMPUTED HERE. The phone answered `warmupOffer` for this exact step when it built
+   * the plan and put the answer on the step (`ramp`): each bridge's load, reps and bar. This is the
+   * phone's `insertWarmup`, to the letter — a bridge per rung, immediately BEFORE the working set, so
+   * the cursor (which addresses the plan by position) lands on the first bridge without moving;
+   * negative set numbers; the fixed breath after each; no place in the coach's day; never the last
+   * of its lift; positions re-derived for the whole plan. The offer is then spent: on the phone,
+   * `warmupOffer` finds a bridge in front of the working set and offers nothing; here the step's
+   * `ramp` is simply taken off it.
+   */
+  func addWarmup() {
+    guard !finished, state.phase == "active_set", state.holdEndsAt == nil else { return }
+    let at = state.currentIndex
+    let anchor = state.steps[at]
+    guard !anchor.isBridge, !anchor.isHold, let ramp = anchor.ramp, !ramp.isEmpty else { return }
+    let bridges: [WirePlanStep] = ramp.enumerated().map { i, rung in
+      var b = anchor
+      b.setIndexInExercise = i - ramp.count
+      b.targetWeight = rung.weightKg
+      b.targetReps = rung.reps
+      b.targetRepsHi = nil // a bridge has no band: it is so many reps, at a weight below her number
+      b.loadSetup = rung.loadSetup
+      b.reasonType = nil
+      b.reasonDelta = nil
+      b.lastReps = nil // last time's WORKING reps are not a ghost a bridge should draw
+      b.lastLoadKg = nil
+      b.restAfterS = WARMUP_REST_S
+      b.restWritten = true
+      b.restIsLearned = nil
+      b.superset = nil
+      b.at = nil
+      b.ramp = nil
+      b.warmup = WireWarmupPlace(index: i, count: ramp.count)
+      return b
+    }
+    state.steps[at].ramp = nil
+    state.steps.insert(contentsOf: bridges, at: at)
+    for i in state.steps.indices { state.steps[i].globalIndex = i }
     persist()
     emit()
   }
@@ -246,12 +294,20 @@ final class LocalWorkoutEngine {
     finish(early: true)
   }
 
+  /// Work logged into this session on this wrist — a set she did, or a hold she finished.
+  ///
+  /// ⛔ A PLANK IS WORK (2026-10-17). Every guard that protects a session from being thrown away
+  /// read `state.sets.isEmpty`, written while a set was the only thing the wrist could log. Since
+  /// the wrist runs holds alone (2026-10-13), a session that opened on a plank had real work in it
+  /// and `sets` still empty — so a phone that turned up live discarded it, plank and all.
+  var hasWork: Bool { !state.sets.isEmpty || !(state.items ?? []).isEmpty }
+
   /// Tear the local session down WITHOUT recording anything. Only valid while nothing
   /// has been logged (asserted by the caller): the Begin fallback starts a local session
   /// when the phone doesn't answer, and if the phone then answers late, the phone reclaims
   /// authority — the never-used local session must leave no record and no persisted state.
   func discard() {
-    guard !finished, state.sets.isEmpty else { return }
+    guard !finished, !hasWork else { return }
     finished = true
     cancelRestAdvance()
     onFrame = nil
@@ -378,8 +434,8 @@ final class LocalWorkoutEngine {
     // Durability order: the record enters the outbox BEFORE the active session is
     // cleared — a crash between the two re-offers a completed workout to the
     // outbox, never loses one (the phone de-dupes). A hold she finished is work: a record of
-    // holds alone goes home too.
-    if !record.sets.isEmpty || !(record.items ?? []).isEmpty {
+    // holds alone goes home too. A warm-up alone is not a workout, on either device.
+    if record.isAWorkout {
       store.enqueueRecord(record)
       store.markWorkoutDone(state.workoutId)
     }
@@ -421,7 +477,8 @@ final class LocalWorkoutEngine {
    * the phone's `currentBlockSets`, and the same bug it was written for.
    */
   private func currentBlockSets(_ exerciseId: String) -> [WireRecordSet] {
-    let all = state.sets.filter { $0.exerciseId == exerciseId }
+    // A bridge is not "her work so far" — the phone's line (`soFarOnLift`).
+    let all = state.sets.filter { $0.exerciseId == exerciseId && $0.isWarmup != true }
     var start = 0
     for (i, s) in all.enumerated() where s.setIndex == 0 { start = i }
     return all.isEmpty ? [] : Array(all[start...])
@@ -455,16 +512,28 @@ final class LocalWorkoutEngine {
     return Set(raised).count
   }
 
+  /// "Set 2 of 4" — or, on a warm-up bridge, its place in the RAMP ("Warm-up 1 of 2"), never a
+  /// working-set number. The phone's `stepPosition`, which every surface there reads.
+  private func position(_ s: WirePlanStep) -> (label: String, n: Int, m: Int) {
+    if let w = s.warmup { return ("Warm-up \(w.index + 1) of \(w.count)", w.index + 1, w.count) }
+    return ("Set \(s.setIndexInExercise + 1) of \(s.totalSetsInExercise)", s.setIndexInExercise + 1, s.totalSetsInExercise)
+  }
+
+  /// Her WORKING sets — what every count and every tonnage reads (a bridge is the road to her
+  /// number, not work; the phone draws the same line in `liveSets` and the summary).
+  private var workingSets: [WireRecordSet] { state.sets.filter { $0.isWarmup != true } }
+
   private func baseMirror(cur: WirePlanStep, phase: String) -> WireMirror {
     let lift = liftPosition(at: min(state.currentIndex, state.steps.count - 1))
+    let here = position(cur)
     return WireMirror(
       schema: MIRROR_SCHEMA_VERSION,
       phase: phase,
       exerciseName: cur.exerciseName,
       exerciseGroup: cur.exerciseGroup,
-      setLabel: "Set \(cur.setIndexInExercise + 1) of \(cur.totalSetsInExercise)",
-      setNumber: cur.setIndexInExercise + 1,
-      setsInExercise: cur.totalSetsInExercise,
+      setLabel: here.label,
+      setNumber: here.n,
+      setsInExercise: here.m,
       // Passed explicitly rather than leaning on the memberwise initializer's implicit nil for an
       // optional: this file is only ever compiled on EAS, so a wrong assumption here costs a whole
       // build to discover. `project()` fills them in on a rest frame.
@@ -517,8 +586,8 @@ final class LocalWorkoutEngine {
       // WT13c · GLANCE — the standalone engine owes the wrist the SAME two live figures the phone
       // sends, or a phone-absent workout glances at a blank. Same arithmetic as the closing
       // summary's `volumeKg` (bodyweight contributes 0), read off the sets already logged here.
-      liveVolumeKg: state.sets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) },
-      liveSets: state.sets.count,
+      liveVolumeKg: workingSets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) },
+      liveSets: workingSets.count,
       workoutName: state.workoutName,
       summary: nil,
       swapOptions: nil, // no offline swaps — the phone owns exercise selection
@@ -546,7 +615,9 @@ final class LocalWorkoutEngine {
    * their phone, which is precisely the athlete this runtime exists for.
    */
   private func summaryLifts() -> [WireSummaryLift] {
-    let frontier = state.sets.count
+    // A bridge is neither prescribed work nor a best set — the phone's line (`summaryLifts`).
+    let sets = workingSets
+    let frontier = sets.count
     var order: [String] = []
     var best: [String: WireRecordSet] = [:]
     func volume(_ s: WireRecordSet) -> Double { (s.actualWeight ?? 0) * Double(s.actualReps) }
@@ -562,7 +633,7 @@ final class LocalWorkoutEngine {
     // every set was read back under the NEXT step's name.
     var names: [String: String] = [:]
     for step in state.steps where names[step.exerciseId] == nil { names[step.exerciseId] = step.exerciseName }
-    for set in state.sets.prefix(frontier) {
+    for set in sets.prefix(frontier) {
       let name = names[set.exerciseId] ?? set.exerciseId
       if let cur = best[name] {
         if better(set, cur) { best[name] = set }
@@ -584,10 +655,10 @@ final class LocalWorkoutEngine {
     var m = baseMirror(cur: cur, phase: "complete")
     // External tonnage moved, from the ACTUALS — so a standalone (phone-absent) workout reads
     // the same WT6 "T" metric a phone-driven one does. Bodyweight sets (weight nil) count 0.
-    let volumeKg = state.sets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) }
+    let volumeKg = workingSets.reduce(0.0) { $0 + ($1.actualWeight ?? 0) * Double($1.actualReps) }
     m.summary = WireSummary(
       timeLabel: timeLabel(fromISO: state.startedAt),
-      sets: state.sets.count,
+      sets: workingSets.count,
       up: progressedLifts(),
       volumeKg: volumeKg,
       lifts: summaryLifts()
@@ -606,6 +677,7 @@ final class LocalWorkoutEngine {
       p.superset = isResting(state.pausedFrom ?? "active_set") ? next?.superset : cur.superset
       p.holdSeconds = cur.holdSeconds
       p.holdMetres = cur.holdMetres
+      p.isWarmup = cur.isBridge
       return p
     }
 
@@ -615,14 +687,17 @@ final class LocalWorkoutEngine {
     // these since 2026-09-17 for a session the phone runs; the engine now states them for its own.
     m.holdSeconds = cur.holdSeconds
     m.holdMetres = cur.holdMetres
+    m.isWarmup = cur.isBridge
     if state.phase == "active_set" {
       m.loadDeltaKg = signedDelta(cur)
       m.loadSetup = cur.loadSetup
       m.toLoad = cur.isHold ? false : toLoad(cur)
       m.superset = cur.superset
       m.holdEndsAt = state.holdEndsAt
-      m.isWarmup = false
       m.awaitingReady = false
+      // The warm-up the phone would offer before this set, while it is still on offer (`addWarmup`
+      // takes it off the step once the bridges are in). A hold no plan gives one; said anyway.
+      m.warmupOffered = cur.isBridge || cur.isHold ? nil : cur.ramp.map { $0.count }
       return m
     }
 
@@ -638,12 +713,10 @@ final class LocalWorkoutEngine {
     m.nextExerciseGroup = next?.exerciseGroup
     m.nextTargetWeight = next?.targetWeight
     m.nextTargetReps = next?.targetReps
-    m.nextSetsInExercise = next?.totalSetsInExercise
-    // The warm-up ramp is deliberately NOT in the standalone plan (watchPlan.ts header, 2026-08-24)
-    // — every step this engine runs is a working set, and the mirror says so explicitly so the
-    // parity contract with the phone's projector holds.
-    m.isWarmup = false
-    m.nextIsWarmup = false
+    m.nextSetsInExercise = next.map { position($0).m }
+    // A rest that leads into a warm-up bridge says so, as the phone's does (2026-10-17: the wrist
+    // alone runs the ramp she asks for — `addWarmup`).
+    m.nextIsWarmup = next?.isBridge == true
     // The hold this rest leads into, when it is one (2026-10-13 — the plan carries holds now).
     m.nextHoldSeconds = next?.holdSeconds
     m.nextHoldMetres = next?.holdMetres
@@ -657,8 +730,8 @@ final class LocalWorkoutEngine {
     // label; standalone workouts were showing the wrong set number on the wrist for exactly as
     // long as the mirrored ones were.
     if let n = next {
-      m.nextSetLabel = "Set \(n.setIndexInExercise + 1) of \(n.totalSetsInExercise)"
-      m.nextSetNumber = n.setIndexInExercise + 1
+      m.nextSetLabel = position(n).label
+      m.nextSetNumber = position(n).n
     }
     if state.phase == "rest_transition" {
       m.completedExerciseName = cur.exerciseName

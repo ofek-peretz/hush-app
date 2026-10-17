@@ -50,7 +50,7 @@ describe('one workout has one authority', () => {
     const model = code(swift('WatchModel.swift'));
     const reclaim = model
       .split('\n')
-      .find((l) => l.includes('localEngine') && l.includes('phoneLive') && l.includes('sets.isEmpty'));
+      .find((l) => l.includes('localEngine') && l.includes('phoneLive') && l.includes('discard') === false && l.includes('hasWork'));
     expect(reclaim).toBeDefined();
     /*
      * `fallbackStarted` in this condition is the bug: it narrows the reclaim to sessions the wrist
@@ -58,7 +58,21 @@ describe('one workout has one authority', () => {
      */
     expect(reclaim).not.toContain('fallbackStarted');
     // And the one guarantee that must NOT be relaxed — a session holding real work keeps authority.
-    expect(reclaim).toContain('sets.isEmpty');
+    expect(reclaim).toContain('!engine.hasWork');
+  });
+
+  it('⛔ a finished plank is work: the guard counts holds as well as sets (2026-10-17)', () => {
+    /*
+     * The guard read `sets.isEmpty` from the days a set was all the wrist could log. A session that
+     * opened on a plank had real work in it and no sets, and a phone turning up live discarded it.
+     */
+    const engine = code(swift('LocalWorkoutEngine.swift'));
+    const decl = engine.split('\n').find((l) => l.includes('var hasWork'));
+    expect(decl).toBeDefined();
+    expect(decl).toContain('state.sets.isEmpty');
+    expect(decl).toContain('state.items');
+    // Nothing that decides whether a session may be thrown away reads sets alone any more.
+    expect(code(swift('WatchModel.swift'))).not.toMatch(/state\.sets\.isEmpty/);
   });
 
   it('⛔ the Begin grace is one number, read from both sides of the wire', () => {
@@ -126,7 +140,7 @@ describe('the live handover releases on an id, never on an inference', () => {
     const engine = code(swift('LocalWorkoutEngine.swift'));
     const at = engine.indexOf('func discard()');
     expect(at).toBeGreaterThan(-1);
-    expect(engine.slice(at, at + 200)).toContain('state.sets.isEmpty');
+    expect(engine.slice(at, at + 200)).toContain('!hasWork');
   });
 
   it('the wrist offers a running workout when the phone comes back', () => {

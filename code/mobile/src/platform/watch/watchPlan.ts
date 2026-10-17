@@ -12,12 +12,13 @@
  * (exerciseById + loadSetup), keeping the wrist presentation identical whether a
  * set is mirrored live or executed locally.
  *
- * ⚠️ THE WARM-UP RAMP IS DELIBERATELY NOT IN THE SNAPSHOT (2026-08-24). The phone's stage runs
- * bridge sets before its compounds (domain/warmupRamp) and the LIVE mirror labels them; a
- * standalone plan carries WORKING sets only, because a watch build that predates the `isWarmup`
- * flag would render a half-weight bridge as "Set 1 of 5" — the exact looks-broken defect Rev 8
- * was about. A phone-less workout simply starts at the working weight, as it always has; the ramp
- * returns to the wrist when the standalone engine learns the label.
+ * ⛔ THE WARM-UP IS OFFERED HERE AS IT IS ON THE PHONE — NEVER WRITTEN IN (2026-10-17, stage 2).
+ * A standalone plan carries WORKING sets only, and still does: a watch build that predates the
+ * `isWarmup` flag would render a half-weight bridge as "Set 1 of 5" — the looks-broken defect Rev 8
+ * was about — and since the founder's ruling of 2026-08-30 nobody's plan contains a warm-up anyway.
+ * What a step carries now is the OFFER (`WatchPlanStep.ramp`): the bridges the phone's own
+ * `warmupOffer` would insert before it, so the wrist alone can offer "+ Warm-up" exactly where the
+ * phone's stage offers its disc, and insert them on her press without computing a thing.
  */
 
 // 
@@ -31,12 +32,26 @@ import { restAfterRun, restInterSecondsFor } from '@/domain/restPrescription';
 import { runSteps } from '@/domain/planRun';
 import { supersetAt } from '@/domain/supersetView';
 import { REST_SKIP_THRESHOLD_S } from '@/state/machines/sessionState';
+import { buildPlanFromCoach, warmupOffer } from '@/state/stores/sessionStore';
+import { rampRungs, wireSetup } from './watchLoad';
 import {
   WATCH_PLAN_SCHEMA_VERSION,
   type WatchPlanSnapshot,
   type WatchPlanStep,
   type WatchPlanWorkout,
+  type WatchWarmupRung,
 } from './protocol';
+
+/**
+ * The warm-up the PHONE would offer before step `at` of its own plan of the day, in the shape the
+ * wrist inserts — each bridge with the bar it is loaded on, because the wrist does no plate maths.
+ * `undefined` where the phone offers none: not a compound, not the start of its run, inside a
+ * superset's round, a lift the day revisits, or a load with no distinct rung below it.
+ */
+export function rampOffered(plan: Parameters<typeof warmupOffer>[0], at: number): WatchWarmupRung[] | undefined {
+  const offer = warmupOffer(plan, at);
+  return offer ? rampRungs(plan[at].exerciseId, offer.ramp) : undefined;
+}
 
 /** Stable content hash (djb2 over the canonical JSON) — cheap, deterministic,
  *  and only used to detect "the plan changed" / name the executed plan. */
@@ -184,20 +199,18 @@ export function buildWatchPlanSnapshot(inp: WatchPlanInputs): WatchPlanSnapshot 
 /* ────────────────────────────────────────────────────── THE COACH'S WEEK, AS FAR AS THE WRIST GOES */
 
 /**
- * ════ THE WATCH OFFERS ONLY WHAT IT CAN HONESTLY EXECUTE ════
+ * ════ THE WATCH OFFERS ONLY WHAT IT CAN HONESTLY EXECUTE — WHOLE ════
  *
- * The wrist's protocol is reps-at-a-load and nothing else: `targetWeight`, `targetReps`,
- * `setIndexInExercise`. Three of the coach's four shapes have no field in it — a 400 m repeat, a
- * 45-second plank, and open work all have nowhere to go.
+ * Until 2026-10-13 the wrist's protocol was reps-at-a-load and nothing else, so a session with a
+ * 400 m repeat or a 45-second plank in it was NOT OFFERED standalone. The alternative was to send
+ * the lifts and drop the rest, and that is the one thing this layer exists to prevent: she would
+ * start "Intervals & Core" on her wrist, do the squats, and never see the running — a different
+ * workout from the one the coach wrote, with nothing anywhere saying so.
  *
- * So a session containing any of them is NOT OFFERED standalone. The alternative was to send the
- * lifts and drop the rest, and that is the one thing this layer exists to prevent: she would start
- * "Intervals & Core" on her wrist, do the squats, and never see the running — a different workout
- * from the one the coach wrote, with nothing anywhere saying so.
- *
- * Not offering it is a true statement about what the watch can do today. Widening the protocol is
- * native work (Swift, a schema bump, and a watch binary that ships asynchronously from the phone),
- * and until that lands "you cannot start this one from your wrist" is the honest answer.
+ * The wrist's engine now runs a hold on its own clock and a carry in metres (stage 1b), so such a
+ * day is sent — whole, in the phone's own order — in `moreWorkouts`, where a watch one build behind
+ * never looks. What is still not sent is a shape the wrist cannot draw at all (`theWristOffersOnly
+ * WhatItCanRun`): "you cannot start this one from your wrist" stays the honest answer there.
  *
  * ⚠️ IT RETURNS null RATHER THAN AN EMPTY LOBBY when nothing qualifies, which is the same answer
  * `buildWatchPlanSnapshot` gives: an empty plan on the wrist reads as "you have no workouts", and
@@ -265,6 +278,9 @@ export function buildCoachWatchPlan(inp: {
      * `theWristRunsWhatThePhoneRuns` plays the result on the watch's real engine against the phone.
      */
     const run = runSteps({ name: session.name, blocks: session.blocks } as PlannedSession);
+    // The phone's own plan of this day — one step per step of the run, in the same order — asked
+    // only what it alone can answer: where a warm-up would be offered, and what it would be.
+    const own = buildPlanFromCoach({ name: session.name, blocks: session.blocks } as PlannedSession);
     const lastOfLift = (i: number) => i === run.length - 1 || run[i + 1].item.ex !== run[i].item.ex;
     // What the plan itself says after each step. The session's closing zero is a fact about the
     // POSITION, not the step (`laws/aSupersetIsOnlyEverWritten`) — the last step keeps its block's own.
@@ -307,7 +323,8 @@ export function buildCoachWatchPlan(inp: {
       }
       if (item.kind !== 'reps') return; // unreachable given the guard; the narrowing is for TS
       const ex = exerciseById(item.ex);
-      const setup = loadSetup(item.ex, item.load, 'kg');
+      const setup = wireSetup(item.ex, item.load);
+      const ramp = own[at] && own[at].exerciseId === item.ex ? rampOffered(own, at) : undefined;
       const r = st.round - 1;
       steps.push({
         exerciseId: item.ex,
@@ -345,9 +362,9 @@ export function buildCoachWatchPlan(inp: {
           : inp.restInterSFor?.(item.ex) != null
             ? { restInterS: inp.restInterSFor(item.ex) as number, restIsLearned: true }
             : { restInterS: restInterSecondsFor(item.ex, item.reps[0]) }),
-        ...(setup
-          ? { loadSetup: { style: setup.style, perSide: setup.perSide, plates: setup.plates ?? undefined } }
-          : {}),
+        ...(setup ? { loadSetup: setup } : {}),
+        // The warm-up the phone would offer before this set, when it would (stage 2, 2026-10-17).
+        ...(ramp ? { ramp } : {}),
         ...placed,
       });
       global += 1;
@@ -409,9 +426,9 @@ export function buildCoachWatchPlan(inp: {
  *
  * ⚠️ AN EMPTY `workouts` IS ENOUGH, AND NO SWIFT HAD TO CHANGE — read off the wrist to be sure:
  * `WatchStore.savePlan` has no emptiness guard, and both `offlineLobby()` and `startLocalWorkout()`
- * derive `remaining` from `stored.plan.workouts`. An empty list makes the offline Start screen
- * return nil and a local start a no-op. Which is precisely "nothing left", said in the vocabulary
- * the watch already speaks.
+ * derive `remaining` from `stored.plan.allWorkouts` (`workouts` + `moreWorkouts`). This snapshot
+ * carries neither, so the offline Start screen returns nil and a local start is a no-op. Which is
+ * precisely "nothing left", said in the vocabulary the watch already speaks.
  */
 export function emptyWatchPlan(inp: {
   nowMs: number;

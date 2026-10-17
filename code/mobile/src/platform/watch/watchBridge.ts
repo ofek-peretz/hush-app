@@ -105,6 +105,10 @@ export interface WatchSessionDeps {
    *  lock screen's Ready and her spoken word start it. Optional in the type so a harness may omit it;
    *  `everyWristIntentLandsSomewhere` proves the app supplies it. */
   setReady?: () => void;
+  /** "+ Warm-up" on the wrist (2026-10-17): the bridges the phone is offering before the set on stage
+   *  go in, exactly as the stage's warm-up disc puts them in. Optional so a harness may omit it;
+   *  `everyWristIntentLandsSomewhere` proves the app supplies it. */
+  addWarmup?: () => void;
   /** Queue the workout the Start screen picked (lobby proposal). Optional — the
    *  phone owns the program; absent = the proposal is accepted but no-op. */
   selectWorkout?: (workoutId?: string) => void;
@@ -567,6 +571,9 @@ export class WatchSession {
         break;
       case 'set_ready':
         this.d.setReady?.();
+        break;
+      case 'add_warmup':
+        this.d.addWarmup?.();
         break;
       case 'select_workout':
         this.d.selectWorkout?.(action.workoutId);

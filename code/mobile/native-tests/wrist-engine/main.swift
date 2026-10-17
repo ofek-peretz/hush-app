@@ -171,6 +171,7 @@ for file in files {
       case "pause": engine.pause()
       case "resume": engine.resume()
       case "finishEarly": engine.finishEarly()
+      case "warmUp": engine.addWarmup()
       default: diffs.append("step \(i): an action this program does not know — \(what)")
       }
       let phone = step["phone"] as? [String: Any] ?? [:]
@@ -182,6 +183,7 @@ for file in files {
     let home: [[String: Any]] = sets.map { s in
       var row: [String: Any] = ["exerciseId": s.exerciseId, "setIndex": s.setIndex, "reps": s.actualReps]
       if let w = s.actualWeight { row["weight"] = w }
+      if s.isWarmup == true { row["warmup"] = true }
       return row
     }
     if !same(logged, home) {

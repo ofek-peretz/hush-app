@@ -114,6 +114,25 @@ function stepOf(s: WatchPlanStep, total: number, next: WatchPlanStep | undefined
   const where = s.at ? { where: { block: s.at.block, round: s.at.round, position: s.at.position } } : {};
   const rest = s.restWritten && s.restAfterS != null ? { restAfterS: s.restAfterS } : {};
   const edges = { lastSetOfExercise: !next || next.exerciseId !== s.exerciseId, lastSetOfSession: s.globalIndex === total - 1 };
+  /*
+   * ⛔ A WARM-UP BRIDGE COMES BACK AS A BRIDGE (2026-10-17, stage 2). `insertWarmup`'s shape, byte for
+   * byte: its label, its negative index, the breath after it (written on the step), no `where`, and
+   * never the last of its lift — so every reader on the phone steps over it exactly as it steps over
+   * one the phone inserted itself.
+   */
+  if (s.warmup) {
+    return {
+      exerciseId: s.exerciseId,
+      globalIndex: s.globalIndex,
+      exerciseSetIndex: s.setIndexInExercise,
+      totalSetsInExercise: s.totalSetsInExercise,
+      target: { exerciseId: s.exerciseId, setIndex: s.setIndexInExercise, recommendedWeight: s.targetWeight, recommendedReps: s.targetReps },
+      warmup: { index: s.warmup.index, count: s.warmup.count },
+      ...(s.restAfterS != null ? { restAfterS: s.restAfterS } : {}),
+      lastSetOfExercise: false,
+      lastSetOfSession: s.globalIndex === total - 1,
+    };
+  }
   if (s.holdSeconds != null || s.holdMetres != null) {
     const load = s.targetWeight != null ? { load: s.targetWeight } : {};
     return {
@@ -174,6 +193,7 @@ function setOf(s: WatchRecordSet): SetLog {
     actualReps: s.actualReps,
     edited: actualWeight !== recommendedWeight || s.actualReps !== recommendedReps,
     persistedAt: s.completedAt,
+    ...(s.isWarmup ? { isApproach: true, isWarmup: true } : {}),
   };
 }
 

@@ -1575,10 +1575,13 @@ struct WatchRootView: View {
                      onPause: model.pause, onEnd: model.endWorkout,
                      onReportPain: model.reportPain) {
         ActiveSetScreen(mirror: m, draft: draft, onSave: model.saveEdit,
-                        onComplete: model.completeSet, onReady: model.setReady)
+                        onComplete: model.completeSet, onReady: model.setReady,
+                        onWarmup: model.addWarmup)
           // A new set is a new screen: an editor left open, or reps said for the set before, must
           // never carry into the next one when two sets follow with no rest between them.
-          .id(m.globalIndex)
+          // ⚠️ AND A WARM-UP IS A NEW SET AT THE SAME NUMBER (2026-10-17): the bridges go in AHEAD of
+          // the cursor, so the position stays put while the set under it becomes the first bridge.
+          .id("\(m.globalIndex)\(m.isWarmup == true ? "w" : "")")
       }
     case let .interRest(m):
       ExecutionPager(metrics: model.liveMetrics,
@@ -2076,6 +2079,8 @@ struct ActiveSetScreen: View {
   let onComplete: () -> Void
   /// "מוכן" — offered only while the voice's loading dialogue is open (`mirror.awaitingReady`).
   var onReady: () -> Void = {}
+  /// "+ Warm-up" — offered only while a warm-up is on offer for this set (`mirror.warmupOffered`).
+  var onWarmup: () -> Void = {}
   /*
    * ════ THE LIVE-SET SWAP WAS WIRED, AND DEAD ════
    *
@@ -2759,6 +2764,22 @@ struct ActiveSetScreen: View {
        */
       HStack(spacing: Fit.s(6)) {
         StageButton(title: WatchCopy.ready, kind: .quiet, height: Wrist.action, fontSize: 15, action: onReady)
+        StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, action: onComplete)
+      }
+    } else if !editing && (mirror.warmupOffered ?? 0) > 0 {
+      /*
+       * ⛔ THE WARM-UP IS OFFERED HERE AS IT IS ON THE PHONE (2026-10-17, the wrist-alone plan, stage 2).
+       *
+       * The founder's ruling (2026-08-30): only a compound, at the start of its lift, and nobody is
+       * handed one — *"מי שרוצה שילחץ על הפקד"*. The phone's stage has drawn that disc since; the
+       * wrist never offered it, with the phone or without it, so a lifter reading her sets off her
+       * wrist met her first heavy squat cold. Same row as Ready (`RestActions`'s two-button shape),
+       * the quiet half for the offer and Complete set where it always is: one press logs the set as
+       * written, one press puts the bridges in front of it. Ready wins the row while the voice's
+       * dialogue is open — that one is waiting on her, this one is only offered.
+       */
+      HStack(spacing: Fit.s(6)) {
+        StageButton(title: WatchCopy.addWarmup, kind: .quiet, height: Wrist.action, fontSize: 15, action: onWarmup)
         StageButton(title: WatchCopy.completeSet, kind: .primary, height: Wrist.action, fontSize: 15, action: onComplete)
       }
     } else if editing {
