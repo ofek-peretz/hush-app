@@ -6,7 +6,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_sgrjdw",
+  "planId": "plan_1hgphkz",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -32,7 +32,39 @@
        "block": 1,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "weighted_pull_up",
+        "name": "Weighted Pull-Up",
+        "group": "Back",
+        "swaps": [
+         {
+          "id": "weighted_chin_up",
+          "name": "Weighted Chin-Up"
+         },
+         {
+          "id": "lat_pulldown",
+          "name": "Lat Pulldown"
+         }
+        ]
+       },
+       {
+        "id": "lat_pulldown",
+        "name": "Lat Pulldown",
+        "group": "Back",
+        "swaps": [
+         {
+          "id": "pull_up",
+          "name": "Pull-Up"
+         },
+         {
+          "id": "close_grip_pulldown",
+          "name": "Close-Grip Lat Pulldown"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "pull_up",
@@ -82,7 +114,62 @@
        "block": 2,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "meadows_row",
+        "name": "Meadows Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 0,
+         "plates": [],
+         "barKg": 20
+        },
+        "swaps": [
+         {
+          "id": "db_row",
+          "name": "Dumbbell Row"
+         },
+         {
+          "id": "smith_row",
+          "name": "Smith Machine Row"
+         }
+        ]
+       },
+       {
+        "id": "smith_row",
+        "name": "Smith Machine Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 10,
+         "plates": [
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 12.5,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 6.25,
+           "plates": [
+            5,
+            1.25
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "db_row",
@@ -140,6 +227,7 @@
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
   "warmupOffered": null,
+  "nextSwapOptions": null,
   "isWarmup": false
  },
  "steps": [
@@ -178,6 +266,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -217,6 +306,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -257,6 +347,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "meadows_row",
+     "smith_row"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -292,6 +386,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": 1,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -330,6 +425,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -369,6 +465,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },

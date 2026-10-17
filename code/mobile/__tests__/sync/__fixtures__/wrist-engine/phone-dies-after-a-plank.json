@@ -6,7 +6,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_yssmvt",
+  "planId": "plan_pjhnph",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -68,7 +68,94 @@
        "block": 1,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "db_bench_press",
+        "name": "Dumbbell Bench Press",
+        "group": "Chest",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 60
+        },
+        "ramp": [
+         {
+          "weightKg": 30,
+          "reps": 5,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 30
+          }
+         },
+         {
+          "weightKg": 45,
+          "reps": 3,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 45
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_bench_press",
+          "name": "Barbell Bench Press"
+         },
+         {
+          "id": "smith_bench_press",
+          "name": "Smith Machine Bench Press"
+         }
+        ]
+       },
+       {
+        "id": "smith_bench_press",
+        "name": "Smith Machine Bench Press",
+        "group": "Chest",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 30,
+         "plates": [
+          20,
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 30,
+          "reps": 5,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 15,
+           "plates": [
+            15
+           ]
+          }
+         },
+         {
+          "weightKg": 45,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 22.5,
+           "plates": [
+            20,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_bench_press",
+          "name": "Barbell Bench Press"
+         },
+         {
+          "id": "machine_chest_press",
+          "name": "Machine Chest Press"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "plank",
@@ -144,7 +231,80 @@
        "block": 3,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "t_bar_row",
+        "name": "T-Bar Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 15,
+         "plates": [
+          15
+         ],
+         "barKg": 20
+        },
+        "ramp": [
+         {
+          "weightKg": 35,
+          "reps": 3,
+          "loadSetup": {
+           "style": "barbell",
+           "perSide": 7.5,
+           "plates": [
+            5,
+            2.5
+           ],
+           "barKg": 20
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         },
+         {
+          "id": "smith_row",
+          "name": "Smith Machine Row"
+         }
+        ]
+       },
+       {
+        "id": "smith_row",
+        "name": "Smith Machine Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 25,
+         "plates": [
+          20,
+          5
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 35,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 17.5,
+           "plates": [
+            15,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         }
+        ]
+       }
+      ]
      }
     ],
     "seat": 0
@@ -180,6 +340,7 @@
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
   "warmupOffered": 2,
+  "nextSwapOptions": null,
   "isWarmup": false
  },
  "steps": [
@@ -218,6 +379,7 @@
     "nextHoldSeconds": 45,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -253,6 +415,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -287,6 +450,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -321,6 +485,7 @@
     "nextHoldSeconds": 45,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -356,6 +521,7 @@
     "nextHoldSeconds": 45,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -392,6 +558,7 @@
     "nextHoldSeconds": 45,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -427,6 +594,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -461,6 +629,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "t_bar_row",
+     "smith_row"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -496,6 +668,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": 1,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -555,7 +728,7 @@
     "workoutId": "w_today",
     "workoutName": "Core",
     "startedAt": "2027-01-15T08:00:00.000Z",
-    "rev": "kit_18q6yr5_4",
+    "rev": "kit_k8chst_4",
     "steps": [
      {
       "exerciseId": "bb_bench_press",
@@ -582,6 +755,93 @@
        "round": 1,
        "position": 1
       },
+      "swaps": [
+       {
+        "id": "db_bench_press",
+        "name": "Dumbbell Bench Press",
+        "group": "Chest",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 60
+        },
+        "ramp": [
+         {
+          "weightKg": 30,
+          "reps": 5,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 30
+          }
+         },
+         {
+          "weightKg": 45,
+          "reps": 3,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 45
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_bench_press",
+          "name": "Barbell Bench Press"
+         },
+         {
+          "id": "smith_bench_press",
+          "name": "Smith Machine Bench Press"
+         }
+        ]
+       },
+       {
+        "id": "smith_bench_press",
+        "name": "Smith Machine Bench Press",
+        "group": "Chest",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 30,
+         "plates": [
+          20,
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 30,
+          "reps": 5,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 15,
+           "plates": [
+            15
+           ]
+          }
+         },
+         {
+          "weightKg": 45,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 22.5,
+           "plates": [
+            20,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_bench_press",
+          "name": "Barbell Bench Press"
+         },
+         {
+          "id": "machine_chest_press",
+          "name": "Machine Chest Press"
+         }
+        ]
+       }
+      ],
       "ramp": [
        {
         "weightKg": 30,
@@ -672,6 +932,79 @@
        "round": 1,
        "position": 1
       },
+      "swaps": [
+       {
+        "id": "t_bar_row",
+        "name": "T-Bar Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "barbell",
+         "perSide": 15,
+         "plates": [
+          15
+         ],
+         "barKg": 20
+        },
+        "ramp": [
+         {
+          "weightKg": 35,
+          "reps": 3,
+          "loadSetup": {
+           "style": "barbell",
+           "perSide": 7.5,
+           "plates": [
+            5,
+            2.5
+           ],
+           "barKg": 20
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         },
+         {
+          "id": "smith_row",
+          "name": "Smith Machine Row"
+         }
+        ]
+       },
+       {
+        "id": "smith_row",
+        "name": "Smith Machine Row",
+        "group": "Back",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 25,
+         "plates": [
+          20,
+          5
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 35,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 17.5,
+           "plates": [
+            15,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_row",
+          "name": "Barbell Row"
+         }
+        ]
+       }
+      ],
       "ramp": [
        {
         "weightKg": 35,
@@ -700,7 +1033,7 @@
     "workoutId": "w_today",
     "workoutName": "Core",
     "startedAt": "2027-01-15T08:00:00.000Z",
-    "rev": "kit_18q6yr5_4",
+    "rev": "kit_k8chst_4",
     "cursor": 1,
     "phase": "rest_inter",
     "restEndsAt": "2027-01-15T08:00:49.000Z",

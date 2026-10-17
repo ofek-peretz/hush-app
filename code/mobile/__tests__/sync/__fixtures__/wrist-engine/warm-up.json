@@ -6,7 +6,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_17jel4o",
+  "planId": "plan_1uhk7ds",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -69,7 +69,93 @@
        "block": 1,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "goblet_squat",
+        "name": "Goblet Squat",
+        "group": "Quads",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 100
+        },
+        "ramp": [
+         {
+          "weightKg": 50,
+          "reps": 5,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 50
+          }
+         },
+         {
+          "weightKg": 75,
+          "reps": 3,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 75
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_back_squat",
+          "name": "Barbell Back Squat"
+         },
+         {
+          "id": "smith_squat",
+          "name": "Smith Machine Squat"
+         }
+        ]
+       },
+       {
+        "id": "smith_squat",
+        "name": "Smith Machine Squat",
+        "group": "Quads",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 50,
+         "plates": [
+          20,
+          20,
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 50,
+          "reps": 5,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 25,
+           "plates": [
+            20,
+            5
+           ]
+          }
+         },
+         {
+          "weightKg": 75,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 37.5,
+           "plates": [
+            20,
+            15,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_back_squat",
+          "name": "Barbell Back Squat"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "bb_back_squat",
@@ -165,7 +251,65 @@
        "block": 2,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "db_rdl",
+        "name": "Dumbbell Romanian Deadlift",
+        "group": "Hamstrings",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 80
+        },
+        "ramp": [
+         {
+          "weightKg": 56,
+          "reps": 3,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 56
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_deadlift",
+          "name": "Deadlift"
+         },
+         {
+          "id": "bb_rdl",
+          "name": "Romanian Deadlift"
+         }
+        ]
+       },
+       {
+        "id": "kb_rdl",
+        "name": "Kettlebell Romanian Deadlift",
+        "group": "Hamstrings",
+        "loadSetup": {
+         "style": "kettlebell"
+        },
+        "ramp": [
+         {
+          "weightKg": 56,
+          "reps": 3,
+          "loadSetup": {
+           "style": "kettlebell"
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_deadlift",
+          "name": "Deadlift"
+         },
+         {
+          "id": "bb_rdl",
+          "name": "Romanian Deadlift"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "bb_rdl",
@@ -272,6 +416,7 @@
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
   "warmupOffered": 2,
+  "nextSwapOptions": null,
   "isWarmup": false
  },
  "steps": [
@@ -306,6 +451,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true
    }
   },
@@ -340,6 +486,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true,
     "nextIsWarmup": true
    }
@@ -375,6 +522,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true
    }
   },
@@ -409,6 +557,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true
    }
   },
@@ -443,6 +592,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true
    }
   },
@@ -479,6 +629,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true,
     "nextIsWarmup": false
    }
@@ -514,6 +665,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -552,6 +704,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -591,6 +744,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -631,6 +785,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -672,6 +827,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -714,6 +870,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "db_rdl",
+     "kb_rdl"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -749,6 +909,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": 1,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -783,6 +944,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true
    }
   },
@@ -817,6 +979,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": true,
     "nextIsWarmup": false
    }
@@ -852,6 +1015,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -890,6 +1054,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -929,6 +1094,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -969,6 +1135,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -1004,6 +1171,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -1042,6 +1210,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -1081,6 +1250,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },

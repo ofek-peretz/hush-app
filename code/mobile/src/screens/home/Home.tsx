@@ -674,6 +674,8 @@ export function Home({ navigation, route }: Props) {
           restInterSFor: (exerciseId: string) => (restIsLearnedFor(exerciseId) ? restInterSecondsFor(exerciseId) : null),
           restInterS: REST_INTER_S,
           restTransitionS: restTransitionSeconds(),
+          // The swaps the wrist offers alone are chosen against HER equipment, as the live ones are.
+          equipment: app.profile?.equipment,
           }),
           weekLoaded,
           nowMs: Date.now(),

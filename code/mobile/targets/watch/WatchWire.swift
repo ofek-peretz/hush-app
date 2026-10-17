@@ -454,6 +454,22 @@ struct WirePlanStep: Codable, Equatable {
   /// A warm-up bridge — which of how many. Set on the steps the engine inserts, and on a bridge
   /// already in a phone's live plan when the wrist takes the workout over.
   var warmup: WireWarmupPlace?
+  /// ⛔ THE LIFTS SHE MAY SWAP THIS ONE FOR (stage 4, 2026-10-17) — the phone's own options, chosen in
+  /// advance for the wrist alone, on the first step of each lift's run (the one a crossing leads into).
+  var swaps: [WireSwapChoice]?
+}
+
+/// One lift a step may be swapped for, with what the wrist needs to show it once chosen — mirror of
+/// protocol.ts `WatchSwapChoice`. `swaps` is what the phone would offer for it in turn.
+struct WireSwapChoice: Codable, Equatable {
+  var id: String
+  var name: String
+  var group: String?
+  var loadSetup: WireLoadSetup?
+  var lastReps: [Int]?
+  var lastLoadKg: Double?
+  var ramp: [WireWarmupRung]?
+  var swaps: [WireSwapOption]?
 }
 
 /// One bridge of an offered warm-up — see `WirePlanStep.ramp`.

@@ -10,7 +10,9 @@ import Foundation
 //
 // Boundaries (permanent):
 //  - The engine NEVER computes targets — it executes the phone-prescribed plan
-//    verbatim (the phone owns the model). No swaps, no reorders offline.
+//    verbatim (the phone owns the model). What it may change is what the phone chose in
+//    advance and put on the steps: her own weight carried, the warm-up offered, the swap
+//    offered (stages 2 and 4, 2026-10-17). No reorders offline.
 //  - Every transition is persisted BEFORE it is rendered (WatchStore), so an app
 //    termination/crash resumes exactly where the athlete was — an elapsed rest is
 //    caught up on restore (wall-clock, not timer-based).
@@ -299,6 +301,59 @@ final class LocalWorkoutEngine {
     state.steps[at].ramp = nil
     state.steps.insert(contentsOf: bridges, at: at)
     for i in state.steps.indices { state.steps[i].globalIndex = i }
+    persist()
+    emit()
+  }
+
+  /**
+   * "Swap" on the walk to the next lift (WT11b) — alone (stage 4, 2026-10-17).
+   *
+   * The phone's `swapNextExercise` → `retargetPlanForSwap`, to the letter: from the step the crossing
+   * leads into, every remaining step of that lift becomes the lift she chose, and its written weight
+   * and reps carry across unchanged — a coach's session has no target table to re-weigh them (a
+   * takeover kit offers no swap where one would). Never a lift already in the session.
+   *
+   * ⛔ NOTHING IS CHOSEN HERE. The options are the phone's (`swaps`, its own `wristSwapOptions`), each
+   * with its bar, last time and warm-up worked out on the phone; the new lift is offered, in turn,
+   * exactly what the phone would offer for it — with the lift she just left among them, whole, so a
+   * swap back puts back precisely what was there.
+   */
+  func swapNext(to id: String) {
+    guard !finished, state.phase == "rest_transition" else { return }
+    let at = state.currentIndex + 1
+    guard at < state.steps.count else { return }
+    let old = state.steps[at]
+    guard let choice = old.swaps?.first(where: { $0.id == id }),
+          !state.steps.contains(where: { $0.exerciseId == id }) else { return }
+    let back = WireSwapChoice(
+      id: old.exerciseId,
+      name: old.exerciseName,
+      group: old.exerciseGroup,
+      loadSetup: old.loadSetup,
+      lastReps: old.lastReps,
+      lastLoadKg: old.lastLoadKg,
+      ramp: old.ramp,
+      swaps: old.swaps?.map { WireSwapOption(id: $0.id, name: $0.name) }
+    )
+    let offered: [WireSwapChoice] = (choice.swaps ?? []).map { o in
+      o.id == back.id ? back : WireSwapChoice(id: o.id, name: o.name, group: nil, loadSetup: nil, lastReps: nil, lastLoadKg: nil, ramp: nil, swaps: nil)
+    }
+    let writtenKg = old.targetWeight
+    for i in at..<state.steps.count where state.steps[i].exerciseId == old.exerciseId {
+      let runStart = i == at || state.steps[i - 1].exerciseId != old.exerciseId
+      var s = state.steps[i]
+      s.exerciseId = choice.id
+      s.exerciseName = choice.name
+      s.exerciseGroup = choice.group
+      // The bar was worked out for the written weight; a set she has since carried her own number to
+      // shows none — the wrist does no plate maths (the carry-forward's own rule).
+      s.loadSetup = s.targetWeight == writtenKg ? choice.loadSetup : nil
+      s.lastReps = choice.lastReps
+      s.lastLoadKg = choice.lastLoadKg
+      s.ramp = i == at ? choice.ramp : nil
+      s.swaps = runStart && !offered.isEmpty ? offered : nil
+      state.steps[i] = s
+    }
     persist()
     emit()
   }
@@ -700,7 +755,7 @@ final class LocalWorkoutEngine {
       liveSets: workingSets.count,
       workoutName: state.workoutName,
       summary: nil,
-      swapOptions: nil, // no offline swaps — the phone owns exercise selection
+      swapOptions: nil, // the wrist swaps on the walk to a lift (`nextSwapOptions`), never mid-lift
       nextSwapOptions: nil,
       loadSetup: nil,
       nextLoadSetup: nil,
@@ -847,6 +902,11 @@ final class LocalWorkoutEngine {
       m.completedExerciseName = cur.exerciseName
       m.nextLoadDeltaKg = signedDelta(next)
       m.nextLoadSetup = next?.loadSetup
+      // The swaps on the walk to it — the phone's options, less any lift now in the session (stage 4).
+      let offered = (next?.swaps ?? [])
+        .filter { c in !state.steps.contains { $0.exerciseId == c.id } }
+        .map { WireSwapOption(id: $0.id, name: $0.name) }
+      m.nextSwapOptions = offered.isEmpty ? nil : offered
     }
     return m
   }

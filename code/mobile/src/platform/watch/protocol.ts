@@ -436,6 +436,34 @@ export interface WatchPlanStep {
   /** A warm-up bridge, not a working set — which of how many (`insertWarmup`'s own label). Present
    *  on a step the wrist inserted for her, and on one in a phone's live plan handed to the wrist. */
   warmup?: { index: number; count: number };
+  /**
+   * ⛔ THE LIFTS SHE MAY SWAP THIS ONE FOR, AS THE PHONE WOULD OFFER THEM (2026-10-17, stage 4).
+   *
+   * The wrist offers Swap on the walk to the next lift (WT11b) — with the phone in her pocket. With it
+   * in a locker the button was simply not there, because the alternatives are the phone's to choose
+   * (`swapChoices`, true synonyms only). Now the phone chooses them in advance: on the FIRST step of
+   * each lift's run (the only step a crossing leads into), the same options its live mirror would
+   * send, each with what the wrist needs to show it — its name, its bar, last time, the warm-up it
+   * would be offered — and the options IT would offer in turn, so a swap back (Undo) is exact.
+   * Present only where there is one; dropped first when the plan has to fit the wire (`fitPlanToWire`).
+   */
+  swaps?: WatchSwapChoice[];
+}
+
+/** One lift a step may be swapped for — see `WatchPlanStep.swaps`. */
+export interface WatchSwapChoice {
+  id: string;
+  name: string;
+  /** Its muscle — the set screen's legend. */
+  group?: string;
+  /** How to load the step's weight on THIS lift (a dumbbell's "per hand", a machine's pin). */
+  loadSetup?: MirrorLoadSetup | null;
+  lastReps?: number[];
+  lastLoadKg?: number | null;
+  /** The warm-up the phone would offer before it, once swapped in. */
+  ramp?: WatchWarmupRung[];
+  /** The options the phone would offer for it in turn — what the crossing shows once it is swapped in. */
+  swaps?: { id: string; name: string }[];
 }
 
 /** One bridge of a warm-up the phone would insert — see `WatchPlanStep.ramp`. */

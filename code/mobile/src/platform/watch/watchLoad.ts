@@ -11,7 +11,72 @@
 
 import { loadSetup } from '@/domain/loadPresentation';
 import type { WarmupSet } from '@/domain/warmupRamp';
-import type { WatchPlanStep, WatchWarmupRung } from './protocol';
+import type { LastTime } from '@/domain/lastTimeOn';
+import { swapChoices } from '@/domain/swapPool';
+import { exerciseById, exerciseDisplayName, type EquipmentFamily } from '@/data/exercises';
+import type { WatchPlanStep, WatchSwapChoice, WatchWarmupRung } from './protocol';
+
+/**
+ * ⛔ THE SWAPS THE WRIST OFFERS — ONE DEFINITION, ASKED BY THE LIVE MIRROR AND BY THE PLAN (stage 4).
+ *
+ * True synonyms only (2026-08-16): a 40 mm screen shows a name and nothing else, so an option that
+ * trains the lift a different way — which the phone's sheet labels — would be a lie there. Chosen
+ * against the session's OTHER lifts, so the wrist never offers one she has done or is about to do.
+ * `buildMirrorSteps` asks this for every frame; the plan asks it in advance for the wrist alone.
+ */
+export function wristSwapOptions(
+  exerciseId: string,
+  sessionExerciseIds: readonly string[],
+  equipment?: readonly EquipmentFamily[],
+): { id: string; name: string }[] {
+  const ex = exerciseById(exerciseId);
+  if (!ex) return [];
+  return swapChoices(ex.id, { sessionExerciseIds: [...sessionExerciseIds], equipment }, 2)
+    .filter((c) => c.sameMovement)
+    /* The name is the wrist's KEY for "is this the lift on stage" (Undo matches it against
+       `exerciseName`), so it is the same spoken name a step carries. */
+    .map((c) => ({ id: c.exercise.id, name: exerciseDisplayName(c.exercise.id) }));
+}
+
+/** What a step's swaps need from the plan they were asked on — the session store's own answers. */
+export interface SwapChoiceFacts {
+  /** The plan's lifts, as they would stand with step `at`'s lift swapped for `id`. */
+  liftsAfter: (at: number, id: string) => string[];
+  /** The warm-up the phone would offer at `at` once `id` is swapped in (`warmupOffer` on the swapped plan). */
+  warmupAfter: (at: number, id: string) => readonly WarmupSet[] | null;
+  lastOf: (exerciseId: string) => LastTime | null;
+  equipment?: readonly EquipmentFamily[];
+}
+
+/**
+ * The options for the step at `at` — whose weight is `kg` — each with what the wrist needs to show it
+ * once chosen, and the options the phone would offer for it in turn. Undefined where there are none.
+ */
+export function swapChoicesFor(
+  exerciseId: string,
+  sessionExerciseIds: readonly string[],
+  at: number,
+  kg: number | null,
+  facts: SwapChoiceFacts,
+): WatchSwapChoice[] | undefined {
+  const options = wristSwapOptions(exerciseId, sessionExerciseIds, facts.equipment);
+  if (options.length === 0) return undefined;
+  return options.map((o) => {
+    const setup = wireSetup(o.id, kg);
+    const last = facts.lastOf(o.id);
+    const ramp = facts.warmupAfter(at, o.id);
+    const next = wristSwapOptions(o.id, facts.liftsAfter(at, o.id), facts.equipment);
+    return {
+      id: o.id,
+      name: o.name,
+      ...(exerciseById(o.id)?.muscle ? { group: exerciseById(o.id)!.muscle } : {}),
+      ...(setup ? { loadSetup: setup } : {}),
+      ...(last && last.reps.length > 0 ? { lastReps: last.reps, lastLoadKg: last.loadKg } : {}),
+      ...(ramp && ramp.length > 0 ? { ramp: rampRungs(o.id, ramp) } : {}),
+      ...(next.length > 0 ? { swaps: next } : {}),
+    };
+  });
+}
 
 /**
  * How to load a weight on this lift — EVERY field the live mirror sends (`buildMirrorSteps`). The

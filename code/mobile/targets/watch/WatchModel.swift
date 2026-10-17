@@ -658,6 +658,7 @@ final class WatchModel: ObservableObject {
     actualReps: Int? = nil,
     actualWeight: Double? = nil,
     seconds: Int? = nil,
+    exerciseId: String? = nil,
     heard: @escaping () -> Void = {},
     local: @escaping (LocalWorkoutEngine) -> Void
   ) {
@@ -670,7 +671,7 @@ final class WatchModel: ObservableObject {
       actualReps: actualReps,
       actualWeight: actualWeight,
       workoutId: nil,
-      exerciseId: nil,
+      exerciseId: exerciseId,
       seconds: seconds,
       severity: nil,
       area: nil,
@@ -1342,16 +1343,31 @@ final class WatchModel: ObservableObject {
   }
 
   private func swap(_ exerciseId: String, replacing originalName: String, context: SwapUndoContext) {
-    // Exercise selection belongs to the phone's model; the offline mirror offers no
-    // swap options, so this can only fire under phone authority. One-tap (founder
-    // 2026-07-10): Hush already picked the replacement — apply it immediately, ack by
-    // feel, and the next mirror frame shows the new lift (exact parity with the phone).
-    // The original's NAME is remembered so the post-swap frame can offer the way back.
-    guard localEngine == nil else { return }
+    // One-tap (founder 2026-07-10): Hush already picked the replacement — apply it immediately, ack
+    // by feel, and the next frame shows the new lift (exact parity with the phone). The original's
+    // NAME is remembered so the post-swap frame can offer the way back.
     // A nameless original (a version-skewed frame) simply gets no undo offer — it must never
     // cost the athlete the swap itself.
     pendingUndo = originalName.isEmpty ? nil : (name: originalName, at: Date(), context: context)
-    sendIntent(type: "swap_exercise", exerciseId: exerciseId)
+    /*
+     * ⛔ ALONE, THE WRIST SWAPS AS IT SWAPS WITH THE PHONE (stage 4, 2026-10-17). The options it shows
+     * alone are the phone's own, chosen in advance (`WirePlanStep.swaps`), and its engine applies the
+     * phone's swap to the letter. The undo is resolved off the engine's own frame, the same way.
+     */
+    if let engine = localEngine {
+      guard context == .next else {
+        pendingUndo = nil
+        return
+      }
+      engine.swapNext(to: exerciseId)
+      onEntryHaptic.send(.exerciseBusyApplied)
+      resolveUndo(with: localMirror)
+      return
+    }
+    propose("swap_exercise", exerciseId: exerciseId) { [weak self] engine in
+      engine.swapNext(to: exerciseId)
+      self?.resolveUndo(with: self?.localMirror)
+    }
     onEntryHaptic.send(.exerciseBusyApplied)
   }
 
@@ -1404,7 +1420,12 @@ final class WatchModel: ObservableObject {
   func undoSwap() {
     guard let u = undoOption else { return }
     clearUndo()
-    sendIntent(type: "swap_exercise", exerciseId: u.id)
+    // Alone, the engine swaps back to what was there, whole (stage 4); with the phone, the phone does.
+    if let engine = localEngine {
+      engine.swapNext(to: u.id)
+    } else {
+      propose("swap_exercise", exerciseId: u.id) { $0.swapNext(to: u.id) }
+    }
     onEntryHaptic.send(.exerciseBusyApplied)
   }
 

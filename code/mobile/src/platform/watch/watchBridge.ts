@@ -296,6 +296,9 @@ export class WatchSession {
       this.d.track(WATCH_EVENTS.planPublished, {
         planId: plan.planId,
         workouts: plan.workouts.length + (plan.moreWorkouts?.length ?? 0),
+        // Its size (characters of JSON) — the one message the whole week rides, which has a limit
+        // (`fitPlanToWire`); a plan creeping toward it should be seen before one is refused.
+        chars: JSON.stringify(plan).length,
       });
     }
   }

@@ -6,7 +6,7 @@
  "workoutId": "w_today",
  "plan": {
   "schema": 1,
-  "planId": "plan_1kzmbbi",
+  "planId": "plan_1cizcli",
   "generatedAt": "2027-01-15T08:00:00.000Z",
   "restInterS": 90,
   "restTransitionS": 120,
@@ -67,7 +67,94 @@
        "block": 1,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "db_bench_press",
+        "name": "Dumbbell Bench Press",
+        "group": "Chest",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 60
+        },
+        "ramp": [
+         {
+          "weightKg": 30,
+          "reps": 5,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 30
+          }
+         },
+         {
+          "weightKg": 45,
+          "reps": 3,
+          "loadSetup": {
+           "style": "dumbbell",
+           "perHand": 45
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_bench_press",
+          "name": "Barbell Bench Press"
+         },
+         {
+          "id": "smith_bench_press",
+          "name": "Smith Machine Bench Press"
+         }
+        ]
+       },
+       {
+        "id": "smith_bench_press",
+        "name": "Smith Machine Bench Press",
+        "group": "Chest",
+        "loadSetup": {
+         "style": "plate_loaded",
+         "perSide": 30,
+         "plates": [
+          20,
+          10
+         ]
+        },
+        "ramp": [
+         {
+          "weightKg": 30,
+          "reps": 5,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 15,
+           "plates": [
+            15
+           ]
+          }
+         },
+         {
+          "weightKg": 45,
+          "reps": 3,
+          "loadSetup": {
+           "style": "plate_loaded",
+           "perSide": 22.5,
+           "plates": [
+            20,
+            2.5
+           ]
+          }
+         }
+        ],
+        "swaps": [
+         {
+          "id": "bb_bench_press",
+          "name": "Barbell Bench Press"
+         },
+         {
+          "id": "machine_chest_press",
+          "name": "Machine Chest Press"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "bb_bench_press",
@@ -122,7 +209,47 @@
        "block": 2,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "bb_curl",
+        "name": "Barbell Curl",
+        "group": "Biceps",
+        "loadSetup": {
+         "style": "fixed_barbell",
+         "fixedBar": 12
+        },
+        "swaps": [
+         {
+          "id": "db_curl",
+          "name": "Dumbbell Curl"
+         },
+         {
+          "id": "cable_curl",
+          "name": "Cable Curl"
+         }
+        ]
+       },
+       {
+        "id": "cable_curl",
+        "name": "Cable Curl",
+        "group": "Biceps",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 12
+        },
+        "swaps": [
+         {
+          "id": "bb_curl",
+          "name": "Barbell Curl"
+         },
+         {
+          "id": "single_arm_cable_curl",
+          "name": "Single-Arm Cable Curl"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "rope_pushdown",
@@ -150,7 +277,47 @@
        "block": 2,
        "round": 1,
        "position": 2
-      }
+      },
+      "swaps": [
+       {
+        "id": "triceps_pushdown",
+        "name": "Triceps Pushdown",
+        "group": "Triceps",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 25
+        },
+        "swaps": [
+         {
+          "id": "rope_pushdown",
+          "name": "Rope Pushdown"
+         },
+         {
+          "id": "triceps_kickback",
+          "name": "Triceps Kickback"
+         }
+        ]
+       },
+       {
+        "id": "triceps_kickback",
+        "name": "Triceps Kickback",
+        "group": "Triceps",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 25
+        },
+        "swaps": [
+         {
+          "id": "single_arm_pushdown",
+          "name": "Single-Arm Pushdown"
+         },
+         {
+          "id": "band_pushdown",
+          "name": "Band Pushdown"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "db_curl",
@@ -179,7 +346,47 @@
        "block": 2,
        "round": 2,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "bb_curl",
+        "name": "Barbell Curl",
+        "group": "Biceps",
+        "loadSetup": {
+         "style": "fixed_barbell",
+         "fixedBar": 12
+        },
+        "swaps": [
+         {
+          "id": "ez_bar_curl",
+          "name": "EZ-Bar Curl"
+         },
+         {
+          "id": "cable_curl",
+          "name": "Cable Curl"
+         }
+        ]
+       },
+       {
+        "id": "cable_curl",
+        "name": "Cable Curl",
+        "group": "Biceps",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 12
+        },
+        "swaps": [
+         {
+          "id": "bb_curl",
+          "name": "Barbell Curl"
+         },
+         {
+          "id": "single_arm_cable_curl",
+          "name": "Single-Arm Cable Curl"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "rope_pushdown",
@@ -207,7 +414,47 @@
        "block": 2,
        "round": 2,
        "position": 2
-      }
+      },
+      "swaps": [
+       {
+        "id": "triceps_pushdown",
+        "name": "Triceps Pushdown",
+        "group": "Triceps",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 25
+        },
+        "swaps": [
+         {
+          "id": "machine_triceps_ext",
+          "name": "Triceps Extension Machine"
+         },
+         {
+          "id": "triceps_kickback",
+          "name": "Triceps Kickback"
+         }
+        ]
+       },
+       {
+        "id": "triceps_kickback",
+        "name": "Triceps Kickback",
+        "group": "Triceps",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 25
+        },
+        "swaps": [
+         {
+          "id": "single_arm_pushdown",
+          "name": "Single-Arm Pushdown"
+         },
+         {
+          "id": "band_pushdown",
+          "name": "Band Pushdown"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "db_curl",
@@ -236,7 +483,47 @@
        "block": 2,
        "round": 3,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "bb_curl",
+        "name": "Barbell Curl",
+        "group": "Biceps",
+        "loadSetup": {
+         "style": "fixed_barbell",
+         "fixedBar": 12
+        },
+        "swaps": [
+         {
+          "id": "ez_bar_curl",
+          "name": "EZ-Bar Curl"
+         },
+         {
+          "id": "cable_curl",
+          "name": "Cable Curl"
+         }
+        ]
+       },
+       {
+        "id": "cable_curl",
+        "name": "Cable Curl",
+        "group": "Biceps",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 12
+        },
+        "swaps": [
+         {
+          "id": "bb_curl",
+          "name": "Barbell Curl"
+         },
+         {
+          "id": "single_arm_cable_curl",
+          "name": "Single-Arm Cable Curl"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "rope_pushdown",
@@ -264,7 +551,47 @@
        "block": 2,
        "round": 3,
        "position": 2
-      }
+      },
+      "swaps": [
+       {
+        "id": "triceps_pushdown",
+        "name": "Triceps Pushdown",
+        "group": "Triceps",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 25
+        },
+        "swaps": [
+         {
+          "id": "machine_triceps_ext",
+          "name": "Triceps Extension Machine"
+         },
+         {
+          "id": "triceps_kickback",
+          "name": "Triceps Kickback"
+         }
+        ]
+       },
+       {
+        "id": "triceps_kickback",
+        "name": "Triceps Kickback",
+        "group": "Triceps",
+        "loadSetup": {
+         "style": "dumbbell",
+         "perHand": 25
+        },
+        "swaps": [
+         {
+          "id": "single_arm_pushdown",
+          "name": "Single-Arm Pushdown"
+         },
+         {
+          "id": "band_pushdown",
+          "name": "Band Pushdown"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "lateral_raise",
@@ -286,7 +613,47 @@
        "block": 3,
        "round": 1,
        "position": 1
-      }
+      },
+      "swaps": [
+       {
+        "id": "cable_lateral_raise",
+        "name": "Cable Lateral Raise",
+        "group": "Shoulders",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 8
+        },
+        "swaps": [
+         {
+          "id": "cable_upright_row",
+          "name": "Cable Upright Row"
+         },
+         {
+          "id": "lateral_raise",
+          "name": "Lateral Raise"
+         }
+        ]
+       },
+       {
+        "id": "cable_upright_row",
+        "name": "Cable Upright Row",
+        "group": "Shoulders",
+        "loadSetup": {
+         "style": "cable",
+         "pin": 8
+        },
+        "swaps": [
+         {
+          "id": "cable_lateral_raise",
+          "name": "Cable Lateral Raise"
+         },
+         {
+          "id": "lateral_raise",
+          "name": "Lateral Raise"
+         }
+        ]
+       }
+      ]
      },
      {
       "exerciseId": "lateral_raise",
@@ -344,6 +711,7 @@
   "nextHoldSeconds": null,
   "nextHoldMetres": null,
   "warmupOffered": 2,
+  "nextSwapOptions": null,
   "isWarmup": false
  },
  "steps": [
@@ -382,6 +750,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -421,6 +790,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -466,6 +836,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "bb_curl",
+     "cable_curl"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -506,6 +880,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -545,6 +920,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -588,6 +964,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "bb_curl",
+     "cable_curl"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -632,6 +1012,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -675,6 +1056,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -720,6 +1102,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "bb_curl",
+     "cable_curl"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -766,6 +1152,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -811,6 +1198,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -853,6 +1241,10 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": [
+     "cable_lateral_raise",
+     "cable_upright_row"
+    ],
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -888,6 +1280,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },
@@ -926,6 +1319,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false,
     "nextIsWarmup": false
    }
@@ -965,6 +1359,7 @@
     "nextHoldSeconds": null,
     "nextHoldMetres": null,
     "warmupOffered": null,
+    "nextSwapOptions": null,
     "isWarmup": false
    }
   },

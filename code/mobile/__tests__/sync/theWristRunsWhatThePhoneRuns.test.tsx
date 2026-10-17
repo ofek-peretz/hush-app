@@ -120,7 +120,9 @@ type Action =
   | { do: 'finishEarly' }
   | { do: 'warmUp' } // "+ Warm-up" on a compound's first set: the bridges go in ahead of it
   | { do: 'wait'; s: number } // she stands there this many seconds more — the rest she TAKES is measured
-  | { do: 'phoneDies' }; // stage 3: from here the WRIST runs it, from the phone's last word — the phone runs on as the reference
+  | { do: 'phoneDies' } // stage 3: from here the WRIST runs it, from the phone's last word — the phone runs on as the reference
+  | { do: 'swapNext' } // stage 4: "Swap" on the walk to the next lift — the FIRST option offered, as the wrist's button takes
+  | { do: 'swapBack' }; // …and back to the lift it replaced (the wrist's Undo)
 
 const done = (n: number, a: Action = { do: 'complete' }): Action[] => Array.from({ length: n }, () => [a, { do: 'endRest' } as Action]).flat();
 const reps = (ex: string, load: number | null, band: [number, number] = [8, 12]) => ({ kind: 'reps', ex, load, reps: band });
@@ -265,6 +267,21 @@ const SCENARIOS: Scenario[] = [
    * each), must be what the phone would have drawn and written had it never gone silent.
    */
   {
+    name: 'swap-alone',
+    says: 'on the walk to the row she swaps it for the first lift offered, swaps back, swaps again — and trains the swapped lift',
+    day: { name: 'Upper A', blocks: [{ rounds: 2, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('bb_row', 50)] }, { rounds: 2, items: [reps('lateral_raise', 8, [12, 20])] }] },
+    script: [...done(1), { do: 'complete' }, { do: 'swapNext' }, { do: 'swapBack' }, { do: 'swapNext' }, { do: 'endRest' }, ...done(4).slice(0, -1)],
+    // Stage 4 (2026-10-17): the options are the phone's, chosen in advance; the engine applies its swap.
+    agrees: true,
+  },
+  {
+    name: 'phone-dies-then-swap',
+    says: 'the phone goes silent on the walk to the row — and she swaps it on the wrist, from the options the phone left in the kit',
+    day: { name: 'Upper A', blocks: [{ rounds: 2, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('bb_row', 50)] }] },
+    script: [...done(1), { do: 'complete' }, { do: 'phoneDies' }, { do: 'swapNext' }, { do: 'endRest' }, ...done(2).slice(0, -1)],
+    agrees: true,
+  },
+  {
     name: 'phone-dies-in-a-rest',
     says: 'she lifts lighter on the phone (her weight carried), the phone goes silent mid-rest, and the wrist carries the day to its end',
     day: { name: 'Upper A', blocks: [{ rounds: 3, items: [reps('bb_bench_press', 60, [8, 10])] }, { rounds: 2, items: [reps('bb_row', 50)] }] },
@@ -351,6 +368,8 @@ const FACTS = [
   'nextHoldMetres',
   // The warm-up on offer for the set on stage, and whether the step coming is a bridge (stage 2).
   'warmupOffered',
+  // The swaps offered on the walk to the next lift — the wrist's Swap button takes the first (stage 4).
+  'nextSwapOptions',
 ] as const;
 
 function told(): Record<string, unknown> {
@@ -361,6 +380,8 @@ function told(): Record<string, unknown> {
   // "What comes next" is a fact of a REST. Off one, the phone writes zeros and the wrist writes
   // nothing — the same statement in two spellings, and not what this file is measuring.
   if (m.phase !== 'rest_inter' && m.phase !== 'rest_transition') for (const k of FACTS) if (k.startsWith('next')) out[k] = null;
+  // The swaps offered, by id — an empty list and none are one fact.
+  if (Array.isArray(out.nextSwapOptions)) out.nextSwapOptions = out.nextSwapOptions.length > 0 ? out.nextSwapOptions.map((o) => o.id) : null;
   // A zero and an absence are one fact here: "no warm-up", "no hold".
   out.isWarmup = m.isWarmup === true;
   if (m.phase === 'rest_inter' || m.phase === 'rest_transition') out.nextIsWarmup = m.nextIsWarmup === true;
@@ -408,6 +429,8 @@ async function run(s: Scenario) {
   const start = told();
   /** What the wrist holds when the phone goes silent — see `wristHolds`. */
   let takeover: { nowMs: number; kits: unknown[] } | null = null;
+  /** The lift the last swap replaced — what "swap back" chooses. */
+  let replaced: string | null = null;
   for (const a of s.script) {
     const v = view!;
     setNow(now + 1_000); // a second passes between any two things she does
@@ -423,7 +446,18 @@ async function run(s: Scenario) {
     else if (a.do === 'pause') await act(async () => v.pause());
     else if (a.do === 'resume') await act(async () => v.resume());
     else if (a.do === 'warmUp') await act(async () => v.addWarmup());
-    else if (a.do === 'wait' || a.do === 'phoneDies') {
+    else if (a.do === 'swapNext' || a.do === 'swapBack') {
+      // The FIRST option offered on the walk — the lift the wrist's Swap button takes — or the one it replaced.
+      const offered = wire.envelopes[wire.envelopes.length - 1]?.mirror?.nextSwapOptions ?? [];
+      const to = a.do === 'swapNext' ? offered[0]?.id : replaced;
+      if (!to) throw new Error(`${s.name}: nothing offered to swap to at step ${steps.length}`);
+      replaced = v.nextExerciseId;
+      await act(async () => v.swapNextExercise(to));
+      await settle();
+      await settle();
+      steps.push({ ...a, to, phone: told() });
+      continue;
+    } else if (a.do === 'wait' || a.do === 'phoneDies') {
       // Nothing she does: time passes, or (stage 3) the WRIST takes over — the phone runs on as the reference.
     } else await act(async () => void (await v.finishEarly()));
     await settle();

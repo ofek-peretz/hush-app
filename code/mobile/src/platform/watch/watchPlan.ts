@@ -32,8 +32,9 @@ import { restAfterRun, restInterSecondsFor } from '@/domain/restPrescription';
 import { runSteps } from '@/domain/planRun';
 import { supersetAt } from '@/domain/supersetView';
 import { REST_SKIP_THRESHOLD_S } from '@/state/machines/sessionState';
-import { buildPlanFromCoach, warmupOffer } from '@/state/stores/sessionStore';
-import { rampRungs, wireSetup } from './watchLoad';
+import { buildPlanFromCoach, retargetPlanForSwap, warmupOffer } from '@/state/stores/sessionStore';
+import type { EquipmentFamily } from '@/data/exercises';
+import { rampRungs, swapChoicesFor, wireSetup } from './watchLoad';
 import {
   WATCH_PLAN_SCHEMA_VERSION,
   type WatchPlanSnapshot,
@@ -245,6 +246,8 @@ export function buildCoachWatchPlan(inp: {
    * a Swift constant honest without compiling Swift.
    */
   restInterSFor?: (exerciseId: string) => number | null;
+  /** Her equipment — the swaps the wrist offers alone are chosen against it, as the live mirror's are. */
+  equipment?: readonly EquipmentFamily[];
 }): WatchPlanSnapshot | null {
   const workouts: WatchPlanWorkout[] = [];
   /** The days with a hold or a carry in them — see `WatchPlanSnapshot.moreWorkouts`. */
@@ -281,6 +284,21 @@ export function buildCoachWatchPlan(inp: {
     // The phone's own plan of this day — one step per step of the run, in the same order — asked
     // only what it alone can answer: where a warm-up would be offered, and what it would be.
     const own = buildPlanFromCoach({ name: session.name, blocks: session.blocks } as PlannedSession);
+    /*
+     * …and the swaps it would offer on the walk to each lift (stage 4, 2026-10-17): the same options
+     * its live mirror sends (`wristSwapOptions`, against this day's lifts), each with what the wrist
+     * needs to show it once chosen. Asked on the FIRST step of each lift's run — the only step a
+     * crossing leads into — and never anywhere else, because every byte here rides one message.
+     */
+    const lifts = [...new Set(own.map((st) => st.exerciseId))];
+    const swapFacts = {
+      liftsAfter: (at: number, id: string) => [...new Set(retargetPlanForSwap(own, [], at, id).map((st) => st.exerciseId))],
+      warmupAfter: (at: number, id: string) => warmupOffer(retargetPlanForSwap(own, [], at, id), at)?.ramp ?? null,
+      lastOf,
+      equipment: inp.equipment,
+    };
+    const swapsAt = (at: number, kg: number | null) =>
+      at === 0 || run[at - 1].item.ex !== run[at].item.ex ? swapChoicesFor(run[at].item.ex, lifts, at, kg, swapFacts) : undefined;
     const lastOfLift = (i: number) => i === run.length - 1 || run[i + 1].item.ex !== run[i].item.ex;
     // What the plan itself says after each step. The session's closing zero is a fact about the
     // POSITION, not the step (`laws/aSupersetIsOnlyEverWritten`) — the last step keeps its block's own.
@@ -306,6 +324,7 @@ export function buildCoachWatchPlan(inp: {
       };
       if (item.kind === 'time' || item.kind === 'distance') {
         // A hold or a carry: its seconds or its metres, what she carries if anything, and no reps.
+        const holdSwaps = swapsAt(at, item.load ?? null);
         steps.push({
           exerciseId: item.ex,
           exerciseName: exerciseDisplayName(item.ex),
@@ -317,6 +336,7 @@ export function buildCoachWatchPlan(inp: {
           targetReps: 0,
           ...(item.kind === 'time' ? { holdSeconds: Math.round(item.seconds) } : { holdMetres: Math.round(item.metres) }),
           ...placed,
+          ...(holdSwaps ? { swaps: holdSwaps } : {}),
         });
         global += 1;
         return;
@@ -325,6 +345,7 @@ export function buildCoachWatchPlan(inp: {
       const ex = exerciseById(item.ex);
       const setup = wireSetup(item.ex, item.load);
       const ramp = own[at] && own[at].exerciseId === item.ex ? rampOffered(own, at) : undefined;
+      const liftSwaps = swapsAt(at, item.load);
       const r = st.round - 1;
       steps.push({
         exerciseId: item.ex,
@@ -366,6 +387,8 @@ export function buildCoachWatchPlan(inp: {
         // The warm-up the phone would offer before this set, when it would (stage 2, 2026-10-17).
         ...(ramp ? { ramp } : {}),
         ...placed,
+        // The lifts she may swap it for on the walk to it (stage 4).
+        ...(liftSwaps ? { swaps: liftSwaps } : {}),
       });
       global += 1;
     });
@@ -476,11 +499,87 @@ export function watchPlanToPublish(inp: {
   restInterS: number;
   restTransitionS: number;
 }): WatchPlanSnapshot | null {
-  if (inp.built) return inp.built;
+  if (inp.built) return fitPlanToWire(inp.built);
   if (!inp.weekLoaded) return null;
   return emptyWatchPlan({
     nowMs: inp.nowMs,
     restInterS: inp.restInterS,
     restTransitionS: inp.restTransitionS,
   });
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * THE PLAN MUST FIT THE WIRE (2026-10-17, the wrist-alone plan, stage 4)
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * The whole week travels to the wrist in ONE message — the application context the lobby rides —
+ * and WatchConnectivity refuses a payload over its limit outright (`payloadTooLarge`, code 7009).
+ * Apple publishes no figure; ~64 KB is the number developers meet. A refused context is not a
+ * smaller plan, it is NO plan: her wrist keeps last week's.
+ *
+ * Measured on a heavy four-day week (81 steps): 28 KB, ~350 bytes a step before her history and her
+ * language's names. A six-day week was already within reach of the limit before the wrist learned
+ * the warm-up (stage 2) and the swaps (stage 4). So the plan is held to a budget, with room left for
+ * the lobby and her copy beside it in the same message, and what does not fit is given up in the
+ * order it matters least — never a set of a workout:
+ *
+ *   1 · the options offered for a lift once it is swapped in   (a second swap shows fewer)
+ *   2 · the swaps themselves                                   (no Swap alone; the phone still offers it)
+ *   3 · the warm-up offers                                     (no "+ Warm-up" alone)
+ *   4 · last time's reps                                       (dashes in the set row, as for a new lift)
+ *   5 · the days furthest ahead, one at a time                 (they are sent the next time she is on Today)
+ */
+export const WATCH_PLAN_BYTE_BUDGET = 40_000;
+
+function utf8Bytes(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
+}
+
+export function planBytes(plan: WatchPlanSnapshot): number {
+  return utf8Bytes(JSON.stringify(plan));
+}
+
+export function fitPlanToWire(plan: WatchPlanSnapshot, budget = WATCH_PLAN_BYTE_BUDGET): WatchPlanSnapshot {
+  if (planBytes(plan) <= budget) return plan;
+  const withSteps = (p: WatchPlanSnapshot, f: (s: WatchPlanStep) => WatchPlanStep): WatchPlanSnapshot => {
+    const map = (ws: WatchPlanWorkout[]) => ws.map((w) => ({ ...w, steps: w.steps.map(f) }));
+    return { ...p, workouts: map(p.workouts), ...(p.moreWorkouts ? { moreWorkouts: map(p.moreWorkouts) } : {}) };
+  };
+  const rename = (p: WatchPlanSnapshot): WatchPlanSnapshot => ({ ...p, planId: contentHash([...p.workouts, ...(p.moreWorkouts ?? [])]) });
+  const cuts: ((s: WatchPlanStep) => WatchPlanStep)[] = [
+    (s) => (s.swaps ? { ...s, swaps: s.swaps.map(({ swaps: _next, ...c }) => c) } : s),
+    ({ swaps: _swaps, ...s }) => s,
+    ({ ramp: _ramp, ...s }) => s,
+    ({ lastReps: _reps, lastLoadKg: _load, ...s }) => s,
+  ];
+  let p = plan;
+  for (const cut of cuts) {
+    p = rename(withSteps(p, cut));
+    if (planBytes(p) <= budget) return p;
+  }
+  // The days furthest ahead go last, one at a time — by her week's order, never the next one.
+  const all = [...p.workouts.map((w) => ({ w, more: false })), ...(p.moreWorkouts ?? []).map((w) => ({ w, more: true }))]
+    .sort((a, b) => (a.w.seat ?? 0) - (b.w.seat ?? 0));
+  while (all.length > 1) {
+    all.pop();
+    const kept = all.map((x) => x.w.id);
+    p = rename({
+      ...p,
+      workouts: p.workouts.filter((w) => kept.includes(w.id)),
+      ...(p.moreWorkouts ? { moreWorkouts: p.moreWorkouts.filter((w) => kept.includes(w.id)) } : {}),
+    });
+    if (planBytes(p) <= budget) return p;
+  }
+  return p;
 }
