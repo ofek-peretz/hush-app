@@ -1,0 +1,45 @@
+# How long Apple's networking waits on a quiet line — ON DEMAND ONLY.
+#
+# The week's build may take up to 107 s; Apple's request timeout is an idle timer of sixty seconds;
+# the coach Worker keeps the line alive with a beat every ten seconds. Whether that holds is a
+# fact about URLSession, and no Swift runs on the machine this code is written on — so this job
+# asks URLSession itself, natively on macOS and inside the iOS simulator, with the settings React
+# Native uses (`code/mobile/native-tests/net-probe/probe.swift` holds the question and the
+# decision table).
+#
+# It runs only when asked — a push to `ci/net-probe` or a manual dispatch — and nothing here gates
+# a merge. The answers come back on the `ci/net-probe-results` branch (force-pushed, text only), so
+# they can be read with `git fetch` and no token, exactly as the wrist's photographs are.
+name: net-probe
+
+on:
+  push:
+    branches: ["ci/net-probe"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    name: a quiet line on Apple's networking (macOS + iOS simulator)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe
+        run: bash code/mobile/native-tests/net-probe/probe.sh "$RUNNER_TEMP/net-probe-results"
+      - name: Send the answers back (branch ci/net-probe-results)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/net-probe-results"
+          cd "$RUNNER_TEMP/net-probe-results"
+          echo "$GITHUB_SHA" > SOURCE
+          git init -q -b ci/net-probe-results
+          git config user.name "net-probe"
+          git config user.email "net-probe@users.noreply.github.com"
+          git add -A
+          git commit -q -m "net probe @ $GITHUB_SHA"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci/net-probe-results

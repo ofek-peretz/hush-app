@@ -19,6 +19,9 @@
  *
  * This module is PURE (no native imports) so it is unit-testable on any host.
  */
+
+// 
+
 import type { SessionMachine } from '@/state/machines/sessionState';
 import type { ReasonType } from '@/data/local/models';
 
@@ -35,9 +38,45 @@ export type MirrorPhase =
  *  surface built against an older app rejects a shape it cannot read. */
 export const MIRROR_SCHEMA_VERSION = 1 as const;
 
+/** Equipment-native load setup (kg) — how to physically load the prescribed weight so the athlete
+ *  never has to calculate (UX items 5/12). Mirrors `domain/loadPresentation.LoadSetup` but is a
+ *  plain structural type so this module stays free of domain/native imports. The headline IS the
+ *  step's `targetWeight`; these fields only explain the setup. Watch + Live Activity render a
+ *  compact line from it. `style` is a free string (the load style) to keep this decoupled. */
+export interface MirrorLoadSetup {
+  style: string;
+  /** Per-side weight for a bar / carriage (barbell, plate_loaded). */
+  perSide?: number;
+  /** Plate stack for one side (largest first) — present ONLY when it sums exactly to `perSide`. */
+  plates?: number[];
+  /** Bar weight (barbell only). */
+  barKg?: number;
+  /** Per-hand weight (dumbbell). */
+  perHand?: number;
+  /** Stack pin weight (selectorized, cable). */
+  pin?: number;
+  /** Fixed-bar weight (fixed_barbell). */
+  fixedBar?: number;
+}
+
 /** One step of the live plan, name-resolved, as the projection needs it. Decoupled
  *  from the session store's internal `Step` so this module stays pure. */
+/**
+ * A superset, as the wrist is told it (2026-10-11): which round of how many, and which of the
+ * round's lifts. Four small integers — the wrist's job is POSITION; the announcement, the two
+ * films and the names are the phone's (`screens/session/SupersetBlock`).
+ */
+export interface MirrorSuperset {
+  round: number;
+  rounds: number;
+  position: number;
+  count: number;
+}
+
 export interface MirrorStep {
+  /** The superset this step is part of, when it is — read from the plan by the one rule the phone's
+   *  own stage uses (`domain/supersetView`). Absent on every ordinary set. */
+  superset?: MirrorSuperset;
   exerciseName: string;
   /** Primary muscle group label (Active Set legend). */
   exerciseGroup?: string;
@@ -46,13 +85,98 @@ export interface MirrorStep {
   globalIndex: number; // 0-based within the whole session
   targetWeight: number | null; // null => bodyweight
   targetReps: number;
+  /** The rep band's ceiling (floor == targetReps). Carried so the watch draws the same
+   *  8–10 rep-range rule the phone's stage does (WT2). */
+  repBandHi?: number;
   /** Advisory model reason for THIS set's load vs last comparable (§4.4). Carried so
    *  the watch can render the LoadDelta mark; never authoritative. */
   reasonType?: ReasonType;
   /** Magnitude (kg) of the change, used by the LoadDelta value. */
   reasonDelta?: number;
+  /** A warm-up bridge (domain/warmupRamp) — the wrist labels it "Warm-up n of m" and its numbers
+   *  count the RAMP, never the working sets. Absent on every working step. */
+  warmup?: { index: number; count: number };
   /** In-class alternatives the athlete may swap to (Swap overlay); empty = none. */
   swapOptions?: { id: string; name: string }[];
+  /** Equipment-native setup (kg) for this step's load — the watch reads it so the
+   *  athlete never has to do mental math on the wrist (item 11). */
+  loadSetup?: MirrorLoadSetup | null;
+  /**
+   * ⛔ A HOLD OR A CARRY, NOT A SET (sync simulator, 2026-09-17). A timed or distance step — a plank,
+   * a carry — used to be left OUT of the mirror, and the cursor was translated into "sets reached".
+   * So while she held a plank the wrist and the lock card showed the NEXT lift's load and reps, a
+   * Done pressed on either did nothing, and the rest either side of the hold named the wrong set.
+   * The step now crosses as what it is: its seconds or its metres, and no reps.
+   */
+  hold?: { seconds?: number; metres?: number };
+}
+
+/**
+ * One lift the athlete PERFORMED, at the close of the workout — with its best set.
+ *
+ * The wrist plays the phone's closing beat, and now it plays the same one (founder 2026-07-13:
+ * "read the workout on the watch exactly like the phone reads it — only the exercises that were
+ * performed, with the green check"). The first cut listed the whole prescription and marked the
+ * unreached lifts with a dash. That is a LEDGER, and the closing beat is not a ledger: the phone
+ * walks the sets the athlete actually logged (WellDone reads `session.sets`), lands a check on
+ * each lift among them, and prints the best set beside it. Nothing that did not happen appears.
+ *
+ * So the wire carries what the phone renders: the performed lifts, in the order they were trained,
+ * each with the heaviest set of work it took (best by volume — the same rule WellDone uses).
+ */
+export interface MirrorSummaryLift {
+  name: string;
+  /** The lift's best set, formatted the way the phone prints it: "60 × 8", "BW × 12". */
+  best: string;
+  // (`done` — the pre-Build-30 compatibility shim — left on 2026-09-09, forty builds after the last
+  // binary that decoded it as non-optional; `WireSummaryLift` on the wrist carries `best` alone.)
+}
+
+/** One logged set, in step order — the actuals behind the read-back's numbers. */
+export interface MirrorLoggedSet {
+  weight: number | null; // kg; null = bodyweight
+  reps: number;
+}
+
+/**
+ * A milestone the session just crossed — the phone's beat 4, carried to the wrist (founder
+ * 2026-07-13: "add milestones to the watch at the end of a workout when the athlete earned one").
+ *
+ * COPY, NOT DOMAIN. The mark is earned on the phone, from the phone's history, the moment the
+ * session is written — there is no second engine on the wrist and never will be. What crosses the
+ * wire is the finished sentence (`domain/milestoneCopy`), rendered in ENGLISH: the watch target
+ * has no i18n runtime (WatchCopy.swift), and a Hebrew string in a mono face is the bug we already
+ * fixed once. The wrist shows the medallion's figure and the one factual line; the emblem itself,
+ * with its engraved glyph, stays a phone thing.
+ */
+export interface MirrorMilestone {
+  /** The engraved figure ("100", "250 t", "140 kg") — empty for a mark that is an event, not a number. */
+  value: string;
+  /** The tiny unit under the figure ("workouts", "tonnes"), when the figure has one. */
+  caption?: string;
+  title: string;
+  sub?: string;
+}
+
+export interface MirrorSummary {
+  timeLabel: string;
+  sets: number;
+  up: number;
+  /** Total external load moved this session, in KILOGRAMS (Σ weight × reps over the logged sets;
+   *  bodyweight sets contribute 0). The watch Complete screen renders it as tonnes ("11.7 T").
+   *  0 when no weighted set was logged. */
+  volumeKg: number;
+  /**
+   * The session's calories, AS THE PHONE COMPUTED THEM — one number per workout (founder
+   * 2026-07-28). The wrist can read HealthKit's active energy and the phone cannot, so for a
+   * phone-authority session the two surfaces used to print different figures for the same workout.
+   * The authority produces it; the wrist renders it. Null when it cannot be estimated honestly
+   * (no bodyweight — Hush never guesses a body to bill calories against).
+   */
+  kcal?: number | null;
+  lifts: MirrorSummaryLift[];
+  /** Present ONLY on the session that crossed it — a mark is celebrated once, on its own workout. */
+  milestone?: MirrorMilestone | null;
 }
 
 /** The canonical mirror. Every surface renders a SUBSET of this — e.g. the Live
@@ -64,16 +188,50 @@ export interface SessionMirror {
   exerciseName: string;
   /** Primary muscle group of the current exercise (Active Set legend); '' if none. */
   exerciseGroup: string;
+  /**
+   * The CURRENT step, which during a REST is the set the athlete has JUST FINISHED — the state
+   * machine does not advance `setIndex` until the rest ends (sessionState: END_REST). That is a
+   * deliberate design (the rest belongs to the set that earned it), and it is a trap for every
+   * surface that renders a rest, because what a resting athlete wants to know is what is COMING.
+   * Use `nextSetLabel` / `nextSetNumber` on a rest frame. Both the watch and the Live Activity
+   * read `setLabel` here and were quietly showing the set the athlete had already done.
+   */
   setLabel: string; // e.g. "Set 2 of 4"
   /** Numeric set position within the current exercise (1-based) + total, for set dots. */
   setNumber: number;
   setsInExercise: number;
+  /** The current step is a warm-up bridge — `setNumber`/`setsInExercise` then count the RAMP, and
+   *  the wrist prints the warm-up word. Optional both ways: an older watch ignores it. */
+  isWarmup?: boolean;
+  /** …and the same fact about the UPCOMING step, for rest frames. */
+  nextIsWarmup?: boolean;
+  /** The set the athlete is about to do — the ONLY set worth naming during a rest. Null when
+   *  there is no next step (an active set, or the last set of the session). */
+  nextSetLabel: string | null;
+  nextSetNumber: number;
   /** Total sets of the UPCOMING exercise (transition card "{n} sets"); 0 if none. */
   nextSetsInExercise: number;
   globalIndex: number; // 0-based position within the session
   totalSets: number;
   targetWeight: number | null;
   targetReps: number;
+  /** The rep band's ceiling (floor == targetReps). Carried so the wrist draws the same
+   *  8–10 rep-range ruler the phone's stage does (WT2). Null when the target is a single rep. */
+  targetRepsHi: number | null;
+  /**
+   * ⛔ HER OWN SETS ON THIS LIFT, THIS SESSION — reps in order (2026-08-04).
+   *
+   * The wrist drew four dots: filled, ringed, empty. They said HOW MANY sets were behind her and
+   * never WHAT HAPPENED in them, while the phone printed the figures. These two fields close that,
+   * and they are what the single row hands over from.
+   */
+  setsSoFar: number[];
+  /** The same sets' loads, index-aligned — what the hero's delta measures against mid-lift. */
+  loadsSoFar: (number | null)[];
+  /** Last time's reps on this lift, in order. Empty on a lift she has never done. */
+  lastReps: number[];
+  /** …and the load she finished it on. `null` = bodyweight, or no history at all. */
+  lastLoadKg: number | null;
   /** Absolute instant the current rest ends (ISO); null unless resting. */
   restEndsAt: string | null;
   /** Convenience snapshot derived from restEndsAt at projection time. */
@@ -103,17 +261,97 @@ export interface SessionMirror {
   nextLoadDeltaKg: number;
   /** The current lift's ordinal among the session's distinct exercises + the total
    *  ("Lift 1/6") — ambient exercises-remaining context on the top strip. */
+  /** The superset in play — see `MirrorSuperset`. Absent outside one. */
+  superset?: MirrorSuperset;
   liftIndex: number;
   liftCount: number;
   /** The session's workout name (program day) — shown on the Complete screen. */
   workoutName: string;
+  /**
+   * WT13c · GLANCE — what she has DONE so far, live, while the workout is still running.
+   *
+   * The summary below carries the same two figures, but only on the terminal frame, so a glance
+   * mid-session had nothing to read: the wrist could show her heart and her burn (the OS supplies
+   * those) and not one thing about her own lifting. These are the athlete's frontier, from the
+   * ACTUALS in step order — bodyweight sets contribute 0 kg, exactly as the summary treats them.
+   */
+  liveVolumeKg: number;
+  liveSets: number;
+  /** WT5 — true when the running rest is HER measured median on this lift (S-17) rather than the
+   *  tier bootstrap. Presentational only: the seconds are already hers either way. */
+  restIsLearned?: boolean;
   /** Complete-frame summary (only on the terminal frame): wall-clock time, total
    *  sets logged, and lifts progressed (distinct exercises the model raised). */
-  summary: { timeLabel: string; sets: number; up: number } | null;
+  summary: MirrorSummary | null;
   /** Swap alternatives for the CURRENT exercise (Active Set glyph → overlay). */
   swapOptions: { id: string; name: string }[];
   /** Swap alternatives for the UPCOMING exercise (Transition rest card glyph). */
   nextSwapOptions: { id: string; name: string }[];
+  /** Equipment-native setup (kg) for the CURRENT set's load (item 11) — the watch /
+   *  Live Activity render the per-side / plate / pin / per-hand line from it.
+   *  Optional/back-compatible: a version-skewed surface simply omits the line. */
+  loadSetup?: MirrorLoadSetup | null;
+  /** Equipment-native setup (kg) for the UPCOMING exercise's first set (transition rest). */
+  nextLoadSetup?: MirrorLoadSetup | null;
+  /** TO-LOAD vs LOADED for the CURRENT set (item: instruction-first execution). True when the
+   *  athlete still has to set the equipment — the first set of an exercise, or the load changed
+   *  since the last completed set of it. False once a set has been logged at this load (the bar /
+   *  pin is set) and for bodyweight (nothing to load). Drives the bright imperative vs the quiet
+   *  "loaded" confirmation on the Active Set. */
+  toLoad?: boolean;
+  /**
+   * THE SIGNATURE MOMENT, on the wrist (2026-07-17).
+   *
+   * Loop 1 just moved the next set's load because of the set she finished. The brief calls this the
+   * product's most distinctive moment and requires it to appear on BOTH surfaces — "the same change
+   * appears on the watch" — which matters most here: mid-workout the wrist is often the only thing
+   * she looks at, and a load changing on it with no account of why is the app doing something TO
+   * her rather than WITH her.
+   *
+   * `from`/`to` are kg (the mirror's unit; the wrist formats). Null on every frame that did not
+   * just earn a correction. Optional/back-compatible: a version-skewed watch simply omits the line
+   * and still shows the correct next load.
+   */
+  correction?: { from: number; to: number; direction: 'up' | 'down'; reps: number } | null;
+  /**
+   * ⛔ THE STEP IS A HOLD (seconds) OR A CARRY (metres), NOT A SET — see `MirrorStep.hold`. Both null on
+   * every set. A surface that sees either draws the duration instead of a load and a rep band, and
+   * offers no editor: there is nothing to type. Optional both ways, like every later field.
+   */
+  holdSeconds?: number | null;
+  holdMetres?: number | null;
+  /** …and the same fact about the COMING step, for rest frames. */
+  nextHoldSeconds?: number | null;
+  nextHoldMetres?: number | null;
+  /**
+   * ⛔ THE VOICE'S LOADING DIALOGUE IS OPEN (2026-09-28, founder: *"חייב שכולם יראו את אותו המצב בזמן
+   * אמת"*): "load the bar, and say ready". Until today only the lock card knew it — it offered Ready
+   * beside Done while the phone's stage and the wrist offered Done alone, three surfaces, three
+   * states. Every surface now offers Ready while this is true, and a tap on any of them (or her
+   * word) starts the set. Only ever true on an active set.
+   */
+  awaitingReady?: boolean;
+  /**
+   * ⛔ THE HOLD'S ONE CLOCK (2026-09-28): the instant a RUNNING hold ends (ISO). The voice counted a
+   * plank on a clock of its own, the phone's stage on another, and the wrist and the card drew a
+   * duration that never moved. One start now (`markSetStarted` — "מוכן" from any surface, or the
+   * stage's Start), one end, and every surface counts down to it. Null until it starts, while paused,
+   * and on every set. Nothing is written at zero on any surface (founder, 2026-09-09): her Done is.
+   */
+  holdEndsAt?: string | null;
+  /**
+   * ⛔ THE WARM-UP THE PHONE IS OFFERING BEFORE THE SET ON STAGE — how many bridges (2026-10-17).
+   *
+   * The phone's stage has drawn its warm-up disc since the founder's ruling of 2026-08-30 (offered on
+   * a compound, never prescribed); the wrist never knew there was one, so a lifter reading her set
+   * off her wrist was never offered the ramp at all. The count is the phone's own `warmupOffer`, and
+   * the wrist's "+ Warm-up" proposes `add_warmup` against it.
+   *
+   * On an ACTIVE SET only: the wrist offers it where she stands at the station (the phone also asks
+   * it on the crossing, where the wrist's two buttons already belong to +15 and the swap). Present
+   * only when there is one, so every other frame stays byte-for-byte the frame it was.
+   */
+  warmupOffered?: number;
 }
 
 export interface MirrorInputs {
@@ -122,18 +360,55 @@ export interface MirrorInputs {
   total: number;
   machine: SessionMachine;
   restInterS: number;
+  /** WT5 — is `restInterS` her MEASURED median on this lift, or the tier bootstrap? */
+  restIsLearned?: boolean;
   restTransitionS: number;
   /** When the current rest began (ms epoch), or null when not resting. Drives the
    *  absolute restEndsAt so the timer never drifts as the mirror is re-projected. */
   restStartedAtMs: number | null;
-  /** Seconds added to the current rest via "+15 sec" (phone or watch). Extends both
-   *  restEndsAt and restTotalS so every surface agrees on the longer rest. */
+  /** Seconds added to the current rest via "+15 sec" (phone or watch). Extends `restEndsAt` —
+   *  never `restTotalS`, which stays the prescribed length so every mirrored ring fills forward
+   *  the way the phone's does (see the projection below). */
   restExtraS?: number;
   nowMs: number;
   /** The session's workout name (program day) — for the watch Complete screen. */
   workoutName?: string;
   /** When the session started (ms epoch) — drives the Complete summary time. */
   sessionStartedAtMs?: number | null;
+  /** Sets actually LOGGED this session — drives the Complete summary's truthful set
+   *  count. Falls back to the planned `total` only when omitted (e.g. a pure-projection
+   *  caller without the live session). Fixes the watch reporting all planned sets done. */
+  completedSets?: number;
+  /** The logged sets themselves, in step order — the ACTUAL weight/reps behind the read-back's
+   *  best-set line. Omitted ⇒ the read-back falls back to the prescription. */
+  loggedSets?: MirrorLoggedSet[];
+  /**
+   * ⛔ WHAT SHE DID LAST TIME ON THE LIFT IN FRONT OF HER (founder 2026-08-04, bringing the wrist
+   * up to the phone's set screen). `lastTimeOn` already computes it for the phone; passing it here
+   * is what lets the wrist draw the same row of figures rather than four dots that only count.
+   *
+   * ⚠️ OPTIONAL, AND ABSENT IS THE NORMAL STATE for a lift she has never done. The wrist draws a
+   * dash there — never a zero, which is a set she did and failed.
+   */
+  lastTime?: { loadKg: number | null; reps: number[] } | null;
+  /** Distinct lifts the athlete actually trained AND that the model raised — the
+   *  Complete summary's "up". Falls back to the planned-increase count when omitted. */
+  progressedLifts?: number;
+  /** The session's calories as the PHONE computed them (`domain/energy.sessionKcal`) — carried so
+   *  the wrist prints the same number rather than its own HealthKit reading (founder 2026-07-28). */
+  kcal?: number | null;
+  /** The mark this session crossed (already-rendered English copy), for the terminal frame only. */
+  milestone?: MirrorMilestone | null;
+  /** Whether the CURRENT set still needs the equipment set (TO-LOAD) — see SessionMirror.toLoad. */
+  toLoad?: boolean;
+  /** The correction Loop 1 just made, if any — see SessionMirror.correction. */
+  correction?: { from: number; to: number; direction: 'up' | 'down'; reps: number } | null;
+  /** The voice waits for "מוכן" on the set on stage (`SessionMirror.awaitingReady`). */
+  awaitingReady?: boolean;
+  /** When the running hold on stage ends, epoch ms — null when none runs (`SessionMirror.holdEndsAt`). */
+  holdEndsAtMs?: number | null;
+  /** How many warm-up bridges the phone offers before the set on stage (`SessionMirror.warmupOffered`). */
+  warmupOffered?: number;
 }
 
 function isResting(phase: SessionMachine['phase']): boolean {
@@ -152,20 +427,69 @@ function formatDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** The current step's lift ordinal (1-based) among contiguous same-exercise runs,
- *  and the total number of runs ("Lift 1/6"). */
-function liftPosition(steps: MirrorStep[], idx: number): { index: number; count: number } {
-  let runs = 0;
-  let curRun = 0;
-  let prev: string | null = null;
-  for (let i = 0; i < steps.length; i++) {
-    if (steps[i].exerciseName !== prev) {
-      runs += 1;
-      prev = steps[i].exerciseName;
-    }
-    if (i === idx) curRun = runs;
-  }
-  return { index: curRun || 1, count: runs || 1 };
+/**
+ * "60 × 8" · "62.5 × 6" · "× 12" — the read-back's one number.
+ *
+ * ⛔ A LIFT WITH NO LOAD SAYS ITS REPS AND NOTHING ELSE (sweep, 2026-10-11). It said "BW × 12" — two
+ * English letters on a Hebrew wrist, beside every pull-up and push-up of the workout. This file is
+ * pure and holds no words; the count alone is true in every language.
+ */
+function bestSetLabel(s: MirrorLoggedSet): string {
+  return s.weight == null ? `× ${s.reps}` : `${String(Math.round(s.weight * 10) / 10)} × ${s.reps}`;
+}
+
+/**
+ * The workout read back lift by lift (see MirrorSummaryLift) — ONLY what was performed.
+ *
+ * `completedSets` is the athlete's frontier: sets are logged in step order, so the first N steps
+ * are the ones that happened. A lift appears here if ANY of its steps falls behind that frontier;
+ * a lift the athlete never reached is not part of the workout they just did and has no place in
+ * the beat that reads it back. `logged` carries the ACTUALS in the same order (what was lifted,
+ * not what was prescribed) — the best of them, by volume, is the set shown beside the check. It is
+ * optional only so a caller with no live session still projects a valid frame; then the
+ * prescription stands in for the log, which is the closest true thing available.
+ *
+ * Pure + exported so the rule is a tested fact rather than a rendering detail on a wrist.
+ */
+export function summaryLifts(
+  steps: MirrorStep[],
+  completedSets: number,
+  logged?: MirrorLoggedSet[],
+): MirrorSummaryLift[] {
+  // WITHIN one lift: the heaviest work wins, and when the work ties — which it ALWAYS does on a
+  // bodyweight lift, where volume is 0 by definition — the longer set wins. Volume alone would
+  // have made "your best set of pull-ups" mean "the first one you did", forever. (WellDone.tsx
+  // holds the identical comparator; the two read-backs must never name different sets.)
+  const vol = (s: MirrorLoggedSet) => (s.weight ?? 0) * s.reps;
+  const better = (a: MirrorLoggedSet, b: MirrorLoggedSet) =>
+    vol(a) !== vol(b) ? vol(a) > vol(b) : a.reps > b.reps;
+  const order: string[] = [];
+  const best = new Map<string, MirrorLoggedSet>();
+  steps.forEach((s, i) => {
+    if (s.warmup) return; // a bridge is neither prescribed work nor a best set — same line as tonnage
+    if (i >= completedSets) return; // never reached — it is not part of this workout
+    const set = logged?.[i] ?? { weight: s.targetWeight, reps: s.targetReps };
+    const cur = best.get(s.exerciseName);
+    if (!cur) order.push(s.exerciseName);
+    if (!cur || better(set, cur)) best.set(s.exerciseName, set);
+  });
+  return order.map((name) => ({ name, best: bestSetLabel(best.get(name)!) }));
+}
+
+/**
+ * The current step's lift ordinal (1-based) and how many lifts the workout holds ("Lift 2/5").
+ *
+ * ⛔ IT COUNTS LIFTS, NOT RUNS (sweep, 2026-10-11). It counted contiguous same-name runs, which was
+ * the same number while every lift was one unbroken block. A superset is not: A, B, A, B, A, B is
+ * two lifts and six runs — so five lifts with one pair supersetted read "2 of 5" on the phone
+ * (which counts distinct lifts) and "4 / 9" on the wrist and the lock card, in the same instant.
+ * First-seen order, each lift once, exactly as the stage's own rail counts them.
+ */
+export function liftPosition(steps: MirrorStep[], idx: number): { index: number; count: number } {
+  const order: string[] = [];
+  for (const s of steps) if (!order.includes(s.exerciseName)) order.push(s.exerciseName);
+  const at = order.indexOf(steps[idx]?.exerciseName ?? '');
+  return { index: at >= 0 ? at + 1 : 1, count: order.length || 1 };
 }
 
 /**
@@ -173,11 +497,51 @@ function liftPosition(steps: MirrorStep[], idx: number): { index: number; count:
  *
  * Returns `null` ONLY when there is no session at all (empty plan) — that is the
  * signal for a host to tear its surface down. A finished session projects a
- * `complete` mirror first (so the watch can show "Workout Complete" and the Live
- * Activity can render a final frame) and the host ends on the next null.
+ * `complete` mirror first — the watch shows "Workout Complete" from it; the store ENDS the
+ * Live Activity on that frame rather than drawing it (the lock screen has no closing beat) —
+ * and the host ends on the next null.
  *
  * Pure and total: never throws, never reads a clock other than `nowMs`.
  */
+/**
+ * Her sets on the CURRENT lift, this session — reps and loads, in order.
+ *
+ * ⚠️ `loggedSets` is index-aligned with `steps`, so the exercise is read from the step rather than
+ * from the set: a logged set carries no exercise id of its own, and pairing them any other way is
+ * how a row ends up showing another lift's numbers.
+ */
+function soFarOnLift(steps: MirrorStep[], logged: MirrorLoggedSet[] | undefined, exerciseName: string) {
+  /*
+   * ⛔ SCOPED TO THE BLOCK (found in the 2026-08-04 hermetic pass). `setIndexInExercise` restarts at
+   * 0 for a lift the coach split across two blocks, so collecting every set of the lift put block
+   * one's reps into block two's row — three figures from work she finished twenty minutes earlier.
+   * The plan runs front to back, so the current block is the trailing run beginning at the last 0.
+   */
+  const picked: { reps: number; weight: number | null; at: number }[] = [];
+  (logged ?? []).forEach((set, i) => {
+    if (steps[i]?.exerciseName !== exerciseName) return;
+    if (steps[i]?.warmup) return; // a bridge is not "her work so far" — same line as tonnage
+    picked.push({ reps: set.reps, weight: set.weight, at: steps[i]?.setIndexInExercise ?? 0 });
+  });
+  let start = 0;
+  for (let i = 0; i < picked.length; i += 1) if (picked[i].at === 0) start = i;
+  const block = picked.slice(start);
+  return { reps: block.map((x) => x.reps), loads: block.map((x) => x.weight) };
+}
+
+/** The four fields the wrist's set row needs, assembled once for every phase. */
+function soFarFields(steps: MirrorStep[], inp: MirrorInputs, exerciseName: string, onWarmup = false) {
+  const { reps, loads } = soFarOnLift(steps, inp.loggedSets, exerciseName);
+  return {
+    setsSoFar: reps,
+    loadsSoFar: loads,
+    // On a warm-up step the figures row counts the RAMP — last time's WORKING reps drawn under
+    // ramp columns would be ghosts of a different thing entirely, so the row stays clean.
+    lastReps: onWarmup ? [] : inp.lastTime?.reps ?? [],
+    lastLoadKg: onWarmup ? null : inp.lastTime?.loadKg ?? null,
+  };
+}
+
 export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const { steps, total, machine, restInterS, restTransitionS, restStartedAtMs, nowMs } = inp;
   const workoutName = inp.workoutName ?? '';
@@ -186,20 +550,58 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const idx = machine.setIndex;
   // Clamp: at SESSION_SAVED/WELL_DONE the index may sit past the last step.
   const cur = steps[idx] ?? steps[steps.length - 1];
-  const setLabel = `Set ${cur.setIndexInExercise + 1} of ${cur.totalSetsInExercise}`;
+  // A warm-up bridge counts the RAMP, never the working sets — and says so. (The wrist composes
+  // its own localized line from the numbers + `isWarmup`; this English label is the fallback.)
+  const setLabel = cur.warmup
+    ? `Warm-up ${cur.warmup.index + 1} of ${cur.warmup.count}`
+    : `Set ${cur.setIndexInExercise + 1} of ${cur.totalSetsInExercise}`;
   const lift = liftPosition(steps, Math.min(idx, steps.length - 1));
 
   // Terminal — a read-only "complete" frame. No rest, no next.
+  // WT13c · GLANCE — her own work so far, computed ONCE for every frame (the glance is reachable
+  // from any live phase, so it cannot hang off the terminal branch below).
+  // Working sets only, both figures — the wrist's glance and the phone's Well Done must read the
+  // same numbers, and the phone's (sessionMetrics) draw the warm-up line already.
+  /*
+   * ⚠️ LOGGED SETS ARE INDEXED IN SET-SPACE. `loggedSets` holds sets only — a hold is recorded as an
+   * item, never as a set — so everything that walks the two lists side by side walks `setSteps`,
+   * while the CURSOR (`machine.setIndex`) walks `steps`, which includes the holds.
+   */
+  const setSteps = steps.filter((s) => !s.hold);
+  const isWork = (i: number) => !setSteps[i]?.warmup;
+  const liveSets = Math.min(inp.completedSets ?? 0, setSteps.length) - setSteps.slice(0, inp.completedSets ?? 0).filter((s) => s.warmup).length;
+  const liveVolumeKg = (inp.loggedSets ?? []).reduce((sum, x, i) => (isWork(i) ? sum + (x.weight ?? 0) * x.reps : sum), 0);
+
   if (machine.phase === 'SESSION_SAVED' || machine.phase === 'WELL_DONE') {
-    // Lifts progressed = distinct exercises the model raised this session.
-    const up = new Set(
-      steps.filter((s) => s.reasonType === 'increase').map((s) => s.exerciseName),
-    ).size;
+    /*
+     * ⛔ THE FALLBACK READ THE DEAD ENGINE TOO (2026-08-04 audit). `reasonType` is never written on a
+     * coach-built plan, so this branch produced 0 for every coach athlete — on the wrist and on the
+     * Lock Screen, which is where a closing frame is actually read.
+     *
+     * `progressedLifts` is the measured answer (`progressedLiftCount` — a load that ends the session
+     * higher than it started it, which is what "raised this session" has always meant). This is only
+     * reached when the caller supplies nothing, and 0 is the honest answer then: an unmeasured count
+     * is not a count.
+     */
+    const up = 0;
     const startedMs = inp.sessionStartedAtMs ?? null;
-    const summary = {
+    // The frontier for the terminal frame — a caller with no live count means "all of it".
+    const frontier = inp.completedSets ?? total;
+    const doneWorkSets = Math.min(frontier, setSteps.length) - setSteps.slice(0, frontier).filter((s) => s.warmup).length;
+    const doneVolumeKg = (inp.loggedSets ?? []).reduce((sum, x, i) => (isWork(i) ? sum + (x.weight ?? 0) * x.reps : sum), 0);
+    const summary: MirrorSummary = {
       timeLabel: startedMs != null ? formatDuration(nowMs - startedMs) : '—',
-      sets: total,
-      up,
+      // Truthful: the WORKING sets the athlete actually logged (not the planned total, and never
+      // the warm-up bridges) — an early finish must never report every planned set as done, and
+      // the wrist must count what Well Done counts.
+      sets: doneWorkSets,
+      up: inp.progressedLifts ?? up,
+      // External tonnage actually moved — from the ACTUALS, in step order, working sets only
+      // (sessionMetrics draws the same warm-up line). Bodyweight sets (weight null) contribute 0.
+      volumeKg: doneVolumeKg,
+      kcal: inp.kcal ?? null,
+      lifts: summaryLifts(setSteps, inp.completedSets ?? total, inp.loggedSets),
+      milestone: inp.milestone ?? null,
     };
     return {
       schema: MIRROR_SCHEMA_VERSION,
@@ -209,11 +611,15 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       setLabel,
       setNumber: cur.setIndexInExercise + 1,
       setsInExercise: cur.totalSetsInExercise,
+      nextSetLabel: null,
+      nextSetNumber: 0,
       nextSetsInExercise: 0,
       globalIndex: cur.globalIndex,
       totalSets: total,
       targetWeight: cur.targetWeight,
       targetReps: cur.targetReps,
+      targetRepsHi: cur.repBandHi ?? null,
+      ...soFarFields(setSteps, inp, cur.exerciseName),
       restEndsAt: null,
       restRemainingS: null,
       nextExerciseName: null,
@@ -226,9 +632,22 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
       liftIndex: lift.index,
       liftCount: lift.count,
       workoutName,
+      liveVolumeKg,
+      liveSets,
+      restIsLearned: inp.restIsLearned ?? false,
       summary,
       swapOptions: [],
       nextSwapOptions: [],
+      loadSetup: null,
+      nextLoadSetup: null,
+      toLoad: false,
+      correction: null,
+      holdSeconds: null,
+      holdMetres: null,
+      nextHoldSeconds: null,
+      nextHoldMetres: null,
+      awaitingReady: false,
+      holdEndsAt: null,
     };
   }
 
@@ -242,12 +661,26 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   let restRemainingS: number | null = null;
   let restTotalS: number | null = null;
   if (resting && !paused) {
-    const restS = (effPhase === 'REST_INTER' ? restInterS : restTransitionS) + (inp.restExtraS ?? 0);
-    restTotalS = restS;
+    const baseS = effPhase === 'REST_INTER' ? restInterS : restTransitionS;
+    const restS = baseS + (inp.restExtraS ?? 0);
+    // THE RING'S DENOMINATOR IS THE PRESCRIBED REST, AND +15 DOES NOT MOVE IT (founder 2026-07-13:
+    // "+15 on the watch drops the animation by 15 seconds and climbs back — I want it to rise from
+    // where it is, exactly like the phone"). The phone's ring adds the 15 s to the NUMERATOR only,
+    // so the arc fills FORWARD by a visible 15/total slice. Growing the total here made every
+    // mirrored ring (watch, Live Activity) compute a smaller fraction of a longer rest and lurch
+    // backwards before recovering — the same 15 seconds, told as a loss. The END still moves out:
+    // that is what "+15" means. Only the yardstick stays put.
+    restTotalS = baseS;
     const startMs = restStartedAtMs ?? nowMs;
     const endMs = startMs + restS * 1000;
-    restEndsAt = new Date(endMs).toISOString();
-    restRemainingS = Math.max(0, Math.round((endMs - nowMs) / 1000));
+    // TOTAL MEANS TOTAL. `new Date(NaN).toISOString()` throws a RangeError, and this projection
+    // runs inside the store's publish effect — a single poisoned number (a corrupt +15 from the
+    // wire, a broken clock) would have taken the live workout down with it. An unusable end is
+    // simply no end: the surfaces render a rest without a countdown, and the athlete trains on.
+    if (Number.isFinite(endMs)) {
+      restEndsAt = new Date(endMs).toISOString();
+      restRemainingS = Math.max(0, Math.round((endMs - nowMs) / 1000));
+    }
   }
 
   const phase: MirrorPhase = paused
@@ -261,26 +694,58 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
   const next = resting ? steps[idx + 1] ?? null : null;
   const isTransition = phase === 'rest_transition';
 
-  // Exercise Busy is offered at the start of an exercise (set 1) that still has a
-  // later, different exercise to defer to (mirrors the phone's canMarkOccupied).
+  // Exercise Busy is offered at the start of an exercise — its first warm-up bridge when it has a
+  // ramp, else set 1 — that still has a later, different exercise to defer to (mirrors the phone's
+  // canMarkOccupied).
+  // …at ANY set since 2026-09-07 (the board): the lift's remainder goes one run later (phone parity —
+  // `canMarkOccupied` / `markEquipmentOccupied`).
+  /*
+   * ⛔ IN A SUPERSET, ON ITS FIRST LIFT ONLY — AND ONLY WITH SOMEWHERE TO GO (2026-10-13).
+   *
+   * The line above asked "is there a different lift ahead?", and inside a superset the answer is
+   * always yes: the partner. So the wrist offered "taken" on both halves of every round, including
+   * a superset that ENDS the workout — and since that day the phone moves a superset as one thing
+   * and lands nothing inside a round she has begun (`sessionStore.unitSpan`), a press on the second
+   * half was accepted, buzzed, and changed nothing she could see. A control that answers with
+   * nothing is the dead end `theWristIsWhereASetIsTold` exists to forbid.
+   *
+   * On the first lift of a round the whole superset steps aside for the next thing in the plan — so
+   * the offer needs a step that lies BEYOND every round of it still standing here.
+   */
+  const pair = cur.superset;
+  const leftOfPair = pair ? (pair.rounds - pair.round + 1) * pair.count - (pair.position - 1) : 0;
   const canMarkBusy =
     phase === 'active_set' &&
-    cur.setIndexInExercise === 0 &&
-    steps.slice(idx + 1).some((s) => s.exerciseName !== cur.exerciseName);
+    (pair
+      ? pair.position === 1 && steps.length > idx + leftOfPair
+      : steps.slice(idx + 1).some((s) => s.exerciseName !== cur.exerciseName));
 
   return {
     schema: MIRROR_SCHEMA_VERSION,
     phase,
+    ...soFarFields(setSteps, inp, cur.exerciseName, !!cur.warmup),
     exerciseName: cur.exerciseName,
     exerciseGroup: cur.exerciseGroup ?? '',
     setLabel,
-    setNumber: cur.setIndexInExercise + 1,
-    setsInExercise: cur.totalSetsInExercise,
-    nextSetsInExercise: next ? next.totalSetsInExercise : 0,
+    setNumber: cur.warmup ? cur.warmup.index + 1 : cur.setIndexInExercise + 1,
+    setsInExercise: cur.warmup ? cur.warmup.count : cur.totalSetsInExercise,
+    // Unconditional, so the wire-parity contract can see the key on every frame.
+    isWarmup: !!cur.warmup,
+    // The set that is COMING — see the field docs. On a rest frame this is the only honest
+    // answer to "which set am I on"; `setLabel` above is the one that is already behind them.
+    nextSetLabel: next
+      ? next.warmup
+        ? `Warm-up ${next.warmup.index + 1} of ${next.warmup.count}`
+        : `Set ${next.setIndexInExercise + 1} of ${next.totalSetsInExercise}`
+      : null,
+    nextSetNumber: next ? (next.warmup ? next.warmup.index + 1 : next.setIndexInExercise + 1) : 0,
+    nextSetsInExercise: next ? (next.warmup ? next.warmup.count : next.totalSetsInExercise) : 0,
+    nextIsWarmup: !!next?.warmup,
     globalIndex: cur.globalIndex,
     totalSets: total,
     targetWeight: cur.targetWeight,
     targetReps: cur.targetReps,
+    targetRepsHi: cur.repBandHi ?? null,
     restEndsAt,
     restRemainingS,
     restTotalS,
@@ -292,15 +757,64 @@ export function projectSessionMirror(inp: MirrorInputs): SessionMirror | null {
     completedExerciseName: isTransition ? cur.exerciseName : null,
     canMarkBusy,
     // Active set: the current set's signed load change (the LoadDelta mark).
+    /*
+     * ⛔ THE WRIST IS TOLD (founder, 2026-10-11 — the superset "is not clear at all"; the phone was
+     * rebuilt first and the wrist still counted "exercise 4/6 … 5/6 … 4/6" through every pair).
+     * On a set: the superset the set is part of. On a rest: the one the rest LEADS INTO — the same
+     * choice every other "next" field on a rest frame makes. Null on every ordinary set.
+     */
+    // Present only inside a superset: an absent key and a null are different frames to a comparer,
+    // and every ordinary set must stay byte-for-byte the frame it was.
+    ...((resting ? next?.superset : cur.superset) ? { superset: resting ? next!.superset : cur.superset } : {}),
     loadDeltaKg: phase === 'active_set' ? signedDelta(cur) : 0,
     // Transition rest: the upcoming exercise's first-set change (the card's delta).
     nextLoadDeltaKg: isTransition ? signedDelta(next) : 0,
     liftIndex: lift.index,
     liftCount: lift.count,
     workoutName,
+    liveVolumeKg,
+    liveSets,
+    restIsLearned: inp.restIsLearned ?? false,
     summary: null,
     swapOptions: phase === 'active_set' ? cur.swapOptions ?? [] : [],
     nextSwapOptions: isTransition && next ? next.swapOptions ?? [] : [],
+    // Equipment-native setup (kg): the current set's during a live set, the upcoming
+    // exercise's during a transition rest — so the watch shows how to load it.
+    loadSetup: phase === 'active_set' ? cur.loadSetup ?? null : null,
+    nextLoadSetup: isTransition && next ? next.loadSetup ?? null : null,
+    // TO-LOAD only matters on the live set; the caller computes it from the logged sets.
+    toLoad: phase === 'active_set' && !cur.hold ? inp.toLoad ?? false : false,
+    // ONLY on an inter-set rest. Two reasons, and both matter:
+    //  - On the ACTIVE SET she is lifting, and the load in front of her IS the corrected one —
+    //    announcing it there would narrate the present, not the change.
+    //  - On a TRANSITION rest the athlete is already looking at a different lift, and a correction
+    //    belongs to the exercise it was measured on (SessionFlow holds the same guard, as
+    //    `correction.exerciseId === nextExerciseId`). Loop 1 makes the last set of an exercise a
+    //    no-op (liveSession.ts — there is no next set to correct), so a live correction on a
+    //    transition frame should be impossible; this states that invariant instead of inheriting
+    //    it from a rule two modules away. The wrist must never say "I added weight" over the name
+    //    of a lift that earned nothing.
+    correction: phase === 'rest_inter' ? inp.correction ?? null : null,
+    holdSeconds: cur.hold?.seconds ?? null,
+    holdMetres: cur.hold?.metres ?? null,
+    nextHoldSeconds: next?.hold?.seconds ?? null,
+    nextHoldMetres: next?.hold?.metres ?? null,
+    // Unconditional, like `isWarmup`, so the wire-parity contract sees both keys on every live frame.
+    /*
+     * ⛔ …AND A TIMED HOLD THAT HAS NOT STARTED WAITS FOR ITS START, WITH OR WITHOUT A VOICE
+     * (2026-10-17, the quiet coach). Ready used to be the old voice's dialogue alone, so with the
+     * voice off a plank could not be started from the lock card at all, and the wrist's own Ready
+     * (`holdWaits`, 2026-10-10) was refused by the phone (`decideWatchIntent` gates `set_ready` on
+     * this flag). The voice no longer asks for anything, so the hold's own fact — a duration with no
+     * end yet — is what offers Ready on the card and lets the wrist's tap land.
+     */
+    awaitingReady: phase === 'active_set' && (!!inp.awaitingReady || (cur.hold?.seconds != null && inp.holdEndsAtMs == null)),
+    holdEndsAt:
+      phase === 'active_set' && cur.hold?.seconds != null && inp.holdEndsAtMs != null && Number.isFinite(inp.holdEndsAtMs)
+        ? new Date(inp.holdEndsAtMs).toISOString()
+        : null,
+    // Only on a set she is standing at, and only when there is one — see the field's note.
+    ...(phase === 'active_set' && (inp.warmupOffered ?? 0) > 0 ? { warmupOffered: inp.warmupOffered } : {}),
   };
 }
 

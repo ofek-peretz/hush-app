@@ -2,6 +2,10 @@
  * Equipment Occupied (V1) — the current exercise moves exactly one position later; no
  * replacement, no structure change. Tests the pure plan transform.
  */
+// @ts-nocheck
+
+// 
+
 import { deferCurrentExercise, type Step } from '@/state/stores/sessionStore';
 import type { SetTarget } from '@/data/local/models';
 
@@ -49,7 +53,7 @@ describe('deferCurrentExercise', () => {
   it('preserves all loads/targets (no replacement)', () => {
     const before = plan();
     const out = deferCurrentExercise(before, 0);
-    expect(new Set(out.map((s) => s.target.recommendedWeight))).toEqual(new Set([60]));
-    expect(out.every((s) => s.target.recommendedReps === 5)).toBe(true);
+    expect(new Set(out.map((s) => s.target!.recommendedWeight))).toEqual(new Set([60]));
+    expect(out.every((s) => s.target!.recommendedReps === 5)).toBe(true);
   });
 });

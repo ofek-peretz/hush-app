@@ -1,0 +1,10 @@
+{
+  "name": "hush-coach-worker",
+  "private": true,
+  "type": "module",
+  "description": "The coach Worker. Dependencies are used only by the PROBE bake-off path (worker.ts `probeProvider`).",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "openai": "^7.17.0"
+  }
+}

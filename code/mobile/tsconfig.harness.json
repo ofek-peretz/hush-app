@@ -1,0 +1,18 @@
+{
+  "//": "Compiles the PURE motion core (no RN) to Node-runnable CJS so the harness renders the exact geometry the app ships and CI validates. Not part of the app build.",
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "rootDir": "./src/motion",
+    "outDir": "./.motion-build",
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmit": false,
+    "declaration": false,
+    "types": []
+  },
+  "include": ["src/motion/**/*.ts"],
+  "exclude": ["src/motion/render/**", "**/*.tsx", "**/*.test.ts"]
+}

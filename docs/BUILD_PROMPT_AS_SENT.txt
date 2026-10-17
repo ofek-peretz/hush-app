@@ -1,0 +1,532 @@
+FERROX — the week-build prompt, exactly as the app sends it (prompt version 9)
+Generated 2026-10-17T10:47:22.333Z by __tests__/live/showBuildPrompt.test.ts from buildWeekRequest().
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+HOW IT TRAVELS
+════════════════════════════════════════════════════════════════════════════════════════════════════
+phone  →  our Worker (Cloudflare)  →  OpenAI Responses API
+
+The phone sends:  blocks (the two texts below), the reply schema, think: "low", kind: "build", wait: 60000 ms.
+The Worker joins the two texts with one blank line and sends them as ONE user message.
+It adds NO system prompt and NO other text. (server/worker.ts, server/openaiModel.ts)
+Model settings are the Worker's, not the phone's:
+   first try   gpt-6-sol, reasoning effort HIGH, max_output_tokens 32000, deadline = wait − 13 s (47 s at most)
+   if it misses that deadline (or fails): gpt-6-sol, reasoning effort LOW, max_output_tokens 16384
+The schema is sent as text.format json_schema, strict: false, with numeric/array bounds stripped.
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+TEXT 1 of 2 — OUR LINES (1687 characters). Identical for every athlete.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+Write the best training week this athlete could be given — one the world’s best coaches would respect.
+
+· Session length is no constraint: choose every exercise and every set count only by what this athlete needs.
+· Exactly the number of days the athlete asked for.
+· Only ids from the CATALOGUE. A line is `id = name | name | name` — one lift under all the
+  names we know it by. Never invent an id.
+· A lift you want that is not there: put the name in `missing` — name it, do not silently swap it.
+· Write the week’s title and each day’s name in Hebrew.
+· Every exercise gets at least 3 working sets. When a muscle needs fewer weekly sets than that, give it fewer exercises — never fewer sets per exercise, and never more work than the athlete needs.
+· What the athlete asked for names what matters most to them; it is not a list of the only things they train.
+
+HOW THE APP USES THIS WEEK (facts about the app)
+· This week is the athlete’s programme. It repeats unchanged, week after week, until the athlete asks for a new one. Nothing rotates the exercises.
+· The set count you write is permanent: nothing in the app adds or removes sets later. It is the number they will do every week, not a starting dose for someone to adjust.
+· Loads progress by themselves from what is logged: when every working set reaches at least 2 reps above the bottom of its range (10 in an 8–12 range), the next session adds one step; a missed set holds the load; a repeated stall backs it off. When the logs show broad fatigue, the app lightens every load for a week.
+· One set of a one-sided exercise (lunge, split squat, single-arm row) covers both sides. A dumbbell load is the weight of one dumbbell.
+
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+TEXT 1 continued — THE CATALOGUE (141 exercises, 8971 characters). Identical for every athlete.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+CATALOGUE
+bb_bench_press = Barbell Bench Press | לחיצת חזה במוט | bench | bench press
+incline_bb_press = Incline Barbell Press | לחיצת חזה בשיפוע במוט | incline bench
+db_bench_press = Dumbbell Bench Press | לחיצת חזה במשקולות יד | db press | dumbbell press
+incline_db_press = Incline Dumbbell Press | לחיצת חזה בשיפוע במשקולות יד | incline db
+incline_machine_press = Incline Machine Press | לחיצת חזה בשיפוע במכונה | incline machine
+machine_chest_press = Machine Chest Press | לחיצת חזה במכונה
+chest_dip = Chest Dip | מקבילים לחזה | dips
+weighted_dip = Weighted Dip | מקבילים עם משקל
+pec_deck = Pec Deck Fly | פרפר במכונה | chest fly | machine fly
+cable_fly = Cable Fly | פרפר בפולי
+incline_db_fly = Incline Dumbbell Fly | פרפר בשיפוע במשקולות יד
+smith_bench_press = Smith Machine Bench Press | לחיצת חזה בסמית’
+decline_bb_press = Decline Barbell Press | לחיצת חזה בשיפוע שלילי | decline bench | decline press
+db_fly = Dumbbell Fly | פרפר במשקולות יד | flat fly | flat dumbbell fly
+smith_incline_press = Smith Machine Incline Press | לחיצת חזה בשיפוע בסמית’
+low_cable_fly = Low-to-High Cable Fly | פרפר בפולי תחתון | low cable crossover | low to high fly
+close_grip_bench = Close-Grip Bench Press | לחיצת חזה באחיזה צרה
+triceps_pushdown = Triceps Pushdown | פשיטת מרפקים בפולי עליון | pushdown
+rope_pushdown = Rope Pushdown | פשיטת מרפקים בחבל | rope pushdown | triceps rope
+overhead_triceps_ext = Overhead Triceps Extension | פשיטת מרפקים מעל הראש
+skullcrusher = Skullcrusher | סקאלקראשר | lying triceps extension
+machine_dip = Seated Dip Machine | מקבילים במכונה בישיבה | triceps dip machine | seated dip
+db_overhead_triceps_ext = Dumbbell Overhead Extension | פשיטת מרפקים מעל הראש במשקולת יד
+triceps_kickback = Triceps Kickback | בעיטת טרייספס
+bench_dip = Bench Dip | מקבילים על ספסל
+diamond_push_up = Diamond Push-Up | שכיבות סמיכה יהלום
+machine_triceps_ext = Triceps Extension Machine | פשיטת מרפקים במכונה
+band_pushdown = Band Pushdown | פשיטת מרפקים בגומייה | resistance band pushdown | band triceps pushdown
+single_arm_pushdown = Single-Arm Pushdown | פשיטת מרפק ביד אחת בפולי
+bb_row = Barbell Row | חתירה במוט
+pull_up = Pull-Up | מתח באחיזה רחבה
+chin_up = Chin-Up | מתח באחיזה עליונה
+weighted_pull_up = Weighted Pull-Up | מתח עם משקל
+weighted_chin_up = Weighted Chin-Up | מתח באחיזה עליונה עם משקל
+lat_pulldown = Lat Pulldown | משיכת פולי עליון | pulldown
+cable_row = Seated Cable Row | חתירה בפולי בישיבה
+db_row = Dumbbell Row | חתירה במשקולת יד | db row
+t_bar_row = T-Bar Row | חתירה ב־T־בר
+machine_row = Machine Row | חתירה במכונה
+face_pull = Face Pull | משיכה לפנים בפולי
+rear_delt_fly = Rear Delt Fly | פרפר הפוך לכתף אחורית
+incline_db_row = Chest-Supported Dumbbell Row | חתירה בתמיכת חזה במשקולות יד
+single_arm_cable_row = Single-Arm Cable Row | חתירה ביד אחת בפולי
+inverted_row = Inverted Row | חתירה הפוכה
+straight_arm_pulldown = Straight-Arm Pulldown | משיכת פולי בידיים ישרות
+band_row = Band Row | חתירה בגומייה בישיבה | resistance band row | seated band row
+band_pull_apart = Band Pull-Apart | פתיחת גומייה לצדדים | band pull apart | resistance band pull apart
+reverse_pec_deck = Reverse Pec Deck | פרפר הפוך במכונה
+bb_shrug = Barbell Shrug | הרמת כתפיים במוט
+db_shrug = Dumbbell Shrug | הרמת כתפיים במשקולות יד
+smith_row = Smith Machine Row | חתירה בסמית’
+db_pullover = Dumbbell Pullover | פולאובר במשקולת יד | pullover
+close_grip_pulldown = Close-Grip Lat Pulldown | משיכת פולי עליון באחיזה צרה | neutral grip pulldown | v-bar pulldown
+meadows_row = Meadows Row | חתירת לנדמיין ביד אחת | landmine row
+bb_curl = Barbell Curl | כפיפת מרפקים במוט
+db_curl = Dumbbell Curl | כפיפת מרפקים במשקולות יד
+hammer_curl = Hammer Curl | כפיפת מרפקים בפטיש
+preacher_curl = Preacher Curl | כפיפת מרפקים בכיסא סקוט
+incline_db_curl = Incline Dumbbell Curl | כפיפת מרפקים בשיפוע
+cable_curl = Cable Curl | כפיפת מרפקים בפולי
+concentration_curl = Concentration Curl | כפיפת מרפק בריכוז
+ez_bar_curl = EZ-Bar Curl | כפיפת מרפקים במוט EZ | ez curl | ez bar curl
+bb_curl_21 = Bicep 21s | כפיפות 21 (7·7·7) | 21s | twenty-ones | bicep 21
+cable_rope_hammer_curl = Cable Rope Hammer Curl | כפיפת פטיש בחבל | rope curl | rope hammer curl
+spider_curl = Spider Curl | ספיידר קרל | spider
+reverse_curl = Reverse Curl | כפיפת מרפקים באחיזה הפוכה
+band_curl = Band Curl | כפיפת מרפקים בגומייה | resistance band curl
+single_arm_cable_curl = Single-Arm Cable Curl | כפיפת מרפק ביד אחת בפולי
+bb_overhead_press = Overhead Press | לחיצת כתפיים במוט | ohp | shoulder press
+db_shoulder_press = Dumbbell Shoulder Press | לחיצת כתפיים במשקולות יד | db ohp
+machine_shoulder_press = Machine Shoulder Press | לחיצת כתפיים במכונה
+arnold_press = Arnold Press | לחיצת ארנולד
+lateral_raise = Lateral Raise | הרחקת כתפיים לצדדים | side raise
+cable_lateral_raise = Cable Lateral Raise | הרחקת כתף בפולי
+machine_lateral_raise = Machine Lateral Raise | הרחקת כתפיים במכונה | lateral raise machine | side raise machine
+landmine_press = Landmine Press | לחיצת לנדמיין
+db_front_raise = Front Raise | הרמת זרועות לפנים
+cable_front_raise = Cable Front Raise | הרמת זרוע לפנים בפולי
+cable_upright_row = Cable Upright Row | חתירה אנכית בפולי | upright row
+smith_overhead_press = Smith Machine Overhead Press | לחיצת כתפיים בסמית’
+bb_back_squat = Barbell Back Squat | סקוואט במוט | squat
+front_squat = Front Squat | סקוואט קדמי
+leg_press = Leg Press | לחיצת רגליים
+hack_squat = Hack Squat | הק סקוואט
+goblet_squat = Goblet Squat | סקוואט גובלט
+bw_squat = Bodyweight Squat | סקוואט משקל גוף | air squat | bodyweight squat
+split_squat = Split Squat | ספליט סקוואט | static lunge
+kb_goblet_squat = Kettlebell Goblet Squat | סקוואט גובלט בקטלבל | goblet squat | kb squat
+bulgarian_split_squat = Bulgarian Split Squat | סקוואט בולגרי | split squat
+walking_lunge = Walking Lunge | מכרעים בהליכה | lunge
+leg_extension = Leg Extension | פשיטת ברכיים במכונה
+reverse_lunge = Reverse Lunge | מכרעים לאחור
+step_up = Step-Up | עלייה על מדרגה
+single_leg_press = Single-Leg Press | לחיצת רגליים ברגל אחת
+smith_squat = Smith Machine Squat | סקוואט בסמית’
+curtsy_lunge = Curtsy Lunge | מכרעים מוצלבים
+db_sumo_squat = Dumbbell Sumo Squat | סקוואט סומו במשקולת יד | sumo squat | plié squat | plie squat
+standing_calf_raise = Standing Calf Raise | הרמת עקבים בעמידה
+seated_calf_raise = Seated Calf Raise | הרמת עקבים בישיבה
+leg_press_calf_raise = Leg Press Calf Raise | הרמת עקבים במכונת לחיצת רגליים
+db_calf_raise = Dumbbell Calf Raise | הרמת עקבים עם משקולות יד
+single_leg_calf_raise = Single-Leg Calf Raise | הרמת עקב ברגל אחת
+seated_db_calf_raise = Seated Dumbbell Calf Raise | הרמת עקבים בישיבה עם משקולת
+smith_calf_raise = Smith Machine Calf Raise | הרמת עקבים בסמית’
+bb_deadlift = Deadlift | דדליפט | conventional deadlift
+bb_rdl = Romanian Deadlift | דדליפט רומני | rdl
+sumo_deadlift = Sumo Deadlift | דדליפט סומו
+db_rdl = Dumbbell Romanian Deadlift | דדליפט רומני במשקולות יד | db rdl | dumbbell rdl
+kb_rdl = Kettlebell Romanian Deadlift | דדליפט רומני בקטלבל | kb rdl
+kb_swing = Kettlebell Swing | נדנוד קטלבל | swing | kb swing
+leg_curl = Lying Leg Curl | כפיפת ברכיים בשכיבה | hamstring curl | leg curl | lying hamstring curl
+seated_leg_curl = Seated Leg Curl | כפיפת ברכיים בישיבה | seated hamstring curl
+back_extension = Back Extension | פשיטת גב תחתון | hyperextension
+single_leg_rdl = Single-Leg Romanian Deadlift | דדליפט רומני ברגל אחת
+trap_bar_deadlift = Trap Bar Deadlift | דדליפט בטראפ בר
+standing_leg_curl = Standing Leg Curl | כפיפת ברך בעמידה
+good_morning = Good Morning | גוד מורנינג
+hip_thrust = Barbell Hip Thrust | הרמת אגן במוט | thrust
+glute_bridge = Glute Bridge | גשר ישבן
+cable_pull_through = Cable Pull-Through | משיכה בין הרגליים בפולי
+band_pull_through = Band Pull-Through | משיכה בין הרגליים בגומייה | resistance band pull through
+hip_abduction = Hip Abduction | הרחקת ירך במכונה | abductor machine
+cable_hip_abduction = Cable Hip Abduction | הרחקת ירך בפולי | standing cable abduction
+cable_kickback = Cable Glute Kickback | בעיטת ישבן בפולי | glute kickback
+machine_hip_thrust = Machine Hip Thrust | הרמת אגן במכונה | hip thrust machine | glute drive
+hip_adduction = Hip Adduction | קירוב ירך במכונה | adductor machine | inner thigh machine
+cable_hip_adduction = Cable Hip Adduction | קירוב ירך בפולי | standing cable adduction
+single_leg_hip_thrust = Single-Leg Hip Thrust | הרמת אגן ברגל אחת
+smith_hip_thrust = Smith Machine Hip Thrust | הרמת אגן בסמית’ | smith thrust
+frog_pump = Frog Pump | גשר צפרדע
+donkey_kick = Donkey Kick | בעיטת חמור | quadruped kickback
+machine_kickback = Glute Kickback Machine | בעיטת ישבן במכונה
+cable_crunch = Cable Crunch | כפיפות בטן בפולי
+machine_crunch = Ab Crunch Machine | כפיפות בטן במכונה | crunch machine | ab machine
+lying_leg_raise = Lying Leg Raise | הרמת רגליים בשכיבה
+captains_chair_raise = Captain’s Chair Knee Raise | הרמת ברכיים בכיסא רומי
+sit_up = Sit-Up | כפיפות בטן
+bicycle_crunch = Bicycle Crunch | כפיפות בטן אופניים
+dead_bug = Dead Bug | חרק מת
+russian_twist = Russian Twist | סיבוב רוסי
+cable_woodchop = Cable Woodchop | חיתוך עץ בפולי
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+TEXT 2 of 2 — THIS ATHLETE. Only what the intake collected; a field she skipped is not sent.
+════════════════════════════════════════════════════════════════════════════════════════════════════
+ATHLETE
+- days per week: 5 (if their own words below name a number of days, their words win)
+- sex: male
+- bodyweight: 82 kg
+- training experience: several years
+- default rep range: 8–12 (every exercise you give no range runs on it)
+- weights they lift today: bb_bench_press 100 kg x 6; bb_back_squat 130 kg x 5; bb_deadlift 160 kg x 5; bb_overhead_press 60 kg x 8
+
+WHAT THE ATHLETE ASKED FOR, in their own words:
+PPL, דגש על גב וכתפיים.
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+THE REPLY SCHEMA — the model reads every "description" below as part of the prompt
+════════════════════════════════════════════════════════════════════════════════════════════════════
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "days"
+  ],
+  "properties": {
+    "missing": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string"
+      }
+    },
+    "name": {
+      "type": "string",
+      "description": "A short title for this whole week, in the athlete’s language, as a coach would write at the top of the sheet: what it is built around. Specific to this athlete — never a title that would fit anybody. Write no weight in it: the app shows every weight in the athlete’s own units, and a title cannot be converted."
+    },
+    "days": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "lifts"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The day’s name as the athlete reads it at the top of the day, in the athlete’s language. It must be true of everything in the day: name every muscle group the day trains, or name the day by a scope that covers all of them. A name that leaves out muscle groups trained that day is wrong."
+          },
+          "lifts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ex",
+                "sets"
+              ],
+              "properties": {
+                "ex": {
+                  "type": "string"
+                },
+                "sets": {
+                  "type": "integer",
+                  "description": "Working sets only, at least 3. The app offers warm-up sets on the day, decides how long to pause between sets, and adjusts the weight between sets from what the athlete actually lifts."
+                },
+                "pair": {
+                  "type": "boolean",
+                  "description": "Run this exercise and the next one as a superset: alternate them, with no pause between the two."
+                },
+                "load": {
+                  "type": "number",
+                  "description": "The starting weight in kg for this exercise: the total on a barbell or machine, the weight of ONE dumbbell. When the athlete gave you any of the weights they lift today, write a starting weight for EVERY exercise of the week that takes a load. A lift they named opens at exactly the weight they gave — give it a rep range that weight fits, never a lighter weight. Each of the others is your estimate from those numbers: a weight this athlete can do for its rep range with a little in hand (the app corrects it on the first set). Omit it only for an exercise done with bodyweight or a band — the app cannot add weight to those, so an athlete who trains one of them with added weight is better given a loaded exercise — or when the athlete gave you no weight at all: the app then estimates from bodyweight."
+                },
+                "reps": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "description": "Optional. The rep range for this exercise as [low, high], when the goal calls for something other than the athlete’s default range."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+════════════════════════════════════════════════════════════════════════════════════════════════════
+ONE LIVE CALL, MADE AS THE APP MAKES IT — answered in 46 s
+════════════════════════════════════════════════════════════════════════════════════════════════════
+model that answered: gpt-6-sol
+usage as the provider reported it: {"input_tokens":3967,"input_tokens_details":{"cache_write_tokens":3964,"cached_tokens":0},"output_tokens":4689,"output_tokens_details":{"reasoning_tokens":3624},"total_tokens":8656}
+
+RAW REPLY:
+{
+ "missing": [],
+ "name": "PPL עם עדיפות לגב ולכתפיים, ובנץ׳ וסקוואט כבדים",
+ "days": [
+  {
+   "name": "משיכה: גב, כתפיים ויד קדמית",
+   "lifts": [
+    {
+     "ex": "lat_pulldown",
+     "sets": 4,
+     "load": 70
+    },
+    {
+     "ex": "bb_row",
+     "sets": 4,
+     "load": 75
+    },
+    {
+     "ex": "cable_row",
+     "sets": 3,
+     "load": 65
+    },
+    {
+     "ex": "reverse_pec_deck",
+     "sets": 3,
+     "load": 35,
+     "reps": [
+      12,
+      20
+     ]
+    },
+    {
+     "ex": "cable_lateral_raise",
+     "sets": 3,
+     "load": 7.5,
+     "reps": [
+      12,
+      20
+     ]
+    },
+    {
+     "ex": "incline_db_curl",
+     "sets": 3,
+     "load": 12
+    }
+   ]
+  },
+  {
+   "name": "דחיפה: חזה, כתפיים ויד אחורית",
+   "lifts": [
+    {
+     "ex": "bb_bench_press",
+     "sets": 3,
+     "load": 100,
+     "reps": [
+      4,
+      8
+     ]
+    },
+    {
+     "ex": "bb_overhead_press",
+     "sets": 3,
+     "load": 60,
+     "reps": [
+      6,
+      10
+     ]
+    },
+    {
+     "ex": "incline_db_press",
+     "sets": 3,
+     "load": 30
+    },
+    {
+     "ex": "lateral_raise",
+     "sets": 3,
+     "load": 10,
+     "reps": [
+      12,
+      20
+     ]
+    },
+    {
+     "ex": "rope_pushdown",
+     "sets": 3,
+     "load": 30
+    }
+   ]
+  },
+  {
+   "name": "רגליים, ישבן, גב תחתון, שוקיים ובטן",
+   "lifts": [
+    {
+     "ex": "bb_back_squat",
+     "sets": 3,
+     "load": 130,
+     "reps": [
+      3,
+      6
+     ]
+    },
+    {
+     "ex": "bb_rdl",
+     "sets": 3,
+     "load": 100
+    },
+    {
+     "ex": "leg_extension",
+     "sets": 3,
+     "load": 60,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "seated_leg_curl",
+     "sets": 3,
+     "load": 45,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "standing_calf_raise",
+     "sets": 4,
+     "load": 85,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "cable_crunch",
+     "sets": 3,
+     "load": 40,
+     "reps": [
+      10,
+      15
+     ]
+    }
+   ]
+  },
+  {
+   "name": "פלג גוף עליון: גב, חזה, כתפיים וזרועות",
+   "lifts": [
+    {
+     "ex": "incline_db_row",
+     "sets": 4,
+     "load": 30
+    },
+    {
+     "ex": "close_grip_pulldown",
+     "sets": 3,
+     "load": 65
+    },
+    {
+     "ex": "machine_chest_press",
+     "sets": 3,
+     "load": 75
+    },
+    {
+     "ex": "db_shoulder_press",
+     "sets": 3,
+     "load": 22
+    },
+    {
+     "ex": "reverse_pec_deck",
+     "sets": 3,
+     "load": 35,
+     "reps": [
+      12,
+      20
+     ]
+    },
+    {
+     "ex": "machine_lateral_raise",
+     "sets": 3,
+     "load": 30,
+     "reps": [
+      12,
+      20
+     ]
+    },
+    {
+     "ex": "hammer_curl",
+     "sets": 3,
+     "load": 14
+    },
+    {
+     "ex": "triceps_pushdown",
+     "sets": 3,
+     "load": 30
+    }
+   ]
+  },
+  {
+   "name": "רגליים, ישבן, גב תחתון, שוקיים ובטן",
+   "lifts": [
+    {
+     "ex": "bb_deadlift",
+     "sets": 3,
+     "load": 160,
+     "reps": [
+      3,
+      6
+     ]
+    },
+    {
+     "ex": "leg_press",
+     "sets": 3,
+     "load": 190
+    },
+    {
+     "ex": "bulgarian_split_squat",
+     "sets": 3,
+     "load": 18
+    },
+    {
+     "ex": "leg_curl",
+     "sets": 3,
+     "load": 45,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "seated_calf_raise",
+     "sets": 3,
+     "load": 45,
+     "reps": [
+      10,
+      15
+     ]
+    },
+    {
+     "ex": "cable_woodchop",
+     "sets": 3,
+     "load": 17.5,
+     "reps": [
+      10,
+      15
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+FormSpec validation — lat_pulldown
+========================================
+RESULT: PASS — every predicate holds across the loop.
+
+
+Checks:
+  start: full overhead stretch (elbow ~170°)
+  end: bar to the collarbone (never lower)
+  path: bar vertical ±2
+  invariants: torso lean frozen ~15° (no swing) · hips on the seat · thighs under the pad · neutral neck (head on the spine line) · no elbow hyperextension

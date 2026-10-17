@@ -1,0 +1,134 @@
+# hush-identity — Sign in with Apple verification + the circle (see src/index.ts header).
+# Deployed 2026-08-24 from the founder's machine (wrangler account: ofek34458@gmail.com).
+name = "hush-identity"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# ── GOOGLE SIGN-IN (2026-09-16) ─────────────────────────────────────────────────────────────────
+# Whose Google ID tokens `/auth/google` may accept. NOT a secret: an OAuth client id ships inside
+# every binary that uses it, and stating it here is what lets a reader see whose users this
+# deployment serves. Empty/absent = refuse everything, which is what this worker did until today.
+#
+# The Android client joins this list the day the first Android build exists (it is keyed to the
+# signing certificate's SHA-1, which EAS generates on that build) — see code/mobile/NATIVE_SURFACES.md.
+[vars]
+GOOGLE_CLIENT_IDS = "515963027403-6v5pplctbss3ijbeai1m42beof7tjjdp.apps.googleusercontent.com,515963027403-41cctg308okfcd66hao596alfnci630g.apps.googleusercontent.com"
+# The coach track (2026-09-17): linked trainees a coach gets before paying (founder ruling 1).
+# A coach row's own `seat_limit` overrides it; StoreKit tiers raise that in phase 3.
+COACH_FREE_SEATS = "2"
+
+[[kv_namespaces]]
+binding = "HUSH_KV"
+id = "14a55c2d60944fdfb81d9895cf6b7a66"
+
+# ── THE RESEARCH SINK + REMOTE CONFIG (2026-09-01, audit findings 01/03) ────────────────────────
+# Two new endpoints ride this worker; both work with ZERO new bindings, and each arms with one
+# operator step from the founder's machine:
+#   /events  → forwards telemetry batches to the analytics store. Until the secrets exist it
+#              answers 503 and the app KEEPS its outbox (reversed 2026-09-01 — a 204 here made the
+#              client delete every event in production while the pipeline looked green):
+#                npx wrangler secret put EVENTS_URL    (e.g. https://eu.i.posthog.com/batch)
+#                npx wrangler secret put EVENTS_KEY    (the PostHog project api_key)
+#   /config  → serves ONE KV entry as the app's remote tunables (trial length, time cap):
+#                npx wrangler kv key put --binding=HUSH_KV config:app '{"trialSessionLimit":14}'
+#   /        → the front door (static). No step needed.
+
+# Per-IP rate limit — identity endpoints are where credential-stuffing scripts go.
+[[unsafe.bindings]]
+name = "ID_LIMIT"
+type = "ratelimit"
+namespace_id = "1"
+simple = { limit = 60, period = 60 }
+
+# ── THE PAIR'S ROOM (2026-08-31) ────────────────────────────────────────────────────────────────
+# One Durable Object per live pair — two athletes on one bar, for the length of one workout. The
+# class never touches `state.storage`; see its header for why that is the feature and not an
+# oversight, and `docs/architecture/SHARED_SESSION_V1.md` for the design it serves.
+#
+# ⚠️ A BINDING ALONE IS NOT ENOUGH. A Worker that declares a Durable Object class must also declare
+# the MIGRATION that brings it into existence, or the deploy fails on an unknown class — the two
+# lines below are one change, not two.
+[[durable_objects.bindings]]
+name = "PAIR_ROOM"
+class_name = "HushPairRoom"
+
+# ⛔ `new_sqlite_classes`, NOT `new_classes` — and the deploy is where you find that out.
+#
+#   "In order to use Durable Objects with a free plan, you must create a namespace using a
+#    `new_sqlite_classes` migration."  [Cloudflare API, code 10097, 2026-08-31]
+#
+# ⚠️ IT NAMES THE STORAGE BACKEND, AND THIS ROOM HAS NO STORAGE. `HushPairRoom` never calls
+# `state.storage` — that absence is a promise the app makes about the one weight it lets off the
+# phone, and a law reads the file to prove it. So the backend is a formality here; what matters is
+# that it is the one the account can actually create, and SQLite-backed is Cloudflare's own default
+# for new namespaces either way.
+#
+# ⚠️ AND A MIGRATION TAG IS NOT RE-WRITABLE. If `v1` had ever landed as `new_classes`, this would
+# need a fresh tag rather than an edit — it did not (the deploy failed before anything was created),
+# so `v1` is still free.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HushPairRoom"]
+
+# ── THE COACH TRACK (2026-09-17) ────────────────────────────────────────────────────────────────
+# A coach writes the week, FERROX runs the loads — docs/architecture/COACH_TRACK_V1.md, src/coach.ts.
+# The coach track's storage is relational (links, versions, uploads, a 30-day purge), so it lives in
+# D1 beside HUSH_KV rather than inside it.
+#
+# ⛔ FOUNDER OPERATOR STEPS — in this order, from server/hush-identity, on the founder's machine:
+#
+#   1. npx wrangler d1 create ferrox-coach
+#        → prints a `database_id`; paste it over the placeholder below.
+#   2. npx wrangler d1 migrations apply ferrox-coach --remote
+#        → creates the seven coach_* tables (0001_coach.sql) and the plan columns beside
+#          `seat_limit` (0002_coach_plan.sql). Answer "yes". BOTH run before the deploy in step 3:
+#          a worker whose SELECT names a column the database lacks answers 503 on every coach route.
+#   3. npx wrangler deploy
+#        → the worker, the D1 binding and the daily purge cron go out together.
+#   4. Smoke-call it (the rule since the coach worker's 11-minute outage, 2026-09-09):
+#        curl -s https://hush-identity.hush-app.workers.dev/coach/me        → 401 (auth runs first)
+#        curl -s https://hush-identity.hush-app.workers.dev/c/ABCDEF        → the invite page
+#        curl -s https://hush-identity.hush-app.workers.dev/.well-known/apple-app-site-association
+#      and deploy brand/landing (getferrox.com) for its /c page and association file.
+#
+# ⚠️ THE PLACEHOLDER BLOCKS EVERY DEPLOY OF THIS WORKER until step 1 is done — wrangler refuses a
+# database_id that does not exist. To ship something else first (a pair fix, say), comment out the
+# five `[[d1_databases]]` lines: `COACH_DB` is optional in code, and every coach route then answers
+# 503 `coach_not_configured` while sign-in, the circle and the pair carry on untouched.
+#
+# Local only (no account needed): npx wrangler d1 migrations apply ferrox-coach --local
+#                                 npx wrangler dev --port 8787 --local ; node driveCoach.mjs
+[[d1_databases]]
+binding = "COACH_DB"
+database_name = "ferrox-coach"
+database_id = "dd1ffe8b-b2cb-40fd-a1f8-796016aff036" # created by the founder 2026-09-29 (step 1 done)
+migrations_dir = "migrations"
+
+# ── THE COACH PAYS — Apple, asked directly (2026-09-18) ─────────────────────────────────────────
+# `POST /coach/plan` turns a purchase into seats, and only Apple's signature may say so. See
+# src/appleBilling.ts. THREE SECRETS, from App Store Connect → Users and Access → Integrations →
+# In-App Purchase ("Generate In-App Purchase Key", download the .p8 ONCE):
+#
+#   npx wrangler secret put APPLE_IAP_KEY_ID        # the 10-character Key ID
+#   npx wrangler secret put APPLE_IAP_ISSUER_ID     # the issuer UUID on that same page
+#   npx wrangler secret put APPLE_IAP_PRIVATE_KEY   # the whole AuthKey_XXXXXXXXXX.p8, newlines and
+#                                                   # -----BEGIN/END PRIVATE KEY----- included
+#
+# ⚠️ NONE OF THEM IS A DEPLOY BLOCKER. Without them `/coach/plan` answers 503 `billing_not_configured`
+# and says nothing about the body; every other coach route, the circle and sign-in carry on. The
+# notification route needs NO key at all — a notification proves itself, chain and all.
+#
+# ⚠️ AND THE CHURN ROUTE IS NOW ENTITLEMENT-GRADE. The App Store Connect notification URL
+# (https://<worker>/appstore/notifications, both environments) must be set for BOTH Sandbox and
+# Production, or a lapsed plan keeps its seats until the coach next opens the app.
+#
+# ⛔ `BILLING_TEST` IS NOT LISTED HERE, IN ANY ENVIRONMENT, AND MUST NEVER BE. It is the local
+# driver's key (`node driveCoach.mjs` against `wrangler dev --local --var BILLING_TEST:…`), and the
+# test-injection path it opens is closed in a deployment twice over — by its absence, and by the
+# loopback-hostname check in `appleBilling.testGateOpen`. A jest law reads this file to prove the
+# first of those. Setting it on a deployed worker would be handing out seats.
+
+# The daily purge: rows of links ended > 30 days ago, and expired invites (law 6). 03:17 UTC, off
+# the hour so it never queues behind everyone else's midnight crons.
+[triggers]
+crons = ["17 3 * * *"]

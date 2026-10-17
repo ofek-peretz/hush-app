@@ -1,0 +1,340 @@
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * AFTER THE SESSION — ⛔ DORMANT SINCE 2026-08-12. READ THIS LINE BEFORE THE REST.
+ *
+ * `sessionStore` stopped invoking `askAfterSession` on 2026-08-12 (`theAiHasOneJob` pins it:
+ * the v5 ENGINE decides every load now, and the model is reachable from the import alone). The
+ * only remaining caller is the dev gallery. Everything below is the design of the loop AS IT RAN,
+ * kept because turning the coach back on should be a wiring change, not a rewrite — but a reader
+ * who believes the next heading without this one will misread the product, which is exactly what
+ * happened to the audit that flagged it (2026-09-01).
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * AFTER THE SESSION — the call the whole product was built around (historical).
+ *
+ * The founder described it in one sentence and it has not changed since:
+ *
+ *   > *"It is exactly like me going to train now and sending you all the data from the workout and
+ *   > saying — now decide what happens from here. That's it."*
+ *
+ * So: a workout ends, everything measured about it goes to the coach, and the coach decides the
+ * next programme. There is no second decider and no local fallback. That is a ruling, not a
+ * default — **no connection → nothing is decided; the app says so and the update waits.**
+ *
+ * ── IT MUST NEVER BLOCK ANYTHING ────────────────────────────────────────────────────────────────
+ * She has finished and left. This runs after the session is saved, off to one side, and it cannot
+ * throw, cannot delay Well Done, and cannot fail a workout. A finished workout is finished whatever
+ * happens here — the session is already in history before this is called, and nothing below can
+ * take it back out.
+ *
+ * ── AND IT MUST LEAVE A HONEST TRACE ────────────────────────────────────────────────────────────
+ * The one thing worse than the update not arriving is the app not knowing that. If this fails,
+ * `hush.coach.pending` records WHICH session was never processed, so a surface can say the update
+ * is waiting in words and offer to try again. It does NOT retry by itself: a post-session call that
+ * quietly retries three times is three bills for one workout, and nobody is waiting on it.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+// 
+
+import { db } from '@/data/local/db';
+import { health } from '@/platform/health';
+import { currentLocale } from '@/i18n';
+import { coachFacts } from '@/domain/coachFacts';
+import { COACH_DECISION_SCHEMA, COACH_PLAN_SCHEMA, parseCoachPlan } from '@/domain/coachPlan';
+import type { LiveEdit } from '@/domain/liveRevision';
+import { applyLearned } from '@/domain/coachLearned';
+import { coachRequest } from '@/domain/coachPrompt';
+import type { Session } from '@/data/local/models';
+import { askCoach } from './coachClient';
+import type { CoachFailure } from './coachClient';
+import type { UnreadableReason } from '@/domain/coachPlan';
+
+/** Why there is no new programme, or that there is one. Countable, per model, on real data. */
+export type CoachUpdateOutcome =
+  /** A programme arrived and is stored. */
+  | 'decided'
+  /**
+   * The coach answered and attached NO programme, on the one call where one is required.
+   *
+   * Kept as its own outcome rather than folded into `waiting` because it is a different fault with
+   * a different fix: the network was fine and the model ignored an instruction. It was the first
+   * thing the first live post-session call did — replying *"I have increased your bench press load
+   * to 32.5 kg"* with no `sessions`, which is a promise the app cannot keep. **A surface must treat
+   * this exactly like `waiting`: nothing changed.** Counting it separately is how we find out if a
+   * model does it often enough to matter.
+   */
+  | 'spoke'
+  /** No answer. Nothing is decided and the previous programme stands. */
+  | 'waiting';
+
+export interface CoachUpdate {
+  /** When the attempt finished. */
+  at: string;
+  outcome: CoachUpdateOutcome;
+  /** The session this was about — so a retry sends the right one, not the newest one. */
+  sessionId: string;
+  /** Present only on `waiting`. Which kind of nothing happened. */
+  trouble?: CoachFailure | UnreadableReason;
+  /** What the coach said, when it said anything. Shown to her; never invented here. */
+  say?: string;
+  /* ⛔ `today` IS DELETED (2026-08-26). It carried the coach's edits to the session she is standing
+     in, and **nothing ever applied one** — `reviseToday` is driven only by the local pain table. A
+     field the app carries and drops is a decision the coach believes it made. See the note above
+     `askAfterSession`. */
+}
+
+/*
+ * ════ WHO IS LISTENING, AND WHY THERE HAS TO BE SOMEBODY ════
+ *
+ * This call is fired and not awaited — she has finished and left, and nothing may block on it. But
+ * Well Done opens IMMEDIATELY, and the thing it exists to show is what this call decides. The old
+ * engine had the answer before the screen drew, because the answer was computed locally in a
+ * millisecond. The coach takes fifteen seconds.
+ *
+ * So the screen has three honest states — thinking, decided, waiting — and this is how it learns
+ * which one it is in. A module-level listener rather than a store: exactly one call can be in
+ * flight (one workout just ended), and a whole store for one boolean and one sentence is furniture.
+ */
+export type CoachUpdateListener = (update: CoachUpdate | null) => void;
+const listeners = new Set<CoachUpdateListener>();
+/** True from the moment a post-session call starts until it settles. Drives "I am deciding". */
+let inFlight = false;
+
+export function coachIsDeciding(): boolean {
+  return inFlight;
+}
+
+/** Subscribe to the post-session outcome. Returns the unsubscribe. */
+export function onCoachUpdate(fn: CoachUpdateListener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/**
+ * Ask the coach what happens next, and land whatever comes back.
+ *
+ * Returns the outcome for whoever wants to react to it. It never rejects — every failure is a
+ * `waiting` result, because a rejected promise inside a finished workout is a crash report about
+ * something that does not affect the workout at all.
+ */
+/**
+ * Ask the coach to revise the programme because something about HER changed.
+ *
+ * Three things used to rebuild the week locally and instantly: a pain report, a change to how many
+ * days she trains, and undoing an engine rotation. The third went with Loop 2 — nothing rotates any
+ * more. The first two are real and still need answering, and the answer is not ours: her sheet
+ * already carries the ease and the frequency, so the coach is told what happened and re-decides.
+ *
+ * ⚠️ IT MATTERS THAT THIS IS IMMEDIATE, NOT DEFERRED TO THE NEXT SESSION. A shoulder that hurts
+ * today must not be programmed tomorrow because the next post-session call has not happened yet.
+ * The engine's instant reshape was protective, and dropping it in favour of "the coach will see it
+ * eventually" would have traded a real safeguard for an architectural tidiness.
+ *
+ * `why` is stated in her own terms and reaches the coach as a turn: "her shoulder hurts", "she
+ * changed to five days a week". No schema of reasons — the sheet carries the facts, this carries
+ * what just happened to them.
+ */
+export async function askCoachToRevise(why: string): Promise<CoachUpdate> {
+  return runCoachCall({ kind: 'revise', why });
+}
+
+/*
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔ `askCoachInSession` AND `askCoachAboutPain` ARE DELETED (2026-08-26)
+ *
+ * Both needed a place for her to say something, and both had lost one:
+ *
+ *   `askCoachInSession`  the only call that could come back with `today`. The in-workout window it
+ *                        answered was deleted on the founder's ruling (*"צ'אט בתוך אימון חי —
+ *                        הורדנו"*), and with it the last caller. `today` is deleted with it — from
+ *                        the schema, the parse and `CoachUpdate` — because nothing has ever applied
+ *                        one and a coach that thinks it can change the running session will SAY so
+ *                        in its reply. A promise the app cannot keep is worse than a missing field.
+ *   `askCoachAboutPain`  `PainResponse` was its screen. `reportPain` is fully local now: the ease is
+ *                        saved, `liftsForbiddenNow` drops the lifts from today's session, and the
+ *                        assembler rebuilds the week — no network in front of an injury, which was
+ *                        the whole point of that change (*"Hush has no business needing a connection
+ *                        to stop training a joint she just said hurts"*).
+ *
+ * ⚠️ THE POST-SESSION LOOP IS NOT TOUCHED. `askAfterSession` and `askCoachToRevise` are dormant —
+ * nothing calls them either — but they are the loop itself rather than a door onto it, and turning
+ * the coach back on should be a wiring change, not a rewrite.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ */
+
+export async function askAfterSession(justFinished: Session): Promise<CoachUpdate> {
+  return runCoachCall({ kind: 'after_session', justFinished });
+}
+
+/** Failures that could go the other way on a later day. A refusal or an unreadable reply will not. */
+const WORTH_ANOTHER_TRY: readonly string[] = ['offline', 'timed_out', 'upstream', 'rate_limited'];
+
+/**
+ * ════ THE UPDATE THAT NEVER ARRIVED, ASKED FOR AGAIN WHEN SHE COMES BACK ════
+ *
+ * ⚠️ WATCHED HAPPEN, 2026-08-02. Gemini was unreachable for two hours — 503s, then 524s at two
+ * minutes — and every post-session call in that window died. The app behaved exactly as ruled: it
+ * decided nothing, and said the update was waiting. **And nothing ever tried again.** She finishes a
+ * workout inside a bad hour, and her next week simply never arrives: no error, no retry, no screen
+ * that looks wrong. She would have to open the chat and ask for it.
+ *
+ * `CoachUpdate.sessionId` has carried a comment since the day it was written — *"so a retry sends
+ * the right one, not the newest one"* — and the retry was never built.
+ *
+ * ── WHY HERE AND NOT INSIDE THE CALL ────────────────────────────────────────────────────────────
+ * The ruling `never retries — one workout is one call, and one bill` is about not hammering a model
+ * that just failed, and it stands: this does not retry inside the call, and it does not loop. It
+ * asks ONCE MORE, on the next occasion she opens the app, which recovers from an outage of any
+ * length rather than of twenty seconds — and spends nothing at all on an athlete who never returns.
+ *
+ * Resolves to null when there is nothing waiting, which is almost always.
+ */
+export async function retryWaitingUpdate(): Promise<CoachUpdate | null> {
+  const last = await db.loadCoachUpdate().catch(() => null);
+  if (!last || last.outcome !== 'waiting') return null;
+  // `not_configured` means she has no profile yet; a refusal or an unreadable answer will be refused
+  // and unreadable again. Only the kinds of nothing that are about the moment are worth re-asking.
+  if (!last.trouble || !WORTH_ANOTHER_TRY.includes(last.trouble)) return null;
+  const history = await db.loadHistory().catch(() => []);
+  const session = history.find((s) => s.id === last.sessionId);
+  // The session it was about is gone (a wipe, a very old update). There is nothing to decide from,
+  // and deciding from the NEWEST session instead would answer a question nobody asked.
+  if (!session) return null;
+  return runCoachCall({ kind: 'after_session', justFinished: session });
+}
+
+type Occasion =
+  | { kind: 'after_session'; justFinished: Session }
+  | { kind: 'revise'; why: string }
+
+
+async function runCoachCall(occasion: Occasion): Promise<CoachUpdate> {
+  const justFinished = occasion.kind === 'after_session' ? occasion.justFinished : null;
+  const at = new Date().toISOString();
+  inFlight = true;
+  const sessionId = justFinished?.id ?? `revise_${at}`;
+  const settle = async (update: CoachUpdate): Promise<CoachUpdate> => {
+    await db.saveCoachUpdate(update).catch(() => {});
+    inFlight = false;
+    // The listeners are a screen that is already open and waiting. A throwing one must not turn a
+    // successful decision into the catch below, which would report `waiting` on a landed programme.
+    for (const fn of [...listeners]) {
+      try {
+        fn(update);
+      } catch {
+        /* a listener's problem is not this call's problem */
+      }
+    }
+    return update;
+  };
+
+  try {
+    const [profile, plan, history, decided, prefs, cardio, brief, external] = await Promise.all([
+      db.loadProfile(),
+      // The programme the coach wrote LAST time. It is being asked to revise it, so it has to see
+      // it — this used to hand over the engine's `Program`, which for a coach-led athlete is empty.
+      db.loadCoachPlan(),
+      db.loadHistory(),
+      db.loadCoachLog(),
+      db.loadPreferences(),
+      db.loadCardio(),
+      // ⚠️ WHO SHE IS. This call sends no conversation at all — only her record — so without the
+      // brief her goal, her history and everything she has ever asked for are simply not in the
+      // message that decides what she trains next.
+      db.loadCoachBrief(),
+      /*
+       * ⚠️ WHAT ELSE SHE DID THIS WEEK, from her watch — the football, the spin class, the swim.
+       * Without it the coach believes a footballer who played on Tuesday rested on Tuesday, and
+       * writes him a heavy leg day for Wednesday. Fourteen days is the window a coach actually
+       * reasons over; anything older is history, not context. Never throws: an athlete with no
+       * Health connection returns an empty list, which is the honest answer.
+       */
+      health.recentWorkouts(Date.now() - 14 * 86_400_000).catch(() => []),
+    ]);
+    // No profile is not a coach failure — it is an athlete who has not finished onboarding, and
+    // there is nothing to decide about.
+    if (!profile) return settle({ at, outcome: 'waiting', sessionId, trouble: 'not_configured' });
+
+    const facts = coachFacts({
+      profile,
+      plan,
+      history,
+      ...(justFinished ? { justFinished } : {}),
+      decided,
+      // What she has swapped by hand, and what she has asked to keep. Without these the coach keeps
+      // prescribing the lift she silently swaps out every session.
+      preferences: { substitutes: prefs.substitutes, keep: prefs.leaveItsByMuscle },
+      // The runs she does on her own. Without them the coach writes her a 5 km Tuesday knowing
+      // nothing about the 10 km she ran on Sunday.
+      cardio,
+      ...(external.length ? { external } : {}),
+      ...(brief?.length ? { brief } : {}),
+      language: currentLocale(),
+    });
+
+    const reply = await askCoach(
+      coachRequest({
+        facts,
+        ask: occasion.kind === 'after_session' ? { kind: 'after_session' } : { kind: 'revise', why: occasion.why },
+      }),
+      /*
+       * The DECISION schema: on both remaining calls `sessions` is required, so omitting it is not
+       * something the model can do. Prose asked for it first and prose lost — see
+       * `COACH_DECISION_SCHEMA`.
+       *
+       * ⛔ THE MID-SESSION EXCEPTION IS GONE with the call it served: `in_session` used
+       * `COACH_PLAN_SCHEMA` so that "my shoulder is tight" was not answered with a rewritten month.
+       * There is no in-session call.
+       */
+      COACH_DECISION_SCHEMA as unknown as Record<string, unknown>,
+      /*
+       * ⛔ NO THINKING LEVEL — the `low` branch went with `in_session` (2026-08-26).
+       *
+       * It existed for the one interaction where seconds are felt as seconds: she typed something
+       * mid-set and was watching the screen. `after_session` and `revise` both keep the default
+       * deliberately, and always did — she has left the screen for one, and the other rebuilds her
+       * whole programme. Measured 2026-08-04: `low` on a post-session call answered in 3.9s and
+       * wrote a one-exercise week.
+       */
+      undefined,
+    );
+    if (!reply.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: reply.reason });
+
+    const parsed = parseCoachPlan(reply.text, facts);
+    if (!parsed.ok) return settle({ at, outcome: 'waiting', sessionId, trouble: parsed.reason });
+
+    // The same seam the chat uses. Two callers, one order of writes — see `db.recordCoachAnswer`.
+    await db.recordCoachAnswer(parsed.answer, at);
+
+    /*
+     * ⚠️ AND WHAT IT LEARNED ABOUT HER, WHICH THIS PATH WAS DROPPING ON THE FLOOR.
+     *
+     * The chat applies `learned`; this call did not — and it is the call that produces one on every
+     * single reply, because a plan's own `sessions.length` IS how many days a week she trains. So a
+     * coach that decided she should drop to three days wrote three sessions, the profile kept
+     * saying four, and the next sheet told it four again under a bound reading "write exactly that
+     * many sessions". **The coach could not change her training frequency.**
+     *
+     * Written straight to the record because this runs with no React around it — she has finished
+     * and left. The screens re-read on focus (`refreshProfile`).
+     */
+    if (parsed.answer.learned && profile) {
+      const applied = applyLearned(profile, parsed.answer.learned);
+      if (applied) await db.saveProfile(applied.profile);
+    }
+    return settle({
+      at,
+      outcome: parsed.answer.plan ? 'decided' : 'spoke',
+      sessionId,
+      say: parsed.answer.say,
+    });
+  } catch {
+    /*
+     * A read failed, storage is full, something threw where nothing should. It still resolves to
+     * `waiting` — the difference between "the coach did not answer" and "our own code fell over" is
+     * a distinction for the log, and she is owed the same sentence either way.
+     */
+    return settle({ at, outcome: 'waiting', sessionId, trouble: 'upstream' });
+  }
+}

@@ -5,6 +5,10 @@
  * `watchTransport` must be a safe no-op pipe so the JS WatchSession bridge keeps
  * running (all authority/validation lives in the bridge, exercised separately).
  */
+// @ts-nocheck
+
+// 
+
 import { watchTransport, watchTransportNative } from '@/platform/watch/watchTransportNative';
 
 describe('watchTransportNative (no native module under test)', () => {
@@ -31,9 +35,16 @@ describe('watchTransportNative (no native module under test)', () => {
     const offReach = watchTransport.onReachabilityChange(() => {
       throw new Error('should never fire');
     });
+    const offRecord = watchTransport.onSessionRecord(() => {
+      throw new Error('should never fire');
+    });
     expect(typeof offIntent).toBe('function');
     expect(typeof offReach).toBe('function');
+    expect(typeof offRecord).toBe('function');
     offIntent();
     offReach();
+    offRecord();
+    // Durable ack is a safe no-op with no transport.
+    expect(() => watchTransport.ackRecord('r1')).not.toThrow();
   });
 });

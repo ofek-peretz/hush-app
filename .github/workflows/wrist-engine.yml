@@ -1,0 +1,45 @@
+# The watch's own workout engine, RUN — on demand, with the report sent back where it can be read.
+#
+# `LocalWorkoutEngine.swift` is what runs a workout when the phone is in a locker. No Swift runs on
+# the machine this code is written on, and until 2026-10-13 nothing ran this engine anywhere but on
+# a wrist: every law about it reads its source. This job compiles the REAL engine (with its real
+# store and wire) for the Mac it runs on and plays, on it, the scripts the phone's own session store
+# has already run — `code/mobile/native-tests/wrist-engine/main.swift` holds the comparison.
+#
+# The same check is a GATE inside ci.yml's `swift` job. This workflow exists for the loop of writing
+# Swift from a Windows tree: push the commit to `ci/wrist-engine`, and the build log and the report
+# come back on `ci/wrist-engine-results` (force-pushed, text only) — readable with `git fetch` and
+# no token, exactly as the wrist's photographs and the network probe are.
+name: wrist-engine
+
+on:
+  push:
+    branches: ["ci/wrist-engine"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    name: the wrist alone, against the phone (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: One script, two engines
+        run: bash code/mobile/native-tests/wrist-engine/run.sh "$RUNNER_TEMP/wrist-engine-results"
+      - name: Send the report back (branch ci/wrist-engine-results)
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/wrist-engine-results"
+          cd "$RUNNER_TEMP/wrist-engine-results"
+          echo "$GITHUB_SHA" > SOURCE
+          git init -q -b ci/wrist-engine-results
+          git config user.name "wrist-engine"
+          git config user.email "wrist-engine@users.noreply.github.com"
+          git add -A
+          git commit -q -m "wrist engine @ $GITHUB_SHA"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci/wrist-engine-results

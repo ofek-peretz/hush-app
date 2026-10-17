@@ -3,6 +3,10 @@
  * distinct, and every event maps to its pattern. Pure data; the native layer
  * conforms to this.
  */
+// @ts-nocheck
+
+// 
+
 import {
   HAPTICS,
   hapticForEvent,
@@ -36,6 +40,36 @@ describe('haptic taxonomy', () => {
 
   it('all majors are felt with the wrist down (gym-critical)', () => {
     expect(MAJORS.every((p) => p.firesWristDown)).toBe(true);
+  });
+});
+
+describe('rest countdown ("The Approach")', () => {
+  const cd = HAPTICS.rest_countdown;
+
+  it('is a non-major, wrist-down pattern (does not inflate the five majors)', () => {
+    expect(cd.major).toBe(false);
+    expect(cd.firesWristDown).toBe(true);
+    expect(MAJORS).toHaveLength(5); // unchanged
+  });
+
+  it('begins at 7s with a single soft whisper, then a 3-2-1 cadence', () => {
+    expect(cd.beats).toHaveLength(4);
+    expect(cd.beats[0].intensity).toBe('soft'); // T-7 whisper
+    // 7s → 3s is a 4s gap; then 1s between each of 3-2-1.
+    expect(cd.beats[1].gapBeforeMs).toBe(4000);
+    expect(cd.beats[2].gapBeforeMs).toBe(1000);
+    expect(cd.beats[3].gapBeforeMs).toBe(1000);
+  });
+
+  it('escalates toward zero (never softer than it started) and ends firm', () => {
+    const rank: Record<string, number> = { low: 0, soft: 1, light: 1, gentle_firm: 2, warm: 3 };
+    const levels = cd.beats.map((b) => rank[b.intensity]);
+    for (let i = 1; i < levels.length; i++) expect(levels[i]).toBeGreaterThanOrEqual(levels[i - 1]);
+    expect(cd.beats[cd.beats.length - 1].intensity).toBe('warm'); // the "one"
+  });
+
+  it('maps from the rest_approaching event', () => {
+    expect(hapticForEvent('rest_approaching').id).toBe('rest_countdown');
   });
 });
 
