@@ -3865,11 +3865,13 @@ function CheckDraw({ size }: { size: number }) {
  *  `haptics.setLogged`). */
 function LoggedCapture({ units, confirm, w }: { units: 'kg' | 'lb'; confirm: Confirm; w: number | null }) {
   const { t } = useCopy();
+  // A rep record is a best like a weight record — the same strike, the same moss (2026-10-17).
+  const best = !!(confirm.record || confirm.repRecord);
   useEffect(() => {
     // A best replaces the soft double with its own strike — see `haptics.record`.
-    if (confirm.record) haptics.record();
+    if (best) haptics.record();
     else haptics.success();
-  }, [confirm.record]);
+  }, [best]);
   return (
     <View style={styles.capWrap}>
       <Arrive order={0} style={styles.capBlock}>
@@ -3898,7 +3900,7 @@ function LoggedCapture({ units, confirm, w }: { units: 'kg' | 'lb'; confirm: Con
         */}
         <Text
           /* A best is written in full moss — the figure IS the record (design audit 2026-09-29). */
-          style={[styles.capFigures, confirm.record && { color: signal[0] }]}
+          style={[styles.capFigures, best && { color: signal[0] }]}
           numberOfLines={1}
           adjustsFontSizeToFit
           minimumFontScale={0.7}
@@ -3930,9 +3932,9 @@ function ExerciseDone({ confirm }: { confirm: Confirm }) {
   /* The lift-close carries its own soft pulse too — a boundary the hand should feel. A best that
      closes the lift strikes instead (`haptics.record`). */
   useEffect(() => {
-    if (confirm.record) haptics.record();
+    if (confirm.record || confirm.repRecord) haptics.record();
     else haptics.success();
-  }, [confirm.record]);
+  }, [confirm.record, confirm.repRecord]);
   /* ⛔ THE PIP ROW IS GONE, AND THE RING IS WHY (founder, 2026-08-26 — see `SetRing`). Four green
      dots that appear only when a lift ends are a summary; the ring the athlete has been filling one
      set at a time is a CONCLUSION. Same fact, said by the instrument that earned it.

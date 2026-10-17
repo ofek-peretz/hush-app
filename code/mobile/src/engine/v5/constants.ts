@@ -462,6 +462,8 @@ export const RAISE_HEADROOM_REPS = 2;
  * …and a step bigger than BIG_STEP_FRACTION of the load is a BIG step (a 2.5 → 5 kg cable, a 5 → 6 kg
  * dumbbell): the raise then waits for the reps — her first set at the TOP of her range and the rest
  * within two of it — so the jump lands on a set that had room for it ("reps first", RP / MacroFactor).
+ * On the way DOWN the same step is not taken for a near miss: within RAISE_HEADROOM_REPS of her floor,
+ * a stalled load holds rather than halving (`loop2`, the S-25 back-off).
  */
 export const MAX_RAISE_FRACTION = 0.1;
 export const BIG_STEP_FRACTION = 0.1;

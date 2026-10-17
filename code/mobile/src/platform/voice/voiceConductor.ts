@@ -33,7 +33,7 @@
 import { exerciseById, exerciseDisplayName, loadStyleOf } from '@/data/exercises';
 import { snapToStock } from '@/domain/startingLoad';
 import { VOICE_BUFFER_S, voiceAskAfterS, voiceReportFromS } from '@/domain/setDwell';
-import { isRecordSet } from '@/domain/setRecord';
+import { isRecordSet, isRepRecordSet } from '@/domain/setRecord';
 import { MAX_VOICE_REPS, parseVoiceAnswer, toKg, VOICE_HINTS, type VoiceAnswer } from '@/domain/voiceGrammar';
 import { voiceScript, type VoiceLocale } from '@/domain/voiceScript';
 import { weightStepFor } from '@/domain/weightStep';
@@ -1892,7 +1892,8 @@ export class VoiceConductor {
     // The record is asked BEFORE the write, against everything logged before this set (`priorPeakKg`)
     // — and only where there is a past to beat: on a lift's first day, set two heavier than set one is
     // the day finding her weight, not a record (`domain/setRecord`: "the beat speaks only when…").
-    const record = !v.setLabel?.warmup && v.lastTime != null && isRecordSet(weight, reps, v.priorPeakKg);
+    // A rep record is a personal best too ("שיא אישי חדש" is true of both — 2026-10-17).
+    const record = !v.setLabel?.warmup && v.lastTime != null && (isRecordSet(weight, reps, v.priorPeakKg) || isRepRecordSet(weight, reps, v.priorPeakKg, v.priorPeakReps));
     const ctx: EchoCtx = {
       ex,
       before,
@@ -2115,7 +2116,7 @@ export class VoiceConductor {
       // A record pressed on the lock screen or the wrist is a record all the same (the store's beat
       // asked the question before the write, against the same baseline the voice uses).
       const beat = v.watchLoggedSet;
-      if (beat?.record && v.lastTime != null && beat.lift === row.exerciseId && beat.reps === row.actualReps && beat.weight === row.actualWeight) {
+      if ((beat?.record || beat?.repRecord) && v.lastTime != null && beat.lift === row.exerciseId && beat.reps === row.actualReps && beat.weight === row.actualWeight) {
         lines.push(voiceScript.record());
         this.records.add(row.exerciseId);
       }

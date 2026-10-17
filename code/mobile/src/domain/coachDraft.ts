@@ -213,6 +213,14 @@ export function draftFromCoachWeek(
   opts: { id?: string; dayNamer?: (index: number) => string } = {},
 ): Program | null {
   const days: PlanTemplate['days'] = [];
+  /*
+   * ⛔ ONE LIFT, ONE RANGE (the engine audit, 2026-10-17). The engine keeps one state per lift — one
+   * load, one range, one rep target — so a bench written 5–8 on Monday and 10–12 on Thursday was drawn
+   * as two ranges on the reveal and as ONE everywhere after the first fold. The prompt asks for one
+   * range per lift (v10); this is the floor under it: the first range the week gives a lift is the
+   * range of every seat of it, so the week she keeps is the week every screen reads.
+   */
+  const rangeOf = new Map<string, [number, number]>();
   for (const day of week.days) {
     const seen = new Set<string>();
     const lifts: { ex: string; sets: number; pair?: boolean; reps?: [number, number]; load?: number }[] = [];
@@ -250,11 +258,13 @@ export function draftFromCoachWeek(
         continue;
       }
       seen.add(id);
+      if (l.reps && !rangeOf.has(id)) rangeOf.set(id, l.reps);
+      const reps = rangeOf.get(id);
       lifts.push({
         ex: id,
         sets: Math.min(BUILDER_SETS_MAX, Math.max(MODEL_SETS_MIN, Math.round(l.sets))),
         ...(l.pair ? { pair: true as const } : {}),
-        ...(l.reps ? { reps: l.reps } : {}),
+        ...(reps ? { reps } : {}),
         ...(l.load != null ? { load: l.load } : {}),
       });
 

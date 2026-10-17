@@ -122,7 +122,8 @@ describe('3 · every surface follows', () => {
   });
 
   it('the letter reads the cycle she closed', () => {
-    expect(read('src/domain/weeklyUpdate.ts')).toMatch(/getWeeklyUpdateV5\(Date\.now\(\), await closedCycle\(\)\)/);
+    // (a third argument says whether the week is a written one — `closedWeekChanges`, 2026-10-17)
+    expect(read('src/domain/weeklyUpdate.ts')).toMatch(/getWeeklyUpdateV5\(Date\.now\(\), await closedCycle\(\)(, isAuthored\(program\))?\)/);
   });
 
   it('the Saturday push is retired; the week-closed note is one-shot', () => {

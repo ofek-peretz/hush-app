@@ -80,6 +80,8 @@ export interface LiftLine {
   overshoot: number;
 }
 
+const offersOf: Record<string, string[]> = {};
+
 async function live(policy: Policy, seed = 7): Promise<Record<string, LiftLine>> {
   await db.clearAll();
   const r = rng(seed);
@@ -162,6 +164,9 @@ async function live(policy: Policy, seed = 7): Promise<Record<string, LiftLine>>
   } finally {
     Date.now = realNow;
   }
+  // The changes the engine OFFERED her on this written week (`domain/swapOffers`) — a lift at the top
+  // of its range with no load to add has only this axis left, so the offer is part of the outcome.
+  offersOf[policy] = ((await db.loadPreferences()).swapOffers ?? []).map((o) => `${o.kind}:${o.from}->${o.to}`);
   if (process.env.AUDIT_LOG) {
     const st = await db.loadEngineV5();
     for (const id of process.env.AUDIT_LOG.split(',')) {
@@ -212,7 +217,7 @@ describe('the engine as she lives it — an AI week, twelve weeks, three ways of
     if (PRINT) {
       for (const [p, lines] of Object.entries(runs)) {
         // eslint-disable-next-line no-console
-        console.log(`\n══ ${p} ══ ${JSON.stringify(summary(lines))}`);
+        console.log(`\n══ ${p} ══ ${JSON.stringify(summary(lines))} offers ${JSON.stringify(offersOf[p] ?? [])}`);
         for (const l of Object.values(lines)) {
           // eslint-disable-next-line no-console
           console.log(`${l.ex.padEnd(22)} band ${l.band.join('-').padEnd(6)} loads ${l.loads.join(' ')} | cap ${l.caps[0]}→${l.caps[l.caps.length - 1]} | reps ${l.reps.join(' ')}`);

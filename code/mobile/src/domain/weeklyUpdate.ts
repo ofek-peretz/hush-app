@@ -10,6 +10,7 @@ import type { Program } from '@/data/local/models';
 import type { WeeklyUpdate, WeeklyPlanView } from '@/engine/weeklyView';
 import { getWeeklyUpdateV5, getWeeklyPlanV5, markWeeklyUpdateSeenV5, type ClosedWindow } from '@/engine/v5/v5Engine';
 import { db } from '@/data/local/db';
+import { isAuthored } from '@/domain/swapOffers';
 
 export type { WeeklyUpdate, WeeklyPlanView, WeeklyPlanLift, WeeklyVolumeMove } from '@/engine/weeklyView';
 
@@ -27,7 +28,9 @@ async function closedCycle(): Promise<ClosedWindow | null> {
 }
 
 export async function getWeeklyUpdate(): Promise<WeeklyUpdate | null> {
-  return getWeeklyUpdateV5(Date.now(), await closedCycle());
+  // A week she, a coach or the model wrote is narrated only for what happened on it (`closedWeekChanges`).
+  const program = await db.loadProgram().catch(() => null);
+  return getWeeklyUpdateV5(Date.now(), await closedCycle(), isAuthored(program));
 }
 
 export async function getWeeklyPlan(program: Program): Promise<WeeklyPlanView | null> {

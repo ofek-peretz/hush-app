@@ -17,7 +17,10 @@
 
 import type { Program } from '@/data/local/models';
 import type { SwapOffer } from '@/data/local/db';
-import { exerciseById } from '@/data/exercises';
+import { exerciseById, engineMayAssign, WEIGHTED_FORM_OF, type EquipmentFamily } from '@/data/exercises';
+import { swapCandidates } from '@/domain/swapPool';
+import { graduationTarget } from '@/domain/engineChanges';
+import { canLoad, type LoadProfile } from '@/domain/startingLoad';
 
 export type { SwapOffer };
 
@@ -78,6 +81,37 @@ export function applyOffer(program: Program, offer: Pick<SwapOffer, 'from' | 'to
       };
     }),
   };
+}
+
+/** The loaded form of a bodyweight lift — a pull-up's is the weighted pull-up (`WEIGHTED_FORM_OF`, reversed). */
+const LOADED_FORM: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(WEIGHTED_FORM_OF).map(([loaded, bw]) => [bw, loaded]));
+
+/**
+ * ⛔ WHAT SHE IS OFFERED IS THE CLOSEST LIFT, NOT THE LONGEST-UNUSED ONE (the engine audit's second pass,
+ * 2026-10-17). The engine's own rotation (`rotationTarget`) picks the same-MUSCLE lift she has gone
+ * longest without — on a week it builds, the slot's shape is the engine's to keep. Offered over a week
+ * she was handed, that read "lying leg curl → deadlift" and "cable lateral raise → shoulder press": a
+ * different movement, a different week. An offer is the swap menu's own first answer (`swapCandidates`)
+ * — the SAME movement, in her room, a lift she can load, not one already in her week. With no such lift
+ * there is no offer: the lift backs off and re-climbs as it always did.
+ *
+ * A GRADUATION is the harder variation (`graduationTarget`) — and at the top of a ladder with nothing
+ * harder (a pull-up, a dip), the loaded form of the same movement. Those are hers and the model's to
+ * choose and never the engine's to assign (`CHOICE_ONLY_IDS`); an offer she takes IS her choice.
+ */
+export function offerTarget(
+  from: string,
+  kind: 'graduate' | 'rotate',
+  program: Pick<Program, 'days'>,
+  ctx: { equipment?: readonly EquipmentFamily[]; profile?: LoadProfile } = {},
+): string | undefined {
+  if (kind === 'graduate') return graduationTarget(from) ?? LOADED_FORM[from];
+  const cur = exerciseById(from);
+  if (!cur) return undefined;
+  const inWeek = program.days.flatMap((d) => d.slots.map((s) => s.exerciseId));
+  const same = swapCandidates(from, { sessionExerciseIds: inWeek, ...(ctx.equipment ? { equipment: ctx.equipment } : {}) })
+    .filter((e) => e.pattern === cur.pattern && engineMayAssign(e.id) && !e.regression);
+  return (same.find((e) => canLoad(e, ctx.profile)) ?? same[0])?.id;
 }
 
 /** Her answer "not now": the offer stays on record, declined, and is not made again for this change. */

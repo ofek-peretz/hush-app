@@ -958,7 +958,7 @@
     "newBest": "New best",
     "setsLabel": "sets",
     "movedShort": "moved",
-    "everythingHeld": "Next time — the same weights and the same targets. Meet the target on every set and it moves up a rep.",
+    "everythingHeld": "Next time — the same weights. Meet the target on every set and it moves up a rep.",
     "volumeUp": "{{muscle}} earned a set",
     "volumeDown": "{{muscle}} gave a set back",
     "topSet": "Top set",

@@ -1158,10 +1158,20 @@ function closedWeek(nowMs: number, window?: ClosedWindow | null): { start: numbe
 /** The changes made during the week that just closed — the Saturday mirror's content (S-45). Since a
  *  lift may move more than once in a week (per-workout), the NET change per exercise is used: its
  *  earliest loadFrom → its latest loadTo, so the mirror reads "back went up" once, not thrice. */
-function closedWeekChanges(log: ChangeEntry[], nowMs: number, window?: ClosedWindow | null): ChangeEntry[] {
+/*
+ * ⛔ ON A WRITTEN WEEK THE LETTER NARRATES ONLY WHAT HAPPENED (the engine audit, 2026-10-17). Her set
+ * counts are the author's and a change of exercise is OFFERED, never made — so a volume move, a
+ * graduation or a swap in the log is a thing the engine wanted, not a thing it did. New folds no longer
+ * write them on such a week; this also silences the ones a week written before the fix still carries.
+ */
+const NOT_DONE_ON_A_WRITTEN_WEEK = new Set(['volume', 'graduate', 'swap']);
+
+function closedWeekChanges(log: ChangeEntry[], nowMs: number, window?: ClosedWindow | null, writtenWeek = false): ChangeEntry[] {
   const { start, end } = closedWeek(nowMs, window);
   // A rep target's climb is the ordinary walk of her progression — told at the finish, not in the letter.
-  const inWeek = log.filter((c) => c.at >= start && c.at < end && c.kind !== 'reps').sort((a, b) => a.at - b.at);
+  const inWeek = log
+    .filter((c) => c.at >= start && c.at < end && c.kind !== 'reps' && !(writtenWeek && c.kind != null && NOT_DONE_ON_A_WRITTEN_WEEK.has(c.kind)))
+    .sort((a, b) => a.at - b.at);
   const netByEx = new Map<string, ChangeEntry>();
   for (const c of inWeek) {
     // Structural changes (S-45) are keyed apart from load changes so a graduation and a load move on
@@ -1290,9 +1300,9 @@ export async function getSessionForwardV5(
 }
 
 /** The most recent CLOSED week's update (or null when nothing changed that week). Mirrors v4. */
-export async function getWeeklyUpdateV5(nowMs: number = Date.now(), window?: ClosedWindow | null): Promise<WeeklyUpdate | null> {
+export async function getWeeklyUpdateV5(nowMs: number = Date.now(), window?: ClosedWindow | null, writtenWeek = false): Promise<WeeklyUpdate | null> {
   const state = await load();
-  const changes = closedWeekChanges(state.changeLog ?? [], nowMs, window);
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs, window, writtenWeek);
   if (changes.length === 0) return null;
   const { end } = closedWeek(nowMs, window);
   /*
@@ -1320,7 +1330,7 @@ export async function markWeeklyUpdateSeenV5(nowMs: number = Date.now(), window?
 export async function getWeeklyPlanV5(program: Program, nowMs: number = Date.now(), window?: ClosedWindow | null): Promise<WeeklyPlanView | null> {
   const state = await load();
   const ex = asStates(state);
-  const changes = closedWeekChanges(state.changeLog ?? [], nowMs, window);
+  const changes = closedWeekChanges(state.changeLog ?? [], nowMs, window, (program.authored ?? 'engine') !== 'engine');
   const { end } = closedWeek(nowMs, window);
 
   // The change log carries FOUR kinds of news, and only one of them is keyed by a lift that is

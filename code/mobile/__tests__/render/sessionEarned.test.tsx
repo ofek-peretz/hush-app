@@ -142,12 +142,12 @@ describe('2.5 says everything the workout decided', () => {
     // that moved no load but grew a muscle's week changed something, and saying otherwise is a lie
     // sitting directly under the row that proves it.
     const out = draw({ volume: [{ muscle: 'Chest', setsFrom: 3, setsTo: 4, reason: null }] });
-    expect(out).not.toContain('the same weights and the same targets');
+    expect(out).not.toContain('Next time — the same weights.');
   });
 
   it('…and a workout that really decided nothing still says so', () => {
     // The hold says what happens next, not that standing still is the goal (the engine audit, 2026-10-17).
-    expect(draw({})).toContain('the same weights and the same targets');
+    expect(draw({})).toContain('Next time — the same weights.');
   });
 
   it('⛔ AND THERE IS NO LONGER A "STILL READING" STATE TO WAIT FOR', () => {

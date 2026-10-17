@@ -373,6 +373,20 @@ export function decideExercise(inp: Loop2Input): Loop2Result {
     const load = backTo != null
       ? snapDown(backTo, meta.equipment, meta.observedLoads)
       : Math.max(loadFloor(meta.equipment, meta.observedLoads), prevRung(state.load, meta.equipment, meta.observedLoads));
+    /*
+     * ⛔ F-24, THE WAY DOWN (2026-10-17, the second pass of the engine audit). On coarse equipment the
+     * rung below is not a back-off, it is a different exercise: a cable lateral raise one rep short of
+     * twelve at 5 kg went to 2.5 kg — half — and spent ten sessions climbing back with twice that in
+     * her; a 6 kg dumbbell went to 5 (−17%). A rung bigger than BIG_STEP_FRACTION is earned on the way
+     * up (the reps go first) and is NOT taken on the way down for a near miss: within
+     * RAISE_HEADROOM_REPS of her floor on every set, the load holds and her target goes back to the
+     * floor — the reps come back at the weight she can nearly do. A real miss, further under, still
+     * backs off. A barbell's rung is never this big, so S-25 there is untouched.
+     */
+    const worstNow = Math.min(...sets.map((s) => s.reps));
+    if (state.load > 0 && load < state.load * (1 - BIG_STEP_FRACTION) - EPS && worstNow >= band.lo - RAISE_HEADROOM_REPS) {
+      return { decision: 'hold', load: state.load, band, sets: state.sets, repTarget: band.lo };
+    }
     // ════ S-25.1 IS UNAVAILABLE AT THE FLOOR — SO STEP 2 IS THE ONLY STEP LEFT ════
     //
     // The register orders the response: 1. back off and re-climb, 2. rotate. When she is already on

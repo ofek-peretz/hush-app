@@ -14,7 +14,11 @@
 import fs from 'fs';
 import path from 'path';
 
-import { applyDetrainingV5, advanceV5, currentV5Targets, getSessionForwardV5, getSessionEarnedV5 } from '@/engine/v5/v5Engine';
+import { applyDetrainingV5, advanceV5, currentV5Targets, getSessionForwardV5, getSessionEarnedV5, getWeeklyUpdateV5 } from '@/engine/v5/v5Engine';
+import { offerTarget } from '@/domain/swapOffers';
+import { exerciseById } from '@/data/exercises';
+import { seedStatedLoads } from '@/domain/statedLifts';
+import { draftFromCoachWeek } from '@/domain/coachDraft';
 import { lastSessionStartMs } from '@/engine/v5/detraining';
 import { db } from '@/data/local/db';
 import { withOffer, declined, liveOffers, applyOffer, isAuthored } from '@/domain/swapOffers';
@@ -211,5 +215,101 @@ describe('8 · what the walk found', () => {
   });
   it('"your week so far" counts the cycle the meter above it counts — never the calendar week behind it', () => {
     expect(read('src/screens/home/Home.tsx')).toContain('const weekOpen = app.weekOpenMs ?? currentWeekOpen(Date.now());');
+  });
+});
+
+/*
+ * ⛔ THE SECOND PASS (2026-10-17, founder: *"תעבור על כל ההודעה ותוודא שממצא אחר ממצא טופל בצורה
+ * הטובה ביותר"*). The report read finding by finding against the code and the twelve-week board.
+ */
+describe('9 · the second pass — each finding, held at the level it was promised', () => {
+  const ws = (id: string, at: number, ex: string, load: number, reps: number[]): Session => ({
+    id, programDayId: 'd1', startedAt: new Date(at).toISOString(), state: 'SAVED', earlyFinish: false,
+    sets: reps.map((r, i) => ({ exerciseId: ex, setIndex: i, recommendedWeight: load, recommendedReps: 12, actualWeight: load, actualReps: r, edited: true, persistedAt: '', restBeforeS: 60 })),
+  });
+  const runOf = (ex: string, load: number, reps: number[], n: number) => Array.from({ length: n }, (_, w) => ws(`n${w}`, T0 + w * 3 * DAY, ex, load, reps));
+  const loadAfter = async (ex: string, band: { lo: number; hi: number }, h: Session[]) => {
+    await db.clearAll();
+    await advanceV5([ex], () => band, h, () => h[0].sets[0].actualWeight as number, Date.parse(h[h.length - 1].startedAt) + DAY, undefined, () => 3);
+    return (await currentV5Targets(h))[ex]?.weight ?? null;
+  };
+
+  it('F-24 on the way down: one or two reps short on a coarse rung HOLDS — the dumbbell never halves for a near miss', async () => {
+    // 6 → 5 kg is −17%: a near miss (12, 11, 10 in a 12–20 range) keeps the 6.
+    expect(await loadAfter('lateral_raise', { lo: 12, hi: 20 }, runOf('lateral_raise', 6, [12, 11, 10], 5))).toBe(6);
+    // …a real miss, far under the floor, still backs off.
+    expect(await loadAfter('lateral_raise', { lo: 12, hi: 20 }, runOf('lateral_raise', 6, [9, 8, 7], 5))).toBeLessThan(6);
+    // …and a barbell's rung is never big, so its back-off is S-25's as ever.
+    expect(await loadAfter('bb_bench_press', { lo: 8, hi: 12 }, runOf('bb_bench_press', 60, [7, 6, 6], 5))).toBeLessThan(60);
+  });
+
+  const week = {
+    id: 'w', authored: 'athlete_or_coach', days: [
+      { id: 'a', name: 'A', isRest: false, slots: [{ id: '1', exerciseId: 'leg_curl', setCount: 3 }, { id: '2', exerciseId: 'pull_up', setCount: 3 }, { id: '3', exerciseId: 'cable_lateral_raise', setCount: 3 }] },
+      { id: 'b', name: 'B', isRest: false, slots: [{ id: '4', exerciseId: 'bb_rdl', setCount: 3 }, { id: '5', exerciseId: 'chest_dip', setCount: 3 }] },
+    ],
+  } as never;
+
+  it('a rotation is offered as the SAME movement — a leg curl for a leg curl, never a deadlift', () => {
+    const to = offerTarget('leg_curl', 'rotate', week);
+    expect(to).toBeDefined();
+    expect(exerciseById(to!)!.pattern).toBe('knee_flexion');
+    const lat = offerTarget('cable_lateral_raise', 'rotate', week);
+    expect(exerciseById(lat!)!.pattern).toBe('lateral_raise');
+  });
+
+  it('a pull-up or a dip at the top of its range is offered its loaded form; a push-up its harder variation', () => {
+    expect(offerTarget('pull_up', 'graduate', week)).toBe('weighted_pull_up');
+    expect(offerTarget('chest_dip', 'graduate', week)).toBe('weighted_dip');
+    expect(offerTarget('push_up', 'graduate', week)).toBe('chest_dip');
+  });
+
+  it('the fold offers through `offerTarget`, and keeps a leave-it', () => {
+    const fm = read('src/data/api/fixtureModel.ts');
+    const at = fm.indexOf('  if (writtenWeek) {');
+    const block = fm.slice(at, fm.indexOf('    return;\n  }', at));
+    expect(block).toContain('offerTarget(from, kind, program');
+    expect(block).toContain('prefs.leaveItsByMuscle?.[m] === from');
+  });
+
+  it('the letter over a written week never narrates a set or a swap the engine did not make — old entries included', async () => {
+    await db.clearAll();
+    const start = T0;
+    const end = T0 + 7 * DAY;
+    const base = { setsFrom: 3, setsTo: 3, bandFrom: [8, 12] as [number, number], bandTo: [8, 12] as [number, number], at: T0 + DAY };
+    await db.saveEngineV5({
+      exercises: {},
+      changeLog: [
+        { ...base, exerciseId: 'Chest', decision: 'hold', loadFrom: null, loadTo: null, kind: 'volume', muscle: 'Chest', setsFrom: 10, setsTo: 11 },
+        { ...base, exerciseId: 'bb_bench_press', decision: 'progress', loadFrom: 60, loadTo: 62.5 },
+      ],
+    } as never);
+    const engineWeek = await getWeeklyUpdateV5(T0 + 8 * DAY, { start, end }, false);
+    const written = await getWeeklyUpdateV5(T0 + 8 * DAY, { start, end }, true);
+    expect(engineWeek!.explanations.length).toBe(2);
+    expect(written!.explanations.map((e) => e.slotId)).toEqual(['bb_bench_press']);
+    expect(read('src/domain/weeklyUpdate.ts')).toContain('return getWeeklyUpdateV5(Date.now(), await closedCycle(), isAuthored(program));');
+  });
+
+  it('a weight she stated never opens heavier than her own set allows at the bottom of the range', () => {
+    const w = { id: 'w', days: [{ id: 'a', name: 'A', isRest: false, slots: [
+      { id: '1', exerciseId: 'bb_bench_press', setCount: 3, repBand: [8, 12], startLoadKg: 100 },
+      { id: '2', exerciseId: 'bb_back_squat', setCount: 3, repBand: [8, 12], startLoadKg: 80 },
+    ] }] } as never;
+    const out = seedStatedLoads(w, [{ exerciseId: 'bb_bench_press', kg: 100, reps: 3 }, { exerciseId: 'bb_back_squat', kg: 120, reps: 5 }]);
+    // 100 × 3 asked for eight is about 87 — never the 100 the model kept.
+    expect(out.days[0].slots[0].startLoadKg).toBeLessThan(90);
+    expect(out.days[0].slots[0].startLoadKg).toBeGreaterThan(84);
+    // A lighter number the model chose is its own and stands.
+    expect(out.days[0].slots[1].startLoadKg).toBe(80);
+  });
+
+  it('one lift, one range: the first range the week gives a lift is the range of every seat of it', () => {
+    const p = draftFromCoachWeek({ days: [
+      { name: 'A', lifts: [{ ex: 'bb_bench_press', sets: 3, reps: [5, 8] }] },
+      { name: 'B', lifts: [{ ex: 'bb_bench_press', sets: 3, reps: [10, 12] }, { ex: 'cable_row', sets: 3 }] },
+    ] } as never)!;
+    const seats = p.days.flatMap((d) => d.slots).filter((s) => s.exerciseId === 'bb_bench_press');
+    expect(seats.map((s) => s.repBand)).toEqual([[5, 8], [5, 8]]);
   });
 });

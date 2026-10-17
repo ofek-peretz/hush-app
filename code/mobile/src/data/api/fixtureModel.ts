@@ -44,7 +44,7 @@ import { weeklyTargets } from '@/engine/v5/assembler';
 import { repairWeek } from '@/domain/weekRepair';
 import { learnedExecSFor } from '@/domain/setDwell';
 import { isEvidenceSet } from '@/domain/setEvidence';
-import { isAuthored, withOffer } from '@/domain/swapOffers';
+import { isAuthored, offerTarget, withOffer } from '@/domain/swapOffers';
 import { learnedInterRestS, learnedTransitionRestS, REST_TRANSITION_S, COMPOUND_SET_MIN, ISOLATION_SET_MIN, perSetSeconds, pairedRestSavedS } from '@/domain/restPrescription';
 import { CANONICAL_MUSCLE_ORDER, MUSCLE_VOLUME_SHARE, EMPHASIS_FRACTION, WEEKLY_SETS_FLOOR, SESSION_MIN, SESSION_MAX, SETS_MIN as V5_SETS_MIN, SETS_MAX as V5_SETS_MAX } from '@/engine/v5/constants';
 import { resolveEngineEnactments } from '@/domain/engineChanges';
@@ -1630,7 +1630,7 @@ function growEmphasised(
 // `goal` and `experience` are NOT read here: Part 5 deletes the goal fork ("there is one goal:
 // hypertrophy") and Part 9 §A deletes `experience` from the decision path. `age` survives only for
 // the age-based rep guidance outside the engine, never for a load or a set count.
-async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'age' | 'memberSince' | 'repBand' | 'repBandByMuscle'> & { units?: Profile['units'] }> {
+async function loadProfileSafe(): Promise<Pick<Profile, 'sex' | 'weightKg' | 'age' | 'memberSince' | 'repBand' | 'repBandByMuscle' | 'equipment' | 'painEases'> & { units?: Profile['units'] }> {
   try {
     const p = await db.loadProfile();
     if (p) return p;
@@ -1870,11 +1870,20 @@ async function foldEngineUnsynchronised(
    * (`domain/swapOffers`), and her week changes only when she takes it.
    */
   if (writtenWeek) {
-    if (enacted.length) {
+    // What she is OFFERED is the closest lift of the same movement (`offerTarget`), not the engine's
+    // own longest-unused pick — and a leave-it is never offered away (S-30/S-71), as it is never enacted.
+    const offered = Object.entries(changes)
+      .filter(([from]) => {
+        const m = exerciseById(from)?.muscle;
+        return !(m && prefs.leaveItsByMuscle?.[m] === from);
+      })
+      .map(([from, kind]) => ({ from, kind, to: offerTarget(from, kind, program, { equipment: profile.equipment, profile }) }))
+      .filter((o): o is { from: string; kind: 'graduate' | 'rotate'; to: string } => !!o.to && o.to !== o.from);
+    if (offered.length) {
       const nowMs = Date.now();
       await editPreferences((p) => {
         let offers = p.swapOffers;
-        for (const e of enacted) offers = withOffer(offers, { from: e.from, to: e.to, kind: e.kind === 'graduate' ? 'graduate' : 'rotate', at: nowMs });
+        for (const o of offered) offers = withOffer(offers, { from: o.from, to: o.to, kind: o.kind, at: nowMs });
         p.swapOffers = offers;
       }).catch((e) => void track('engine_error', { op: 'offerEngineChange', message: String(e) }));
     }

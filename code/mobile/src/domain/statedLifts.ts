@@ -136,7 +136,10 @@ export function statedLiftsLine(lifts: readonly StatedLift[]): string {
  * The model is asked to carry these into the week, and it does. This is the floor under that: a
  * lift she named that the week contains and the model left without a load opens at HER number —
  * never at a stranger's. A load the model did write is left alone (it may have chosen a rep range
- * her number was not lifted in). Bodyweight lifts take no load in a week (`Slot.startLoadKg`).
+ * her number was not lifted in) — UNLESS it is heavier than her own set allows at the bottom of the
+ * range it gave the lift (`atTheFloor`, 2026-10-17): "bench 100 × 3" written as 100 kg on 8–12 is
+ * three reps asked for eight, and nothing in the workout corrects a load any more. The prompt asks
+ * for exactly this; this is the floor under the prompt. Bodyweight lifts take no load in a week.
  */
 export function seedStatedLoads(program: Program, lifts: readonly StatedLift[]): Program {
   if (!lifts.length) return program;
@@ -146,9 +149,11 @@ export function seedStatedLoads(program: Program, lifts: readonly StatedLift[]):
     ...d,
     slots: d.slots.map((s) => {
       const stated = byId.get(s.exerciseId);
-      if (stated == null || s.startLoadKg != null || exerciseById(s.exerciseId)?.bodyweight) return s;
+      if (stated == null || exerciseById(s.exerciseId)?.bodyweight) return s;
+      const priced = atTheFloor(stated, s.repBand?.[0] ?? DEFAULT_FLOOR);
+      if (s.startLoadKg != null && s.startLoadKg <= priced + 1e-6) return s;
       touched = true;
-      return { ...s, startLoadKg: atTheFloor(stated, s.repBand?.[0] ?? DEFAULT_FLOOR) };
+      return { ...s, startLoadKg: priced };
     }),
   }));
   return touched ? { ...program, days } : program;
